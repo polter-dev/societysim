@@ -15,7 +15,13 @@ from societysim.batch.runner import run_batch
 from societysim.cli import app
 from societysim.config import BatchConfig, ModelSpec
 from societysim.logging.events import Event, EventLogger
-from societysim.logging.sinks.neon import NeonSink, apply_schema, connect_neon, sync_batch
+from societysim.logging.sinks.neon import (
+    NeonSink,
+    apply_schema,
+    connect_neon,
+    delete_games,
+    sync_batch,
+)
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 
@@ -407,3 +413,108 @@ def test_abandoned_human_game_ends_failed_in_neon(tmp_path, monkeypatch):
     assert res.exit_code == 130, res.output
     ends = [a for sql, a in conn.executed if sql.startswith("update games")]
     assert ends == [("selfplay_smoke-s0", "failed", None)]
+
+
+class MemConn(FakeConn):
+    """Tiny in-memory Neon: games, events (game_id, seq) and labels (game_id, idx)."""
+
+    def __init__(self):
+        super().__init__()
+        self.games: dict[str, str] = {}
+        self.events: dict[tuple, tuple] = {}
+        self.labels: dict[tuple, tuple] = {}
+
+    def _put(self, table, key, row, replace):
+        if replace or key not in table:
+            table[key] = row
+
+    async def execute(self, sql, *args):
+        if "insert into games" in sql:
+            self.games[args[0]] = args[1]
+        elif sql.startswith("delete from events"):
+            self.events = {k: v for k, v in self.events.items() if k[0] != args[0]}
+        elif sql.startswith("delete from labels"):
+            self.labels = {k: v for k, v in self.labels.items() if k[0] != args[0]}
+
+    async def executemany(self, sql, rows):
+        for r in rows:
+            if "into events" in sql:
+                self._put(self.events, (r[0], r[1]), r, False)  # on conflict do nothing
+            else:
+                self._put(self.labels, (r[0], r[1]), r, True)
+
+    async def fetchval(self, sql, ids):
+        table = self.events if "from events" in sql else self.labels
+        return sum(1 for k in table if k[0] in ids)
+
+    async def fetch(self, sql, ids):
+        gone = [g for g in self.games if g in ids]
+        for g in gone:
+            del self.games[g]
+        self.events = {k: v for k, v in self.events.items() if k[0] not in gone}
+        self.labels = {k: v for k, v in self.labels.items() if k[0] not in gone}
+        return [{"game_id": g} for g in gone]
+
+
+async def test_restarted_game_keeps_only_the_second_run():
+    conn = MemConn()
+
+    async def connect():
+        return conn
+
+    for n in (7, 3):  # the second run is shorter, like an interrupted-then-replayed game
+        await _play(NeonSink("b1", connect=connect, batch_size=2), n=n)
+    assert sorted(k[1] for k in conn.events) == list(range(3))
+
+
+async def test_resync_replaces_events_and_drops_extra_labels(tmp_path):
+    batch = _batch(tmp_path)
+    conn = MemConn()
+    await sync_batch(batch, conn)
+    n_events, n_labels = len(conn.events), len(conn.labels)
+    assert n_labels > 1
+    await sync_batch(batch, conn)
+    assert (len(conn.events), len(conn.labels)) == (n_events, n_labels)
+    lp = batch / "fixture-0001.labels.jsonl"
+    lines = lp.read_text(encoding="utf-8").splitlines()
+    lp.write_text(lines[0] + "\n", encoding="utf-8")
+    ep = batch / "fixture-0001.jsonl"
+    await sync_batch(batch, conn)
+    assert len(conn.labels) == 1
+    # events rewritten from the file: drop the tail and the stale rows go too
+    ep.write_text("\n".join(ep.read_text(encoding="utf-8").splitlines()[:5]) + "\n")
+    await sync_batch(batch, conn)
+    assert sorted(k[1] for k in conn.events) == list(range(5))
+
+
+async def test_delete_games_reports_unknown_ids(tmp_path):
+    batch = _batch(tmp_path)
+    conn = MemConn()
+    await sync_batch(batch, conn)
+    n_events, n_labels = len(conn.events), len(conn.labels)
+    res = await delete_games(conn, ["fixture-0001", "nope"])
+    assert res == {
+        "deleted": ["fixture-0001"],
+        "missing": ["nope"],
+        "events": n_events,
+        "labels": n_labels,
+    }
+    assert not conn.games and not conn.events and not conn.labels
+
+
+def test_sync_neon_delete_cli(monkeypatch):
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    monkeypatch.setenv("NEON_DATABASE_URL", "postgres://fake")
+    conn = MemConn()
+    conn.games["a"] = "b"
+    conn.events[("a", 0)] = ("a", 0)
+
+    async def connect():
+        return conn
+
+    monkeypatch.setattr("societysim.logging.sinks.neon.connect_neon", connect)
+    res = CliRunner().invoke(app, ["sync-neon", "--delete", "a", "--delete", "zzz"])
+    assert res.exit_code == 0, res.output
+    assert "deleted 1 games, 1 events, 0 labels" in res.output
+    assert "not found: zzz" in res.output
+    assert not conn.games and conn.closed

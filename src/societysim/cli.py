@@ -388,27 +388,50 @@ def label(
 
 
 @app.command("sync-neon")
-def sync_neon(batch_dir: Path) -> None:
-    """Backfill BATCH_DIR (runs/<batch>) into Neon. Needs NEON_DATABASE_URL. Safe to re-run."""
-    from societysim.logging.sinks.neon import apply_schema, connect_neon, sync_batch
+def sync_neon(
+    batch_dir: Annotated[
+        Path | None, typer.Argument(help="Batch directory, e.g. runs/<batch>.")
+    ] = None,
+    delete: Annotated[
+        list[str] | None, typer.Option("--delete", help="Delete this game id (repeatable).")
+    ] = None,
+) -> None:
+    """Backfill BATCH_DIR into Neon, or --delete games. Needs NEON_DATABASE_URL."""
+    from societysim.logging.sinks.neon import (
+        apply_schema,
+        connect_neon,
+        delete_games,
+        sync_batch,
+    )
 
     load_dotenv()
     if not os.environ.get("NEON_DATABASE_URL"):
         typer.echo("NEON_DATABASE_URL is not set")
         raise typer.Exit(1)
-    if not batch_dir.is_dir():
+    if delete:
+        if batch_dir is not None:
+            typer.echo("give either BATCH_DIR or --delete, not both")
+            raise typer.Exit(1)
+    elif batch_dir is None or not batch_dir.is_dir():
         typer.echo(f"not a directory: {batch_dir}")
         raise typer.Exit(1)
 
     async def run():
         conn = await connect_neon()
         try:
+            if delete:
+                return await delete_games(conn, delete)
             await apply_schema(conn)
             return await sync_batch(batch_dir, conn)
         finally:
             await conn.close()
 
     n = asyncio.run(run())
+    if delete:
+        typer.echo(f"deleted {len(n['deleted'])} games, {n['events']} events, {n['labels']} labels")
+        if n["missing"]:
+            typer.echo(f"not found: {', '.join(n['missing'])}")
+        return
     typer.echo(f"synced {n['games']} games, {n['events']} events, {n['labels']} labels")
 
 

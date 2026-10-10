@@ -39,6 +39,8 @@ on conflict (game_id, idx) do update set
     label_type = excluded.label_type, actor = excluded.actor,
     source_seq = excluded.source_seq, source = excluded.source, label = excluded.label
 """
+_CLEAR_EVENTS = "delete from events where game_id = $1"
+_CLEAR_LABELS = "delete from labels where game_id = $1"
 _END_GAME = "update games set status = $2, winner = $3, ended_at = now() where game_id = $1"
 
 Connect = Callable[[], Awaitable[Any]]
@@ -139,6 +141,9 @@ class NeonSink:
                 json.dumps(run_meta.get("models")),
                 started,
             )
+            # A replayed game must not keep the old run's rows (JSONL was overwritten).
+            await self._t(conn.execute, _CLEAR_EVENTS, self._game_id)
+            await self._t(conn.execute, _CLEAR_LABELS, self._game_id)
         except Exception:
             log.exception("NeonSink.start_game failed")
 
@@ -234,6 +239,8 @@ async def sync_batch(batch_dir: Path, conn: Any, chunk: int = 500) -> dict[str, 
             json.dumps(models),
             datetime.fromisoformat(started) if started else None,
         )
+        await conn.execute(_CLEAR_EVENTS, gid)
+        await conn.execute(_CLEAR_LABELS, gid)
         rows = [event_row(e) for e in events]
         for i in range(0, len(rows), chunk):
             await conn.executemany(_INSERT_EVENT, rows[i : i + chunk])
@@ -247,3 +254,21 @@ async def sync_batch(batch_dir: Path, conn: Any, chunk: int = 500) -> dict[str, 
         totals["events"] += len(events)
         totals["labels"] += len(labels)
     return totals
+
+
+async def delete_games(conn: Any, game_ids: list[str]) -> dict[str, Any]:
+    """Delete games (events and labels go with them via on delete cascade).
+
+    Returns the deleted ids, the unknown ids, and how many events and labels went.
+    """
+    ids = list(dict.fromkeys(game_ids))
+    n_events = await conn.fetchval("select count(*) from events where game_id = any($1)", ids)
+    n_labels = await conn.fetchval("select count(*) from labels where game_id = any($1)", ids)
+    rows = await conn.fetch("delete from games where game_id = any($1) returning game_id", ids)
+    deleted = sorted(r["game_id"] for r in rows)
+    return {
+        "deleted": deleted,
+        "missing": [i for i in ids if i not in deleted],
+        "events": n_events if deleted else 0,
+        "labels": n_labels if deleted else 0,
+    }

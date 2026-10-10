@@ -1,24 +1,20 @@
-// Unstyled start screen for visitor play. Basic (you play) or Watch; Advanced is supplied by the
-// parent, which owns a useSetupForm and renders <SetupForm> in `advanced.node` (see port notes).
-import { type ReactNode, useEffect, useRef, useState } from "react";
+// Unstyled start screen for visitor play. Basic (you play) or Watch, or Advanced via SetupForm.
+import { useEffect, useRef, useState } from "react";
 import { PlayError, getLimits, startGame } from "../../play/api";
 import { getTurnstileToken } from "../../play/turnstile";
 import type { Limits, StartedGame } from "../../play/types";
-import type { GameSetupJson } from "../../settings/setup";
-
-export interface AdvancedSetup {
-  setup: GameSetupJson;
-  valid: boolean;
-  node: ReactNode;
-}
+import type { GameSetupJson, SetupAssets } from "../../settings/setup";
+import { SetupForm } from "../SetupForm/SetupForm";
 
 export function PlayStart({
   onStarted,
-  advanced,
+  assets,
 }: {
   onStarted: (game: StartedGame, watchOnly: boolean) => void;
-  advanced?: AdvancedSetup;
+  /** Model catalog and setup schema; without them there is no Advanced option. */
+  assets?: SetupAssets;
 }) {
+  const [adv, setAdv] = useState<{ setup: GameSetupJson; valid: boolean } | null>(null);
   const [watch, setWatch] = useState(false);
   const [useAdvanced, setUseAdvanced] = useState(false);
   const [limits, setLimits] = useState<Limits | null>(null);
@@ -40,8 +36,8 @@ export function PlayStart({
 
   const paused = limits !== null && !limits.play_enabled;
   const none = limits !== null && limits.remaining_today <= 0;
-  const setup: GameSetupJson = useAdvanced && advanced ? advanced.setup : { mode: "basic", seed: 0 };
-  const canStart = !busy && !paused && !none && token !== null && (!useAdvanced || !advanced || advanced.valid);
+  const setup: GameSetupJson = useAdvanced && adv ? adv.setup : { mode: "basic", seed: 0 };
+  const canStart = !busy && !paused && !none && token !== null && (!useAdvanced || (adv !== null && adv.valid));
 
   const start = async () => {
     if (token === null) return;
@@ -70,13 +66,15 @@ export function PlayStart({
           </label>
         ))}
       </fieldset>
-      {advanced && (
+      {assets && (
         <label>
           <input type="checkbox" checked={useAdvanced} onChange={(e) => setUseAdvanced(e.target.checked)} /> Advanced
           settings
         </label>
       )}
-      {useAdvanced && advanced?.node}
+      {useAdvanced && assets && (
+        <SetupForm assets={assets} onChange={(setup, valid) => setAdv({ setup, valid })} />
+      )}
       <div ref={widget} className="play-start__turnstile" />
       {limits && (
         <p className="play-start__limits">

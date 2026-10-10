@@ -1,9 +1,19 @@
 // Unstyled game setup form. Mount it anywhere with the loaded assets; see the PR's port notes.
-import { type SetupAssets, HUMAN, MAX_PLAYERS, MIN_PLAYERS, PLAY_COMMAND, maxWolves, seatId } from "../../settings/setup";
+import { useEffect } from "react";
+import { type GameSetupJson, type SetupAssets, HUMAN, MAX_PLAYERS, MIN_PLAYERS, PLAY_COMMAND, maxWolves, seatId } from "../../settings/setup";
 import { useSetupForm } from "../../settings/useSetupForm";
 
-export function SetupForm({ assets }: { assets: SetupAssets }) {
+export function SetupForm({
+  assets,
+  onChange,
+}: {
+  assets: SetupAssets;
+  /** Called on mount and after every edit with the current setup and whether it is valid. */
+  onChange?: (setup: GameSetupJson, valid: boolean) => void;
+}) {
   const f = useSetupForm(assets);
+  // Fire on content change only, not when the parent passes a new callback.
+  useEffect(() => onChange?.(f.setup, f.valid), [f.json, f.valid]);
   const { state: s } = f;
   const advanced = s.mode === "advanced";
   const humanIndex = s.seats.slice(0, s.nPlayers).indexOf(HUMAN);

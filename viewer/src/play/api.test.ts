@@ -59,8 +59,8 @@ describe("api client", () => {
 
   it.each([
     [429, /too many games today/i],
-    [403, /daily budget/i],
-    [503, /paused/i],
+    [403, /verify you're human/i],
+    [503, /closed right now/i],
     [409, /not your turn/i],
   ])("maps %i to a friendly message", async (status, re) => {
     fetchMock.mockReturnValue(json({ detail: "x" }, status));
@@ -68,6 +68,20 @@ describe("api client", () => {
     expect(e).toBeInstanceOf(PlayError);
     expect(e.status).toBe(status);
     expect(e.message).toMatch(re);
+  });
+
+  it("tells paused from out of budget on 503 using the server's detail", async () => {
+    fetchMock.mockReturnValue(json({ detail: "play is closed for today" }, 503));
+    await expect(getLimits()).rejects.toThrow(/budget is used up/i);
+    fetchMock.mockReturnValue(json({ detail: "play is paused" }, 503));
+    await expect(getLimits()).rejects.toThrow(/paused/i);
+  });
+
+  it("tells paused from out of budget on 503 using the server's detail", async () => {
+    fetchMock.mockReturnValue(json({ detail: "play is closed for today" }, 503));
+    await expect(getLimits()).rejects.toThrow(/budget is used up/i);
+    fetchMock.mockReturnValue(json({ detail: "play is paused" }, 503));
+    await expect(getLimits()).rejects.toThrow(/paused/i);
   });
 
   it("reports a network failure", async () => {

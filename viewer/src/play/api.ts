@@ -16,14 +16,20 @@ export class PlayError extends Error {
 
 const FRIENDLY: Record<number, string> = {
   429: "Too many games today. Try again tomorrow, or watch a replay.",
-  403: "The daily budget is used up. Watch a replay instead.",
-  503: "Play is paused right now. Watch a replay instead.",
+  403: "Couldn't verify you're human. Please retry the check.",
   409: "It's not your turn.",
   401: "Your seat session has expired.",
 };
 
-export const friendlyMessage = (status: number): string =>
-  FRIENDLY[status] ?? (status >= 500 ? "The game server had a problem. Try again." : `Request failed (${status}).`);
+/** 503 is either "play is paused" or "today's budget is used up"; the server's detail text says which. */
+function unavailable(detail: string): string {
+  if (/budget|closed|today/i.test(detail)) return "Today's budget is used up. Watch a replay instead.";
+  if (/paus|disabled/i.test(detail)) return "Play is paused right now. Watch a replay instead.";
+  return "Play is closed right now (paused or out of budget). Watch a replay instead.";
+}
+
+export const friendlyMessage = (status: number, detail = ""): string =>
+  (status === 503 ? unavailable(detail) : FRIENDLY[status]) ?? (status >= 500 ? "The game server had a problem. Try again." : `Request failed (${status}).`);
 
 const baseUrl = () => ((import.meta.env.VITE_PLAY_API_URL as string | undefined) ?? "").replace(/\/$/, "");
 
@@ -63,7 +69,16 @@ async function call<T>(path: string, init: { method?: string; body?: unknown; to
   } catch {
     throw new PlayError(0, "Can't reach the game server.");
   }
-  if (!res.ok) throw new PlayError(res.status, friendlyMessage(res.status));
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const d = ((await res.json()) as { detail?: unknown }).detail;
+      if (typeof d === "string") detail = d;
+    } catch {
+      /* no JSON body */
+    }
+    throw new PlayError(res.status, friendlyMessage(res.status, detail));
+  }
   return (await res.json()) as T;
 }
 

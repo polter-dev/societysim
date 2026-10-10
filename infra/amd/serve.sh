@@ -6,6 +6,7 @@
 #   bash infra/amd/serve.sh          # install (first run only), serve, print the next steps
 #   bash infra/amd/serve.sh status   # what is running, the URL, latest serving stats
 #   bash infra/amd/serve.sh stop     # stop server, tunnel and stats logger; print session hours
+#   bash infra/amd/serve.sh --backend llamacpp   # skip vLLM: llama.cpp only (Strix Halo 8060S)
 #
 # Safe to re-run: finished steps are skipped and a healthy server is reused.
 #
@@ -26,7 +27,9 @@
 #                      lists exactly this id. configs/models.yaml must send it verbatim: LiteLLM's
 #                      openai/ route strips one prefix, so litellm_model is openai/$AMD_MODEL.
 #   AMD_GGUF_REPO/FILE GGUF used by the llama.cpp fallback (default ggml-org/gpt-oss-20b-GGUF).
-#   AMD_BACKEND        auto | vllm | llamacpp (default auto)
+#   AMD_BACKEND        auto | vllm | llamacpp (default auto); `--backend X` sets it too
+#   AMD_LLAMA_VARIANT  auto | vulkan | hip: which llama.cpp build to try first (default auto:
+#                      vulkan on gfx1151 Strix Halo, where vLLM/ROCm is weak; hip elsewhere)
 #   AMD_API_KEY        required, 32+ chars (openssl rand -hex 32); same value in the laptop .env
 #   AMD_WORK           working dir for venvs, weights, logs (default ~/amd-serve)
 #   AMD_PORT           local port (default 8000)
@@ -57,7 +60,13 @@ AMD_START_TIMEOUT="${AMD_START_TIMEOUT:-1800}"
 AMD_STATS_INTERVAL="${AMD_STATS_INTERVAL:-60}"
 AMD_PRICE_PER_HOUR="${AMD_PRICE_PER_HOUR:-0}"
 VLLM_SRC_REF="${VLLM_SRC_REF:-v0.16.0}"
-GPU_ARCH="${GPU_ARCH:-gfx1201}"
+if [ -z "${GPU_ARCH:-}" ]; then
+  GPU_ARCH=gfx1201
+  if command -v rocminfo >/dev/null && [[ $(rocminfo 2>/dev/null || true) == *gfx1151* ]]; then
+    GPU_ARCH=gfx1151
+  fi
+fi
+AMD_LLAMA_VARIANT="${AMD_LLAMA_VARIANT:-auto}"
 
 AMD_WHEELS="https://rocm.frameworks.amd.com/whl/gfx120X-all"  # vLLM + flash-attn for gfx120X
 AMD_TORCH_INDEX="https://repo.amd.com/rocm/whl/gfx120X-all/"   # torch built for gfx120X
@@ -66,7 +75,8 @@ TORCH312="torch==2.9.1+rocm7.12.0"  # what AMD's cp312 vLLM wheel (rocm712) was 
 TV312="torchvision==0.24.0+rocm7.12.0"
 TORCH313="torch==2.10.0+rocm7.13.0" # matches AMD's cp313 vLLM wheel
 TV313="torchvision==0.25.0+rocm7.13.0"
-LLAMACPP_RELEASE="https://api.github.com/repos/lemonade-sdk/llamacpp-rocm/releases/latest"
+LLAMACPP_RELEASE="https://api.github.com/repos/lemonade-sdk/llamacpp-rocm/releases/latest"  # HIP
+LLAMACPP_VULKAN_RELEASES="https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=10"
 CLOUDFLARED_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
 
 SYS_PY=/usr/bin/python3
@@ -472,52 +482,84 @@ serve_vllm() {
 
 LLAMA_DIR="$AMD_WORK/llamacpp"
 
-llama_ok() { # llama_ok <binary>: runs and sees a ROCm GPU
+llama_ok() { # llama_ok <binary>: runs and sees a real AMD GPU (ROCm or Vulkan, not llvmpipe)
   local bin=$1 out
   out=$(LD_LIBRARY_PATH="$(dirname "$bin"):${LD_LIBRARY_PATH:-}" "$bin" --list-devices 2>&1) ||
     true
   echo "$out" | tail -n 5
-  [[ ${out,,} == *rocm* || ${out,,} == *gfx12* ]]
+  [[ ${out,,} == *rocm* || ${out,,} == *gfx1* || ${out,,} == *radeon* || ${out,,} == *amd* ]]
 }
 
-llama_prebuilt() {
-  local url zip="$AMD_WORK/llamacpp.zip"
-  url=$(curl -fsSL "$LLAMACPP_RELEASE" | "$SYS_PY" -c '
-import json, sys
-for a in json.load(sys.stdin)["assets"]:
-    if "ubuntu-rocm-gfx120X-x64" in a["name"]:
-        print(a["browser_download_url"])
-        break
-') || return 1
-  [ -n "$url" ] || return 1
-  echo "downloading $url"
-  curl -fL --retry 3 -o "$zip" "$url" || return 1
-  rm -rf "$LLAMA_DIR/prebuilt" && mkdir -p "$LLAMA_DIR/prebuilt"
-  "$SYS_PY" -m zipfile -e "$zip" "$LLAMA_DIR/prebuilt" || return 1
-  find "$LLAMA_DIR/prebuilt" -type f \( -name 'llama-*' -o -name '*.so*' \) -exec chmod +x {} +
-  LLAMA_BIN=$(find "$LLAMA_DIR/prebuilt" -type f -name llama-server | head -1)
+# Unpack a release archive (.zip or .tar.gz) into <dir>; sets LLAMA_BIN, true if it sees the GPU.
+llama_unpack() { # llama_unpack <archive> <dir>
+  rm -rf "$2" && mkdir -p "$2"
+  case "$1" in
+    *.zip) "$SYS_PY" -m zipfile -e "$1" "$2" || return 1 ;;
+    *) tar -xzf "$1" -C "$2" || return 1 ;;
+  esac
+  find "$2" -type f \( -name 'llama-*' -o -name '*.so*' \) -exec chmod +x {} +
+  LLAMA_BIN=$(find "$2" -type f -name llama-server | head -1)
   [ -n "$LLAMA_BIN" ] && llama_ok "$LLAMA_BIN"
 }
 
-llama_source() {
-  local src="$LLAMA_DIR/src"
-  command -v hipconfig >/dev/null || { warn "hipconfig not found (no ROCm dev tools)"; return 1; }
+# Newest asset URL whose name contains <pattern>, from a GitHub releases JSON (object or list).
+release_asset() { # release_asset <api url> <pattern>
+  curl -fsSL "$1" | "$SYS_PY" -c '
+import json, sys
+d = json.load(sys.stdin)
+for r in d if isinstance(d, list) else [d]:
+    for a in r["assets"]:
+        if sys.argv[1] in a["name"]:
+            print(a["browser_download_url"])
+            sys.exit()
+' "$2"
+}
+
+llama_fetch() { # llama_fetch <name> <api url> <pattern>: download, unpack, GPU check
+  local url archive="$AMD_WORK/llamacpp-$1.tar.gz"
+  url=$(release_asset "$2" "$3") || return 1
+  [ -n "$url" ] || return 1
+  [[ $url == *.zip ]] && archive="$AMD_WORK/llamacpp-$1.zip"
+  echo "downloading $url"
+  curl -fL --retry 3 -o "$archive" "$url" || return 1
+  llama_unpack "$archive" "$LLAMA_DIR/$1"
+}
+
+llama_vulkan_prebuilt() { llama_fetch vulkan "$LLAMACPP_VULKAN_RELEASES" "bin-ubuntu-vulkan-x64.tar.gz"; }
+
+llama_hip_prebuilt() { # lemonade-sdk ships one zip per gfx family: gfx1151, gfx120X, ...
+  local fam=$GPU_ARCH
+  [[ $fam == gfx120* ]] && fam=gfx120X
+  llama_fetch hip "$LLAMACPP_RELEASE" "ubuntu-rocm-$fam-x64.zip"
+}
+
+llama_source() { # llama_source hip|vulkan
+  local kind=$1 src="$LLAMA_DIR/src-$1" flags
   [ -d "$src/.git" ] || git clone --depth 1 https://github.com/ggml-org/llama.cpp "$src" ||
     return 1
+  if [ "$kind" = hip ]; then
+    command -v hipconfig >/dev/null || { warn "hipconfig not found (no ROCm dev tools)"; return 1; }
+    flags=(-DGGML_HIP=ON "-DAMDGPU_TARGETS=$GPU_ARCH")
+    export HIPCXX="$(hipconfig -l)/clang" HIP_PATH="$(hipconfig -R)"
+  else
+    command -v glslc >/dev/null || { warn "glslc not found (needs libvulkan-dev and glslc)"; return 1; }
+    flags=(-DGGML_VULKAN=ON)
+  fi
   command -v cmake >/dev/null || uv pip install --python "$VENV/bin/python" cmake ninja || return 1
   export PATH="$VENV/bin:$PATH"
-  echo "building llama-server with HIP for $GPU_ARCH (log: $LOGS/llama-build.log)"
-  if ! (HIPCXX="$(hipconfig -l)/clang" HIP_PATH="$(hipconfig -R)" \
-    cmake -S "$src" -B "$src/build" -DGGML_HIP=ON -DAMDGPU_TARGETS="$GPU_ARCH" \
-    -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=OFF &&
+  echo "building llama-server ($kind, $GPU_ARCH; log: $LOGS/llama-build-$kind.log)"
+  if ! (cmake -S "$src" -B "$src/build" "${flags[@]}" -DCMAKE_BUILD_TYPE=Release \
+    -DLLAMA_CURL=OFF &&
     cmake --build "$src/build" --config Release -j "$(nproc)" --target llama-server) \
-    >"$LOGS/llama-build.log" 2>&1; then
-    tail -n 30 "$LOGS/llama-build.log"
+    >"$LOGS/llama-build-$kind.log" 2>&1; then
+    tail -n 30 "$LOGS/llama-build-$kind.log"
     return 1
   fi
   LLAMA_BIN="$src/build/bin/llama-server"
   llama_ok "$LLAMA_BIN"
 }
+llama_vulkan_source() { llama_source vulkan; }
+llama_hip_source() { llama_source hip; }
 
 install_llamacpp() {
   if [ -s "$LLAMA_DIR/bin.ok" ] && [ -x "$(cat "$LLAMA_DIR/bin.ok")" ]; then
@@ -526,8 +568,17 @@ install_llamacpp() {
     return 0
   fi
   mkdir -p "$LLAMA_DIR"
-  local m
-  for m in llama_prebuilt llama_source; do
+  local order variant=$AMD_LLAMA_VARIANT m
+  if [ "$variant" = auto ]; then
+    if [ "$GPU_ARCH" = gfx1151 ]; then variant=vulkan; else variant=hip; fi
+  fi
+  case "$variant" in
+    vulkan) order="llama_vulkan_prebuilt llama_hip_prebuilt llama_vulkan_source llama_hip_source" ;;
+    hip) order="llama_hip_prebuilt llama_hip_source llama_vulkan_prebuilt llama_vulkan_source" ;;
+    *) die "AMD_LLAMA_VARIANT must be auto, vulkan or hip" ;;
+  esac
+  log "llama.cpp install: GPU_ARCH=$GPU_ARCH, first choice $variant, hipconfig: $(command -v hipconfig || echo no), glslc: $(command -v glslc || echo no)"
+  for m in $order; do
     log "llama.cpp install: trying $m"
     if "$m"; then
       echo "$LLAMA_BIN" >"$LLAMA_DIR/bin.ok"
@@ -539,13 +590,30 @@ install_llamacpp() {
   return 1
 }
 
+# Download the GGUF in the background (nohup, resumable) so a short session can disconnect.
+# Re-running this script re-attaches: an unfinished download resumes, a finished one is reused.
+download_gguf() { # sets GGUF to the local path
+  local pid="$AMD_WORK/download.pid" dl="$LOGS/download.log"
+  if ! alive "$pid"; then
+    log "Downloading $AMD_GGUF_REPO/$AMD_GGUF_FILE (about 12 GB, resumes; progress: $dl)"
+    spawn "$pid" "$dl" "$VENV/bin/python" -c 'import sys
+from huggingface_hub import hf_hub_download as d
+print("GGUF=" + d(sys.argv[1], sys.argv[2]))' "$AMD_GGUF_REPO" "$AMD_GGUF_FILE"
+  fi
+  while alive "$pid"; do sleep 5; done
+  GGUF=$(sed -n 's/^GGUF=//p' "$dl" | tail -n 1)
+  if [ -z "$GGUF" ] || [ ! -s "$GGUF" ]; then
+    tail -c 400 "$dl" | tr '\r' '\n' | tail -n 3
+    return 1
+  fi
+  rm -f "$pid"
+}
+
 serve_llamacpp() {
   install_llamacpp || return 1
-  log "Downloading $AMD_GGUF_REPO/$AMD_GGUF_FILE"
-  local gguf help extra=()
-  gguf=$("$VENV/bin/python" -c 'import sys; from huggingface_hub import hf_hub_download as d
-print(d(sys.argv[1], sys.argv[2]))' "$AMD_GGUF_REPO" "$AMD_GGUF_FILE") || return 1
-  echo "$gguf"
+  local GGUF help extra=()
+  download_gguf || return 1
+  echo "$GGUF"
   LD_LIBRARY_PATH="${LLAMA_BIN%/*}:${LD_LIBRARY_PATH:-}"
   export LD_LIBRARY_PATH
   help=$("$LLAMA_BIN" --help 2>&1 || true)
@@ -556,7 +624,7 @@ print(d(sys.argv[1], sys.argv[2]))' "$AMD_GGUF_REPO" "$AMD_GGUF_FILE") || return
   log "Starting llama-server on $LOCAL (4 parallel slots of $AMD_MAX_MODEL_LEN tokens)"
   # LLAMA_API_KEY is llama-server's env form of --api-key; keeps the key off the command line.
   LLAMA_API_KEY="$AMD_API_KEY" spawn "$AMD_WORK/server.pid" "$LOGS/server.log" "$LLAMA_BIN" \
-    -m "$gguf" --host 127.0.0.1 --port "$AMD_PORT" --alias "$AMD_MODEL" -ngl 999 \
+    -m "$GGUF" --host 127.0.0.1 --port "$AMD_PORT" --alias "$AMD_MODEL" -ngl 999 \
     -c $((AMD_MAX_MODEL_LEN * 4)) --parallel 4 --jinja --metrics "${extra[@]}"
   echo "llama.cpp" >"$AMD_WORK/backend"
   wait_healthy "$AMD_WORK/server.pid" "$LOGS/server.log" || return 1
@@ -650,6 +718,11 @@ start_tunnel() {
 
 summary() {
   log "Ready. Backend: $(cat "$AMD_WORK/backend")"
+  local BASE_VAR=AMD_VLLM_BASE_URL MODEL_GLOB=amd-gpt-oss-20b SELFPLAY_CFG=configs/selfplay_amd.yaml
+  if [ "$GPU_ARCH" = gfx1151 ] && [ "$(cat "$AMD_WORK/backend")" = llama.cpp ]; then
+    BASE_VAR=AMD_LLAMACPP_BASE_URL MODEL_GLOB=amd-strix-gpt-oss-20b
+    SELFPLAY_CFG=configs/selfplay_amd_strix.yaml
+  fi
   if [ "$AMD_TUNNEL" != 1 ]; then
     cat <<EOF
 ----------------------------------------------------------------------------
@@ -658,13 +731,13 @@ the same AMD_API_KEY exported (this script never prints the key):
 
   cd $REPO
   uv sync --frozen
-  export AMD_VLLM_BASE_URL=$LOCAL/v1
-  uv run societysim doctor --model 'amd-*'
-  uv run societysim play --config configs/selfplay_amd.yaml --agents llm
+  export $BASE_VAR=$LOCAL/v1
+  uv run societysim doctor --model '$MODEL_GLOB'
+  uv run societysim play --config $SELFPLAY_CFG --agents llm
 
 Or doctor, N games and a tarball of runs/<batch> to download, in one go:
 
-  bash infra/amd/run_on_box.sh configs/selfplay_amd.yaml 3
+  bash infra/amd/run_on_box.sh $SELFPLAY_CFG 3
 
 Logs:  $LOGS/server.log  (server)   $LOGS/stats.log  (stats)
 Stop:  bash $0 stop
@@ -785,6 +858,12 @@ test_tunnel_never_registers() (
   [ ! -e "$AMD_WORK/tunnel.pid" ] || die "mock: tunnel pid was kept"
   echo "tunnel registration mock: passed"
 )
+
+if [ "${1:-}" = --backend ]; then
+  [ -n "${2:-}" ] || die "usage: $0 --backend auto|vllm|llamacpp"
+  AMD_BACKEND=$2
+  shift 2
+fi
 
 case "${1:-up}" in
   up) cmd_up ;;

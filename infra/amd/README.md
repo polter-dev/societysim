@@ -15,6 +15,27 @@ What `serve.sh` does, in order:
 
 Re-running it is safe. Finished steps are skipped and a healthy server is reused.
 
+## Strix Halo (Radeon 8060S) with llama.cpp
+
+The R9700 pod is gone. The AUP cloud now offers the Radeon 8060S (Strix Halo iGPU, gfx1151, 64 GB unified memory) and the 890M (4 GB, too small for the model). vLLM on ROCm is shaky on gfx1151, so for this chip `serve.sh` runs gpt-oss-20b through llama.cpp's `llama-server` (OpenAI-compatible, same port 8000, same API key). It runs at $0/h: an AI player on a laptop-class chip.
+
+1. In AUP: **Start My Server → Custom Repos → Basic GPU Environment**. Under Configuration pick **8060S, not Auto** (Auto can hand you the 890M). Set the runtime to the maximum. Launch.
+2. Make the API key as described below if you haven't. In a Terminal (clone on the first run, then `git pull`):
+
+   ```bash
+   cd /opt/workspace && (git clone https://github.com/polter-dev/societysim.git || true) && cd societysim && git pull
+   read -rs AMD_API_KEY && export AMD_API_KEY      # not echoed, not in history
+   bash infra/amd/serve.sh --backend llamacpp
+   bash infra/amd/run_on_box.sh configs/selfplay_amd_strix.yaml 3
+   ```
+
+What `--backend llamacpp` does: it skips vLLM and gets llama.cpp, preferring the prebuilt Vulkan release from ggml-org/llama.cpp (about 30 MB; `AMD_LLAMA_VARIANT=hip` tries the ROCm build first). If that binary can't see the GPU it tries the other prebuilt, then a source build (`-DGGML_VULKAN=ON`, or `-DGGML_HIP=ON -DAMDGPU_TARGETS=gfx1151` when ROCm dev tools exist). The log says which one it used. Then it downloads `ggml-org/gpt-oss-20b-GGUF` / `gpt-oss-20b-MXFP4.gguf` and starts `llama-server` with `--jinja -ngl 999 --parallel 4 -c 65536` (4 slots of 16k) and low reasoning effort.
+
+- Download: about 12 GB (MXFP4), roughly 5 to 20 minutes depending on the pod's network. It runs under `nohup` and logs progress to `~/amd-serve/logs/download.log` (`tail -f` it). Closing the terminal does not stop it.
+- Resume after a disconnect: export `AMD_API_KEY` again and re-run `bash infra/amd/serve.sh --backend llamacpp`. A running download is re-attached, a partial one resumes, a finished file is reused, and a healthy server is reused too.
+- `bash infra/amd/serve.sh status` shows health. `bash infra/amd/serve.sh stop` stops everything and prints the served hours at $0/h.
+- `configs/selfplay_amd_strix.yaml` uses the `amd-strix-gpt-oss-20b` entry, which reads `AMD_LLAMACPP_BASE_URL` (default `http://127.0.0.1:8000/v1`) and `AMD_API_KEY`. `run_on_box.sh` runs `doctor` before the games.
+
 ## Make an API key (once)
 
 On your laptop:
@@ -46,7 +67,7 @@ Keep it in your laptop's `.env` as `AMD_API_KEY=<that value>` or in a password m
    cd /opt/workspace/societysim
    uv sync --frozen
    export AMD_VLLM_BASE_URL=http://127.0.0.1:8000/v1
-   uv run societysim doctor --model 'amd-*'
+   uv run societysim doctor --model amd-gpt-oss-20b
    uv run societysim play --config configs/selfplay_amd.yaml --agents llm
    ```
 
@@ -131,6 +152,7 @@ Set these before `bash infra/amd/serve.sh`:
 |---|---|---|
 | `AMD_BACKEND` | `auto` | `vllm` to fail instead of falling back, `llamacpp` to skip vLLM |
 | `AMD_MODEL` | `openai/gpt-oss-20b` | Another HF model for vLLM. Also add a matching `amd-*` entry with `litellm_model: openai/<that id>` (for example `openai/Qwen/Qwen3-8B`) and the same `api_base` and `api_key_env` as `amd-gpt-oss-20b`. It has to fit in 32 GB with room for the KV cache: Qwen3-32B in BF16 (about 64 GB) does not, Qwen3-8B or an AWQ/FP8 14B does. |
+| `AMD_LLAMA_VARIANT` | `auto` | llama.cpp build to try first: `vulkan` (auto on gfx1151) or `hip` |
 | `AMD_GGUF_REPO`, `AMD_GGUF_FILE` | `ggml-org/gpt-oss-20b-GGUF`, `gpt-oss-20b-MXFP4.gguf` | Model for the llama.cpp fallback |
 | `AMD_TUNNEL` | `none` in JupyterHub (AUP), `1` elsewhere | `none` (or `0`) for local mode, `1` to open a cloudflared quick tunnel |
 | `AMD_TUNNEL_PROTOCOL` | `http2` | Tunnel transport: `http2`, `quic`, or `auto`. Use `http2` when outbound UDP is blocked. |

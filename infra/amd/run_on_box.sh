@@ -14,7 +14,8 @@
 # Keys: AMD_API_KEY and any provider keys (OPENAI_API_KEY, GEMINI_API_KEY, HF_TOKEN) come from
 # the environment or the repo's .env; an exported value wins over .env. Never printed here.
 #
-# Settings: AMD_VLLM_BASE_URL (default http://127.0.0.1:8000/v1), SEED (default 0),
+# Settings: AMD_VLLM_BASE_URL and AMD_LLAMACPP_BASE_URL (both default http://127.0.0.1:8000/v1;
+#   the second is for amd-strix-gpt-oss-20b, see configs/selfplay_amd_strix.yaml), SEED (default 0),
 #   PUBLISH=1 to also run `societysim publish runs/<batch>` after packing. publish takes the
 #   dataset repo from SOCIETYSIM_HF_DATASET (env or .env) and needs HF_TOKEN with write access.
 
@@ -33,7 +34,9 @@ config=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." # repo root: batch and doctor read configs/models.yaml
 
 export AMD_VLLM_BASE_URL="${AMD_VLLM_BASE_URL:-http://127.0.0.1:8000/v1}"
+export AMD_LLAMACPP_BASE_URL="${AMD_LLAMACPP_BASE_URL:-http://127.0.0.1:8000/v1}"
 echo "AMD_VLLM_BASE_URL=$AMD_VLLM_BASE_URL"
+echo "AMD_LLAMACPP_BASE_URL=$AMD_LLAMACPP_BASE_URL"
 
 uv sync --frozen
 # "<play|batch> <batch id> <model> <model>..."

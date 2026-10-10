@@ -28,6 +28,7 @@ providers:
 # AMD uses a per-model base URL and key so OpenAI's hosted models keep their default endpoint.
 env:
   HOSTED_VLLM_API_BASE: https://router.huggingface.co/v1
+  AMD_LLAMACPP_BASE_URL: http://127.0.0.1:8000/v1 # llama-server on the pod (infra/amd/serve.sh)
 env_from:
   HOSTED_VLLM_API_KEY: HF_TOKEN
 
@@ -101,6 +102,21 @@ models:
     api_key_env: AMD_API_KEY
     structured: json_schema # vLLM guided decoding (xgrammar, else outlines)
     reasoning_effort: low # LiteLLM's openai/ route passes it through; vLLM applies it to gpt-oss
+    max_tokens: 2048
+    input_cost_per_mtok: 0
+    output_cost_per_mtok: 0
+    color: "#ed1c24"
+
+  # AMD Strix Halo (Radeon 8060S, 64 GB unified memory) via llama.cpp llama-server, $0/h.
+  # serve.sh --backend llamacpp serves the GGUF under the id openai/gpt-oss-20b (--alias), so the
+  # prefix is doubled like the vLLM entry. llama-server takes response_format json_schema
+  # (grammar-constrained). Reasoning effort is also set server-side via --chat-template-kwargs.
+  - name: amd-strix-gpt-oss-20b
+    litellm_model: openai/openai/gpt-oss-20b
+    api_base: ${AMD_LLAMACPP_BASE_URL}
+    api_key_env: AMD_API_KEY
+    structured: json_schema
+    reasoning_effort: low
     max_tokens: 2048
     input_cost_per_mtok: 0
     output_cost_per_mtok: 0

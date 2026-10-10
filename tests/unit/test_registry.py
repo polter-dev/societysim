@@ -23,6 +23,7 @@ EXPECTED = {
     "gpt-5-nano",
     "gpt-5-mini",
     "amd-gpt-oss-20b",
+    "amd-strix-gpt-oss-20b",
 }
 
 
@@ -105,6 +106,23 @@ def test_amd_entry_routes_to_self_hosted_server(monkeypatch):
     assert "api_key" not in request_kwargs(reg.get("gpt-5-nano"), Ping)
 
 
+def test_amd_strix_entry_defaults_to_local_llamacpp(monkeypatch):
+    from societysim.models.client import request_kwargs
+
+    monkeypatch.delenv("AMD_LLAMACPP_BASE_URL", raising=False)
+    monkeypatch.setenv("AMD_API_KEY", "amd-key")
+    reg = load_registry(DEFAULT_PATH)
+    reg.apply_env()
+    spec = reg.get("amd-strix-gpt-oss-20b")
+    kw = request_kwargs(spec, Ping)
+    assert kw["api_base"] == "http://127.0.0.1:8000/v1"
+    assert kw["model"] == "openai/openai/gpt-oss-20b"
+    assert spec.structured == "json_schema"
+    assert spec.input_cost_per_mtok == spec.output_cost_per_mtok == 0
+    monkeypatch.setenv("AMD_LLAMACPP_BASE_URL", "http://10.0.0.5:9000/v1")
+    assert request_kwargs(spec, Ping)["api_base"] == "http://10.0.0.5:9000/v1"
+
+
 def test_amd_uses_low_reasoning_and_others_unchanged(monkeypatch):
     from societysim.models.client import request_kwargs
 
@@ -122,6 +140,7 @@ def test_amd_uses_low_reasoning_and_others_unchanged(monkeypatch):
         "gemini-flash-lite": ("disable", 1024),
         "gemini-flash": ("disable", 1024),
         "amd-gpt-oss-20b": ("low", 2048),
+        "amd-strix-gpt-oss-20b": ("low", 2048),
         "gpt-5-nano": ("minimal", 2048),
         "gpt-5-mini": ("minimal", 2048),
     }

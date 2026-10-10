@@ -1,0 +1,6 @@
+# Self-play on gpt-oss-20b served by llama.cpp on the AMD Strix Halo 8060S ($0/h).
+#   bash infra/amd/serve.sh --backend llamacpp
+#   bash infra/amd/run_on_box.sh configs/selfplay_amd_strix.yaml 3
+n_players: 7
+seed: 0
+models: [amd-strix-gpt-oss-20b]

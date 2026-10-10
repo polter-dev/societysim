@@ -7,6 +7,7 @@ import ModelProfilePage from "./components/ModelProfile/ModelProfile";
 import IndexPage from "./pages/Index";
 import LeaderboardPage from "./pages/Leaderboard";
 import NewGamePage from "./pages/NewGame";
+import PlayPage, { PlayDock, PlayNavLink } from "./pages/Play";
 import ResearchPage from "./pages/Research";
 import "./pages/pages.css";
 import "./a11y.css";
@@ -39,7 +40,7 @@ const replay = params.has("game") || params.has("log") || page === "replay";
 const profileModel = page === "model" ? params.get("model") : null;
 const profileHref = (model: string) => href({ page: "model", model });
 const title =
-  profileModel ?? { leaderboard: "leaderboard", research: "research", new: "new game" }[page ?? ""] ?? "games";
+  profileModel ?? { leaderboard: "leaderboard", research: "research", new: "new game", play: "play" }[page ?? ""] ?? "games";
 const style = { fontFamily: "system-ui, sans-serif", padding: 16, maxWidth: 1100 };
 
 createRoot(document.getElementById("root")!).render(
@@ -47,11 +48,14 @@ createRoot(document.getElementById("root")!).render(
     {baseError && <p role="alert">Could not use batch base: {baseError}</p>}
     <nav aria-label="Pages" style={{ ...style, paddingBottom: 0 }}>
       <a href={href({})}>Games</a> | <a href={href({ page: "leaderboard" })}>Leaderboard</a> | <a href={href({ page: "research" })}>Research</a> |{" "}
-      <a href={href({ page: "new" })}>New game</a> |{" "}
+      <a href={href({ page: "new" })}>New game</a> | <PlayNavLink href={href({ page: "play" })} /> |{" "}
       <a href={href({ page: "replay" })}>Open a log file</a>
     </nav>
     {replay ? (
-      <App source={source} />
+      <>
+        <PlayDock gameId={params.get("game")} />
+        <App source={source} />
+      </>
     ) : (
       <main style={style} className="info-page">
         <h1>SocietySim {title}</h1>
@@ -67,6 +71,8 @@ createRoot(document.getElementById("root")!).render(
           />
         ) : page === "research" ? (
           <ResearchPage metricsUrl={sibling("metrics.json")} />
+        ) : page === "play" ? (
+          <PlayPage catalogUrl={sibling("models_catalog.json")} schemaUrl={sibling("devui/schema/game_setup.schema.json")} gamesHref={href({})} gameHref={(id) => href({ game: id })} />
         ) : page === "new" ? (
           <NewGamePage catalogUrl={sibling("models_catalog.json")} schemaUrl={sibling("devui/schema/game_setup.schema.json")} />
 

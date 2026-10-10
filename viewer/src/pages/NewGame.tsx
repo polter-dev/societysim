@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { SetupForm } from "../components/SetupForm/SetupForm";
+import { playEnabled } from "../play/config";
 import { loadSetupAssets, type SetupAssets } from "../settings/setup";
 
 /** Loads models_catalog.json and the setup schema, then shows the Basic/Advanced form. */
@@ -13,7 +14,7 @@ export default function NewGamePage({ catalogUrl, schemaUrl }: { catalogUrl: str
   if (!assets) return <p>Loading models...</p>;
   return (
     <>
-      <p>Pick a lineup, then download setup.json and run the command below. Playing in the browser is not live yet.</p>
+      <p>Pick a lineup, then download setup.json and run the command below. {playEnabled() ? "To play in the browser instead, use Play in the menu." : "Playing in the browser is coming soon."}</p>
       <SetupForm assets={assets} />
     </>
   );

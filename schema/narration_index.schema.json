@@ -19,16 +19,8 @@
           "type": "string"
         },
         "speaker": {
-          "anyOf": [
-            {
-              "const": "narrator",
-              "type": "string"
-            },
-            {
-              "pattern": "^p[0-9]$",
-              "type": "string"
-            }
-          ]
+          "pattern": "^(narrator|p[0-9])$",
+          "type": "string"
         },
         "voice": {
           "type": "string"
@@ -69,10 +61,13 @@
       "type": "string"
     },
     "voices": {
-      "additionalProperties": {
-        "type": "string"
+      "patternProperties": {
+        "^(narrator|narrator_night|p[0-9])$": {
+          "type": "string"
+        }
       },
-      "type": "object"
+      "type": "object",
+      "additionalProperties": false
     },
     "clips": {
       "items": {

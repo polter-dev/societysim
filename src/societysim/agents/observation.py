@@ -174,7 +174,8 @@ def _char(c: str) -> str:
     if c == "\\":  # a trailing backslash would read as an escaped closing quote
         return "/"
     cat, uname = unicodedata.category(c), unicodedata.name(c, "")
-    if any(k in uname for k in _QUOTE_NAMES):
+    # Letters such as Hungarian o with double acute stay; modifier letters (Lm, U+02BA) do not.
+    if cat not in ("Lu", "Ll", "Lt", "Lo") and any(k in uname for k in _QUOTE_NAMES):
         return "'"
     # control, format (zero-width, bidi), unassigned, line breaks, invisible letters
     if cat[0] == "C" or cat in ("Zl", "Zp") or any(k in uname for k in _BLANK_NAMES):

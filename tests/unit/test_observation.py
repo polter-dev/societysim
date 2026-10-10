@@ -266,3 +266,9 @@ def test_backslash_and_fillers_are_neutralized():
     assert (
         after[-1] == f'{actor}: "' + " ".join("'" * n for n in (1, 1, 1, 2, 2, 1, 1, 3, 1, 1)) + '"'
     )
+
+
+def test_letters_with_double_acute_are_kept():
+    text = "Gy\u0151r, Erd\u0151s, \u0170r, \u0443\u0434\u04f3"
+    _, after, actor = _inject("day1", "villager", text, EventType.STATEMENT)
+    assert after[-1] == f'{actor}: "{text}"'

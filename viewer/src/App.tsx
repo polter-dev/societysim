@@ -1,26 +1,86 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
+import { Arrows } from "./components/Arrows/Arrows";
+import { ChatLog } from "./components/ChatLog/ChatLog";
+import { Inspector } from "./components/Inspector/Inspector";
+import { LabelPopups } from "./components/Labels/LabelPopups";
 import { ModeToggle } from "./components/ModeToggle/ModeToggle";
 import { modeFromSearch, urlWithMode } from "./components/ModeToggle/modeUrl";
+import { Speech } from "./components/Speech/Speech";
+import { Table } from "./components/Table/Table";
+import { Tally } from "./components/Tally/Tally";
+import Timeline from "./components/Timeline/Timeline";
+import { fetchLabels, siblingLabelsUrl } from "./data/labels";
 import { parseLog, type ParsedLog } from "./data/parse";
 import { fetchLog } from "./data/source";
 import { deriveScene, type Mode } from "./scene/deriveScene";
+import type { Event, Label } from "./types/events";
 
-// Bare-bones debug UI: the real table, chat and scrubber come in T4.2-T4.8.
+export interface GameProps {
+  events: Event[];
+  labels: Label[];
+  idx: number;
+  mode: Mode;
+  selected: string | null;
+  onSelect: (seat: string | null) => void;
+  onSeqChange: (seq: number, index: number) => void;
+}
+
+/** The composed game view. All state comes from the one scene; components only render. */
+export function Game({ events, labels, idx, mode, selected, onSelect, onSeqChange }: GameProps) {
+  const scene = deriveScene(events, idx, mode);
+  // Table seats aren't buttons yet (#32); a click anywhere inside a seat card selects it.
+  const clickSeat = (e: MouseEvent) => {
+    const seat = (e.target as Element).closest("[data-seat]")?.getAttribute("data-seat");
+    if (seat) onSelect(seat);
+  };
+
+  return (
+    <>
+      <p>
+        Day {scene.day}, {scene.phase}
+        {scene.winner && ` | winner: ${scene.winner}`}
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
+        {/* One square box: Table sets the size, the overlays fill it and share seatPosition coordinates. */}
+        <div onClick={clickSeat} style={{ flex: "1 1 400px", maxWidth: 640 }}>
+          <LabelPopups scene={scene} labels={labels} mode={mode}>
+            <Table scene={scene} />
+            <Arrows scene={scene} />
+            <Speech scene={scene} />
+          </LabelPopups>
+        </div>
+        <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+          <Tally scene={scene} />
+          <ChatLog scene={scene} />
+        </div>
+      </div>
+      <Inspector scene={scene} mode={mode} selected={selected} onSelect={onSelect} />
+      <Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} />
+    </>
+  );
+}
+
 export default function App() {
   const [log, setLog] = useState<ParsedLog | null>(null);
+  const [labels, setLabels] = useState<Label[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [idx, setIdx] = useState(0);
   const [mode, setMode] = useState<Mode>(() => modeFromSearch(window.location.search));
+  const [selected, setSelected] = useState<string | null>(null);
 
   const show = (parsed: ParsedLog) => {
     setLog(parsed);
     setLoadError(null);
-    setIdx(0);
+    setSelected(null);
   };
 
   useEffect(() => {
-    const url = new URLSearchParams(location.search).get("log");
+    const params = new URLSearchParams(location.search);
+    const url = params.get("log");
     if (url) fetchLog(url).then(show, (err: Error) => setLoadError(err.message));
+    const labelsUrl = params.get("labels") ?? (url && siblingLabelsUrl(url));
+    // data/labels.ts types schema_version as number; the generated Label narrows it to 1 | 2.
+    if (labelsUrl) fetchLabels(labelsUrl).then((l) => setLabels(l as Label[]));
   }, []);
 
   useEffect(() => {
@@ -28,6 +88,9 @@ export default function App() {
     window.addEventListener("popstate", syncMode);
     return () => window.removeEventListener("popstate", syncMode);
   }, []);
+
+  // Stable, so Timeline's effect only fires when its seq changes.
+  const onSeqChange = useCallback((_seq: number, index: number) => setIdx(index), []);
 
   const changeMode = (nextMode: Mode) => {
     window.history.replaceState(window.history.state, "", urlWithMode(window.location.href, nextMode));
@@ -38,14 +101,22 @@ export default function App() {
     if (file) show(parseLog(await file.text()));
   };
 
-  const scene = log?.events.length ? deriveScene(log.events, idx, mode) : null;
+  const events = log?.events ?? [];
+  // A labels file for another game (stale ?labels=, uploaded log) must not mark this one.
+  const gameLabels = labels.filter((l) => l.game_id === events[0]?.game_id);
 
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", padding: 16, maxWidth: 960 }}>
+    <main style={{ fontFamily: "system-ui, sans-serif", padding: 16, maxWidth: 1100 }}>
       <h1>SocietySim viewer</h1>
       <p>
         <input type="file" accept=".jsonl" onChange={(e) => onFile(e.target.files?.[0])} /> or
         open with <code>?log=&lt;url&gt;</code>
+        {log && (
+          <>
+            {" "}
+            <ModeToggle mode={mode} onChange={changeMode} />
+          </>
+        )}
       </p>
       {loadError && <p role="alert">Could not load log: {loadError}</p>}
       {log && log.errors.length > 0 && (
@@ -60,44 +131,16 @@ export default function App() {
           </ul>
         </details>
       )}
-      {log && scene && (
-        <>
-          <p>
-            <ModeToggle mode={mode} onChange={changeMode} />{" "}
-            <label>
-              Event {scene.seq}{" "}
-              <input
-                type="range"
-                min={0}
-                max={log.events.length - 1}
-                value={idx}
-                onChange={(e) => setIdx(Number(e.target.value))}
-              />
-            </label>
-          </p>
-          <p>
-            Day {scene.day}, {scene.phase}
-            {scene.winner && ` | winner: ${scene.winner}`}
-          </p>
-          <ul>
-            {scene.players.map((p) => (
-              <li key={p.id} style={{ color: p.color, opacity: p.alive ? 1 : 0.5 }}>
-                {p.name} ({p.id}, {p.model}) {p.role ?? "?"}
-                {p.id === scene.speaker && " (speaking)"}
-                {!p.alive && " (dead)"}
-              </li>
-            ))}
-          </ul>
-          <p>
-            Tally:{" "}
-            {Object.entries(scene.tally)
-              .map(([id, n]) => `${id}: ${n}`)
-              .join(", ") || "none"}
-          </p>
-          <pre style={{ whiteSpace: "pre-wrap" }}>
-            {scene.current ? JSON.stringify(scene.current, null, 2) : "(hidden in this view)"}
-          </pre>
-        </>
+      {events.length > 0 && (
+        <Game
+          events={events}
+          labels={gameLabels}
+          idx={idx}
+          mode={mode}
+          selected={selected}
+          onSelect={setSelected}
+          onSeqChange={onSeqChange}
+        />
       )}
     </main>
   );

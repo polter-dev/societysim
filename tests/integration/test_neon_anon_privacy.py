@@ -56,7 +56,9 @@ def pg_port(tmp_path_factory):
     try:
         yield port
     finally:
-        subprocess.run([BINDIR / "pg_ctl", "-D", data, "-m", "immediate", "stop"], capture_output=True)
+        subprocess.run(
+            [BINDIR / "pg_ctl", "-D", data, "-m", "immediate", "stop"], capture_output=True
+        )
 
 
 def _connect(port: int, user: str, database: str = "sim"):
@@ -155,7 +157,9 @@ async def test_running_game_reads_public_events_without_private_fields(db):
 
 @pytest.mark.parametrize("gid", ["g-done", "g-fail"])
 async def test_game_that_is_over_reads_in_full(db, gid):
-    rows = await _as_anon(db, "select event from events_public where game_id = $1 order by seq", gid)
+    rows = await _as_anon(
+        db, "select event from events_public where game_id = $1 order by seq", gid
+    )
     assert [_event(r) for r in rows] == _fixture_events(gid)
 
 

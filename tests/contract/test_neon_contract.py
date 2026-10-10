@@ -42,7 +42,10 @@ def sql_table_columns(name: str) -> list[tuple[str, str]]:
 
 def sql_view_columns(name: str) -> list[str]:
     """Output column names of the view's top-level (unindented) select."""
-    body = "\n" + re.search(rf"create or replace view {name}(?: with \(\w+\))? as\n(.*?);\n", SQL, re.S)[1]
+    body = (
+        "\n"
+        + re.search(rf"create or replace view {name}(?: with \(\w+\))? as\n(.*?);\n", SQL, re.S)[1]
+    )
     select = body[body.rindex("\nselect ") + 8 :].split("\nfrom ", 1)[0]
     items, depth, cur = [], 0, ""
     for ch in select:

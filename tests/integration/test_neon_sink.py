@@ -1,0 +1,192 @@
+"""NeonSink and sync-neon. Fake-connection tests always run; the real-database test needs
+NEON_DATABASE_URL and skips cleanly without it."""
+
+import asyncio
+import json
+import os
+import shutil
+import uuid
+from pathlib import Path
+
+import pytest
+from typer.testing import CliRunner
+
+from societysim.cli import app
+from societysim.logging.events import EventLogger
+from societysim.logging.sinks.neon import NeonSink, apply_schema, connect_neon, sync_batch
+
+FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
+
+
+class FakeConn:
+    def __init__(self, fail: bool = False):
+        self.fail = fail
+        self.executed: list[tuple] = []
+        self.many: list[tuple[str, list]] = []
+        self.closed = False
+
+    async def execute(self, sql, *args):
+        if self.fail:
+            raise ConnectionError("down")
+        self.executed.append((sql, args))
+
+    async def executemany(self, sql, rows):
+        if self.fail:
+            raise ConnectionError("down")
+        self.many.append((sql, list(rows)))
+
+    async def close(self):
+        self.closed = True
+
+
+def _events(path: Path) -> list[dict]:
+    return [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
+
+
+def _batch(tmp_path: Path, game_id: str = "fixture-0001") -> Path:
+    d = tmp_path / "batch1"
+    d.mkdir()
+    for src, dst in (
+        ("sample_game.jsonl", f"{game_id}.jsonl"),
+        ("sample_game.labels.jsonl", f"{game_id}.labels.jsonl"),
+    ):
+        text = (FIXTURES / src).read_text(encoding="utf-8").replace("fixture-0001", game_id)
+        (d / dst).write_text(text, encoding="utf-8")
+    return d
+
+
+async def _play(sink: NeonSink, n: int = 7, winner="wolves"):
+    logger = EventLogger("g1", [sink])
+    await logger.start_game({}, 1, ["m1", "m2"])
+    for i in range(n):
+        logger.log(t=i, day=1, phase="night", type="phase_start", visibility="public")
+    await logger.end_game(winner)
+    await logger.close()
+
+
+async def test_batches_inserts_and_sets_status():
+    conn = FakeConn()
+
+    async def connect():
+        return conn
+
+    await _play(NeonSink("b1", connect=connect, batch_size=3))
+    assert [len(rows) for _, rows in conn.many] == [3, 3, 1]
+    seqs = [r[1] for _, rows in conn.many for r in rows]
+    assert seqs == list(range(7))
+    assert json.loads(conn.many[0][1][0][7])["type"] == "phase_start"
+    games = [a for sql, a in conn.executed if "insert into games" in sql]
+    assert games[0][:2] == ("g1", "b1")
+    assert json.loads(games[0][2]) == ["m1", "m2"]
+    ends = [a for sql, a in conn.executed if sql.startswith("update games")]
+    assert ends == [("g1", "finished", "wolves")]
+    assert conn.closed
+
+
+async def test_close_without_end_game_marks_failed():
+    conn = FakeConn()
+
+    async def connect():
+        return conn
+
+    sink = NeonSink("b1", connect=connect)
+    logger = EventLogger("g1", [sink])
+    await logger.start_game({}, 1, [])
+    logger.log(t=0, day=0, phase="setup", type="game_start", visibility="narrator")
+    await logger.close()
+    assert [a for sql, a in conn.executed if sql.startswith("update games")] == [
+        ("g1", "failed", None)
+    ]
+    assert sum(len(r) for _, r in conn.many) == 1
+
+
+async def test_sink_errors_are_swallowed():
+    conn = FakeConn(fail=True)
+
+    async def connect():
+        return conn
+
+    await _play(NeonSink("b1", connect=connect, batch_size=2))  # must not raise
+
+
+async def test_connect_failure_is_swallowed():
+    async def connect():
+        raise OSError("no route")
+
+    sink = NeonSink("b1", connect=connect, batch_size=1)
+    await _play(sink)
+    await sink.close()
+
+
+async def test_pending_buffer_is_bounded():
+    async def connect():
+        raise OSError("no route")
+
+    sink = NeonSink("b1", connect=connect, batch_size=10**9, max_pending=5)
+    logger = EventLogger("g1", [sink])
+    for i in range(20):
+        logger.log(t=i, day=1, phase="night", type="phase_start", visibility="public")
+    await logger.close()
+    assert len(sink._pending) <= 5
+    assert [r[1] for r in sink._pending] == list(range(15, 20))  # newest kept
+
+
+async def test_sync_batch_reads_every_line(tmp_path):
+    batch = _batch(tmp_path)
+    conn = FakeConn()
+    totals = await sync_batch(batch, conn, chunk=40)
+    events = _events(batch / "fixture-0001.jsonl")
+    labels = _events(batch / "fixture-0001.labels.jsonl")
+    assert totals == {"games": 1, "events": len(events), "labels": len(labels)}
+    assert sum(len(r) for sql, r in conn.many if "into events" in sql) == len(events)
+    assert max(len(r) for _, r in conn.many) <= 40
+    game = next(a for sql, a in conn.executed if "insert into games" in sql)
+    assert game[1] == "batch1"
+    assert len(json.loads(game[2])) == 7
+    end = next(a for sql, a in conn.executed if sql.startswith("update games"))
+    assert end == ("fixture-0001", "finished", "wolves")
+
+
+async def test_sync_batch_marks_unfinished_game_failed(tmp_path):
+    batch = _batch(tmp_path)
+    path = batch / "fixture-0001.jsonl"
+    lines = path.read_text(encoding="utf-8").splitlines()[:-1]  # drop game_end
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    conn = FakeConn()
+    await sync_batch(batch, conn)
+    end = next(a for sql, a in conn.executed if sql.startswith("update games"))
+    assert end == ("fixture-0001", "failed", None)
+
+
+def test_sync_neon_cli_needs_url(tmp_path, monkeypatch):
+    monkeypatch.delenv("NEON_DATABASE_URL", raising=False)
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    res = CliRunner().invoke(app, ["sync-neon", str(tmp_path)])
+    assert res.exit_code == 1
+    assert "NEON_DATABASE_URL" in res.output
+
+
+@pytest.mark.skipif(not os.environ.get("NEON_DATABASE_URL"), reason="NEON_DATABASE_URL not set")
+def test_real_neon_roundtrip(tmp_path):
+    gid = f"it-{uuid.uuid4().hex[:8]}"
+    batch = _batch(tmp_path, gid)
+    n_events = len(_events(batch / f"{gid}.jsonl"))
+
+    async def run():
+        conn = await connect_neon()
+        try:
+            await apply_schema(conn)
+            await sync_batch(batch, conn)
+            await sync_batch(batch, conn)  # idempotent
+            count = await conn.fetchval("select count(*) from events where game_id = $1", gid)
+            status = await conn.fetchval("select status from games where game_id = $1", gid)
+            await conn.fetch("select * from leaderboard")
+            return count, status
+        finally:
+            await conn.execute("delete from games where game_id = $1", gid)
+            await conn.close()
+
+    count, status = asyncio.run(run())
+    assert count == n_events
+    assert status == "finished"
+    shutil.rmtree(batch)

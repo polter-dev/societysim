@@ -114,13 +114,42 @@ create table if not exists visitor_spend (
 create index if not exists visitor_spend_day_idx on visitor_spend (day);
 alter table visitor_spend enable row level security;
 
+-- What the Data API's anonymous role reads instead of events (#323), with the same columns. A
+-- game that is over (finished or failed) reads in full. While a game runs: only its public
+-- events, with private_reasoning and suspicion set to null, so the live site can't spoil roles.
+-- The view runs with its owner's (the writer's) rights; security_barrier stops a caller's
+-- filters from being evaluated on hidden rows first.
+create or replace view events_public with (security_barrier) as
+select e.game_id,
+       e.seq,
+       e.day,
+       e.phase,
+       e.type,
+       e.actor,
+       e.schema_version,
+       case when g.status = 'running'
+            then e.event || '{"private_reasoning": null, "suspicion": null}'::jsonb
+            else e.event end as event
+from events e
+join games g on g.game_id = e.game_id
+where g.status <> 'running' or e.event ->> 'visibility' = 'public';
+
 -- Read-only access for the Data API's anonymous role (viewer, #40). Never grant writes.
+-- No direct select on events (#323): anonymous reads events_public. Labels are written only
+-- after a game is over (sync_game sets the status first), so labels stay granted.
 do $$
 begin
     if exists (select 1 from pg_roles where rolname = 'anonymous') then
         grant usage on schema public to anonymous;
-        grant select on games, events, labels, leaderboard to anonymous;
+        revoke all on events from anonymous;
+        grant select on games, events_public, labels, leaderboard to anonymous;
         grant select on leaderboard_by_batch, lies_by_model to anonymous;
         revoke all on visitor_spend from anonymous;
     end if;
+    if exists (select 1 from pg_roles where rolname = 'authenticated') then
+        revoke all on events from authenticated;  -- we don't use it; no way around events_public
+    end if;
 end $$;
+
+-- Ask the Data API (PostgREST) to reload its schema cache so events_public shows up at once.
+notify pgrst, 'reload schema';

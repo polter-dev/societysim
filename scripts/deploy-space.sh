@@ -23,6 +23,10 @@
 # URL and the auth URL (or an anon key) are set, devui/config.json carries them so that page can
 # auto-fill its fields.
 #
+# Link previews: og/ holds a card image plus a small redirect page with Open Graph meta for each
+# game and highlight moment (scripts/gen_og.py). Cards carry no roles or winner. The URLs in the
+# meta use SOCIETYSIM_SITE_URL (default https://society-sim.us).
+#
 # Test hooks: SOCIETYSIM_SKIP_VIEWER_BUILD=1 skips npm and copies SOCIETYSIM_VIEWER_DIST
 # (default viewer/dist) as is.
 set -euo pipefail
@@ -127,6 +131,8 @@ cp "$root"/schema/*.schema.json "$stage/devui/schema/"
 if [[ -n "${VITE_NEON_DATA_API_URL:-}" && ( -n "${VITE_NEON_AUTH_URL:-}" || -n "${VITE_NEON_ANON_KEY:-}" ) ]]; then
   python3 -c 'import json,os; e=os.environ; print(json.dumps({k: e[v] for k, v in (("neon_url", "VITE_NEON_DATA_API_URL"), ("auth_url", "VITE_NEON_AUTH_URL"), ("neon_anon_key", "VITE_NEON_ANON_KEY")) if e.get(v)}))' >"$stage/devui/config.json"
 fi
+# Link-preview pages and images (no hidden info; see scripts/gen_og.py).
+uv run --frozen --project "$root" python "$root/scripts/gen_og.py" "$stage" "$batch" --base "${SOCIETYSIM_SITE_URL:-https://society-sim.us}"
 cat >"$stage/README.md" <<'EOF'
 ---
 title: SocietySim

@@ -31,6 +31,11 @@ def _batch(tmp_path: Path) -> Path:
     return batch
 
 
+def _stray_pngs(site: Path) -> list[Path]:
+    """PNGs anywhere but og/ (the report charts must not be deployed)."""
+    return [p for p in site.rglob("*.png") if p.relative_to(site).parts[0] != "og"]
+
+
 def _run(
     tmp_path: Path,
     *args: str,
@@ -74,7 +79,7 @@ def test_out_stages_site(tmp_path):
         assert log.is_file()
         assert log.with_suffix(".labels.jsonl").is_file()
     assert not (out / "data/.cache").exists()
-    assert not list(out.rglob("*.png"))
+    assert not _stray_pngs(out)
     assert "data source: static data/report/index.json" in r.stdout
     assert f"python -m http.server -d {out} 8000" in r.stdout
     assert "?page=leaderboard" in r.stdout
@@ -202,7 +207,7 @@ def test_out_stages_data_at_site_root(tmp_path):
     for entry in index:
         log = out / entry["file"]
         assert log.is_file() and log.with_suffix(".labels.jsonl").is_file()
-    assert not (out / "report").exists() and not list(out.rglob("*.png"))
+    assert not (out / "report").exists() and not _stray_pngs(out)
     assert (out / "data/report/index.json").exists()  # existing viewer path still works
     headers = (out / "_headers").read_text()
     assert "Access-Control-Allow-Origin: *" in headers and "application/x-ndjson" in headers
@@ -215,3 +220,46 @@ def test_out_keeps_static_config_already_in_dist(tmp_path):
     r = _run(tmp_path, "--out", str(out), str(_batch(tmp_path)), prebuilt=True)
     assert r.returncode == 0, r.stderr
     assert (out / "_headers").read_text() == "built"
+
+
+SECRETS = ("wolf", "villager", "seer", "doctor", "winner")
+
+
+def test_out_writes_og_cards_without_hidden_info(tmp_path):
+    batch = _batch(tmp_path)
+    gid = json.loads((batch / "report/index.json").read_text())[0]["game_id"]
+    moment = {
+        "game_id": gid,
+        "day": 2,
+        "seq": [57, 60],
+        "description": "Cleo (p1, doctor) saved Dev (p4) from the wolves.",
+        "link": f"?game={gid}&seq=57&mode=narrator",
+    }
+    evil = {"game_id": "../evil", "day": 1, "seq": [1, 2], "link": "?x"}
+    (batch / "highlights.json").write_text(json.dumps([moment, evil]))
+    out = tmp_path / "site"
+    site = {"SOCIETYSIM_SITE_URL": "https://x.test"}
+    r = _run(tmp_path, "--out", str(out), str(batch), extra=site)
+    assert r.returncode == 0, r.stderr
+    og = out / "og"
+    for name in ("card.png", f"{gid}.png", f"{gid}-57.png"):
+        assert (og / name).read_bytes()[1:4] == b"PNG"
+    assert sorted(p.name for p in og.glob("*.html")) == [f"{gid}-57.html", f"{gid}.html"]
+    page = (og / f"{gid}-57.html").read_text()
+    assert f'<meta property="og:image" content="https://x.test/og/{gid}-57.png">' in page
+    assert '<meta name="twitter:card" content="summary_large_image">' in page
+    assert f"url=../?game={gid}&amp;seq=57&amp;mode=narrator" in page
+    assert "Day 2" in page
+    # no roles, winner or highlight description in any card
+    for f in og.glob("*.html"):
+        lines = f.read_text().lower().splitlines()
+        meta = " ".join(ln for ln in lines if ln.startswith("<meta p"))
+        assert not any(w in meta for w in SECRETS), f.name
+        assert "cleo" not in meta and "saved" not in meta
+
+
+def test_viewer_html_has_site_wide_card():
+    text = (ROOT / "viewer/index.html").read_text()
+    for needle in ("og:title", "og:description", "og:image", "twitter:card", "twitter:image"):
+        assert needle in text
+    assert 'content="https://society-sim.us/og/card.png"' in text

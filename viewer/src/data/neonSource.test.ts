@@ -57,7 +57,7 @@ function fakeNeon(games: Record<string, GameRow>) {
       const fields = select.split(",").map((f) => f.match(/^(\w+):event->(\w+)$/)!.slice(1));
       return json(rows.map((e) => Object.fromEntries(fields.map(([alias, f]) => [alias, e[f as keyof Event]]))));
     }
-    if (table === "labels") return json(id === ID ? labelRows : []);
+    if (table === "labels_public") return json(id === ID ? labelRows : []);
     if (table === "leaderboard")
       return json([
         { model: "a", seat_games: 14, win_rate: "0.571" },
@@ -129,8 +129,8 @@ describe("neonSource, running games (hidden information)", () => {
       expect(u).toContain("event->>visibility=eq.public");
       expect(u).not.toMatch(/select=event&|private_reasoning|suspicion/);
     }
-    expect(asked.some((u) => u.includes("/labels?"))).toBe(false);
-    expect(asked.some((u) => u.includes("/events?"))).toBe(false); // anonymous can't read it (#323)
+    expect(asked.some((u) => u.includes("/labels_public?"))).toBe(false);
+    expect(asked.some((u) => /\/(events|labels)\?/.test(u))).toBe(false); // anonymous can't read them (#323)
   });
 
   it("returns no private text and no roles", async () => {

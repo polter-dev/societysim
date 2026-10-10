@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from societysim.logging.sinks.neon import apply_schema, event_row
+from societysim.logging.sinks.neon import apply_schema, event_row, label_row
 
 asyncpg = pytest.importorskip("asyncpg")
 
@@ -70,6 +70,14 @@ def _fixture_events(game_id: str) -> list[dict]:
     return [json.loads(x.replace("fixture-0001", game_id)) for x in text.splitlines() if x.strip()]
 
 
+def _fixture_labels(game_id: str) -> list[dict]:
+    text = (FIXTURES / "sample_game.labels.jsonl").read_text(encoding="utf-8")
+    return [json.loads(x.replace("fixture-0001", game_id)) for x in text.splitlines() if x.strip()]
+
+
+LIE_TYPES = {"false_role_claim", "false_report", "bussing", "hidden_knowledge"}
+
+
 GAMES = {"g-run": "running", "g-done": "finished", "g-fail": "failed"}
 
 
@@ -80,7 +88,7 @@ def db(pg_port):
 
 
 async def _setup(pg_port: int) -> None:
-    """Neon-like roles, the schema applied twice by the writer, and three games."""
+    """Neon-like roles, the schema applied twice by the writer, and three labelled games."""
     su = await _connect(pg_port, "postgres", "postgres")
     try:
         await su.execute("create role anonymous nologin")
@@ -91,8 +99,8 @@ async def _setup(pg_port: int) -> None:
     w = await _connect(pg_port, "writer")
     try:
         await apply_schema(w)
-        # The live database before #323: anonymous could select events directly.
-        await w.execute("grant select on events to anonymous")
+        # The live database before #323: anonymous could select events and labels directly.
+        await w.execute("grant select on events, labels to anonymous")
         await apply_schema(w)  # idempotent, and it takes that grant away
         for gid, status in GAMES.items():
             await w.execute(
@@ -105,6 +113,12 @@ async def _setup(pg_port: int) -> None:
                 "insert into events (game_id, seq, day, phase, type, actor, schema_version, event)"
                 " values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)",
                 rows,
+            )
+            labels = [label_row(i, lb) for i, lb in enumerate(_fixture_labels(gid))]
+            await w.executemany(
+                "insert into labels (game_id, idx, label_type, actor, source_seq, source, label)"
+                " values ($1, $2, $3, $4, $5, $6, $7::jsonb)",
+                labels,
             )
     finally:
         await w.close()
@@ -131,9 +145,23 @@ async def test_fixture_has_hidden_information():
     assert any(e["visibility"] == "public" and e.get("suspicion") for e in events)
 
 
-async def test_anonymous_cannot_select_events(db):
+@pytest.mark.parametrize("table", ["events", "labels"])
+async def test_anonymous_cannot_select_events_or_labels(db, table):
     with pytest.raises(asyncpg.InsufficientPrivilegeError):
-        await _as_anon(db, "select event from events limit 1")
+        await _as_anon(db, f"select * from {table} limit 1")
+
+
+async def test_labels_and_lies_only_for_finished_games(db):
+    rows = await _as_anon(db, "select game_id, label from labels_public order by game_id, idx")
+    assert {r["game_id"] for r in rows} == {"g-done"}  # none for g-run or g-fail
+    assert [json.loads(r["label"]) for r in rows] == _fixture_labels("g-done")
+    lies = await _as_anon(db, "select sum(lies) as n from lies_by_model")
+    expected = [
+        lb
+        for lb in _fixture_labels("g")
+        if lb["source"] in ("self_tag", "jev") and lb["label"] in LIE_TYPES
+    ]
+    assert expected and lies[0]["n"] == len(expected)  # one game's worth, not three
 
 
 # A failed game counts as not over: batch resume reruns the same game_id and seed (same roles).
@@ -185,7 +213,7 @@ async def test_status_change_reveals_the_rest(db):
 
 
 async def test_anonymous_still_reads_games_labels_and_views(db):
-    for name in ("games", "labels", "leaderboard", "leaderboard_by_batch", "lies_by_model"):
+    for name in ("games", "labels_public", "leaderboard", "leaderboard_by_batch", "lies_by_model"):
         await _as_anon(db, f"select * from {name}")
     board = await _as_anon(db, "select model from leaderboard")
     assert board, "leaderboard reads events with the owner's rights"

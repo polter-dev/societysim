@@ -45,7 +45,7 @@ The viewer types should match these schemas. They can be generated the same way 
   `anonymous`, or changing a view's columns or their order, is breaking in the same way.
   Taking away `anonymous` access to hidden information (hard rule 2) is a fix, not a contract
   change: it needs no version bump, but the viewer moves to the replacement in the same PR (as
-  `events` to `events_public` did in #323).
+  `events` and `labels` moved to `events_public` and `labels_public` in #323).
 
 ## Conventions
 
@@ -640,9 +640,9 @@ Limits, all set by env on the server (defaults in brackets):
 - Env vars (public repo variables): `VITE_NEON_DATA_API_URL`, `VITE_NEON_AUTH_URL`, optional
   `VITE_NEON_ANON_KEY`. Never `NEON_DATABASE_URL`.
 - Grants to `anonymous` (`neon/schema.sql`): `usage` on schema `public`; `select` on `games`,
-  `events_public`, `labels`, `leaderboard`, `leaderboard_by_batch`, `lies_by_model`. No writes.
-  No `select` on `events` (#323): read events through `events_public`, which hides a running
-  game's hidden information inside the database. The writer role (`NEON_DATABASE_URL`, used by
+  `events_public`, `labels_public`, `leaderboard`, `leaderboard_by_batch`, `lies_by_model`. No
+  writes. No `select` on `events` or `labels` (#323): read them through `events_public` and
+  `labels_public`, which hide an unfinished game's hidden information inside the database. The writer role (`NEON_DATABASE_URL`, used by
   `NeonSink` and `sync-neon`) keeps full access to every table. The Databricks ingest reads the
   JSONL and Parquet files, not Neon.
 - Produced by: `NeonSink` during `societysim batch --neon` / `play --neon` (live, game by
@@ -682,7 +682,8 @@ Limits, all set by env on the server (defaults in brackets):
 | `schema_version` | integer | |
 | `event` | jsonb | The full event, exactly the JSONL line (`schema/events.schema.json`) |
 
-`labels`, one row per line of `<game_id>.labels.jsonl`:
+`labels`, one row per line of `<game_id>.labels.jsonl`. Writer only: `anonymous` reads
+`labels_public` (below).
 
 <!-- neon:labels -->
 | Column | Type | Notes |
@@ -714,7 +715,22 @@ as in `events`.
 | `type` | text | |
 | `actor` | text | |
 | `schema_version` | integer | |
-| `event` | jsonb | The JSONL line; redacted as above while the game runs |
+| `event` | jsonb | The JSONL line; redacted as above until the game finishes |
+
+`labels_public`: what `anonymous` reads instead of `labels`, with the same columns (#323). Only
+`finished` games' labels; a `running` or `failed` game has none here, since labels name roles
+and lies.
+
+<!-- neon:labels_public -->
+| Column | Type | Notes |
+|---|---|---|
+| `game_id` | text | |
+| `idx` | integer | |
+| `label_type` | text | |
+| `actor` | text | |
+| `source_seq` | integer | |
+| `source` | text | |
+| `label` | jsonb | |
 
 The next three count finished games only, leave out `human` seats and leave out games with
 `agents = 'scripted'` (null `agents` rows stay in).
@@ -743,8 +759,8 @@ win.
 | `win_rate` | numeric | 3 decimals, 0..1 |
 
 `lies_by_model`: lie labels per liar model, from `self_tag` and `jev` only, for the four lie
-types (`false_role_claim`, `false_report`, `bussing`, `hidden_knowledge`). Not split by game
-status.
+types (`false_role_claim`, `false_report`, `bussing`, `hidden_knowledge`). Finished games only
+(before #323 it counted every game).
 
 <!-- neon:lies_by_model -->
 | Column | Type | Notes |
@@ -764,7 +780,7 @@ GET {base}/games?select=game_id&status=eq.finished&or=(agents.is.null,agents.neq
 GET {base}/events_public?select=event&game_id=eq.<id>&order=seq             a whole game (over)
 GET {base}/events_public?select=<public fields>&game_id=eq.<id>&event->>visibility=eq.public&seq=gt.<n>&order=seq
                                                                             running game, poll after seq n
-GET {base}/labels?select=label&game_id=eq.<id>&order=idx                    a game's labels
+GET {base}/labels_public?select=label&game_id=eq.<id>&order=idx             a game's labels
 GET {base}/leaderboard?select=model,seat_games,win_rate&order=win_rate.desc.nullslast
 GET {base}/leaderboard_by_batch?select=*&batch_id=eq.<batch_id>
 GET {base}/lies_by_model?select=*&batch_id=eq.<batch_id>

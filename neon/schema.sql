@@ -96,7 +96,7 @@ from labels l
 join games g on g.game_id = l.game_id
 join events e on e.game_id = l.game_id and e.type = 'game_start'
 cross join lateral (select value from jsonb_each(e.event -> 'meta' -> 'seats') where key = l.actor) seat
-where g.agents is distinct from 'scripted'
+where g.status = 'finished' and g.agents is distinct from 'scripted'
   and l.source in ('self_tag', 'jev')
   and l.label_type in ('false_role_claim', 'false_report', 'bussing', 'hidden_knowledge')
 group by g.batch_id, seat.value ->> 'model', l.source, l.label_type;
@@ -136,22 +136,35 @@ from events e
 join games g on g.game_id = e.game_id
 where g.status = 'finished' or e.event ->> 'visibility' = 'public';
 
+-- What anonymous reads instead of labels (#323): a finished game's labels only. Labels name
+-- roles and lies, so a running or failed game (rerun with the same roles) shows none.
+create or replace view labels_public with (security_barrier) as
+select l.game_id,
+       l.idx,
+       l.label_type,
+       l.actor,
+       l.source_seq,
+       l.source,
+       l.label
+from labels l
+join games g on g.game_id = l.game_id
+where g.status = 'finished';
+
 -- Read-only access for the Data API's anonymous role (viewer, #40). Never grant writes.
--- No direct select on events (#323): anonymous reads events_public. Labels are never written
--- while a game runs (only sync_game writes them, after setting the status), so they stay granted.
+-- No direct select on events or labels (#323): anonymous reads events_public and labels_public.
 do $$
 begin
     if exists (select 1 from pg_roles where rolname = 'anonymous') then
         grant usage on schema public to anonymous;
-        revoke all on events from anonymous;
-        grant select on games, events_public, labels, leaderboard to anonymous;
+        revoke all on events, labels from anonymous;
+        grant select on games, events_public, labels_public, leaderboard to anonymous;
         grant select on leaderboard_by_batch, lies_by_model to anonymous;
         revoke all on visitor_spend from anonymous;
     end if;
     if exists (select 1 from pg_roles where rolname = 'authenticated') then
-        revoke all on events from authenticated;  -- we don't use it; no way around events_public
+        revoke all on events, labels from authenticated;  -- unused by us; no way around the views
     end if;
 end $$;
 
--- Ask the Data API (PostgREST) to reload its schema cache so events_public shows up at once.
+-- Ask the Data API (PostgREST) to reload its schema cache so the new views show up at once.
 notify pgrst, 'reload schema';

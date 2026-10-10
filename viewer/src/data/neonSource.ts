@@ -117,9 +117,9 @@ export function neonSource(): NeonSource {
 
     loadLabels: async (id): Promise<Label[]> => {
       try {
-        // Labels name roles; a running game has none, but never ask while it runs.
+        // Labels name roles; labels_public has none for an unfinished game, but never ask while it runs.
         if ((await gameRow(id)).status === "running") return [];
-        const rows = await get<{ label: unknown }>(`labels?select=label&${gid(id)}&order=idx`);
+        const rows = await get<{ label: unknown }>(`labels_public?select=label&${gid(id)}&order=idx`);
         return parseLabels(rows.map((r) => JSON.stringify(r.label)).join("\n"));
       } catch {
         return []; // same as a missing labels file

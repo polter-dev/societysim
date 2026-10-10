@@ -534,3 +534,53 @@ def test_cli_batch_dry_run_warns_once_per_unpriced_model(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     assert result.output.count("warning: qwen3-235b is unpriced") == 1
     assert "gemma4-26b is unpriced" not in result.output
+
+
+async def test_progress_callback_counts_fresh_run_and_resume(tmp_path):
+    events: list[dict] = []
+    await run_batch(cfg(n_games=3), SPECS, None, runs_dir=tmp_path, on_progress=events.append)
+    assert [e["done"] for e in events] == [1, 2, 3]
+    assert {e["total"] for e in events} == {3} and {e["event"] for e in events} == {"finished"}
+    assert events[0]["eta_seconds"] is not None and events[-1]["eta_seconds"] == 0
+    assert events[-1]["running"] == 0 and events[0]["winner"]
+    # Drop one game's log; the resume counts the 2 skipped ones.
+    (tmp_path / "t/t-g0002.jsonl").unlink()
+    events.clear()
+    await run_batch(cfg(n_games=3), SPECS, None, runs_dir=tmp_path, on_progress=events.append)
+    assert [(e["done"], e["total"]) for e in events] == [(3, 3)]
+
+
+async def test_progress_reports_failed_game_and_budget_stop(tmp_path):
+    class Crashy(PricedFake):
+        async def complete(self, model, messages, response_model):
+            if not self.calls:
+                self.calls.append(None)
+                raise RuntimeError("boom")
+            return await super().complete(model, messages, response_model)
+
+    events: list[dict] = []
+    await run_batch(
+        cfg(max_concurrency=1), SPECS, Crashy(), runs_dir=tmp_path, on_progress=events.append
+    )
+    assert events[0]["event"] == "failed" and "boom" in events[0]["reason"]
+    assert [e["done"] for e in events] == [1, 2, 3, 4]
+
+    events.clear()
+    await run_batch(
+        cfg(batch_id="b", n_games=5, max_concurrency=1, budget_usd=0.01),
+        SPECS,
+        PricedFake(),
+        runs_dir=tmp_path,
+        on_progress=events.append,
+    )
+    assert events[-1]["event"] == "stopped" and events[-1]["reason"] == "budget"
+
+
+def test_cli_batch_prints_a_progress_line_per_game(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    path = write_config(tmp_path)
+    args = ["batch", "--config", str(path), "--registry", str(REGISTRY)]
+    out = RUNNER.invoke(app, args).output
+    for n in (1, 2, 3):
+        assert f"[{n}/3] cli-g000{n - 1} finished (" in out
+    assert "spent $0.00 of $5.00" in out and "ETA" in out

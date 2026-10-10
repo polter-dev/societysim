@@ -174,6 +174,29 @@ def play(
     typer.echo(f"winner: {game.winner}")
 
 
+def _hm(seconds: float, *, eta: bool = False) -> str:
+    m = round(seconds / 60) if eta else int(seconds // 60)
+    if eta:
+        return f"{m // 60}h{m % 60:02d}m" if m >= 60 else f"{m}m"
+    return f"{m}m{int(seconds % 60):02d}s"
+
+
+def _progress_line(e: dict) -> str:
+    money = f"spent ${e['spent']:.2f} of ${e['budget']:.2f}"
+    if e["event"] == "stopped":
+        why = "provider down" if e["reason"] == "provider_down" else "budget"
+        return f"{why}: no new games ({money}); waiting for {e['running']} running"
+    if e["event"] == "failed":
+        end = f"failed: {str(e['reason'])[:80]}"
+    else:
+        end = f"finished ({e['winner'] or 'no winner'})"
+    eta = "ETA n/a" if e["eta_seconds"] is None else f"ETA ~{_hm(e['eta_seconds'], eta=True)}"
+    return (
+        f"[{e['done']}/{e['total']}] {e['game_id']} {end} in {_hm(e['seconds'])} | {money} "
+        f"| {e['running']} running | {eta}"
+    )
+
+
 @app.command()
 def batch(
     config: Annotated[Path, typer.Option("--config", help="Batch config YAML file.")],
@@ -257,6 +280,7 @@ def batch(
                 client,
                 provider_concurrency={p: c.concurrency for p, c in reg.providers.items()},
                 neon_connect=_neon_connect(neon),
+                on_progress=lambda e: typer.echo(_progress_line(e)),
             )
         )
     except KeyboardInterrupt:

@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import time
 from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping
 from contextvars import ContextVar
@@ -194,6 +195,7 @@ async def run_batch(
     provider_concurrency: Mapping[str, int] | None = None,
     runs_dir: str | Path = "runs",
     neon_connect: Connect | None = None,
+    on_progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Play every unfinished game of the batch; return the summary also written to run_meta.json.
 
@@ -213,6 +215,11 @@ async def run_batch(
     re-raised; re-running resumes. Resuming into a batch_id made from a different config
     raises BatchMismatch. With neon_connect, every game also streams to Neon (NeonSink) while
     it runs; Neon errors are logged and never stop a game.
+
+    on_progress, if given, gets a dict after each game ends (event "finished" or "failed", with
+    done, total, game_id, winner or reason, seconds, spent, budget, running, eta_seconds) and
+    once when the guard stops new games (event "stopped", with reason, spent, budget, running).
+    done counts games skipped on resume. eta_seconds is None until a game ends in this run.
     """
     out = Path(runs_dir) / cfg.batch_id
     out.mkdir(parents=True, exist_ok=True)
@@ -260,6 +267,12 @@ async def run_batch(
     in_flight = 0
     sem = asyncio.Semaphore(cfg.max_concurrency)  # global cap on games in flight
     metered: MeteredClient | None = None
+    durations: list[float] = []  # wall seconds of games that ended in this run
+    total = cfg.n_games
+
+    def progress(event: str, **info: Any) -> None:
+        if on_progress:
+            on_progress({"event": event, "spent": spent(), "budget": cfg.budget_usd, **info})
 
     def spent() -> float:
         return prior_spend + (metered.spent if metered else 0.0)
@@ -312,11 +325,14 @@ async def run_batch(
     async def play(a: Assignment) -> None:
         nonlocal in_flight
         _game.set(a.game_id)
+        t0 = time.monotonic()
+        outcome: dict[str, Any] = {}
         try:
             sinks: list[Any] = [JsonlSink(cfg.batch_id, runs_dir)]
             if neon_connect:
                 sinks.append(NeonSink(cfg.batch_id, connect=neon_connect))
-            await run_game(a.game_config(cfg.game), make_agent, sinks, a.game_id, colors)
+            game = await run_game(a.game_config(cfg.game), make_agent, sinks, a.game_id, colors)
+            outcome = {"event": "finished", "winner": getattr(game.winner, "value", game.winner)}
             _tag_agents(out / f"{a.game_id}.run_meta.json", agents)
             finished.append(a.game_id)
             if metered:
@@ -324,6 +340,7 @@ async def run_batch(
         except Exception as exc:
             log.exception("game %s failed", a.game_id)
             failed[a.game_id] = f"{type(exc).__name__}: {exc}"
+            outcome = {"event": "failed", "reason": failed[a.game_id]}
             if isinstance(exc, ProviderDown) and str(exc) not in down:
                 down.append(str(exc))
             # asyncio.gather does not cancel the siblings of a call that raised; they inherit
@@ -341,6 +358,20 @@ async def run_batch(
             in_flight -= 1
             reserved.pop(a.game_id, None)
             sem.release()
+            if outcome:
+                seconds = time.monotonic() - t0
+                durations.append(seconds)
+                done = len(skipped) + len(finished) + len(failed)
+                eta = sum(durations) / len(durations) * (total - done) / cfg.max_concurrency
+                progress(
+                    **outcome,
+                    done=done,
+                    total=total,
+                    game_id=a.game_id,
+                    seconds=seconds,
+                    running=in_flight,
+                    eta_seconds=eta,
+                )
 
     save("running")
     tasks: set[asyncio.Task[None]] = set()
@@ -353,6 +384,12 @@ async def run_batch(
             if v == "stop":
                 sem.release()
                 budget_hit = True
+                progress(
+                    "stopped",
+                    reason="provider_down" if down else "budget",
+                    running=in_flight,
+                    detail=down[0] if down else "",
+                )
                 break
             in_flight += 1
             reserved[a.game_id] = estimate(a)

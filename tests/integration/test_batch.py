@@ -411,6 +411,83 @@ async def test_fresh_models_start_in_parallel_from_the_prior(tmp_path):
     assert max(client.peak.values()) > 7  # several fresh-model games ran at once
 
 
+class Spans(PricedFake):
+    """PricedFake that records when each game makes its first and last call."""
+
+    def __init__(self):
+        super().__init__(delay=0.002)
+        self.span: dict[str, list[int]] = {}
+        self.tick = 0
+
+    async def complete(self, model, messages, response_model) -> CompletionResult:
+        from societysim.batch.runner import _game
+
+        game = _game.get()
+        self.tick += 1
+        self.span.setdefault(game, [self.tick, self.tick])[1] = self.tick
+        r = await super().complete(model, messages, response_model)
+        self.tick += 1
+        self.span[game][1] = self.tick
+        return r
+
+    def peak_games(self) -> int:
+        marks = [(a, 1) for a, _ in self.span.values()] + [(b, -1) for _, b in self.span.values()]
+        live = peak = 0
+        for _, d in sorted(marks):
+            live += d
+            peak = max(peak, live)
+        return peak
+
+
+NINE = {
+    f"m{i}": ModelSpec(
+        name=f"m{i}", litellm_model=f"openai/m{i}", input_cost_per_mtok=1, output_cost_per_mtok=0
+    )
+    for i in range(9)
+}
+
+
+async def test_nine_unseen_priced_models_fill_max_concurrency(tmp_path):
+    client = Spans()
+    res = await run_batch(
+        cfg(n_games=9, max_concurrency=4, models=list(NINE)), NINE, client, runs_dir=tmp_path
+    )
+    assert res["status"] == "completed"
+    assert client.peak_games() == 4  # all four slots filled from the prior, none over
+
+
+async def test_nine_unseen_priced_models_still_respect_the_budget(tmp_path):
+    client = Spans()
+    # A game's prior is about $0.168, so $0.40 reserves for two at once, not four.
+    res = await run_batch(
+        cfg(n_games=9, max_concurrency=4, models=list(NINE), budget_usd=0.4),
+        NINE,
+        client,
+        runs_dir=tmp_path,
+    )
+    assert client.peak_games() == 2
+    assert res["spent_usd"] <= 0.4
+
+
+async def test_unpriced_model_game_runs_alone_until_it_has_finished_once(tmp_path):
+    specs = {
+        "free": ModelSpec(name="free", litellm_model="openai/free"),
+        "paid": NINE["m0"].model_copy(update={"name": "paid"}),
+    }
+    client = Spans()
+    res = await run_batch(
+        cfg(n_games=6, max_concurrency=4, models=["free", "paid"]),
+        specs,
+        client,
+        runs_dir=tmp_path,
+    )
+    assert res["status"] == "completed"
+    first = client.span["t-g0000"]
+    others = [v for g, v in client.span.items() if g != "t-g0000"]
+    assert all(first[1] < v[0] for v in others)  # nothing overlapped the first game
+    assert client.peak_games() > 1  # then it ran in parallel
+
+
 async def test_prior_over_budget_still_stops_new_games(tmp_path):
     client = PricedFake()
     res = await run_batch(

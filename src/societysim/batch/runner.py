@@ -231,9 +231,18 @@ async def run_batch(
     starts only if spend so far, plus what each in-flight game is still expected to spend,
     plus the new game's estimate stays within cfg.budget_usd. A game is estimated as the sum
     over its seats of the highest per-seat cost seen so far for that seat's model, or
-    prior_seat_cost for a model with no finished game yet, so fresh models run in parallel too.
-    Overshoot happens only when a game costs more than its estimate: a model's first games are
-    bounded by the prior, so a model far dearer than its price table can overshoot there.
+    prior_seat_cost (the same estimator --dry-run prints) for a model with no finished game yet,
+    so fresh models run in parallel too. The prior is a safe reservation: T5.1 measured real
+    games at about a quarter of it (a cheap model's seat cost about $0.023 a game against a
+    $0.09 prior), and the live T5.2 batch averages about $0.06 a game against $0.09.
+    A model with no finished game and a prior of 0 (no listed price, e.g. AMD) cannot be
+    bounded that way, so a game with such a seat runs alone: it waits for every game in flight
+    to end, and nothing else starts while it runs. Once it ends, its observed cost takes over.
+    Overshoot bound: spend can pass cfg.budget_usd only by the amount real games exceed their
+    estimates. For a model with a price this needs a model far dearer than its price table
+    (the first max_concurrency games can each exceed the prior, so at most max_concurrency
+    games' worth of excess); for an unpriced model it is at most one game, the one running
+    alone. Games already running at the stop always finish.
     Games already running finish. After each finished game (and on resume, over the games
     already on disk) every model's invalid_output rate is checked; one above
     cfg.max_invalid_rate with at least cfg.min_calls_for_invalid_check attempts stops new games,
@@ -352,6 +361,11 @@ async def run_batch(
     colors = {name: s.color for name, s in specs.items()}
 
     reserved: dict[str, float] = {}  # in-flight game -> estimated USD
+    solo: set[str] = set()  # in-flight games with a seat no estimate can bound
+
+    def unbounded(a: Assignment) -> bool:
+        """A model with no finished game and no listed price: its prior is 0."""
+        return any(m not in seat_cost and prior_seat_cost(specs[m]) == 0 for m in a.models)
 
     def estimate(a: Assignment) -> float:
         """Sum of each seat's observed per-seat cost, or the prior for a model with no data."""
@@ -362,6 +376,8 @@ async def run_batch(
             return "stop"
         if metered is None:
             return "go"  # scripted games are free
+        if in_flight and (solo or unbounded(a)):
+            return "wait"  # an unpriced game runs alone, so its spend is the only one moving
         est = estimate(a)
         # An in-flight game only still needs what it has not spent yet.
         left = sum(max(e - sum(metered.by_game[g].values()), 0.0) for g, e in reserved.items())
@@ -407,6 +423,7 @@ async def run_batch(
         finally:
             in_flight -= 1
             reserved.pop(a.game_id, None)
+            solo.discard(a.game_id)
             sem.release()
             if outcome:
                 seconds = time.monotonic() - t0
@@ -447,6 +464,8 @@ async def run_batch(
                 break
             in_flight += 1
             reserved[a.game_id] = estimate(a)
+            if unbounded(a):
+                solo.add(a.game_id)
             started_ids.append(a.game_id)
             task = asyncio.create_task(play(a))
             tasks.add(task)

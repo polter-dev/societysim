@@ -3,6 +3,12 @@
   "output_format": "mp3_44100_64",
   "clips": [
     {
+      "file": "009f2be4e106e725f16bea80f0b7113ad2e91590.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Jude, a villager."
+    },
+    {
       "file": "0265b90a19a22fe7f36377c3000775c7fb724b3f.mp3",
       "voice": "narrator_night",
       "voice_id": "SOYHLrjzK2X1ezoPC6cr",
@@ -67,6 +73,18 @@
       "voice": "narrator_night",
       "voice_id": "SOYHLrjzK2X1ezoPC6cr",
       "text": "The wolves struck. Finn, the Seer, was found dead."
+    },
+    {
+      "file": "10a81bc060266e57259e49e8a31eeb0f2825b5a9.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Jude, the Seer, was found dead."
+    },
+    {
+      "file": "131174e6b53a80bec105e9ae9e11355428c0eb1e.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Jude, the Seer."
     },
     {
       "file": "176a44b0e6359396fa41f6392e6eb998df0591ab.mp3",
@@ -315,6 +333,12 @@
       "text": "The wolves struck. Hugo, the Seer, was found dead."
     },
     {
+      "file": "71aaafcd10aaedcb524afd0b6800eb08297c983a.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Jude was found dead."
+    },
+    {
       "file": "754f9ab738f2cc6c4c7f26d3dc592bb5590bf34c.mp3",
       "voice": "narrator",
       "voice_id": "N2lVS1w4EtoT3dr4eOWO",
@@ -331,6 +355,12 @@
       "voice": "narrator",
       "voice_id": "N2lVS1w4EtoT3dr4eOWO",
       "text": "Day 4. The village wakes."
+    },
+    {
+      "file": "7ff4219e902d47bfad369a8c6a7fde315d29c857.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Jude, a villager, was found dead."
     },
     {
       "file": "865dac16be4bf785da35851a4a482e0bfac54cf5.mp3",
@@ -363,6 +393,12 @@
       "text": "The wolves struck. Gia was found dead."
     },
     {
+      "file": "8de29943fad0047bd5b8b497d856750b8ea04fe3.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Jude, the Doctor."
+    },
+    {
       "file": "90e4217419a7ba95afe3257f92d1edfca1ac519a.mp3",
       "voice": "narrator",
       "voice_id": "N2lVS1w4EtoT3dr4eOWO",
@@ -385,6 +421,12 @@
       "voice": "narrator",
       "voice_id": "N2lVS1w4EtoT3dr4eOWO",
       "text": "The village voted out Ava."
+    },
+    {
+      "file": "95f6f05e631221941ec2088507c971c938c741a4.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Jude."
     },
     {
       "file": "9e5d0ddd450f7b75ba0b73ae85c801432165dc7e.mp3",
@@ -603,10 +645,22 @@
       "text": "The village voted out Elif, the Seer."
     },
     {
+      "file": "e6ccff2f491393ce8f398c935469463b3c2bba47.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Jude, the Doctor, was found dead."
+    },
+    {
       "file": "e99c8873882b40ca23bd434c961fd2ea299336c7.mp3",
       "voice": "narrator",
       "voice_id": "N2lVS1w4EtoT3dr4eOWO",
       "text": "The village voted out Dev, the Seer."
+    },
+    {
+      "file": "e9b80266bcf1a91ed60711e0fdaecb63fdf328d1.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Jude, a wolf."
     },
     {
       "file": "eab7539d3f1c82c6abc759276f74f0bab87ac4d8.mp3",

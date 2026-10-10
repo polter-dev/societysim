@@ -70,11 +70,8 @@ stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 cp server/Dockerfile "$stage/Dockerfile"
 cp server/README.md "$stage/README.md"
-while IFS= read -r -d '' f; do
-  [ -f "$f" ] || continue
-  mkdir -p "$stage/$(dirname "$f")"
-  cp "$f" "$stage/$f"
-done < <(git ls-files -z -- "${TRACKED[@]}")
+# Committed content (git archive HEAD), not the working tree: an uncommitted edit can't ship.
+git archive HEAD -- "${TRACKED[@]}" | tar -x -C "$stage"
 bad=$(cd "$stage" && find . -type f | sed 's|^\./||' | grep -E "$FORBIDDEN" || true)
 if [ -n "$bad" ]; then
   echo "error: staged files that look like secrets or local data:" >&2

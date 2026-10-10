@@ -159,10 +159,36 @@ def test_stage_has_tracked_allowlist_only_never_untracked_env(tmp_path):
     assert not any(dummy in p.read_text() for p in out.rglob("*") if p.is_file())
 
 
+def test_stage_uses_committed_content_not_working_tree(tmp_path):
+    repo = _temp_repo(tmp_path)
+    (repo / "pyproject.toml").write_text("UNCOMMITTED-EDIT\n")
+    out = tmp_path / "stage"
+    r = _stage(repo, out)
+    assert r.returncode == 0, r.stderr
+    assert (out / "pyproject.toml").read_text() == "[project]\n"
+
+
+def test_dockerfile_cmd_target_imports_and_builds(monkeypatch):
+    pytest.importorskip("fastapi")
+    import importlib
+    import json
+
+    cmd = re.search(r"^CMD (\[.*\])$", (ROOT / "server/Dockerfile").read_text(), re.M)
+    args = json.loads(cmd.group(1))
+    assert args[:2] == ["uvicorn", "--factory"]
+    module, _, attr = args[2].partition(":")
+    monkeypatch.setenv("PLAY_DEV_MODE", "1")
+    monkeypatch.delenv("NEON_DATABASE_URL", raising=False)
+    factory = getattr(importlib.import_module(module), attr)
+    assert callable(factory)
+    assert factory().title
+
+
 def test_stage_hard_fails_on_tracked_secret_looking_file(tmp_path):
     repo = _temp_repo(tmp_path)
     (repo / "schema/leak.pem").write_text("x")
     _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "leak")
     r = _stage(repo, tmp_path / "s")
     assert r.returncode == 1
     assert "leak.pem" in r.stderr

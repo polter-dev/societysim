@@ -17,6 +17,7 @@ Six sponsor rooms on Sunday (hours 42 to 46), one 60-second pitch each. Every se
 
 ## Before walking in
 
+- The main site is https://society-sim.us (Cloudflare Pages; deploy with the `Deploy` workflow, see the README). The HF Space and the GitHub Pages mirror are backups.
 - Open the HF Space on the game index, a finished game, and the leaderboard page. `TODO(#37)`: Space URL and Dataset URL.
 - Have the backup video from #38 on the laptop, not only online.
 - Keep a local viewer running (`cd viewer && npm ci && npm run dev`) with one mixed-batch game loaded through `?log=<url>`, in case the Space or the venue wifi is down.

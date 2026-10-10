@@ -7,7 +7,12 @@ import pytest
 from typer.testing import CliRunner
 
 from societysim.analysis.metrics import compute_metrics, load_game
-from societysim.analysis.report import build_leaderboard, render_markdown, write_report
+from societysim.analysis.report import (
+    build_leaderboard,
+    model_game_counts,
+    render_markdown,
+    write_report,
+)
 from societysim.cli import app
 
 FIX = Path(__file__).parents[2] / "fixtures"
@@ -115,3 +120,54 @@ def test_missing_base_rate_raises():
     board = build_leaderboard(broken)
     with pytest.raises(KeyError):
         render_markdown(broken, board)
+
+
+def _two_seat_batch(tmp_path: Path) -> Path:
+    """The fixture game with llama's seat given to qwen: qwen fills 2 seats in 1 game."""
+    batch = _batch(tmp_path)
+    log = batch / "sample_game.jsonl"
+    log.write_text(
+        log.read_text(encoding="utf-8").replace("llama-4-maverick", "qwen3-235b"),
+        encoding="utf-8",
+    )
+    return batch
+
+
+def test_leaderboard_reports_games_and_seats_separately(tmp_path):
+    out = write_report(_two_seat_batch(tmp_path))
+    board = json.loads((out / "leaderboard.json").read_text())
+    rows = {r["model"]: r for r in board["models"]}
+    assert "llama-4-maverick" not in rows
+    assert (rows["qwen3-235b"]["games"], rows["qwen3-235b"]["seats"]) == (1, 2)
+    assert (rows["gemma-4-26b"]["games"], rows["gemma-4-26b"]["seats"]) == (1, 1)
+    assert all(r["games"] <= board["games"] for r in board["models"])
+    md = (out / "report.md").read_text(encoding="utf-8")
+    assert "| Model | Games | Seats | Win rate (per seat) |" in md
+    assert "Win rate is per seat" in md
+    assert "`seats`" in md.split("## leaderboard.json shape")[1]
+
+
+def test_model_game_counts_are_distinct_games():
+    g = load_game(FIX / "sample_game.jsonl")
+    other = copy.deepcopy(g)
+    other.events[0] = other.events[0].model_copy(update={"game_id": "other"})
+    counts = model_game_counts([g, other])
+    assert set(counts.values()) == {2}
+    assert model_game_counts([g, g]) == {m: 1 for m in counts}  # same game twice is one game
+
+
+def test_unknown_game_count_is_null_not_seats():
+    metrics = compute_metrics([load_game(FIX / "sample_game.jsonl")])
+    board = build_leaderboard(metrics)
+    assert all(r["games"] is None and r["seats"] == 1 for r in board["models"])
+
+
+def test_base_rate_shows_its_denominator(tmp_path):
+    # fixture: gemma-4-26b's only bussing has 5 base votes, none followed
+    out = write_report(_batch(tmp_path))
+    md = (out / "report.md").read_text(encoding="utf-8")
+    row = next(ln for ln in md.splitlines() if ln.startswith("| gemma-4-26b | self_tag |"))
+    assert row.split("|")[-2].strip() == "0% (5)"
+    # no base days at all: n/a with a zero denominator
+    jev = next(ln for ln in md.splitlines() if ln.startswith("| gemma-4-26b | jev |"))
+    assert jev.split("|")[-2].strip() == "n/a (0)"

@@ -8,14 +8,15 @@ leaderboard.json (read by the viewer, T4.9 and T6.2):
 
     {
       "schema": 1,
-      "games": int,                        # games in the batch
+      "games": int,                        # distinct games in the batch
       "label_sources": ["self_tag", "jev"],
       "wolf_side_advantage": {"overall": {mu, sigma, ordinal}, "sided": {...}} | null,
       "models": [                          # sorted by openskill.ordinal, best first
         {
           "model": str,
-          "games": int,                    # seat-games played
-          "win_rate": float | null,        # 0..1, all roles
+          "games": int | null,             # distinct games the model played in (null if unknown)
+          "seats": int,                    # seats it filled, summed over games
+          "win_rate": float | null,        # 0..1 per seat (one result per seat), all roles
           "win_ci": [lo, hi] | null,       # Wilson 95%
           "wolf_win_rate": float | null,   # null when the model never played wolf
           "village_win_rate": float | null,
@@ -87,7 +88,20 @@ def build_index(games: list[tuple[Path, GameData]]) -> list[dict]:
     return out
 
 
-def build_leaderboard(metrics: dict, present: set[str] | None = None) -> dict:
+def model_game_counts(games: list[GameData]) -> dict[str, int]:
+    """Distinct games each model played in (a model can fill several seats in one game)."""
+    seen: dict[str, set[str]] = {}
+    for g in games:
+        for model in set(g.models.values()):
+            seen.setdefault(model, set()).add(g.game_id)
+    return {m: len(ids) for m, ids in seen.items()}
+
+
+def build_leaderboard(
+    metrics: dict,
+    present: set[str] | None = None,
+    model_games: dict[str, int] | None = None,
+) -> dict:
     present = set(LABEL_SOURCES) if present is None else present
     base = metrics
     ratings = base["openskill"]["overall"]
@@ -97,7 +111,8 @@ def build_leaderboard(metrics: dict, present: set[str] | None = None) -> dict:
         rows.append(
             {
                 "model": model,
-                "games": a.get("games", 0),
+                "games": (model_games or {}).get(model),
+                "seats": a.get("games", 0),
                 "win_rate": a.get("win_rate"),
                 "win_ci": a.get("win_ci"),
                 "wolf_win_rate": groups.get("wolf", {}).get("win_rate"),
@@ -135,7 +150,9 @@ def render_markdown(metrics: dict, board: dict, present: set[str] | None = None)
     lines = [
         "# Batch report",
         "",
-        f"{board['games']} games. Win rates carry a Wilson 95% interval; small batches are noisy.",
+        f"{board['games']} games. Win rate is per seat: each seat a model fills counts once, "
+        "and a model can fill several seats in one game. Win rates carry a Wilson 95% interval; "
+        "small batches are noisy.",
         "",
         "## Leaderboard",
         "",
@@ -152,11 +169,21 @@ def render_markdown(metrics: dict, board: dict, present: set[str] | None = None)
             "",
         ]
     lines += _table(
-        ["Model", "Games", "Win rate", "95% CI", "Wolf win", "Village win", "Ordinal"],
+        [
+            "Model",
+            "Games",
+            "Seats",
+            "Win rate (per seat)",
+            "95% CI",
+            "Wolf win",
+            "Village win",
+            "Ordinal",
+        ],
         [
             [
                 r["model"],
-                str(r["games"]),
+                "n/a" if r["games"] is None else str(r["games"]),
+                str(r["seats"]),
                 _pct(r["win_rate"]),
                 "n/a" if not r["win_ci"] else f"{_pct(r['win_ci'][0])} to {_pct(r['win_ci'][1])}",
                 _pct(r["wolf_win_rate"]),
@@ -208,7 +235,8 @@ def render_markdown(metrics: dict, board: dict, present: set[str] | None = None)
         "",
         "Exploratory: this reads correlation, not cause. 'Moved' is the share of observer "
         "suspicions that shifted the way the liar wanted. 'Voted as lie implied' is read against "
-        "the base rate of the same vote when no lie was told.",
+        "the base rate of the same vote when no lie was told. Counts in brackets are the "
+        "denominators; a base rate on a handful of votes means little.",
         "",
     ]
     head = ["Model", "Source", "Moved", "Voted as lie implied", "No-lie base rate"]
@@ -222,7 +250,7 @@ def render_markdown(metrics: dict, board: dict, present: set[str] | None = None)
                     s,
                     f"{_pct(ls['share_moved'])} ({ls['comparisons']})",
                     f"{_pct(ls['share_followed'])} ({ls['voters']})",
-                    _pct(ls["base_rate"]),
+                    f"{_pct(ls['base_rate'])} ({ls['base_voters']})",
                 ]
             )
     lines += _table(head, rows)
@@ -264,7 +292,8 @@ def render_markdown(metrics: dict, board: dict, present: set[str] | None = None)
         "## leaderboard.json shape",
         "",
         "`leaderboard.json` holds `{schema, games, label_sources, models[]}`. Each entry in "
-        "`models` (best OpenSkill ordinal first) has `model`, `games`, `win_rate`, `win_ci`, "
+        "`models` (best OpenSkill ordinal first) has `model`, `games` (distinct games), `seats` "
+        "(seats filled, which is what win rate is counted over), `win_rate`, `win_ci`, "
         "`wolf_win_rate`, `village_win_rate`, `openskill {mu, sigma, ordinal}`, `detection_auc`, "
         "`detection_brier`, `invalid_output_rate`, `cost_usd_per_game` and "
         "`lie_rate {self_tag, jev}`, plus top-level `wolf_side_advantage`. "
@@ -333,7 +362,7 @@ def write_report(batch_dir: Path) -> Path:
     data = [g for _, g in games]
     metrics: dict[str, Any] = compute_metrics(data)
     present = {lb.source for g in data for lb in g.labels}
-    board = build_leaderboard(metrics, present)
+    board = build_leaderboard(metrics, present, model_game_counts(data))
     write_charts(board, out)
 
     def dump(name: str, obj) -> None:

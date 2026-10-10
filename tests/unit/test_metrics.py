@@ -126,6 +126,17 @@ def test_lie_success_false_role_claim(game):
     }
 
 
+def test_base_rate_zero_when_the_only_base_day_is_all_abstains(game):
+    # The real smoke-batch gemma 0%: the one base day had nobody voting, and an abstain never
+    # follows the lie, so the base rate is 0 on a handful of voters. It is arithmetic, not a bug.
+    events = [
+        e.model_copy(update={"target": None}) if e.type is EventType.VOTE and e.day == 2 else e
+        for e in game.events
+    ]
+    r = lie_success(GameData(events, game.labels), _label(game, LabelType.FALSE_ROLE_CLAIM))
+    assert (r["base_voters"], r["base_followed"]) == (4, 0)
+
+
 def test_lie_success_false_report_follows_reported_target(game):
     # same suspicion pairs as above; reported Ava (p0) as wolf, and only p4 voted p0.
     # No base day: Ava is dead by the day-2 vote.

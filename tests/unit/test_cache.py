@@ -98,10 +98,12 @@ async def test_error_results_are_not_cached(tmp_path, mode):
         assert inner.calls == 2 and again.usage.cached
 
 
-async def test_bad_parse_is_not_cached(tmp_path):
+async def test_failed_parse_round_trips(tmp_path):
     bad = FakeClient(script=["not json"])
-    await CachedClient(bad, tmp_path, "record").complete(SPEC, MSGS, VoteResponse)
-    assert not list(tmp_path.glob("*.json"))
+    a = await CachedClient(bad, tmp_path, "record").complete(SPEC, MSGS, VoteResponse)
+    b = await CachedClient(FakeClient(), tmp_path, "replay").complete(SPEC, MSGS, VoteResponse)
+    assert a.parsed is None and b.parsed is None
+    assert (a.raw, a.error) == (b.raw, b.error)
 
 
 async def test_existing_error_entry_is_a_miss(tmp_path):

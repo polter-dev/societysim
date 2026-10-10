@@ -705,7 +705,8 @@ Seth's and Marcus's OK. `sync-neon --prune` refuses until the column exists.
 
 ### Views
 
-`events_public`: what `anonymous` reads instead of `events`, with the same columns (#323). A
+`events_public`: what `anonymous` reads instead of `events`, with the same columns except
+`inserted_at`, which is an internal server timestamp (#323). A
 `finished` game reads in full. A `running` or `failed` game gives only its events with
 `visibility = 'public'`, with `private_reasoning` and `suspicion` set to null inside `event`, so
 `seq` has gaps and there is no `game_start`. Failed counts as unfinished because batch resume
@@ -723,7 +724,6 @@ as in `events`.
 | `actor` | text | |
 | `schema_version` | integer | |
 | `event` | jsonb | The JSONL line; redacted as above until the game finishes |
-| `inserted_at` | timestamp with time zone | Database clock at insert, as in `events`. A timestamp of a row the view already shows, not game information |
 
 `labels_public`: what `anonymous` reads instead of `labels`, with the same columns (#323). Only
 `finished` games' labels; a `running` or `failed` game has none here, since labels name roles

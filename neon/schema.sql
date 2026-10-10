@@ -135,8 +135,7 @@ select e.game_id,
        case when g.status = 'finished'
             then e.event
             else e.event || jsonb_build_object('private_reasoning', null, 'suspicion', null) end
-           as event,
-       e.inserted_at
+           as event
 from events e
 join games g on g.game_id = e.game_id
 where g.status = 'finished' or e.event ->> 'visibility' = 'public';

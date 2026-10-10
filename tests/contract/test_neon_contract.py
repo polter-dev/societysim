@@ -82,7 +82,12 @@ def test_events_public_hides_running_games():
     assert view.startswith("with (security_barrier) as")
     assert "where g.status = 'finished' or e.event ->> 'visibility' = 'public'" in view
     assert "jsonb_build_object('private_reasoning', null, 'suspicion', null)" in view
-    assert sql_view_columns("events_public") == [c for c, _ in sql_table_columns("events")]
+    # inserted_at is an internal server timestamp (used by sync-neon --prune), not part of the
+    # public contract; the view must not list it, as databases may not have the column yet.
+    internal = {"inserted_at"}
+    assert sql_view_columns("events_public") == [
+        c for c, _ in sql_table_columns("events") if c not in internal
+    ]
 
 
 def test_labels_only_for_finished_games():

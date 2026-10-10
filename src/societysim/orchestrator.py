@@ -5,8 +5,10 @@ The engine owns state changes and emits the flow events (phase_start, seer_check
 night_kill, doctor_save, death_reveal, elimination, no_elimination, game_end). This module
 emits the rest: game_start, wolf_chat, wolf_proposal, statement and its self-tags, vote,
 invalid_output and fallback_action. Prompts come only from `observe` + `phase_prompt`.
-All randomness (fallbacks, the wolf tie-break) is drawn from `state.rng`, never while
-calls run in parallel, so a seed replays the same game.
+All randomness (fallbacks, the wolf tie-break) is drawn from `state.rng` in a fixed order,
+so a seed replays the same game: during the parallel night calls only the wolf channel
+draws (its own fallbacks, in turn order); Seer and Doctor fallbacks and the tie-break are
+drawn after the calls finish. Vote fallbacks abstain and draw nothing.
 """
 
 import asyncio
@@ -90,12 +92,12 @@ class Game:
         config: GameConfig,
         make_agent: AgentFactory,
         logger: EventLogger,
-        colors: Mapping[str, str] | None = None,
+        colors: Mapping[str, str | None] | None = None,
     ):
         self.state = GameState(config)
         self.agents = {seat: make_agent(self.state, seat) for seat in self.state.seats}
         self.logger = logger
-        self.colors = colors or {}  # model name -> viewer color
+        self.colors = colors or {}  # model name -> viewer color (None falls back)
         self.events: list[Event] = []
         self.winner: Winner | None = None
 
@@ -118,7 +120,7 @@ class Game:
             s: {
                 "name": st.names[s],
                 "model": st.models.get(s, ""),
-                "color": self.colors.get(st.models.get(s, ""), DEFAULT_COLOR),
+                "color": self.colors.get(st.models.get(s, "")) or DEFAULT_COLOR,
                 "role": st.roles[s],
             }
             for s in st.seats
@@ -365,7 +367,7 @@ async def run_game(
     make_agent: AgentFactory,
     sinks: Sequence[EventSink],
     game_id: str,
-    colors: Mapping[str, str] | None = None,
+    colors: Mapping[str, str | None] | None = None,
 ) -> Game:
     """Play one game to the end. Pass fresh sinks per game; returns the finished Game."""
     logger = EventLogger(game_id, sinks)

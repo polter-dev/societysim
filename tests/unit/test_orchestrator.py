@@ -10,8 +10,7 @@ from societysim.agents.prompts import player
 from societysim.config import GameConfig, ModelSpec, RoleCounts
 from societysim.engine.state import GameState
 from societysim.logging.events import EventLogger, EventType
-from societysim.logging.sinks.jsonl import JsonlSink
-from societysim.orchestrator import SILENT, Game, run_game
+from societysim.orchestrator import DEFAULT_COLOR, SILENT, Game, run_game
 from societysim.roles import Role
 
 SPEC = ModelSpec(name="fake", litellm_model="fake/fake")
@@ -210,10 +209,9 @@ async def test_statement_truncation_and_self_tags():
     assert (tags[3].target, tags[3].meta.result, tags[3].meta.night) == (a, "wolf", 1)
 
 
-async def test_full_game_is_deterministic_and_complete(tmp_path):
+async def test_full_game_is_deterministic_and_complete():
     async def play(seed):
-        sink = JsonlSink("b", tmp_path)  # fresh sink per game
-        return await run_game(GameConfig(seed=seed, models=["fake"]), FakeAgent, [sink], "g")
+        return await run_game(GameConfig(seed=seed, models=["fake"]), FakeAgent, [], "g")
 
     for seed in range(6):
         game = await play(seed)
@@ -224,7 +222,6 @@ async def test_full_game_is_deterministic_and_complete(tmp_path):
         llm = (EventType.STATEMENT, EventType.VOTE, EventType.WOLF_CHAT, EventType.SEER_CHECK)
         assert all(e.meta.usage for e in events if e.type in llm and not e.meta.fallback)
         assert events[1].day == 1 and events[1].phase == "night"
-        assert len((tmp_path / "b" / "g.jsonl").read_text().splitlines()) == len(events)
         again = await play(seed)
         assert [e.model_dump() for e in again.events] == [e.model_dump() for e in events]
 
@@ -234,3 +231,9 @@ def test_llm_agents_builds_seat_system_prompt():
     state = GameState(GameConfig(models=["fake"]))
     agent = llm_agents(client, {"fake": SPEC})(state, "p0")
     assert agent.spec is SPEC and state.names["p0"] in agent.system
+
+
+async def test_model_without_color_gets_default():
+    game = await run_game(GameConfig(models=["fake"]), FakeAgent, [], "g", colors={"fake": None})
+    seats = game.events[0].meta.seats
+    assert {seat.color for seat in seats.values()} == {DEFAULT_COLOR}

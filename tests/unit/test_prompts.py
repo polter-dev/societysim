@@ -11,7 +11,7 @@ from societysim.agents.prompts import (
     system_prompt,
 )
 from societysim.agents.schemas import StatementResponse, VoteResponse
-from societysim.config import GameConfig, ModelSpec, RuleFlags
+from societysim.config import GameConfig, ModelSpec, RoleCounts, RuleFlags
 from societysim.roles import Role
 
 CFG = GameConfig()
@@ -115,6 +115,36 @@ def test_system_prompt_follows_rule_flags():
     assert "abstains" not in text
     assert "day 4 vote" in text
     assert "at most 50 words" in text
+
+
+@pytest.mark.parametrize(
+    ("seers", "doctors", "roles_line"),
+    [
+        (1, 1, "- Roles: 2 Werewolves, 1 Seer, 1 Doctor, 3 Villagers."),
+        (0, 1, "- Roles: 2 Werewolves, 1 Doctor, 4 Villagers."),
+        (1, 0, "- Roles: 2 Werewolves, 1 Seer, 4 Villagers."),
+        (0, 0, "- Roles: 2 Werewolves, 5 Villagers."),
+    ],
+)
+def test_system_prompt_omits_roles_with_zero_count(seers, doctors, roles_line):
+    roles = GameConfig(roles=RoleCounts(seers=seers, doctors=doctors)).roles
+    text = system_prompt("p3", "Ava", Role.VILLAGER, CFG.rules, roles)
+    assert roles_line in text.splitlines()
+    night = next(line for line in text.splitlines() if line.startswith("- Night:"))
+    assert ("Seer" in night) == bool(seers)
+    assert ("Doctor" in night) == bool(doctors)
+    assert ("protect themself" in text) == bool(doctors)
+    assert ("Seer" in text) == bool(seers)
+    assert ("Doctor" in text) == bool(doctors)
+
+
+def test_system_prompt_uses_singular_and_plural_counts():
+    roles = RoleCounts(wolves=1, villagers=1).resolved(4)
+    text = system_prompt("p3", "Ava", Role.WOLF, CFG.rules, roles)
+    assert "- Roles: 1 Werewolf, 1 Seer, 1 Doctor, 1 Villager." in text
+    roles = RoleCounts(wolves=3).resolved(9)
+    text = system_prompt("p3", "Ava", Role.WOLF, CFG.rules, roles)
+    assert "- Roles: 3 Werewolves, 1 Seer, 1 Doctor, 4 Villagers." in text
 
 
 @pytest.mark.parametrize("action", list(PHASES))

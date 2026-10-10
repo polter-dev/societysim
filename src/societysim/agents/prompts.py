@@ -62,17 +62,33 @@ def _players(players: dict[str, str]) -> str:
     return ", ".join(player(seat, name) for seat, name in players.items())
 
 
+def _count(n: int, singular: str, plural: str) -> str:
+    return f"{n} {singular if n == 1 else plural}"
+
+
 def _rules(rules: RuleFlags, roles: RoleCounts) -> str:
-    doctor = "The Doctor may " + ("" if rules.doctor_self_protect else "not ") + "protect themself"
-    if rules.doctor_no_repeat:
-        doctor += ", and may not protect the same player two nights in a row"
-    lines = [
-        f"- Roles: {roles.wolves} Werewolves, {roles.seers} Seer, {roles.doctors} Doctor, "
-        f"{roles.villagers} Villagers.",
-        "- The game starts at night, then alternates day and night.",
+    counts = [
+        (roles.wolves, "Werewolf", "Werewolves"),
+        (roles.seers, "Seer", "Seers"),
+        (roles.doctors, "Doctor", "Doctors"),
+        (roles.villagers, "Villager", "Villagers"),
+    ]
+    night = (
         f"- Night: the wolves talk privately for up to {rules.wolf_chat_rounds} rounds and kill "
-        "one non-wolf. The Seer checks one player. The Doctor protects one player. "
-        f"{doctor}.",
+        "one non-wolf."
+    )
+    if roles.seers:
+        night += " The Seer checks one player."
+    if roles.doctors:
+        may = "may" if rules.doctor_self_protect else "may not"
+        night += f" The Doctor protects one player. The Doctor {may} protect themself"
+        if rules.doctor_no_repeat:
+            night += ", and may not protect the same player two nights in a row"
+        night += "."
+    lines = [
+        "- Roles: " + ", ".join(_count(*c) for c in counts if c[0]) + ".",
+        "- The game starts at night, then alternates day and night.",
+        night,
         "- Day: night deaths are announced"
         + (" and their roles revealed" if rules.reveal_role_on_death else "")
         + f". Then {rules.discussion_rounds} discussion rounds; each living player makes one "

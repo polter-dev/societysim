@@ -120,13 +120,27 @@ def plan(cfg: BatchConfig, specs: Mapping[str, ModelSpec]) -> list[dict[str, Any
     return rows
 
 
+def _tag_agents(path: Path, agents: str) -> None:
+    """Record the agent type in a game's run_meta.json, next to its finished JSONL."""
+    meta = json.loads(path.read_text())
+    meta["agents"] = agents
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(meta, indent=2))
+    os.replace(tmp, path)
+
+
 class BatchMismatch(Exception):
     """runs/<batch_id> holds games from a different batch config; the message is safe to print."""
 
 
-def fingerprint(cfg: BatchConfig) -> str:
-    """Hash of what decides which games exist. n_games, budget and concurrency may change."""
+def fingerprint(cfg: BatchConfig, specs: Mapping[str, ModelSpec], agents: str) -> str:
+    """Hash of what decides what a game is: config, agent type and the models' registry entries.
+
+    n_games, budget and concurrency may change between runs.
+    """
     keep = cfg.model_dump(mode="json", exclude={"n_games", "budget_usd", "max_concurrency"})
+    keep["agents"] = agents
+    keep["registry"] = {m: specs[m].model_dump(mode="json") for m in sorted(set(cfg.models))}
     return hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:16]
 
 
@@ -174,11 +188,17 @@ async def run_batch(
     out.mkdir(parents=True, exist_ok=True)
     meta_path = out / "run_meta.json"
     old = _read_meta(meta_path)
-    fp = fingerprint(cfg)
+    agents = "llm" if client else "scripted"
+    fp = fingerprint(cfg, specs, agents)
+    if old.get("agents") not in (None, agents):
+        raise BatchMismatch(
+            f"runs/{cfg.batch_id} was played with {old['agents']} agents, not {agents}; "
+            "use a new batch_id or delete the directory"
+        )
     if old.get("fingerprint") not in (None, fp):
         raise BatchMismatch(
-            f"runs/{cfg.batch_id} was made with a different seed, models, mode or game settings; "
-            "use a new batch_id or delete the directory"
+            f"runs/{cfg.batch_id} was made with a different seed, models (or their registry "
+            "entries), mode or game settings; use a new batch_id or delete the directory"
         )
 
     started = datetime.now(UTC).isoformat()
@@ -218,6 +238,7 @@ async def run_batch(
             "batch_id": cfg.batch_id,
             "status": status,
             "fingerprint": fp,
+            "agents": agents,
             "started_at": started,
             "updated_at": datetime.now(UTC).isoformat(),
             "spent_usd": round(spent(), 6),
@@ -271,6 +292,7 @@ async def run_batch(
         try:
             sinks = [JsonlSink(cfg.batch_id, runs_dir)]
             await run_game(a.game_config(cfg.game), make_agent, sinks, a.game_id, colors)
+            _tag_agents(out / f"{a.game_id}.run_meta.json", agents)
             finished.append(a.game_id)
             if metered:
                 observe(a, metered.by_game[a.game_id])

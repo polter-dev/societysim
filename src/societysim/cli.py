@@ -188,7 +188,8 @@ def batch(
         raise typer.Exit(1) from None
     typer.echo(Path("runs") / cfg.batch_id)
     typer.echo(
-        f"{result['status']}: {len(result['finished'])} played, {len(result['skipped'])} skipped, "
+        f"{result['status']} ({agents.value}): {len(result['finished'])} played, "
+        f"{len(result['skipped'])} skipped, "
         f"{len(result['not_started'])} not started; "
         f"spent ${result['spent_usd']:.4f} of ${cfg.budget_usd:.2f}"
     )

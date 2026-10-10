@@ -260,6 +260,25 @@ async def test_run_meta_written_via_replace(tmp_path):
     assert not list((tmp_path / "t").glob("*.tmp"))
 
 
+async def test_scripted_logs_do_not_satisfy_an_llm_resume(tmp_path):
+    await run_batch(cfg(), SPECS, None, runs_dir=tmp_path)
+    meta = json.loads((tmp_path / "t/t-g0000.run_meta.json").read_text())
+    assert meta["agents"] == "scripted"
+    client = PricedFake()
+    with pytest.raises(BatchMismatch, match="scripted agents, not llm"):
+        await run_batch(cfg(), SPECS, client, runs_dir=tmp_path)
+    assert client.calls == []
+    meta = json.loads((tmp_path / "t/run_meta.json").read_text())
+    assert meta["agents"] == "scripted" and len(meta["skipped"]) == 0  # untouched
+
+
+async def test_changed_registry_entry_refuses_resume(tmp_path):
+    await run_batch(cfg(), SPECS, None, runs_dir=tmp_path)
+    changed = SPECS | {"a": SPECS["a"].model_copy(update={"litellm_model": "openai/other"})}
+    with pytest.raises(BatchMismatch, match="registry"):
+        await run_batch(cfg(), changed, None, runs_dir=tmp_path)
+
+
 async def test_resume_refuses_a_different_config(tmp_path):
     await run_batch(cfg(), SPECS, None, runs_dir=tmp_path)
     await run_batch(cfg(n_games=6, budget_usd=1, max_concurrency=2), SPECS, None, runs_dir=tmp_path)
@@ -292,10 +311,10 @@ def test_cli_batch_scripted_and_resume(tmp_path, monkeypatch):
     path = write_config(tmp_path)
     first = RUNNER.invoke(app, ["batch", "--config", str(path), "--registry", str(REGISTRY)])
     assert first.exit_code == 0, first.output
-    assert "completed: 3 played, 0 skipped" in first.output
+    assert "completed (scripted): 3 played, 0 skipped" in first.output
     assert len(list((tmp_path / "runs/cli").glob("*.jsonl"))) == 3
     second = RUNNER.invoke(app, ["batch", "--config", str(path), "--registry", str(REGISTRY)])
-    assert "completed: 0 played, 3 skipped" in second.output
+    assert "completed (scripted): 0 played, 3 skipped" in second.output
 
 
 def test_cli_batch_dry_run_prints_plan_and_writes_nothing(tmp_path, monkeypatch):
@@ -310,6 +329,20 @@ def test_cli_batch_dry_run_prints_plan_and_writes_nothing(tmp_path, monkeypatch)
     assert lines[0].startswith("cli-g0000 seed=") and "p0=gemma4-26b/" in lines[0]
     assert "wolf" in result.output and "3 games, estimated $" in lines[-1]
     assert not (tmp_path / "runs").exists()
+
+
+def test_cli_batch_llm_after_scripted_exits_one(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOSTED_VLLM_API_KEY", "test-key")
+    from societysim.models import client as client_module
+
+    monkeypatch.setattr(client_module, "LiteLLMClient", lambda *, limits: PricedFake())
+    path = write_config(tmp_path)
+    args = ["batch", "--config", str(path), "--registry", str(REGISTRY)]
+    assert RUNNER.invoke(app, args).exit_code == 0
+    result = RUNNER.invoke(app, [*args, "--agents", "llm"])
+    assert result.exit_code == 1, result.output
+    assert "scripted agents, not llm" in result.output
 
 
 def test_cli_batch_keyboard_interrupt_exits_130(tmp_path, monkeypatch):

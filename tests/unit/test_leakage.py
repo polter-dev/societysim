@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from societysim.agents.observation import observe
+from societysim.agents.observation import observe, visible
 from societysim.config import GameConfig, RuleFlags
 from societysim.engine.engine import resolve_night, seer_check, start_phase, tally
 from societysim.engine.state import GameState
@@ -345,8 +345,10 @@ def test_hidden_state_changes_nothing(reveal, checkpoint, role):
     for a, b in zip(movable, rotated, strict=True):
         other.roles[a] = state.roles[b]
     assert other.roles != state.roles
-    other.seer_results = {s: [(1, seat, "wolf")] for s in state.seats if s != seat}
-    other.seer_results[seat] = state.seer_results.get(seat, [])
+    fake = next(s for s in sorted(state.alive) if s != seat)
+    other.seer_results = {s: [(1, fake, "wolf")] for s in state.seats}
+    if role is Role.SEER:
+        other.seer_results[seat] = state.seer_results[seat]
     other.last_doctor_protect, other.last_doctor_protect_night = seat, 1
     assert observe(state, events, seat) == observe(other, events, seat)
 
@@ -367,3 +369,43 @@ def test_unrevealed_roles_stay_hidden():
     obs = observe(state, events, game.cast["villager"])
     assert obs.count("role not revealed") >= 2
     assert "villager" not in obs  # both dead were villagers; nobody claimed villager
+
+
+@pytest.mark.parametrize("role", list(Role))
+@pytest.mark.parametrize("vis", list(Visibility))
+@pytest.mark.parametrize("own", [True, False])
+def test_visible_policy(role, vis, own):
+    """The filter itself, independent of what rendering happens to show."""
+    event = Event(
+        game_id="g",
+        seq=0,
+        t=0,
+        day=1,
+        phase=Phase.NIGHT,
+        type=EventType.STATEMENT,
+        visibility=vis,
+        actor="p1" if own else "p2",
+    )
+    expected = {
+        Visibility.PUBLIC: True,
+        Visibility.WOLVES: role is Role.WOLF,
+        Visibility.SEER: role is Role.SEER and own,
+        Visibility.DOCTOR: role is Role.DOCTOR and own,
+        Visibility.NARRATOR: False,
+    }[vis]
+    assert visible(event, "p1", role) is expected
+
+
+@pytest.mark.parametrize("role", list(Role))
+def test_game_end_is_never_visible(role):
+    event = Event(
+        game_id="g",
+        seq=0,
+        t=0,
+        day=1,
+        phase=Phase.VOTE,
+        type=EventType.GAME_END,
+        visibility=Visibility.PUBLIC,
+        meta={"roles": {"p1": "wolf"}},
+    )
+    assert not visible(event, "p1", role)

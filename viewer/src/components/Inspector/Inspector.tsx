@@ -10,16 +10,21 @@ export interface InspectorProps {
   onSelect: (seat: string | null) => void;
 }
 
-/** The seat's latest speech/reasoning and latest suspicion row, up to the current event. */
+/** The seat's latest visible speech, wolf activity, reasoning, and suspicion row. */
 export function inspect(scene: Scene, seat: string) {
   const mine = scene.log.filter((e) => e.actor === seat);
   const last = (pick: (e: Event) => unknown) => [...mine].reverse().find((e) => pick(e));
-  const spoke = last((e) => e.public_text || e.private_reasoning);
+  const spoke = last((e) => e.visibility === "public" && e.public_text);
+  const wolfChat = last((e) => e.type === "wolf_chat" && e.visibility === "wolves" && e.public_text);
+  const wolfProposal = last((e) => e.type === "wolf_proposal" && e.visibility === "wolves" && e.target);
+  const reasoned = last((e) => e.private_reasoning);
   const susp = last((e) => e.suspicion)?.suspicion ?? [];
   const alive = new Set(scene.players.filter((p) => p.alive).map((p) => p.id));
   return {
     publicText: spoke?.public_text ?? null,
-    reasoning: spoke?.private_reasoning ?? null,
+    wolfChat: wolfChat?.public_text ?? null,
+    wolfProposal: wolfProposal?.target ?? null,
+    reasoning: reasoned?.private_reasoning ?? null,
     suspicion: susp.filter((s) => s.player !== seat && alive.has(s.player)),
   };
 }
@@ -31,7 +36,7 @@ export function Inspector({ scene, mode, selected, onSelect }: InspectorProps) {
   if (!player) return null;
 
   const name = (id: string) => scene.players.find((p) => p.id === id)?.name ?? id;
-  const { publicText, reasoning, suspicion } = inspect(scene, player.id);
+  const { publicText, wolfChat, wolfProposal, reasoning, suspicion } = inspect(scene, player.id);
 
   const onKeyDown = (ev: KeyboardEvent) => {
     if (ev.key === "Escape") return onSelect(null);
@@ -65,6 +70,13 @@ export function Inspector({ scene, mode, selected, onSelect }: InspectorProps) {
       </section>
       {mode === "narrator" && (
         <>
+          {(wolfChat || wolfProposal) && (
+            <section aria-label="Wolf chat (private)">
+              <h3>Wolf chat (private)</h3>
+              {wolfChat && <p>{wolfChat}</p>}
+              {wolfProposal && <p>Proposed target: {name(wolfProposal)}</p>}
+            </section>
+          )}
           <section aria-label="Private reasoning">
             <h3>Private reasoning</h3>
             <p>{reasoning ?? "Nothing yet."}</p>

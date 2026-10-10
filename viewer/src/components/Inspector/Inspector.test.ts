@@ -14,6 +14,8 @@ const events: Event[] = [
   ev({ seq: 1, actor: "p0", public_text: "I trust Bo", private_reasoning: "SECRET-A", suspicion: [{ player: "p1", p: 0.1 }, { player: "p2", p: 0.9 }] }),
   ev({ seq: 2, actor: "p0", public_text: "Cy is odd", private_reasoning: "SECRET-B", suspicion: [{ player: "p1", p: 0.2 }, { player: "p2", p: 0.8 }] }),
   ev({ seq: 3, type: "death_reveal", target: "p2", meta: { role: "seer" } }),
+  ev({ seq: 4, type: "wolf_chat", phase: "night", visibility: "wolves", actor: "p0", public_text: "WOLF-ONLY CHAT", private_reasoning: "WOLF-ONLY REASON" }),
+  ev({ seq: 5, type: "wolf_proposal", phase: "night", visibility: "wolves", actor: "p0", target: "p1" }),
 ];
 const html = (idx: number, mode: "narrator" | "villager", selected: string | null = "p0") =>
   renderToStaticMarkup(createElement(Inspector, { scene: deriveScene(events, idx, mode), mode, selected, onSelect: () => {} }));
@@ -37,9 +39,18 @@ describe("Inspector", () => {
     expect(inspect(deriveScene(events, 3, "narrator"), "p0").suspicion.map((s) => s.player)).toEqual(["p1"]);
   });
 
+  it("narrator keeps wolf chat and proposals out of public speech", () => {
+    const h = html(5, "narrator");
+    expect(h.match(/<section aria-label="Public">.*?<\/section>/)?.[0]).toContain("Cy is odd");
+    expect(h.match(/<section aria-label="Public">.*?<\/section>/)?.[0]).not.toContain("WOLF-ONLY CHAT");
+    expect(h.match(/<section aria-label="Wolf chat \(private\)">.*?<\/section>/)?.[0]).toContain("WOLF-ONLY CHAT");
+    expect(h.match(/<section aria-label="Wolf chat \(private\)">.*?<\/section>/)?.[0]).toContain("Proposed target: Bo");
+    expect(h).toContain("WOLF-ONLY REASON");
+  });
+
   it("villager mode renders nothing private", () => {
-    const h = html(2, "villager");
+    const h = html(5, "villager");
     expect(h).toContain("Cy is odd");
-    expect(h).not.toMatch(/SECRET|Private reasoning|Suspicion|meter|80%/);
+    expect(h).not.toMatch(/SECRET|WOLF-ONLY|Wolf chat|Proposed target|Private reasoning|Suspicion|meter|80%/);
   });
 });

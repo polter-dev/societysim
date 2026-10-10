@@ -2,6 +2,7 @@ import json
 import shutil
 from pathlib import Path
 
+import httpx
 import pytest
 from typer.testing import CliRunner
 
@@ -163,7 +164,7 @@ def test_cli_with_key_runs_jev_and_writes_agreement(tmp_path, monkeypatch, no_ke
     monkeypatch.setenv("TYPESAFE_API_KEY", "fake")
     seen = []
 
-    async def fake_classify(events):
+    async def fake_classify(events, cache_dir):
         seen.append(events[0].game_id)
         return [_result(claim_role="seer")]  # Jev hears Elif claim Seer
 
@@ -183,7 +184,7 @@ def test_cli_with_key_runs_jev_and_writes_agreement(tmp_path, monkeypatch, no_ke
 def test_cli_no_jev_flag_skips_jev(tmp_path, monkeypatch, no_key):
     monkeypatch.setenv("TYPESAFE_API_KEY", "fake")
 
-    async def boom(events):
+    async def boom(events, cache_dir):
         raise AssertionError("Jev called")
 
     monkeypatch.setattr(jev_mod, "classify_events", boom)
@@ -212,3 +213,36 @@ def test_cli_writes_labels_next_to_game_and_leaves_raw_log_alone(tmp_path, no_ke
     # re-running does not label the labels file as a game
     assert CliRunner().invoke(app, ["label", str(tmp_path)]).exit_code == 0
     assert not (tmp_path / "fixture-0001.labels.labels.jsonl").exists()
+
+
+def _status_error(code: int) -> httpx.HTTPStatusError:
+    req = httpx.Request("POST", jev_mod.API_URL)
+    return httpx.HTTPStatusError("x", request=req, response=httpx.Response(code, request=req))
+
+
+@pytest.mark.parametrize(
+    ("error", "shown"),
+    [(_status_error(401), "HTTP 401"), (httpx.ConnectError("refused"), "ConnectError")],
+)
+def test_cli_survives_jev_failure(tmp_path, monkeypatch, no_key, error, shown):
+    monkeypatch.setenv("TYPESAFE_API_KEY", "sk-secret-do-not-print")
+
+    async def failing(events, cache_dir):
+        raise error
+
+    monkeypatch.setattr(jev_mod, "classify_events", failing)
+    shutil.copy(FIXTURE, tmp_path / "fixture-0001.jsonl")
+
+    result = CliRunner().invoke(app, ["label", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert f"Jev failed ({shown})" in result.output
+    assert "sk-secret" not in result.output
+    written = (tmp_path / "fixture-0001.labels.jsonl").read_text().splitlines()
+    assert len(written) == len(PLANTED.read_text().splitlines())
+    assert not (tmp_path / "agreement.json").exists()
+
+
+def test_cli_fails_when_automatic_labeling_fails(tmp_path, monkeypatch, no_key):
+    (tmp_path / "broken.jsonl").write_text("not json\n")
+    assert CliRunner().invoke(app, ["label", str(tmp_path)]).exit_code != 0

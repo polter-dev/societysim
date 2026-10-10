@@ -7,7 +7,8 @@ For every `statement` event it asks:
   report a Seer check, on whom, with what result.
 
 Raw API responses are cached at `<cache_dir>/<game_id>/<seq>.json`, so re-runs make no
-calls. The labeler (T3.2) turns `JevResult`s into labels; this module only classifies.
+calls. The default cache is `<batch_dir>/.cache/jev` (see `cache_dir_for`), never relative
+to the cwd. The labeler (T3.2) turns `JevResult`s into labels; this module only classifies.
 
     uv run python -m societysim.analysis.jev fixtures/sample_game.jsonl
 """
@@ -27,7 +28,6 @@ from societysim.roles import Role, SeatId, SeerResult
 
 API_URL = "https://api.typesafe.ai/v1/systemone"
 MODEL = "jev-latest"
-DEFAULT_CACHE = Path(".cache/jev")
 NO_CLAIM = "none"
 RETRY_STATUS = {429, 529}
 TIMEOUT = 30.0  # seconds per request; a timeout is retried like a 429
@@ -47,6 +47,11 @@ class JevResult(BaseModel):
     seer_report: float
     seer_target: SeatId  # only meaningful when seer_report is high
     seer_result: SeerResult  # same
+
+
+def cache_dir_for(batch_dir: Path) -> Path:
+    """The default Jev cache for a batch: `<batch_dir>/.cache/jev`, as an absolute path."""
+    return batch_dir.resolve() / ".cache" / "jev"
 
 
 def build_request(stmt: Event, names: dict[str, str]) -> dict[str, Any]:
@@ -141,7 +146,7 @@ async def classify_game(log_path: Path, **kwargs: Any) -> list[JevResult]:
 
 async def classify_events(
     events: list[Event],
-    cache_dir: Path = DEFAULT_CACHE,
+    cache_dir: Path,
     client: httpx.AsyncClient | None = None,
     concurrency: int = 8,
 ) -> list[JevResult]:
@@ -179,5 +184,6 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
 
     load_dotenv()
-    for r in asyncio.run(classify_game(Path(sys.argv[1]))):
+    log = Path(sys.argv[1])
+    for r in asyncio.run(classify_game(log, cache_dir=cache_dir_for(log.parent))):
         print(r.model_dump_json())

@@ -4,8 +4,10 @@ from pathlib import Path
 
 import httpx
 import pytest
+from typer.testing import CliRunner
 
 from societysim.analysis import jev
+from societysim.cli import app
 from societysim.roles import Role
 
 FIXTURE = Path(__file__).parents[2] / "fixtures" / "sample_game.jsonl"
@@ -137,6 +139,57 @@ async def test_timeout_gives_up_after_last_try(monkeypatch):
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         with pytest.raises(httpx.ReadTimeout):
             await jev._post(client, {}, tries=2)
+
+
+async def test_auth_error_raises_without_retry_or_cache(tmp_path):
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(401)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(httpx.HTTPStatusError) as exc:
+            await jev.classify_game(FIXTURE, cache_dir=tmp_path, client=client, concurrency=1)
+    assert exc.value.response.status_code == 401
+    assert len(requests) == N_STATEMENTS  # each statement tried once: 401 is not retried
+    assert not any(tmp_path.rglob("*.json"))
+
+
+async def test_connection_error_raises(tmp_path):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(httpx.ConnectError):
+            await jev.classify_game(FIXTURE, cache_dir=tmp_path, client=client)
+
+
+def test_cli_cache_is_under_batch_dir_whatever_the_cwd(tmp_path, monkeypatch):
+    monkeypatch.setenv("TYPESAFE_API_KEY", "fake")
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    calls = []
+
+    async def fake_post(client, body):
+        calls.append(body)
+        return fake_answers(body)
+
+    monkeypatch.setattr(jev, "_post", fake_post)
+    batch = tmp_path / "runs" / "b1"
+    batch.mkdir(parents=True)
+    (batch / "fixture-0001.jsonl").write_bytes(FIXTURE.read_bytes())
+    (tmp_path / "elsewhere").mkdir()
+
+    monkeypatch.chdir(tmp_path)
+    assert CliRunner().invoke(app, ["label", "runs/b1"]).exit_code == 0
+    assert len(calls) == N_STATEMENTS
+    assert len(list((batch / ".cache" / "jev" / "fixture-0001").glob("*.json"))) == N_STATEMENTS
+
+    monkeypatch.chdir(tmp_path / "elsewhere")
+    result = CliRunner().invoke(app, ["label", "../runs/b1"])
+    assert result.exit_code == 0, result.output
+    assert len(calls) == N_STATEMENTS  # second run, other cwd: all cache hits
+    assert not (tmp_path / "elsewhere" / ".cache").exists()
 
 
 def test_claim_role_none_parses_as_no_claim():

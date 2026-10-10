@@ -15,6 +15,8 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
+from huggingface_hub.errors import HfHubHTTPError
+
 
 def parse_spec(spec: str) -> tuple[str, str]:
     """hf:owner/name[:batch_id] -> (repo_id, batch_id)."""
@@ -66,8 +68,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         repo_id, batch = parse_spec(args.spec)
         print(fetch_batch(repo_id, batch, args.root, os.environ.get("HF_TOKEN") or None))
-    except ValueError as e:
-        print(f"error: {e}", file=sys.stderr)
+    except (ValueError, HfHubHTTPError, OSError) as e:
+        # Missing or private dataset, bad token, network failure: say so, don't dump a traceback.
+        print(f"error: could not fetch {args.spec}: {type(e).__name__}: {e}", file=sys.stderr)
         return 1
     return 0
 

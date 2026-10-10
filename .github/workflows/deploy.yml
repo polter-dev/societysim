@@ -72,11 +72,24 @@ jobs:
               hf:*) ;;
               *) echo "::error::source must look like hf:<owner/name>[:<batch_id>]"; exit 1 ;;
             esac
-            BATCH=$(uv run python scripts/fetch_hf_batch.py "$SOURCE" --root "$RUNNER_TEMP/runs")
-            # Free labels only: --no-jev. Skip if the dataset already has them.
-            ls "$BATCH"/*.labels.jsonl >/dev/null 2>&1 || uv run societysim label "$BATCH" --no-jev
-            uv run societysim report "$BATCH"
-            uv run societysim highlights "$BATCH"
+            # A bad source must not block viewer deploys: warn and use the sample game.
+            if BATCH=$(uv run python scripts/fetch_hf_batch.py "$SOURCE" --root "$RUNNER_TEMP/runs"); then
+              # Free labels only (--no-jev), for each game that has no labels file.
+              mkdir -p "$RUNNER_TEMP/unlabeled"
+              for log in "$BATCH"/*.jsonl; do
+                case "$log" in *.labels.jsonl) continue ;; esac
+                [ -f "${log%.jsonl}.labels.jsonl" ] || cp "$log" "$RUNNER_TEMP/unlabeled/"
+              done
+              if ls "$RUNNER_TEMP"/unlabeled/*.jsonl >/dev/null 2>&1; then
+                uv run societysim label "$RUNNER_TEMP/unlabeled" --no-jev
+                cp "$RUNNER_TEMP"/unlabeled/*.labels.jsonl "$BATCH/"
+              fi
+              uv run societysim report "$BATCH"
+              uv run societysim highlights "$BATCH"
+            else
+              echo "::warning::could not fetch $SOURCE; deploying the sample game instead"
+              BATCH=""
+            fi
           fi
           if [ -z "$BATCH" ]; then
             BATCH="$RUNNER_TEMP/sample-batch"

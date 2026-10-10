@@ -62,3 +62,16 @@ def test_parse_spec():
     for bad in ("hf:nope", "hf:a/b:../x", "hf:a/b/c"):
         with pytest.raises(ValueError):
             fetch.parse_spec(bad)
+
+
+def test_missing_dataset_exits_nonzero(monkeypatch, tmp_path, capsys):
+    import httpx
+    from huggingface_hub.errors import RepositoryNotFoundError
+
+    def boom(**kw):
+        resp = httpx.Response(404, request=httpx.Request("GET", "http://x"))
+        raise RepositoryNotFoundError("404 not found", response=resp)
+
+    monkeypatch.setattr("huggingface_hub.snapshot_download", boom)
+    assert fetch.main(["hf:o/missing", "--root", str(tmp_path)]) == 1
+    assert "could not fetch hf:o/missing" in capsys.readouterr().err

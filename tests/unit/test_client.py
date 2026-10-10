@@ -443,3 +443,69 @@ async def test_token_bucket_waits_for_refill():
     # burst of 2, then one token per second at 60 rpm
     assert waits == [pytest.approx(1.0), pytest.approx(1.0)]
     assert now[0] == pytest.approx(2.0)
+
+
+# --- call timeout -------------------------------------------------------------------------
+
+
+def hang_then(*outcomes):
+    """First call never returns; later calls play `outcomes`."""
+    rest = list(outcomes)
+    calls: list[dict] = []
+
+    async def fake(**kw):
+        calls.append(kw)
+        if len(calls) == 1:
+            await asyncio.Event().wait()
+        return rest.pop(0)
+
+    return fake, calls
+
+
+async def test_timeout_returns_error_without_retry(monkeypatch, sleeps):
+    fake, calls = hang_then()
+    monkeypatch.setattr(litellm, "acompletion", fake)
+    client = LiteLLMClient(timeout_s=0.02, sleep=sleeps)
+    r = await client.complete(spec(), MESSAGES, VoteResponse)
+    assert r.parsed is None
+    assert r.error == "Timeout: m took longer than 0.02 s"
+    assert r.usage.attempts == 1 and r.usage.latency_ms >= 10
+    assert r.usage.input_tokens == r.usage.output_tokens == 0
+    assert len(calls) == 1 and calls[0]["timeout"] == 0.02
+    assert sleeps.delays == []
+
+
+async def test_litellm_timeout_exception_is_not_retried(monkeypatch, client):
+    fake = mock(monkeypatch, litellm.exceptions.Timeout("t", model="x", llm_provider="openai"))
+    r = await client.complete(spec(), MESSAGES, VoteResponse)
+    assert "Timeout" in r.error and r.usage.attempts == 1 and len(fake.calls) == 1
+
+
+async def test_provider_timeout_overrides_client_default(monkeypatch):
+    fake, calls = hang_then()
+    monkeypatch.setattr(litellm, "acompletion", fake)
+    client = LiteLLMClient(
+        limits={"openai": ProviderLimit(8, 10_000, timeout_s=0.02)}, timeout_s=60
+    )
+    r = await client.complete(spec(), MESSAGES, VoteResponse)
+    assert r.error == "Timeout: m took longer than 0.02 s"
+    assert calls[0]["timeout"] == 0.02
+
+
+async def test_timed_out_call_frees_the_provider_slot(monkeypatch):
+    fake, _ = hang_then(reply(json.dumps(VOTE)))
+    monkeypatch.setattr(litellm, "acompletion", fake)
+    client = LiteLLMClient(limits={"openai": ProviderLimit(1, 10_000)}, timeout_s=0.05)
+    first, second = await asyncio.gather(
+        client.complete(spec(), MESSAGES, VoteResponse),
+        client.complete(spec(), MESSAGES, VoteResponse),
+    )
+    assert first.error.startswith("Timeout")
+    assert second.parsed is not None
+
+
+async def test_429_still_retries_with_timeout_set(monkeypatch, sleeps):
+    fake = mock(monkeypatch, rate_limited(), reply(json.dumps(VOTE)))
+    client = LiteLLMClient(timeout_s=5, sleep=sleeps)
+    r = await client.complete(spec(), MESSAGES, VoteResponse)
+    assert r.parsed is not None and r.usage.attempts == 2 and len(fake.calls) == 2

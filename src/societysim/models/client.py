@@ -66,6 +66,7 @@ class ProviderLimit:
 
     concurrency: int
     rpm: int
+    timeout_s: float | None = None  # per attempt; None uses the client default
 
 
 DEFAULT_LIMITS: dict[str, ProviderLimit] = {
@@ -74,6 +75,7 @@ DEFAULT_LIMITS: dict[str, ProviderLimit] = {
     "openai": ProviderLimit(concurrency=8, rpm=500),
 }
 FALLBACK_LIMIT = ProviderLimit(concurrency=8, rpm=300)
+DEFAULT_TIMEOUT_S = 120.0
 HF_ROUTER_HOST = "router.huggingface.co"
 
 
@@ -212,7 +214,7 @@ def estimate_cost(spec: ModelSpec, input_tokens: int, output_tokens: int) -> flo
 def _retryable(e: Exception) -> bool:
     import litellm
 
-    if isinstance(e, litellm.exceptions.APIConnectionError | litellm.exceptions.Timeout):
+    if isinstance(e, litellm.exceptions.APIConnectionError):
         return True
     return getattr(e, "status_code", None) in RETRY_STATUS
 
@@ -248,6 +250,7 @@ class LiteLLMClient:
         self,
         limits: dict[str, ProviderLimit] | None = None,
         max_retries: int = 4,
+        timeout_s: float = DEFAULT_TIMEOUT_S,
         backoff_s: float = 1.0,
         max_backoff_s: float = 30.0,
         sleep: Sleep = asyncio.sleep,
@@ -255,6 +258,7 @@ class LiteLLMClient:
     ) -> None:
         self.limits = {**DEFAULT_LIMITS, **(limits or {})}
         self.max_retries = max_retries
+        self.timeout_s = timeout_s
         self.backoff_s, self.max_backoff_s = backoff_s, max_backoff_s
         self.sleep, self.clock = sleep, clock
         self._limiters: dict[str, _Limiter] = {}
@@ -280,7 +284,10 @@ class LiteLLMClient:
             return CompletionResult(
                 parsed=None, raw="", error=str(e), usage=Usage(model=model.name, attempts=0)
             )
-        limiter = self._limiter(limit_key(model))
+        key = limit_key(model)
+        limiter = self._limiter(key)
+        timeout_s = self.limits.get(key, FALLBACK_LIMIT).timeout_s or self.timeout_s
+        kwargs["timeout"] = timeout_s
         usage = Usage(model=model.name, attempts=0)
         latency = 0.0
         for attempt in range(self.max_retries + 1):
@@ -289,8 +296,20 @@ class LiteLLMClient:
                 usage.attempts += 1
                 start = self.clock()
                 try:
-                    resp = await litellm.acompletion(messages=messages, **kwargs)
+                    resp = await asyncio.wait_for(
+                        litellm.acompletion(messages=messages, **kwargs), timeout_s
+                    )
                     error = None
+                except (TimeoutError, litellm.exceptions.Timeout):
+                    # Not retried: the orchestrator's retry-once and fallback take over.
+                    latency += self.clock() - start
+                    usage.latency_ms = round(latency * 1000)
+                    return CompletionResult(
+                        parsed=None,
+                        raw="",
+                        error=f"Timeout: {model.name} took longer than {timeout_s:g} s",
+                        usage=usage,
+                    )
                 except Exception as e:
                     resp, error = None, e
                 latency += self.clock() - start

@@ -37,6 +37,19 @@ def test_gemini_limit_matches_free_tier():
     assert lim["gemini"] == ProviderLimit(concurrency=2, rpm=10)
 
 
+def test_provider_timeout_passes_through_and_must_be_positive():
+    base = {"litellm_model": "openai/x", "name": "m"}
+    prov = {
+        "openai": {"concurrency": 1, "rpm": 1, "timeout_s": 30},
+        "b": {"concurrency": 1, "rpm": 1},
+    }
+    lim = Registry.model_validate({"providers": prov, "models": [base]}).limits()
+    assert lim["openai"].timeout_s == 30 and lim["b"].timeout_s is None
+    prov["openai"]["timeout_s"] = 0
+    with pytest.raises(ValueError):
+        Registry.model_validate({"providers": prov, "models": [base]})
+
+
 def test_every_model_provider_has_a_limit():
     reg = load_registry(DEFAULT_PATH)
     assert {limit_key(m) for m in reg.models} <= set(reg.providers)

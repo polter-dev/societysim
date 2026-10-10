@@ -25,6 +25,7 @@ class ProviderLimitConfig(BaseModel):
 
     concurrency: int = Field(ge=1)
     rpm: int = Field(ge=1)
+    timeout_s: float | None = Field(None, gt=0)
 
 
 class Registry(BaseModel):
@@ -68,7 +69,9 @@ class Registry(BaseModel):
 
     def limits(self) -> dict[str, ProviderLimit]:
         """For `LiteLLMClient(limits=...)`."""
-        return {p: ProviderLimit(c.concurrency, c.rpm) for p, c in self.providers.items()}
+        return {
+            p: ProviderLimit(c.concurrency, c.rpm, c.timeout_s) for p, c in self.providers.items()
+        }
 
 
 def load_registry(path: str | Path = DEFAULT_PATH) -> Registry:

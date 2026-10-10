@@ -19,11 +19,11 @@ class FakeHub:
     def __init__(self, token=None):
         self.token = token
 
-    def create_repo(self, repo_id, repo_type, exist_ok):
-        FakeHub.calls.append(("create_repo", repo_id, repo_type, exist_ok, self.token))
+    def create_repo(self, repo_id, repo_type, private, exist_ok):
+        FakeHub.calls.append(("create_repo", repo_id, repo_type, exist_ok, self.token, private))
 
-    def upload_folder(self, folder_path, repo_id, repo_type, commit_message):
-        FakeHub.calls.append(("upload_folder", repo_id, repo_type))
+    def upload_folder(self, folder_path, repo_id, repo_type, commit_message, delete_patterns=None):
+        FakeHub.calls.append(("upload_folder", repo_id, repo_type, delete_patterns))
         for p in Path(folder_path).rglob("*"):
             if p.is_file():
                 FakeHub.repo[p.relative_to(folder_path).as_posix()] = p.read_bytes()
@@ -41,7 +41,7 @@ def test_publish_uploads_shards_labels_and_card(tmp_path):
     FakeHub.repo, FakeHub.calls = {}, []
     n = publish.publish_batch(batch(tmp_path), "org/ds", "tok", api_factory=FakeHub)
     assert n["games"] == 1 and n["events"] > 0 and n["labels"] > 0
-    assert FakeHub.calls[0] == ("create_repo", "org/ds", "dataset", True, "tok")
+    assert FakeHub.calls[0] == ("create_repo", "org/ds", "dataset", True, "tok", True)
     assert set(FakeHub.repo) == {
         "README.md",
         "data/jsonl/fixture-0001.jsonl",
@@ -89,3 +89,26 @@ def test_cli_publish(tmp_path, monkeypatch):
     r = CliRunner().invoke(app, ["publish", str(batch(tmp_path)), "--repo", "org/ds"])
     assert r.exit_code == 0, r.output
     assert "published 1 games" in r.output and "data/events/fixture-0001.parquet" in FakeHub.repo
+
+
+def test_cli_private_by_default_and_public_flag(tmp_path, monkeypatch):
+    monkeypatch.setenv("HF_TOKEN", "tok")
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    monkeypatch.setattr("huggingface_hub.HfApi", FakeHub)
+    b = str(batch(tmp_path))
+    for extra, want in (([], True), (["--public"], False), (["--private"], True)):
+        FakeHub.repo, FakeHub.calls = {}, []
+        r = CliRunner().invoke(app, ["publish", b, "--repo", "org/ds", *extra])
+        assert r.exit_code == 0, r.output
+        assert FakeHub.calls[0][-1] is want
+
+
+def test_game_without_labels_deletes_stale_shards(tmp_path):
+    FakeHub.repo, FakeHub.calls = {}, []
+    b = batch(tmp_path)
+    (b / "fixture-0001.labels.jsonl").unlink()
+    publish.publish_batch(b, "org/ds", "tok", api_factory=FakeHub)
+    assert FakeHub.calls[1][3] == [
+        "data/labels/fixture-0001.parquet",
+        "data/jsonl/fixture-0001.labels.jsonl",
+    ]

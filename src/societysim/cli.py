@@ -538,6 +538,9 @@ def highlights(
 def publish(
     batch_dir: Path,
     repo: Annotated[str, typer.Option("--repo", help="Hugging Face dataset, org/name.")],
+    private: Annotated[
+        bool, typer.Option("--private/--public", help="Visibility if the repo is created.")
+    ] = True,
 ) -> None:
     """Push BATCH_DIR (runs/<batch>) logs, labels and a dataset card to a HF Dataset.
 
@@ -555,7 +558,7 @@ def publish(
         typer.echo(f"not a directory: {batch_dir}")
         raise typer.Exit(1)
     try:
-        n = publish_batch(batch_dir, repo, token)
+        n = publish_batch(batch_dir, repo, token, private=private)
     except ValueError as e:
         typer.echo(str(e))
         raise typer.Exit(1) from None

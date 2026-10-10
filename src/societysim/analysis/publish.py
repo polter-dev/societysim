@@ -143,6 +143,7 @@ def publish_batch(
     batch_dir: Path,
     repo_id: str,
     token: str,
+    private: bool = True,
     api_factory: Callable[..., object] | None = None,
 ) -> dict[str, int]:
     """Upload batch_dir to the dataset repo repo_id. Re-running overwrites the same paths."""
@@ -151,11 +152,20 @@ def publish_batch(
     api = api_factory(token=token)
     with tempfile.TemporaryDirectory() as tmp:
         n = build_staging(batch_dir, Path(tmp))
-        api.create_repo(repo_id, repo_type="dataset", exist_ok=True)
+        api.create_repo(repo_id, repo_type="dataset", private=private, exist_ok=True)
+        # A game with no labels now must not keep an older labels shard on the hub.
+        stale = []
+        for log in sorted((Path(tmp) / "data" / "jsonl").glob("*.jsonl")):
+            if log.name.endswith(".labels.jsonl"):
+                continue
+            gid = log.stem
+            if not (Path(tmp) / "data" / "labels" / f"{gid}.parquet").exists():
+                stale += [f"data/labels/{gid}.parquet", f"data/jsonl/{gid}.labels.jsonl"]
         api.upload_folder(
             folder_path=tmp,
             repo_id=repo_id,
             repo_type="dataset",
+            delete_patterns=stale or None,
             commit_message=f"Publish {batch_dir.name}: {n['games']} games",
         )
     return n

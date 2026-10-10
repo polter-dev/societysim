@@ -1,9 +1,11 @@
 import pytest
 from fakes import FakeClient
 
+from societysim.agents.llm_agent import llm_agents
 from societysim.agents.schemas import TargetResponse, VoteResponse
-from societysim.config import ModelSpec
+from societysim.config import GameConfig, ModelSpec
 from societysim.models.cache import CachedClient, CachedUsage, CacheMiss, cache_key
+from societysim.orchestrator import run_game
 
 SPEC = ModelSpec(name="m", litellm_model="openai/x")
 PLAYERS = ["p1", "p2", "p3"]
@@ -75,3 +77,19 @@ def test_key_depends_on_model_messages_schema_only():
     assert k != cache_key(SPEC.model_copy(update={"name": "n"}), MSGS, VoteResponse)
     assert k != cache_key(SPEC, [{"role": "user", "content": "x"}], VoteResponse)
     assert k != cache_key(SPEC, MSGS, TargetResponse)
+
+
+async def test_full_game_replays_byte_identical(tmp_path):
+    config = GameConfig(seed=4, models=["m"])
+    seats = [f"p{i}" for i in range(config.n_players)]
+
+    async def play(client):
+        game = await run_game(config, llm_agents(client, {"m": SPEC}), [], "g")
+        return [e.model_dump_json(exclude={"meta": {"ts"}}) for e in game.events]
+
+    recorded = await play(CachedClient(FakeClient(players=seats, seed=1), tmp_path, "record"))
+    inner = FakeClient(players=seats, seed=2)
+    replayed = await play(CachedClient(inner, tmp_path, "replay"))
+    assert len(recorded) > 50
+    assert replayed == recorded
+    assert inner.calls == []

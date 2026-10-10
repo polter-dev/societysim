@@ -60,7 +60,7 @@ uv run societysim batch --config <cfg.yaml> [--agents llm]  # runs/<batch_id>/<g
 uv run societysim label runs/<batch_id> [--no-jev]          # <game_id>.labels.jsonl
 uv run societysim report runs/<batch_id>                    # report/
 uv run societysim highlights runs/<batch_id>                # highlights.json
-uv run python -m societysim.analysis.narrate runs/<batch_id>/<game_id>.jsonl  # <game_id>.audio/ (paid, ElevenLabs)
+uv run python -m societysim.analysis.narrate runs/<batch_id>/<game_id>.jsonl  # <game_id>.audio/ (free from the phrase bank)
 scripts/deploy-space.sh runs/<batch_id> <owner/space>       # deploy viewer + data/
 scripts/deploy-space.sh --out <dir> runs/<batch_id>         # same layout, staged locally
 ```
@@ -75,7 +75,7 @@ data/
   <game_id>.jsonl              events, one per line
   <game_id>.labels.jsonl       labels (absent if `label` never ran)
   <game_id>.audio/index.json   narration index (absent unless narrated)
-  <game_id>.audio/<seq>.mp3
+  <game_id>.audio/<sha1>.mp3
   highlights.json              at the batch root, not in report/
   report/index.json            the game list; the viewer starts here
   report/leaderboard.json
@@ -255,27 +255,40 @@ Speed: `calls`, `timed_calls` (integers), `median_latency_ms` (number | null),
   "description": "Cleo (p1, doctor) saved Dev (p4) from the night kill.", "link": "?game=c-g0001&seq=57&mode=narrator"}]
 ```
 
-### Narration: `<game_id>.audio/index.json` and `<seq>.mp3`
+### Narration: `<game_id>.audio/index.json` and its mp3s
 
 - Path: `<batch>/<game_id>.audio/index.json`, and one mp3 per clip in the same dir. Schema:
   `schema/narration_index.schema.json`.
-- Produced by: `uv run python -m societysim.analysis.narrate <batch>/<game_id>.jsonl` (paid,
-  ElevenLabs; `--dry-run` prints the estimate and writes nothing). Absent for games nobody
-  narrated: the viewer must work without it.
-- Only public events are voiced (statements, votes, phase starts, deaths, eliminations,
-  no-elimination, game end). Never private reasoning, wolf chat, night actions or the role list.
+- Produced by: `uv run python -m societysim.analysis.narrate <batch>/<game_id>.jsonl
+  [--select speech,wolf_chat,highlight]` (`--dry-run` prints the estimate and writes nothing).
+  Absent for games nobody narrated: the viewer must work without it.
+- Narrator lines are fixed templates, one after each public phase start, death reveal,
+  elimination, no-elimination and game end. Every possible line is generated once into the
+  phrase bank, `narration/bank/<sha1>.mp3` plus `narration/bank/index.json`
+  (`narrate --build-bank`), and copied into the game's `.audio` dir, so narrating a game costs
+  nothing. The viewer never reads the bank.
+- Two narrator voices: `narrator` (Callum) for day phases, eliminations and the result,
+  `narrator_night` (Harry) for night falling and the night's deaths. Player clips use a voice
+  per model, from `configs/voices.yaml`.
+- Categories: `narrator` (always), and only when selected: `speech` (public statements),
+  `wolf_chat` (the wolf channel) and `highlight` (highlights.json descriptions, narrator voice).
+  **`wolf_chat` and `highlight` carry hidden information: play them only in narrator mode.**
+  `narrator` and `speech` are public and safe in villager mode. Private reasoning, night
+  actions and the role list are never voiced.
 
 | Field | Type | Notes |
 |---|---|---|
 | `game_id` | string | |
-| `model_id`, `output_format` | string | ElevenLabs settings, e.g. `eleven_flash_v2_5`, `mp3_44100_128` |
-| `voices` | object, `"narrator"` or seat id -> voice id | |
-| `clips` | list of `{seq, speaker, voice_id, text, file}` | `seq` is the event's seq; `speaker` is `"narrator"` or a seat id; `file` is relative to the `.audio` dir (`"<seq>.mp3"`) |
+| `model_id`, `output_format` | string | ElevenLabs settings, e.g. `eleven_flash_v2_5`, `mp3_44100_64` |
+| `voices` | object, `"narrator"`, `"narrator_night"` or seat id -> voice id | |
+| `clips` | list of `{seq, category, speaker, voice, voice_id, text, file}` | In `seq` order. `seq` is the event the clip follows (a highlight follows its last event; it comes after that event's own clip). `category` is `narrator`, `highlight`, `speech` or `wolf_chat`. `speaker` is `"narrator"` or a seat id. `voice` is `"narrator"`, `"narrator_night"` or the speaker's model name. `file` is relative to the `.audio` dir: `<sha1(text + voice_id)>.mp3`, so two clips with the same text and voice share a file |
 
 ```json
-{"game_id": "fixture-0001", "model_id": "eleven_flash_v2_5", "output_format": "mp3_44100_128",
- "voices": {"narrator": "JBFqnCBsd6RMkjVDRZzb", "p0": "EXAVITQu4vr4xnSDxMaL"},
- "clips": [{"seq": 1, "speaker": "narrator", "voice_id": "JBFqnCBsd6RMkjVDRZzb", "text": "Night 1", "file": "1.mp3"}]}
+{"game_id": "fixture-0001", "model_id": "eleven_flash_v2_5", "output_format": "mp3_44100_64",
+ "voices": {"narrator": "N2lVS1w4EtoT3dr4eOWO", "narrator_night": "SOYHLrjzK2X1ezoPC6cr", "p0": "cjVigY5qzO86Huf0OWal"},
+ "clips": [{"seq": 1, "category": "narrator", "speaker": "narrator", "voice": "narrator_night",
+            "voice_id": "SOYHLrjzK2X1ezoPC6cr", "text": "Night 1. The village sleeps.",
+            "file": "c27ca0c1984731b0e3587efc1a9b8bd6cef9e59e.mp3"}]}
 ```
 
 Neon has no narration: in Neon mode there is no audio location. Audio exists only as static

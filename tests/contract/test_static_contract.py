@@ -51,7 +51,9 @@ def batch(tmp_path_factory) -> Path:
     write_report(b)
     write_highlights(b, top=100)
     stub = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, content=b"")))
-    narrate(b / f"{FIXTURE}.jsonl", max_chars=10**9, client=stub)
+    bank = tmp_path_factory.mktemp("bank")
+    every = ("speech", "wolf_chat", "highlight")
+    narrate(b / f"{FIXTURE}.jsonl", max_chars=10**9, select=every, bank=bank, client=stub)
     return b
 
 
@@ -90,7 +92,9 @@ def test_highlight_links_and_narration_files(batch):
     for h in json.loads((batch / "highlights.json").read_text()):
         assert h["link"] == f"?game={h['game_id']}&seq={h['seq'][0]}&mode=narrator"
     audio = batch / f"{FIXTURE}.audio"
-    for clip in json.loads((audio / "index.json").read_text())["clips"]:
+    clips = json.loads((audio / "index.json").read_text())["clips"]
+    assert {c["category"] for c in clips} == {"narrator", "highlight", "speech", "wolf_chat"}
+    for clip in clips:
         assert (audio / clip["file"]).is_file()
 
 

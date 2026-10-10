@@ -9,8 +9,20 @@
         "seq": {
           "type": "integer"
         },
+        "category": {
+          "enum": [
+            "narrator",
+            "highlight",
+            "speech",
+            "wolf_chat"
+          ],
+          "type": "string"
+        },
         "speaker": {
           "pattern": "^(narrator|p[0-8])$",
+          "type": "string"
+        },
+        "voice": {
           "type": "string"
         },
         "voice_id": {
@@ -25,7 +37,9 @@
       },
       "required": [
         "seq",
+        "category",
         "speaker",
+        "voice",
         "voice_id",
         "text",
         "file"
@@ -48,7 +62,7 @@
     },
     "voices": {
       "patternProperties": {
-        "^(narrator|p[0-8])$": {
+        "^(narrator|narrator_night|p[0-8])$": {
           "type": "string"
         }
       },

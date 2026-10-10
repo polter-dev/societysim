@@ -13,6 +13,8 @@ COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
 COPY configs ./configs
 COPY schema ./schema
+# The Neon spend ledger and game stream create their tables from this at startup.
+COPY neon/schema.sql ./neon/schema.sql
 RUN chown -R user:user /app
 
 USER user

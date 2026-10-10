@@ -1,0 +1,21 @@
+# ElevenLabs voices for narration (src/societysim/analysis/narrate.py).
+# The narrator has two voices: Callum narrates the day (phases, eliminations, the result),
+# Harry the night (night falls, the night kill and its reveal). They are not player voices.
+# Player voices are keyed by model name from configs/models.yaml, not by seat: seats shuffle
+# every game. A model missing here gets default_model_voice.
+narrator:
+  day: N2lVS1w4EtoT3dr4eOWO     # Callum - Husky Trickster
+  night: SOYHLrjzK2X1ezoPC6cr   # Harry - Fierce Warrior
+models:
+  gpt-5-mini: TX3LPaxmHKxFdv7VOQHJ      # Liam
+  gpt-5-nano: FGY2WhTYpPnrIDTdsKH5      # Laura
+  gemini-flash: cgSgspJ2msm6clMCkdW9    # Jessica
+  gemini-flash-lite: pFZP5JQG7iQjIQuC4Bku  # Lily
+  deepseek-v3.1: IKne3meq5aSn9XLyUdCD   # Charlie
+  qwen3-235b: cjVigY5qzO86Huf0OWal      # Eric
+  llama4-maverick: pNInz6obpgDQGcFmaJgB # Adam
+  gemma4-26b: Xb7hH8MSUJpSbSDYk0k2      # Alice
+  gpt-oss-120b: JBFqnCBsd6RMkjVDRZzb    # George
+  amd-gpt-oss-20b: bIHbv24MWmeRgasZH58o # Will
+  human: CwhRBWXzGAHq8TQ4Fs17           # Roger
+default_model_voice: TX3LPaxmHKxFdv7VOQHJ

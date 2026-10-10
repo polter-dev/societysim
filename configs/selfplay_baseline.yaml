@@ -4,7 +4,10 @@ batch_id: selfplay_baseline
 seed: 2
 n_games: 90
 mode: selfplay
-budget_usd: 25.0
+# Cap sized from T5.1 measurements: about $0.023 per game for the cheap HF models, about 4x below
+# the dry-run price prior. Expected real cost is about $4 for 90 games; the cap is about 2x that.
+# amd-gpt-oss-20b is left out: the AMD server wasn't reachable (AMD_VLLM_BASE_URL unset).
+budget_usd: 8.0
 max_concurrency: 8
 models:
   - gemma4-26b

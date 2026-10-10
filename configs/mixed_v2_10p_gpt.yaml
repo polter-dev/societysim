@@ -1,0 +1,30 @@
+# Real runs need --agents llm (the default is scripted): societysim batch --config <this file> --agents llm
+# Run only after mixed_v2_10p finishes, and only with Marcus's OK (issue #306).
+# Second 10-player batch for GPT pair coverage. In mixed_v2_10p the GPT models sit in at most 12
+# games each, so every pair with gpt-5-mini or gpt-5-nano as wolf or listener got 1-3 games, too
+# few for the deception matrix (n >= 5). Here both GPT models sit in every game (no
+# model_game_limits), over 8 of the 9 mixed_v2_10p models.
+# gemini-flash is left out: it is the priciest seat (about 2x gemini-flash-lite) and it already
+# has 26+ games against every non-GPT model. Its GPT pairs stay at the mixed_v2_10p count.
+# Seed 25 was picked by scanning seeds 0-39: it is the first seed where all 28 (wolf model,
+# listener model) pairs with a GPT model on either side, GPT-vs-GPT included, reach at least 5
+# games (tests/unit/test_configs.py checks this).
+# Dry-run estimate (about $4) is the basis of the cap. The prior runs about 4x high (see mixed_v1),
+# so the real cost should land near $1.
+batch_id: mixed_v2_10p_gpt
+seed: 25
+n_games: 40
+mode: mixed
+budget_usd: 6.0
+max_concurrency: 8
+models:
+  - gemma4-26b
+  - qwen3-235b
+  - llama4-maverick
+  - gpt-oss-120b
+  - deepseek-v3.1
+  - gemini-flash-lite
+  - gpt-5-nano
+  - gpt-5-mini
+game:
+  n_players: 10

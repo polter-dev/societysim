@@ -6,12 +6,14 @@ import pytest
 from typer.testing import CliRunner
 
 from societysim.batch.assign import assign_games
+from societysim.batch.runner import plan
 from societysim.cli import app
 from societysim.config import BatchConfig, GameConfig, load_yaml
 from societysim.models.registry import load_registry
+from societysim.roles import Role
 
 CONFIGS = Path(__file__).resolve().parents[2] / "configs"
-NAMES = ["smoke_batch", "selfplay_baseline", "mixed_v1", "mixed_v2_10p"]
+NAMES = ["smoke_batch", "selfplay_baseline", "mixed_v1", "mixed_v2_10p", "mixed_v2_10p_gpt"]
 HF_PROVIDERS = {"huggingface", "hosted_vllm"}
 
 
@@ -75,6 +77,31 @@ def test_mixed_v2_10p_ten_seats_nine_models():
     assert cfg.game.n_players == 10 and len(set(cfg.models)) == 9
     assert cfg.budget_usd <= 15
     assert all(len(g.models) == 10 for g in assign_games(cfg))
+
+
+def wolf_listener_pairs(cfg: BatchConfig) -> Counter[tuple[str, str]]:
+    """Games per (wolf model, listener model): one count per game for each such pair."""
+    specs = {s.name: s for s in load_registry(CONFIGS / "models.yaml").resolve(cfg.models)}
+    pairs: Counter[tuple[str, str]] = Counter()
+    for row in plan(cfg, specs):
+        wolves = {m for _, m, role in row["seats"] if role == Role.WOLF}
+        others = {m for _, m, role in row["seats"] if role != Role.WOLF}
+        pairs.update((w, o) for w in wolves for o in others)
+    return pairs
+
+
+def test_mixed_v2_10p_gpt_pair_coverage():
+    cfg = load("mixed_v2_10p_gpt")
+    assert cfg.game.n_players == 10 and cfg.budget_usd <= 6
+    gpt = [m for m in cfg.models if m.startswith("gpt-5")]
+    assert len(gpt) == 2 and not cfg.model_game_limits
+    pairs = wolf_listener_pairs(cfg)
+    gpt_pairs = [(a, b) for a in cfg.models for b in cfg.models if a in gpt or b in gpt]
+    assert len(gpt_pairs) == 28
+    assert min(pairs[p] for p in gpt_pairs) >= 5, {p: pairs[p] for p in gpt_pairs if pairs[p] < 5}
+    # The main batch leaves these pairs thin; this one exists to fix that.
+    main = wolf_listener_pairs(load("mixed_v2_10p"))
+    assert min(main[p] for p in gpt_pairs) < 5
 
 
 def test_human_vs_ai_10p_config():

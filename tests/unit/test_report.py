@@ -326,22 +326,26 @@ def test_headline_wolf_seats_singular(tmp_path):
 
 
 def test_who_fools_whom_section_and_heatmap(tmp_path):
-    out = write_report(_batch(tmp_path))  # self_tag labels only
+    out = write_report(_batch(tmp_path))  # self_tag labels only, as after `label --no-jev`
     md = (out / "report.md").read_text(encoding="utf-8")
     sec = md.split("## Who fools whom (exploratory)")[1].split("## Cost")[0]
-    st, jev = sec.split("### jev")
-    assert "| Liar \\ listener |" in st and "| No-lie baseline |" in st
-    assert "| gemini-flash | 100% (n=2) | 50% (n=2) |" in st  # deepseek, then gemini-flash-lite
+    st, rest = sec.split("### jev")
+    jev, base = rest.split("### No-lie baseline")
+    assert "| Liar \\ listener |" in st
+    # deepseek, then gemini-flash-lite; each with that listener's role-claim/report baseline
+    assert "| gemini-flash | 100% (n=2), base 25% | 50% (n=2), base 100% |" in st
     assert "None qualifies yet." in st  # no pair has 5 votes in one game
     assert "![Who fools whom (self_tag)](deception_self_tag.png)" in st
-    assert "No jev labels." in jev
+    assert jev.strip() == "No jev labels."  # no jev baseline either
+    assert "| True role claim: did not vote the claimant | 50% (n=2) |" in base
     assert (out / "deception_self_tag.png").read_bytes()[:4] == b"\x89PNG"
     assert not (out / "deception_jev.png").exists()
     dm = json.loads((out / "metrics.json").read_text())["deception_matrix"]
-    assert dm["self_tag"]["pairs"]["gemini-flash"]["deepseek-v3.1"]["voters"] == 2
+    assert dm["pairs"]["self_tag"]["gemini-flash"]["deepseek-v3.1"]["voters"] == 2
+    assert dm["pairs"]["jev"] == {}
 
 
-def _cell(followed: int, voters: int) -> dict:
+def _cell(followed: int, voters: int, base: float | None = None) -> dict:
     return {
         "heard": voters,
         "comparisons": 0,
@@ -352,6 +356,8 @@ def _cell(followed: int, voters: int) -> dict:
         "vote_follow_ci": [0.1, 0.9],
         "belief_shift_rate": None,
         "belief_shift_ci": None,
+        "baseline_rate": base,
+        "baseline_voters": voters if base is not None else 0,
     }
 
 
@@ -359,13 +365,14 @@ def test_top_pairs_need_five_votes_and_rank_by_follow_rate():
     from societysim.analysis.report import _deception
 
     pairs = {
-        "a": {"x": _cell(5, 5), "y": _cell(4, 4)},  # y: 100% but only 4 votes
+        "a": {"x": _cell(5, 5, 0.1), "y": _cell(4, 4)},  # y: 100% but only 4 votes
         "b": {"x": _cell(3, 6), "y": _cell(6, 8)},
     }
-    base = {"x": {k: v for k, v in _cell(1, 10).items() if "belief" not in k}}
-    dm = {"self_tag": {"pairs": pairs, "baseline": base}, "jev": {"pairs": {}, "baseline": {}}}
+    dm = {"pairs": {"self_tag": pairs, "jev": {}}, "baseline": {}}
     lines = _deception(dm, {"self_tag", "jev"})
     top = [ln for ln in lines if "(10% to 90%)" in ln]
     assert [ln.split(" | ")[:2] for ln in top] == [["| a", "x"], ["| b", "y"], ["| b", "x"]]
-    assert "10% (n=10)" in top[0]  # the listener's baseline sits beside the pair
+    assert top[0].endswith("| 10% (n=5) |")  # the pair's own baseline sits beside it
+    assert top[1].endswith("| n/a (n=0) |")
     assert "No lies were heard by another model." in lines
+    assert "No truthful claims were heard." in lines

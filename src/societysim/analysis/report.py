@@ -285,17 +285,23 @@ class DeceptionCell(DeceptionBaseline):
     moved: int
     belief_shift_rate: Num
     belief_shift_ci: CI
+    baseline_rate: Num
+    baseline_voters: int
 
 
-class DeceptionSource(_Out):
-    pairs: dict[str, dict[str, DeceptionCell]]  # liar model -> listener model
-    baseline: dict[str, DeceptionBaseline]  # listener model
+ClaimKind = Literal["role_claim", "seer_wolf", "seer_clear", "accusation"]
+DeceptionPairs = dict[str, dict[str, DeceptionCell]]  # liar model -> listener model
+
+
+class DeceptionBySource(_Out):
+    self_tag: DeceptionPairs
+    jev: DeceptionPairs
 
 
 class DeceptionMatrix(_Out):
     exploratory: bool
-    self_tag: DeceptionSource
-    jev: DeceptionSource
+    pairs: DeceptionBySource
+    baseline: dict[ClaimKind, dict[str, DeceptionBaseline]]  # kind -> listener model
 
 
 class Metrics(_Out):
@@ -617,11 +623,23 @@ MIN_PAIR_VOTES = 5  # fewer listener votes than this is too thin to rank a pair 
 
 
 def _has_matrix(dm: dict, src: str, present: set[str]) -> bool:
-    return src in present and bool(dm[src]["pairs"])
+    return src in present and bool(dm["pairs"][src])
 
 
 def _follow(c: dict) -> str:
     return f"{_pct(c['vote_follow_rate'])} (n={c['voters']})"
+
+
+def _vs_base(c: dict) -> str:
+    return f"{_pct(c['baseline_rate'])} (n={c['baseline_voters']})"
+
+
+CLAIM_KIND_TEXT = {
+    "role_claim": "True role claim: did not vote the claimant",
+    "seer_wolf": "True seer report of a wolf: voted that wolf",
+    "seer_clear": "True seer clear: voted neither the cleared player nor the seer",
+    "accusation": "A non-wolf accused only real wolves: voted one of them",
+}
 
 
 def _deception(dm: dict, present: set[str]) -> list[str]:
@@ -631,10 +649,13 @@ def _deception(dm: dict, present: set[str]) -> list[str]:
         "Each lie counts once for every living non-wolf seat that heard it, other than the liar "
         "and any player the lie names. Rows are the liar's model, columns the listener's. A cell "
         "is how often the listener's next vote that day went the way the lie implied, with the "
-        "number of votes. The baseline row is how often that listener's next vote followed an "
-        "accusation with no lie label, so a high cell is not just a listener that follows every "
-        "accusation. Belief shift is whether the listener's next suspicion update moved the way "
-        "the lie wanted. Correlation, not cause.",
+        "number of votes, then the listener's no-lie baseline for the same mix of claims. The "
+        "baseline is how often that listener's next vote went the same way after a truthful "
+        "claim of the same kind (table below), so a high cell is not just a listener that "
+        "believes every claim. Belief shift is whether the listener's next suspicion update "
+        "moved the way the lie wanted: down on the liar for a role claim, toward the claimed side "
+        "of the reported player for a seer report, up on the accused wolf for bussing. "
+        "Correlation, not cause.",
         "",
     ]
     for src in LABEL_SOURCES:
@@ -642,16 +663,21 @@ def _deception(dm: dict, present: set[str]) -> list[str]:
         if src not in present:
             lines += [f"No {src} labels.", ""]
             continue
-        pairs, base = dm[src]["pairs"], dm[src]["baseline"]
+        pairs = dm["pairs"][src]
         if not pairs:
             lines += ["No lies were heard by another model.", ""]
             continue
-        cols = sorted({m for row in pairs.values() for m in row} | set(base))
+        cols = sorted({m for row in pairs.values() for m in row})
         rows = [
-            [liar] + [_follow(pairs[liar][c]) if c in pairs[liar] else "" for c in cols]
+            [liar]
+            + [
+                f"{_follow(pairs[liar][c])}, base {_pct(pairs[liar][c]['baseline_rate'])}"
+                if c in pairs[liar]
+                else ""
+                for c in cols
+            ]
             for liar in pairs
         ]
-        rows.append(["No-lie baseline"] + [_follow(base[c]) if c in base else "" for c in cols])
         lines += _table(["Liar \\ listener", *cols], rows)
         top = sorted(
             (
@@ -681,7 +707,7 @@ def _deception(dm: dict, present: set[str]) -> list[str]:
                         f"{_pct(c['vote_follow_ci'][1])})",
                         str(c["voters"]),
                         f"{_pct(c['belief_shift_rate'])} (n={c['comparisons']})",
-                        _follow(base[listener]) if listener in base else "n/a",
+                        _vs_base(c),
                     ]
                     for liar, listener, c in top
                 ],
@@ -689,7 +715,24 @@ def _deception(dm: dict, present: set[str]) -> list[str]:
         else:
             lines += ["None qualifies yet.", ""]
         lines += [f"![Who fools whom ({src})](deception_{src}.png)", ""]
-    return lines
+    base = dm["baseline"]
+    lines += [
+        "### No-lie baseline",
+        "",
+        "Truthful claims from the log, the same for both label sources: how often each "
+        "listener's next vote went the way the claim implied.",
+        "",
+    ]
+    if not base:
+        return lines + ["No truthful claims were heard.", ""]
+    cols = sorted({m for row in base.values() for m in row})
+    return lines + _table(
+        ["Claim", *cols],
+        [
+            [CLAIM_KIND_TEXT[kind]] + [_follow(row[c]) if c in row else "" for c in cols]
+            for kind, row in base.items()
+        ],
+    )
 
 
 def _speed(speed: dict) -> list[str]:
@@ -972,7 +1015,7 @@ def write_deception_charts(dm: dict, present: set[str], out: Path) -> list[str]:
     for src in LABEL_SOURCES:
         if not _has_matrix(dm, src, present):
             continue
-        pairs = dm[src]["pairs"]
+        pairs = dm["pairs"][src]
         liars = list(pairs)
         cols = sorted({m for row in pairs.values() for m in row})
         grid = [

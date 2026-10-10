@@ -24,7 +24,7 @@ share one pool. Each pool has its own wolf-side dummy, reported under "wolf_side
 
 import math
 from collections import Counter, defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -367,10 +367,12 @@ def game_rows(game: GameData) -> dict[str, Row]:
 
 DM_KEYS = ("heard", "comparisons", "moved", "voters", "followed")
 BASE_KEYS = ("heard", "voters", "followed")
+# What a lie claimed, and so which truthful claims its baseline is read from.
+CLAIM_KINDS = ("role_claim", "seer_wolf", "seer_clear", "accusation")
 
 
 def _listeners(game: GameData, seq: int, named: set[str]) -> list[str]:
-    """Non-wolf seats alive at `seq` that the lie or accusation does not name.
+    """Non-wolf seats alive at `seq` that the claim does not name.
 
     Wolves are left out as in lie_success: they know who the wolves are.
     """
@@ -409,18 +411,65 @@ def _belief_moved(
     return sum(deltas) > 0 if rose else sum(deltas) < 0
 
 
+def _seer_kind(e: Event) -> str:
+    return "seer_wolf" if e.meta.result == "wolf" else "seer_clear"
+
+
+def _truthful_claims(
+    game: GameData,
+) -> Iterator[tuple[str, Event, set[str], Callable[[str | None], bool]]]:
+    """(kind, event, named, follows) for every claim in the log that told the truth.
+
+    role_claim: the claimed role is the speaker's role; follows = did not vote the speaker.
+    seer_wolf / seer_clear: the real seer reported a player's true side; follows as for a
+    false_report (voted the reported wolf; voted neither the cleared player nor the seer).
+    accusation: a non-wolf accused only real wolves (all targets of one statement together);
+    follows = voted one of them.
+    """
+    roles = game.roles
+    wolves = {p for p, r in roles.items() if r is Role.WOLF}
+    accused: dict[tuple[str, int], set[str]] = defaultdict(set)
+    first: dict[tuple[str, int], Event] = {}
+    for e in game.events:
+        a = e.actor
+        if not a:
+            continue
+        if e.type is EventType.ROLE_CLAIM and e.meta.role is roles.get(a):
+            yield "role_claim", e, {a}, lambda v, a=a: v is not None and v != a
+        elif (
+            e.type is EventType.SEER_CLAIM
+            and roles.get(a) is Role.SEER
+            and e.target
+            and (e.meta.result == "wolf") == (e.target in wolves)
+        ):
+            t = e.target
+            if e.meta.result == "wolf":
+                yield "seer_wolf", e, {a, t}, lambda v, t=t: v == t
+            else:
+                yield "seer_clear", e, {a, t}, lambda v, a=a, t=t: v not in (None, a, t)
+        elif e.type is EventType.ACCUSATION and e.target and a not in wolves:
+            k = (a, e.meta.statement_seq or e.seq)
+            accused[k].add(e.target)
+            first.setdefault(k, e)
+    for (a, stmt), targets in accused.items():
+        if targets <= wolves:
+            yield "accusation", first[(a, stmt)], {a} | targets, lambda v, ts=targets: v in ts
+
+
 def game_deception(game: GameData) -> tuple[Counter, Counter]:
     """Raw deception counts for one game: (pairs, baseline).
 
-    pairs[(source, liar_model, listener_model, key)] over DM_KEYS, one `heard` per (lie,
+    pairs[(source, liar_model, listener_model, kind, key)] over DM_KEYS, one `heard` per (lie,
     listener): every non-wolf seat alive at the lie, except the liar and the players the lie's
-    vote rule names. `moved`: the listener's next suspicion update moved the lie's subjects the
-    lie's way (same subjects and direction as lie_success). `followed`: the listener's next vote
-    that day went the way the lie implied (lie_success's rule; abstains never follow).
+    vote rule names. `followed`: the listener's next vote that day went the way the lie implied
+    (lie_success's rule; abstains never follow). `moved`: the listener's next suspicion update
+    moved the lie's subject the lie's way: down on the liar for a role claim, toward the claimed
+    side of the reported player for a seer report, up on the accused wolf for bussing.
+    `kind` is what the lie claimed (CLAIM_KINDS), which picks its baseline.
 
-    baseline[(source, listener_model, key)] over BASE_KEYS: the same listeners and next vote for
-    every accusation (all targets of one statement together) on a statement with no lie label
-    from that source. `followed`: the vote went to one of the accused.
+    baseline[(listener_model, kind, key)] over BASE_KEYS: the same listeners, next vote and vote
+    direction for every truthful claim of that kind (_truthful_claims). It reads the log, not
+    the labels, so it is one baseline for both sources.
     """
     events, models = game.events, game.models
     votes = [e for e in events if e.type is EventType.VOTE]
@@ -430,43 +479,30 @@ def game_deception(game: GameData) -> tuple[Counter, Counter]:
             continue
         subjects, rose, follows, named = _lie_rule(game, lb)
         s = lb.source_seq
-        day = game.by_seq[s].day
+        src = game.by_seq[s]
+        kind = "accusation" if lb.label is LabelType.BUSSING else "role_claim"
+        if lb.label is LabelType.FALSE_REPORT and src.type is EventType.SEER_CLAIM and src.target:
+            kind = _seer_kind(src)
+            subjects, rose = {src.target}, kind == "seer_wolf"
         for seat in _listeners(game, s, named | {lb.actor}):
-            key = (lb.source, models[lb.actor], models[seat])
+            key = (lb.source, models[lb.actor], models[seat], kind)
             pairs[(*key, "heard")] += 1
             moved = _belief_moved(events, seat, s, subjects, rose)
             if moved is not None:
                 pairs[(*key, "comparisons")] += 1
                 pairs[(*key, "moved")] += moved
-            if v := _next_vote(votes, seat, s, day):
+            if v := _next_vote(votes, seat, s, src.day):
                 pairs[(*key, "voters")] += 1
                 pairs[(*key, "followed")] += follows(v.target)
 
-    stmt_of = {e.seq: e.meta.statement_seq or e.seq for e in events}
-    accused: dict[tuple[str, int], set[str]] = defaultdict(set)
-    first: dict[tuple[str, int], Event] = {}
-    for e in events:
-        if e.type is EventType.ACCUSATION and e.actor and e.target:
-            k = (e.actor, e.meta.statement_seq or e.seq)
-            accused[k].add(e.target)
-            first.setdefault(k, e)
     base: Counter = Counter()
-    for src in SOURCES:
-        lied = {
-            stmt_of.get(lb.source_seq, lb.source_seq)
-            for lb in game.labels
-            if lb.source == src and lb.label in LIE_TYPES
-        }
-        for (actor, stmt), targets in accused.items():
-            if stmt in lied:
-                continue
-            e = first[(actor, stmt)]
-            for seat in _listeners(game, e.seq, {actor} | targets):
-                key = (src, models[seat])
-                base[(*key, "heard")] += 1
-                if v := _next_vote(votes, seat, e.seq, e.day):
-                    base[(*key, "voters")] += 1
-                    base[(*key, "followed")] += v.target in targets
+    for kind, e, named, follows in _truthful_claims(game):
+        for seat in _listeners(game, e.seq, named):
+            key = (models[seat], kind)
+            base[(*key, "heard")] += 1
+            if v := _next_vote(votes, seat, e.seq, e.day):
+                base[(*key, "voters")] += 1
+                base[(*key, "followed")] += follows(v.target)
     return pairs, base
 
 
@@ -480,11 +516,16 @@ def _follow_stats(c: dict) -> dict:
 
 
 def deception_matrix(games: list[GameData]) -> dict:
-    """Who fools whom, per label source: liar model -> listener model -> counts and rates,
-    plus each listener model's no-lie baseline. Exploratory, like lie_success.
+    """Who fools whom: per label source, liar model -> listener model -> counts and rates, and
+    one no-lie baseline per claim kind and listener model. Exploratory, like lie_success.
+
+    Each cell carries `baseline_rate`: the vote-follow rate the listener would have had if it
+    followed this cell's lies at its truthful-claim rate for each kind, weighted by the cell's
+    votes of that kind; `baseline_voters` counts the votes that had a baseline to compare with.
 
     Rows and columns are model names, so a human seat is its own "human" row and column and
-    never mixes into a model. Self-play games only fill the diagonal.
+    never mixes into a model. Self-play games only fill the diagonal. A source with no labels
+    has no pairs.
     """
     pairs: Counter = Counter()
     base: Counter = Counter()
@@ -492,17 +533,29 @@ def deception_matrix(games: list[GameData]) -> dict:
         p, b = game_deception(g)
         pairs.update(p)
         base.update(b)
-    out: dict = {"exploratory": True}
+    baseline: dict[str, dict[str, dict]] = {}
+    for listener, kind in sorted({k[:2] for k in base}):
+        stats = _follow_stats({k: base[(listener, kind, k)] for k in BASE_KEYS})
+        baseline.setdefault(kind, {})[listener] = stats
+    out: dict = {"exploratory": True, "pairs": {}, "baseline": baseline}
     for src in SOURCES:
         cells: dict[str, dict[str, dict]] = {}
         for liar, listener in sorted({(k[1], k[2]) for k in pairs if k[0] == src}):
-            c = {k: pairs[(src, liar, listener, k)] for k in DM_KEYS}
-            cells.setdefault(liar, {})[listener] = _follow_stats(c)
-        baseline = {
-            listener: _follow_stats({k: base[(src, listener, k)] for k in BASE_KEYS})
-            for listener in sorted({k[1] for k in base if k[0] == src})
-        }
-        out[src] = {"pairs": cells, "baseline": baseline}
+            c = dict.fromkeys(DM_KEYS, 0)
+            n = expected = 0.0
+            for kind in CLAIM_KINDS:
+                for k in DM_KEYS:
+                    c[k] += pairs[(src, liar, listener, kind, k)]
+                rate = baseline.get(kind, {}).get(listener, {}).get("vote_follow_rate")
+                voters = pairs[(src, liar, listener, kind, "voters")]
+                if rate is not None and voters:
+                    n += voters
+                    expected += voters * rate
+            cell = _follow_stats(c)
+            cell["baseline_rate"] = _ratio(expected, n)
+            cell["baseline_voters"] = int(n)
+            cells.setdefault(liar, {})[listener] = cell
+        out["pairs"][src] = cells
     return out
 
 

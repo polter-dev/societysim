@@ -85,9 +85,9 @@ def test_events_and_labels_match_event_schema(batch):
 
 def test_deception_matrix_is_populated_so_its_schema_check_means_something(batch):
     dm = json.loads((batch / STATIC["metrics"]).read_text())["deception_matrix"]
-    cells = [c for row in dm["self_tag"]["pairs"].values() for c in row.values()]
-    assert cells and dm["self_tag"]["baseline"]
-    assert any(c["vote_follow_ci"] for c in cells)
+    cells = [c for row in dm["pairs"]["self_tag"].values() for c in row.values()]
+    assert cells and dm["baseline"]
+    assert any(c["vote_follow_ci"] for c in cells) and any(c["baseline_rate"] for c in cells)
 
 
 def test_index_file_paths_resolve_from_the_batch_dir(batch):

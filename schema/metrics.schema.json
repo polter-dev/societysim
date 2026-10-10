@@ -56,6 +56,35 @@
       "title": "DeceptionBaseline",
       "type": "object"
     },
+    "DeceptionBySource": {
+      "additionalProperties": false,
+      "properties": {
+        "self_tag": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "$ref": "#/$defs/DeceptionCell"
+            },
+            "type": "object"
+          },
+          "type": "object"
+        },
+        "jev": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "$ref": "#/$defs/DeceptionCell"
+            },
+            "type": "object"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "self_tag",
+        "jev"
+      ],
+      "title": "DeceptionBySource",
+      "type": "object"
+    },
     "DeceptionCell": {
       "additionalProperties": false,
       "properties": {
@@ -133,6 +162,19 @@
               "type": "null"
             }
           ]
+        },
+        "baseline_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "baseline_voters": {
+          "type": "integer"
         }
       },
       "required": [
@@ -144,7 +186,9 @@
         "comparisons",
         "moved",
         "belief_shift_rate",
-        "belief_shift_ci"
+        "belief_shift_ci",
+        "baseline_rate",
+        "baseline_voters"
       ],
       "title": "DeceptionCell",
       "type": "object"
@@ -155,45 +199,33 @@
         "exploratory": {
           "type": "boolean"
         },
-        "self_tag": {
-          "$ref": "#/$defs/DeceptionSource"
+        "pairs": {
+          "$ref": "#/$defs/DeceptionBySource"
         },
-        "jev": {
-          "$ref": "#/$defs/DeceptionSource"
+        "baseline": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "$ref": "#/$defs/DeceptionBaseline"
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "enum": [
+              "role_claim",
+              "seer_wolf",
+              "seer_clear",
+              "accusation"
+            ]
+          },
+          "type": "object"
         }
       },
       "required": [
         "exploratory",
-        "self_tag",
-        "jev"
-      ],
-      "title": "DeceptionMatrix",
-      "type": "object"
-    },
-    "DeceptionSource": {
-      "additionalProperties": false,
-      "properties": {
-        "pairs": {
-          "additionalProperties": {
-            "additionalProperties": {
-              "$ref": "#/$defs/DeceptionCell"
-            },
-            "type": "object"
-          },
-          "type": "object"
-        },
-        "baseline": {
-          "additionalProperties": {
-            "$ref": "#/$defs/DeceptionBaseline"
-          },
-          "type": "object"
-        }
-      },
-      "required": [
         "pairs",
         "baseline"
       ],
-      "title": "DeceptionSource",
+      "title": "DeceptionMatrix",
       "type": "object"
     },
     "Detection": {

@@ -212,19 +212,34 @@ statement), `lie_success` (`{exploratory: true, comparisons, moved, voters, foll
 base_voters, base_followed, base_abstained, share_moved, share_followed, base_rate}`: counts are
 integers, the last three are number | null).
 
-`deception_matrix`: `{exploratory: true, self_tag: DeceptionSource, jev: DeceptionSource}`, the
-two sources kept apart as everywhere else. DeceptionSource is `pairs` (liar model -> listener
-model -> Cell, only pairs where a lie was heard) and `baseline` (listener model -> Baseline).
-Keys are model names; a human seat is its own `human` key. A source with no labels has empty
-`pairs`. Each lie (`false_role_claim`, `false_report`, `bussing`; not `hidden_knowledge`) counts
-once for every non-wolf seat alive when it was told, other than the liar and the players the
-lie's vote rule names. Baseline: `heard`, `voters`, `followed` (integers), `vote_follow_rate`
-(number | null), `vote_follow_ci` (Wilson 95% `[lo, hi]` | null), counted over accusations on
-statements with no lie label from that source; `followed` means the listener's next vote that
-day went to the accused. Cell: the Baseline keys, where `followed` means the next vote went the
-way the lie implied (the `lie_success` rule), plus `comparisons`, `moved` (integers),
-`belief_shift_rate` (number | null) and `belief_shift_ci` (`[lo, hi]` | null): whether the
-listener's next suspicion update moved the lie's subjects the lie's way.
+`deception_matrix`: `{exploratory: true, pairs: {self_tag: Pairs, jev: Pairs}, baseline}`. Pairs
+is liar model -> listener model -> Cell, only pairs where a lie was heard, the two sources kept
+apart as everywhere else. A source with no labels (`jev` after `label --no-jev`) has `{}`. Keys
+are model names; a human seat is its own `human` key. Each lie (`false_role_claim`,
+`false_report`, `bussing`; not `hidden_knowledge`) counts once for every non-wolf seat alive
+when it was told, other than the liar and the players the lie's vote rule names.
+
+Cell: `heard`, `voters`, `followed`, `comparisons`, `moved`, `baseline_voters` (integers);
+`vote_follow_rate`, `belief_shift_rate`, `baseline_rate` (number | null); `vote_follow_ci`,
+`belief_shift_ci` (Wilson 95% `[lo, hi]` | null).
+- `followed`: the listener's next vote that day went the way the lie implied (the `lie_success`
+  rule: not the liar for a role claim; the reported player for a wolf report, neither the
+  reported player nor the liar for a clear; the bussed wolf for bussing). Abstains never follow.
+- `moved`: the listener's next suspicion update moved the lie's subject the lie's way: down on
+  the liar for a role claim, up (wolf report) or down (clear) on the reported player for a seer
+  report, up on the bussed wolf.
+- `baseline_rate`: the listener's `baseline` rate for each kind of claim in this cell, weighted
+  by the cell's votes of that kind; `baseline_voters` counts the votes that had one.
+
+`baseline`: claim kind -> listener model -> `{heard, voters, followed, vote_follow_rate,
+vote_follow_ci}`, read from truthful claims in the log, so it is shared by both sources. The
+same listeners and next-vote rule as a lie, with the matching direction:
+- `role_claim`: a player claimed their real role; followed = did not vote them. Compared with
+  `false_role_claim` (and a Jev `false_report`, which has no logged seer claim).
+- `seer_wolf` / `seer_clear`: the real seer reported a player's true side; followed as for a
+  `false_report` with that result.
+- `accusation`: a non-wolf accused only real wolves; followed = voted one of them. Compared
+  with `bussing`.
 
 `summary`: `games`, `unfinished_games`, `cost_usd`, `input_tokens`, `output_tokens`,
 `wolf_wins`, `village_wins`, `draws`, `wolf_win_share`, `village_win_share` (number | null),
@@ -242,10 +257,10 @@ Speed: `calls`, `timed_calls` (integers), `median_latency_ms` (number | null),
                "wolf_side": {"overall": {"mu": 5.97, "sigma": 7.70, "ordinal": -17.12}, "sided": {"mu": 5.69, "sigma": 7.70, "ordinal": -17.42}}},
  "speed": {"gemini-flash": {"calls": 12, "timed_calls": 12, "median_latency_ms": 1610.0, "p90_latency_ms": 2232,
                             "output_tokens_per_s": 142.4, "tokens_per_game": 42470.0, "cost_usd_per_game": 0.0096, "self_hosted": false}},
- "deception_matrix": {"exploratory": true, "jev": {"pairs": {}, "baseline": {}},
-                      "self_tag": {"pairs": {"gemini-flash": {"deepseek-v3.1": {"heard": 2, "voters": 2, "followed": 2, "vote_follow_rate": 1.0, "vote_follow_ci": [0.34, 1.0],
-                                                                                "comparisons": 2, "moved": 2, "belief_shift_rate": 1.0, "belief_shift_ci": [0.34, 1.0]}}},
-                                   "baseline": {"deepseek-v3.1": {"heard": 15, "voters": 15, "followed": 7, "vote_follow_rate": 0.47, "vote_follow_ci": [0.25, 0.70]}}}},
+ "deception_matrix": {"exploratory": true,
+   "pairs": {"jev": {}, "self_tag": {"gemini-flash": {"deepseek-v3.1": {"heard": 2, "voters": 2, "followed": 2, "vote_follow_rate": 1.0, "vote_follow_ci": [0.34, 1.0],
+     "comparisons": 2, "moved": 2, "belief_shift_rate": 1.0, "belief_shift_ci": [0.34, 1.0], "baseline_rate": 0.25, "baseline_voters": 2}}}},
+   "baseline": {"role_claim": {"deepseek-v3.1": {"heard": 2, "voters": 2, "followed": 1, "vote_follow_rate": 0.5, "vote_follow_ci": [0.09, 0.91]}}}},
  "models": {"...": "..."}, "by_group": {"...": "..."}, "summary": {"...": "..."}}
 ```
 

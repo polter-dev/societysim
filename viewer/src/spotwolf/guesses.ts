@@ -45,6 +45,18 @@ export function livingSeats(events: Event[], idx: number): { id: string; name: s
     .map((p) => ({ id: p.id, name: p.name }));
 }
 
+/** Living players plus any dead players the spectator has marked, so those marks can still be removed. */
+export function selectableSeats(
+  events: Event[],
+  idx: number,
+  marks: string[],
+): { id: string; name: string; alive: boolean }[] {
+  if (events.length === 0) return [];
+  return deriveScene(events, idx, "villager")
+    .players.filter((p) => p.alive || marks.includes(p.id))
+    .map((p) => ({ id: p.id, name: p.name, alive: p.alive }));
+}
+
 export function isLocked(state: GuessState, events: Event[], idx: number): boolean {
   return state.lockedSeq !== null || isRevealed(events, idx);
 }
@@ -68,8 +80,9 @@ export function toggleMark(
   maxMarks = WOLF_COUNT,
 ): GuessState {
   if (events.length === 0 || isLocked(state, events, idx)) return state;
-  if (!livingSeats(events, idx).some((s) => s.id === seat)) return state;
   const on = state.marks.includes(seat);
+  // A marked player who has since died can still be unmarked; only living players can be newly marked.
+  if (!on && !livingSeats(events, idx).some((s) => s.id === seat)) return state;
   if (!on && state.marks.length >= maxMarks) return state;
   const marks = on ? state.marks.filter((s) => s !== seat) : [...state.marks, seat];
   const e = events[clamp(events, idx)];

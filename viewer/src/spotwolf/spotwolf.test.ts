@@ -14,6 +14,7 @@ import {
   lockIfRevealed,
   revealedRoles,
   scoreMarks,
+  selectableSeats,
   toggleMark,
 } from "./guesses";
 import { loadGuesses, saveGuesses } from "./storage";
@@ -87,6 +88,23 @@ describe("marking and locking", () => {
     const dead = events.find((e) => e.type === "death_reveal" && e.target)!;
     const afterIdx = events.indexOf(dead) + 1;
     expect(toggleMark(s, events, afterIdx, dead.target!)).toBe(s);
+  });
+
+  it("lets a marked player be unmarked after they die, and frees the slot", () => {
+    const dead = events.find((e) => e.type === "death_reveal" && e.target)!;
+    const target = dead.target!;
+    const before = events.indexOf(dead) - 1;
+    const after = events.indexOf(dead) + 1;
+    const others = livingSeats(events, after).filter((p) => p.id !== target);
+    let s = toggleMark(toggleMark(initGuesses("g"), events, before, target), events, before, others[0].id);
+    expect(s.marks).toEqual([target, others[0].id]);
+    expect(livingSeats(events, after).map((p) => p.id)).not.toContain(target);
+    expect(selectableSeats(events, after, s.marks).find((p) => p.id === target)?.alive).toBe(false);
+    expect(toggleMark(s, events, after, others[1].id)).toBe(s); // still at the cap
+    s = toggleMark(s, events, after, target);
+    expect(s.marks).toEqual([others[0].id]);
+    expect(toggleMark(s, events, after, target)).toBe(s); // cannot re-mark the dead
+    expect(toggleMark(s, events, after, others[1].id).marks).toEqual([others[0].id, others[1].id]);
   });
 
   it("locks at the reveal and stays locked when scrubbing back", () => {

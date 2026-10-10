@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { ModeToggle } from "./components/ModeToggle/ModeToggle";
+import { modeFromSearch, urlWithMode } from "./components/ModeToggle/modeUrl";
 import { parseLog, type ParsedLog } from "./data/parse";
 import { fetchLog } from "./data/source";
 import { deriveScene, type Mode } from "./scene/deriveScene";
@@ -8,7 +10,7 @@ export default function App() {
   const [log, setLog] = useState<ParsedLog | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [idx, setIdx] = useState(0);
-  const [mode, setMode] = useState<Mode>("narrator");
+  const [mode, setMode] = useState<Mode>(() => modeFromSearch(window.location.search));
 
   const show = (parsed: ParsedLog) => {
     setLog(parsed);
@@ -20,6 +22,17 @@ export default function App() {
     const url = new URLSearchParams(location.search).get("log");
     if (url) fetchLog(url).then(show, (err: Error) => setLoadError(err.message));
   }, []);
+
+  useEffect(() => {
+    const syncMode = () => setMode(modeFromSearch(window.location.search));
+    window.addEventListener("popstate", syncMode);
+    return () => window.removeEventListener("popstate", syncMode);
+  }, []);
+
+  const changeMode = (nextMode: Mode) => {
+    window.history.replaceState(window.history.state, "", urlWithMode(window.location.href, nextMode));
+    setMode(nextMode);
+  };
 
   const onFile = async (file: File | undefined) => {
     if (file) show(parseLog(await file.text()));
@@ -50,13 +63,7 @@ export default function App() {
       {log && scene && (
         <>
           <p>
-            <label>
-              View{" "}
-              <select value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
-                <option value="narrator">Narrator</option>
-                <option value="villager">Villager</option>
-              </select>
-            </label>{" "}
+            <ModeToggle mode={mode} onChange={changeMode} />{" "}
             <label>
               Event {scene.seq}{" "}
               <input

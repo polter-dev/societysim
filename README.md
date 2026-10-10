@@ -13,7 +13,3 @@ uv run societysim --help
 ```
 
 Copy `.env.example` to `.env` and fill in the keys you have.
-
-## How we work
-
-Nearly all code is written by AI agents working GitHub issues. Read [AGENTS.md](AGENTS.md) before you start, human or agent.

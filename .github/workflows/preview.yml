@@ -32,20 +32,21 @@ jobs:
     # Fork PRs have no secrets and should not get a write token; skip them outright.
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    # No secrets at job level: the build steps run PR code. Each secret is set on the one
+    # step that needs it.
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-      HEAD_REF: ${{ github.event.pull_request.head.ref }}
-      GH_TOKEN: ${{ github.token }}
-      PR: ${{ github.event.pull_request.number }}
       VITE_NEON_DATA_API_URL: ${{ vars.VITE_NEON_DATA_API_URL }}
       VITE_NEON_AUTH_URL: ${{ vars.VITE_NEON_AUTH_URL }}
       VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
     steps:
       - name: Check Cloudflare credentials
         id: creds
+        env:
+          # Booleans only; the values never reach this step.
+          HAVE_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          HAVE_ACCOUNT: ${{ vars.CLOUDFLARE_ACCOUNT_ID != '' }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+          if [ "$HAVE_TOKEN" != true ] || [ "$HAVE_ACCOUNT" != true ]; then
             echo "::notice::Skipping the preview: set the CLOUDFLARE_API_TOKEN secret and the CLOUDFLARE_ACCOUNT_ID variable."
             echo "ready=false" >> "$GITHUB_OUTPUT"
           else
@@ -53,6 +54,8 @@ jobs:
           fi
       - if: steps.creds.outputs.ready == 'true'
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false # keep GITHUB_TOKEN out of .git/config
       - if: steps.creds.outputs.ready == 'true'
         uses: astral-sh/setup-uv@v6
       - if: steps.creds.outputs.ready == 'true'
@@ -75,6 +78,10 @@ jobs:
       - name: Deploy the preview
         if: steps.creds.outputs.ready == 'true'
         id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           # Pages branch aliases are lowercase letters, digits and dashes.
           branch=$(printf '%s' "$HEAD_REF" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | cut -c1-28)
@@ -87,7 +94,9 @@ jobs:
       - name: Comment the URL on the PR
         if: steps.creds.outputs.ready == 'true'
         env:
-          URL: ${{ steps.deploy.outputs.url }}
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          URL:${{ steps.deploy.outputs.url }}
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           marker='<!-- societysim-preview -->'

@@ -266,6 +266,11 @@ def batch(
     )
     if result["failed"]:
         typer.echo(f"failed games: {', '.join(result['failed'])}")
+        for msg in result["provider_down"]:
+            typer.echo(f"provider down: {msg}")
+        if result["provider_down"]:
+            out = Path("runs") / cfg.batch_id
+            typer.echo(f"no new games started; re-run once it is back to resume: {out}")
         raise typer.Exit(1)
 
 

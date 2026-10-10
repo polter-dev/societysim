@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping
 from contextvars import ContextVar
@@ -37,8 +38,23 @@ _game: ContextVar[str | None] = ContextVar("batch_game", default=None)
 Status = Literal["running", "completed", "budget_stopped", "failed", "interrupted"]
 
 
+# A model whose calls fail this many times in a row without getting any tokens back is taken
+# as down (no credits, quota hit, key revoked); the batch stops starting games.
+PROVIDER_DOWN_AFTER = 10
+
+
+class ProviderDown(Exception):
+    """A model's provider stopped answering. The message names the model, never a key or URL."""
+
+    def __init__(self, model: str, error: str):
+        error = re.sub(r"https?://\S+", "<url>", error)
+        error = re.sub(r"[A-Za-z0-9_\-]{24,}", "<redacted>", error)[:200]
+        super().__init__(f"{model}: {PROVIDER_DOWN_AFTER} calls in a row failed; last: {error}")
+
+
 class MeteredClient:
-    """Wraps a ModelClient: adds up cost and caps in-flight calls per provider."""
+    """Wraps a ModelClient: adds up cost, caps in-flight calls per provider and raises
+    ProviderDown once a model fails PROVIDER_DOWN_AFTER calls in a row with no tokens."""
 
     def __init__(
         self,
@@ -52,6 +68,7 @@ class MeteredClient:
         self.by_game: dict[str, Counter[str]] = defaultdict(Counter)  # game -> model -> USD
         self._caps = dict(provider_concurrency or {})
         self._sems: dict[str, asyncio.Semaphore] = {}
+        self.failures: Counter[str] = Counter()  # model -> consecutive provider failures
 
     async def complete(
         self, model: ModelSpec, messages: list[dict[str, Any]], response_model: type[BaseModel]
@@ -68,6 +85,12 @@ class MeteredClient:
             self.by_game[gid][model.name] += result.usage.cost_usd
         if self.on_spend:
             self.on_spend()
+        if result.usage.input_tokens or result.usage.output_tokens:
+            self.failures[model.name] = 0  # it answered, even if the answer was bad JSON
+        elif result.error:
+            self.failures[model.name] += 1
+            if self.failures[model.name] >= PROVIDER_DOWN_AFTER:
+                raise ProviderDown(model.name, result.error)
         return result
 
 
@@ -183,8 +206,10 @@ async def run_batch(
     Overshoot happens only when a game costs more than its estimate: a model's first games are
     bounded by the prior, so a model far dearer than its price table can overshoot there.
     Games already running finish. A game that
-    raises is recorded under "failed" and the batch ends "failed". On cancellation the running
-    games are cancelled, run_meta.json gets status "interrupted" and CancelledError is
+    raises is recorded under "failed" and the batch ends "failed". A model that fails
+    PROVIDER_DOWN_AFTER calls in a row with no tokens raises ProviderDown in its game; no new
+    game starts after that, and the message is kept under "provider_down". On cancellation the
+    running games are cancelled, run_meta.json gets status "interrupted" and CancelledError is
     re-raised; re-running resumes. Resuming into a batch_id made from a different config
     raises BatchMismatch. With neon_connect, every game also streams to Neon (NeonSink) while
     it runs; Neon errors are logged and never stop a game.
@@ -230,6 +255,7 @@ async def run_batch(
 
     finished: list[str] = []
     failed: dict[str, str] = {}
+    down: list[str] = []  # ProviderDown messages; any one stops new games
     started_ids: list[str] = []
     in_flight = 0
     sem = asyncio.Semaphore(cfg.max_concurrency)  # global cap on games in flight
@@ -251,6 +277,7 @@ async def run_batch(
             "finished": finished,
             "skipped": skipped,
             "failed": failed,
+            "provider_down": down,
             "not_started": [a.game_id for a in todo if a.game_id not in started_ids],
             "config": cfg.model_dump(mode="json"),
         }
@@ -271,7 +298,7 @@ async def run_batch(
         return sum(seat_cost[m] if m in seat_cost else prior_seat_cost(specs[m]) for m in a.models)
 
     def verdict(a: Assignment) -> Literal["go", "wait", "stop"]:
-        if spent() >= cfg.budget_usd:
+        if down or spent() >= cfg.budget_usd:
             return "stop"
         if metered is None:
             return "go"  # scripted games are free
@@ -297,6 +324,19 @@ async def run_batch(
         except Exception as exc:
             log.exception("game %s failed", a.game_id)
             failed[a.game_id] = f"{type(exc).__name__}: {exc}"
+            if isinstance(exc, ProviderDown) and str(exc) not in down:
+                down.append(str(exc))
+            # asyncio.gather does not cancel the siblings of a call that raised; they inherit
+            # this task's context, so find them by game id.
+            me = asyncio.current_task()
+            stray = [
+                t
+                for t in asyncio.all_tasks()
+                if t is not me and t.get_context().get(_game) == a.game_id
+            ]
+            for t in stray:
+                t.cancel()
+            await asyncio.gather(*stray, return_exceptions=True)
         finally:
             in_flight -= 1
             reserved.pop(a.game_id, None)

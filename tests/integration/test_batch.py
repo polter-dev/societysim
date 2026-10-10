@@ -6,11 +6,11 @@ import pytest
 from fakes import FakeClient
 from typer.testing import CliRunner
 
-from societysim.batch.runner import BatchMismatch, run_batch
+from societysim.batch.runner import PROVIDER_DOWN_AFTER, BatchMismatch, run_batch
 from societysim.cli import app
 from societysim.config import BatchConfig, ModelSpec
 from societysim.logging.events import EventType
-from societysim.models.client import CompletionResult
+from societysim.models.client import CompletionResult, Usage
 
 PLAYERS = [f"p{i}" for i in range(7)]
 SPECS = {
@@ -420,3 +420,102 @@ async def test_prior_over_budget_still_stops_new_games(tmp_path):
     assert res["status"] == "budget_stopped"
     assert 1 <= len(res["finished"]) < 4
     assert res["not_started"]
+
+
+# --- provider failures -------------------------------------------------------------------
+
+OUTAGE = (
+    "APIError: 402 out of credits at https://router.example/v1 key hf_abcdefghijklmnopqrstuvwxyz"
+)
+
+
+class Outage(PricedFake):
+    """Model `down` errors with no tokens once `after` calls are made, or only on every
+    `every`-th call. bad_json=True answers garbage with tokens instead."""
+
+    def __init__(self, down="b", after=0, every=0, bad_json=False, delay=0.0):
+        super().__init__(delay=delay)
+        self.down, self.after, self.every, self.bad_json = down, after, every, bad_json
+
+    async def complete(self, model, messages, response_model) -> CompletionResult:
+        n = len(self.calls)
+        if model.name != self.down or n < self.after or (self.every and n % self.every):
+            return await super().complete(model, messages, response_model)
+        self.calls.append((model, messages, response_model))
+        await asyncio.sleep(self.delay)
+        if self.bad_json:
+            usage = Usage(model=model.name, input_tokens=100, output_tokens=20)
+            return CompletionResult(parsed=None, raw="nope", error="bad json", usage=usage)
+        return CompletionResult(parsed=None, raw="", error=OUTAGE, usage=Usage(model=model.name))
+
+
+async def test_provider_down_mid_batch_stops_new_games_and_rerun_replays(tmp_path):
+    client = Outage(after=300, delay=0.001)
+    c = cfg(n_games=8, max_concurrency=1)
+    res = await run_batch(c, SPECS, client, runs_dir=tmp_path)
+    assert res["status"] == "failed"
+    assert res["failed"] and res["not_started"]
+    assert all("ProviderDown" in why for why in res["failed"].values())
+    [down] = res["provider_down"]
+    assert down.startswith("b: ") and "402 out of credits" in down
+    assert "http" not in down and "hf_abc" not in down  # no URLs or keys
+    meta = json.loads((tmp_path / "t/run_meta.json").read_text())
+    assert meta["status"] == "failed" and meta["failed"] == res["failed"]
+
+    again = await run_batch(c, SPECS, PricedFake(), runs_dir=tmp_path)
+    assert again["status"] == "completed"
+    assert set(res["failed"]) | set(res["not_started"]) <= set(again["finished"])
+    assert len(again["finished"]) + len(again["skipped"]) == 8
+
+
+async def test_provider_down_inside_a_gather_leaves_no_stray_calls(tmp_path, monkeypatch):
+    monkeypatch.setattr("societysim.batch.runner.PROVIDER_DOWN_AFTER", 1)
+    # a's first failure trips it inside the night's parallel calls, with siblings in flight
+    client = Outage(down="a", delay=0.005)
+    res = await run_batch(cfg(n_games=2, max_concurrency=1), SPECS, client, runs_dir=tmp_path)
+    assert res["status"] == "failed" and len(res["not_started"]) == 1
+    assert asyncio.all_tasks() == {asyncio.current_task()}  # siblings were cancelled
+    calls = len(client.calls)
+    await asyncio.sleep(0.02)
+    assert len(client.calls) == calls
+
+
+async def test_occasional_provider_errors_do_not_stop_the_batch(tmp_path):
+    client = Outage(every=3)
+    res = await run_batch(cfg(), SPECS, client, runs_dir=tmp_path)
+    assert res["status"] == "completed" and res["provider_down"] == []
+    assert len(res["finished"]) == 4
+
+
+async def test_bad_json_never_counts_as_provider_down(tmp_path):
+    res = await run_batch(cfg(), SPECS, Outage(bad_json=True), runs_dir=tmp_path)
+    assert res["status"] == "completed" and res["provider_down"] == []
+    assert len(res["finished"]) == 4
+
+
+async def test_down_after_exactly_n_failures(tmp_path):
+    from societysim.agents.schemas import VoteResponse
+    from societysim.batch.runner import MeteredClient, ProviderDown
+
+    metered = MeteredClient(Outage(down="a"))
+    for _ in range(PROVIDER_DOWN_AFTER - 1):
+        await metered.complete(SPECS["a"], [], VoteResponse)
+    await metered.complete(SPECS["b"], [], VoteResponse)  # other models keep their own count
+    with pytest.raises(ProviderDown, match="^a: "):
+        await metered.complete(SPECS["a"], [], VoteResponse)
+
+
+def test_cli_batch_provider_down_says_which_and_how_to_resume(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOSTED_VLLM_API_KEY", "test-key")
+    from societysim.models import client as client_module
+
+    monkeypatch.setattr(
+        client_module, "LiteLLMClient", lambda *, limits: Outage(down="qwen3-235b", after=100)
+    )
+    path = write_config(tmp_path, n_games=4, max_concurrency=1)
+    args = ["batch", "--config", str(path), "--registry", str(REGISTRY), "--agents", "llm"]
+    result = RUNNER.invoke(app, args)
+    assert result.exit_code == 1, result.output
+    assert "provider down: qwen3-235b: " in result.output
+    assert "re-run once it is back to resume: runs/cli" in result.output

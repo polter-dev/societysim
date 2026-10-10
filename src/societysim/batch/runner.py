@@ -9,7 +9,10 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
+from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -19,7 +22,7 @@ from pydantic import BaseModel
 from societysim.agents.base import AgentFactory
 from societysim.agents.llm_agent import llm_agents
 from societysim.agents.scripted import RandomAgent
-from societysim.batch.assign import assign_games
+from societysim.batch.assign import Assignment, assign_games
 from societysim.config import BatchConfig, ModelSpec
 from societysim.logging.events import EventType
 from societysim.logging.sinks.jsonl import JsonlSink
@@ -27,6 +30,8 @@ from societysim.models.client import CompletionResult, ModelClient
 from societysim.orchestrator import run_game
 
 log = logging.getLogger(__name__)
+
+_game: ContextVar[str | None] = ContextVar("batch_game", default=None)
 
 Status = Literal["running", "completed", "budget_stopped", "failed", "interrupted"]
 
@@ -43,6 +48,7 @@ class MeteredClient:
         self.inner = inner
         self.on_spend = on_spend
         self.spent = 0.0
+        self.by_game: dict[str, Counter[str]] = defaultdict(Counter)  # game -> model -> USD
         self._caps = dict(provider_concurrency or {})
         self._sems: dict[str, asyncio.Semaphore] = {}
 
@@ -57,13 +63,15 @@ class MeteredClient:
             async with sem:
                 result = await self.inner.complete(model, messages, response_model)
         self.spent += result.usage.cost_usd
+        if (gid := _game.get()) is not None:
+            self.by_game[gid][model.name] += result.usage.cost_usd
         if self.on_spend:
             self.on_spend()
         return result
 
 
-def game_cost(path: Path) -> float | None:
-    """Total cost of a finished game log, or None if the game did not finish."""
+def game_costs(path: Path) -> Counter[str] | None:
+    """USD per model in a finished game log, or None if the game did not finish."""
     try:
         lines = path.read_text().splitlines()
         if not lines or json.loads(lines[-1])["type"] != EventType.GAME_END:
@@ -71,7 +79,12 @@ def game_cost(path: Path) -> float | None:
         events = [json.loads(line) for line in lines]
     except (OSError, ValueError, KeyError):
         return None
-    return sum((e.get("meta") or {}).get("usage", {}).get("cost_usd", 0.0) for e in events)
+    costs: Counter[str] = Counter()
+    for e in events:
+        usage = (e.get("meta") or {}).get("usage")
+        if usage:
+            costs[usage.get("model", "?")] += usage.get("cost_usd", 0.0)
+    return costs
 
 
 class BatchMismatch(Exception):
@@ -84,12 +97,20 @@ def fingerprint(cfg: BatchConfig) -> str:
     return hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:16]
 
 
+class CorruptMeta(BatchMismatch):
+    """run_meta.json exists but cannot be read; it is never treated as a fresh batch."""
+
+
 def _read_meta(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
     try:
         meta = json.loads(path.read_text())
     except (OSError, ValueError):
-        return {}
-    return meta if isinstance(meta, dict) else {}
+        meta = None
+    if not isinstance(meta, dict):
+        raise CorruptMeta(f"{path} is unreadable; fix or delete it (and check the games) to go on")
+    return meta
 
 
 async def run_batch(
@@ -104,9 +125,13 @@ async def run_batch(
 
     client=None plays scripted RandomAgents (free). Spend is kept in run_meta.json after every
     model call, including games that never finished, and carries over to a resume. A new game
-    starts only if spend so far plus the cost of the dearest finished game for each game in
-    flight and the new one stays within cfg.budget_usd. Until some game has finished there is
-    no estimate, so only one game runs at a time. Games already running finish. A game that
+    starts only if spend so far, plus what each in-flight game is still expected to spend,
+    plus the new game's estimate stays within cfg.budget_usd. A game is estimated as the sum
+    over its seats of the highest per-seat cost seen so far for that seat's model. A game with a
+    model that has no finished game yet has no estimate, so it runs alone and nothing starts
+    beside it. Overshoot therefore happens only when a game costs more than its estimate (a
+    model's first game is unbounded; later ones are bounded by the dearest game seen).
+    Games already running finish. A game that
     raises is recorded under "failed" and the batch ends "failed". On cancellation the running
     games are cancelled, run_meta.json gets status "interrupted" and CancelledError is
     re-raised; re-running resumes. Resuming into a batch_id made from a different config
@@ -126,16 +151,24 @@ async def run_batch(
     started = datetime.now(UTC).isoformat()
     skipped: list[str] = []
     todo = []
-    finished_cost: dict[str, float] = {}
+    seat_cost: dict[str, float] = {}  # model -> highest observed USD per seat per game
+    prior_spend = 0.0
+
+    def observe(a: Assignment, costs: Mapping[str, float]) -> None:
+        for model, seats in Counter(a.models).items():
+            if model in costs:
+                seat_cost[model] = max(seat_cost.get(model, 0.0), costs[model] / seats)
+
     for a in assign_games(cfg):
-        cost = game_cost(out / f"{a.game_id}.jsonl")
-        if cost is None:
+        costs = game_costs(out / f"{a.game_id}.jsonl")
+        if costs is None:
             todo.append(a)
         else:
             skipped.append(a.game_id)
-            finished_cost[a.game_id] = cost
+            observe(a, costs)
+            prior_spend += sum(costs.values())
     # The ledger also holds money spent on games that were cut off; logs alone would miss it.
-    prior_spend = max(float(old.get("spent_usd", 0.0)), sum(finished_cost.values()))
+    prior_spend = max(float(old.get("spent_usd", 0.0)), prior_spend)
 
     finished: list[str] = []
     failed: dict[str, str] = {}
@@ -162,7 +195,9 @@ async def run_batch(
             "not_started": [a.game_id for a in todo if a.game_id not in started_ids],
             "config": cfg.model_dump(mode="json"),
         }
-        meta_path.write_text(json.dumps(s, indent=2))
+        tmp = meta_path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(s, indent=2))
+        os.replace(tmp, meta_path)  # a hard kill leaves the old file, never half of one
         return s
 
     if client:
@@ -170,34 +205,48 @@ async def run_batch(
     make_agent: AgentFactory = llm_agents(metered, specs) if metered else RandomAgent
     colors = {name: s.color for name, s in specs.items()}
 
-    def verdict() -> Literal["go", "wait", "stop"]:
+    reserved: dict[str, float | None] = {}  # in-flight game -> estimated USD (None: unknown)
+
+    def estimate(a: Assignment) -> float | None:
+        """Sum of each seat's model's observed per-seat cost; None if a model has no data."""
+        if any(m not in seat_cost for m in a.models):
+            return None
+        return sum(seat_cost[m] for m in a.models)
+
+    def verdict(a: Assignment) -> Literal["go", "wait", "stop"]:
         if spent() >= cfg.budget_usd:
             return "stop"
         if metered is None:
             return "go"  # scripted games are free
-        if not finished_cost:  # no estimate yet: probe with one game
+        est = estimate(a)
+        if est is None or None in reserved.values():
+            # Unpriced game: run it alone, and let nothing start next to one.
             return "wait" if in_flight else "go"
-        fits = spent() + max(finished_cost.values()) * (in_flight + 1) <= cfg.budget_usd
-        if fits:
+        # An in-flight game only still needs what it has not spent yet.
+        left = sum(
+            max(e - sum(metered.by_game[g].values()), 0.0)
+            for g, e in reserved.items()
+            if e is not None
+        )
+        if spent() + left + est <= cfg.budget_usd:
             return "go"
         return "wait" if in_flight else "stop"  # running games may free budget by finishing
 
-    async def play(game_id: str, game_cfg) -> None:
+    async def play(a: Assignment) -> None:
         nonlocal in_flight
-        before = metered.spent if metered else 0.0
+        _game.set(a.game_id)
         try:
             sinks = [JsonlSink(cfg.batch_id, runs_dir)]
-            await run_game(game_cfg, make_agent, sinks, game_id, colors)
-            finished.append(game_id)
-            if metered:  # concurrent games share the meter, so this over-estimates; fine
-                finished_cost[game_id] = max(metered.spent - before, 1e-9)
-            else:
-                finished_cost[game_id] = 0.0
+            await run_game(a.game_config(cfg.game), make_agent, sinks, a.game_id, colors)
+            finished.append(a.game_id)
+            if metered:
+                observe(a, metered.by_game[a.game_id])
         except Exception as exc:
-            log.exception("game %s failed", game_id)
-            failed[game_id] = f"{type(exc).__name__}: {exc}"
+            log.exception("game %s failed", a.game_id)
+            failed[a.game_id] = f"{type(exc).__name__}: {exc}"
         finally:
             in_flight -= 1
+            reserved.pop(a.game_id, None)
             sem.release()
 
     save("running")
@@ -206,15 +255,16 @@ async def run_batch(
     try:
         for a in todo:
             await sem.acquire()
-            while (v := verdict()) == "wait":
+            while (v := verdict(a)) == "wait":
                 await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             if v == "stop":
                 sem.release()
                 budget_hit = True
                 break
             in_flight += 1
+            reserved[a.game_id] = estimate(a)
             started_ids.append(a.game_id)
-            task = asyncio.create_task(play(a.game_id, a.game_config(cfg.game)))
+            task = asyncio.create_task(play(a))
             tasks.add(task)
             task.add_done_callback(tasks.discard)
         while tasks:

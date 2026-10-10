@@ -213,7 +213,51 @@ async def test_interrupts_do_not_reset_spend(tmp_path):
     res = await run_batch(
         cfg(n_games=10, max_concurrency=1, budget_usd=cap), SPECS, PricedFake(), runs_dir=tmp_path
     )
-    assert res["spent_usd"] <= cap + cost  # at most one game over: budget is checked per game start
+    assert (
+        res["spent_usd"] <= cap + cost
+    )  # same-priced models: a game is estimated from its own models, so at most one over
+
+
+class SpreadFake(PricedFake):
+    """Model b costs 100x model a per call."""
+
+    async def complete(self, model, messages, response_model) -> CompletionResult:
+        r = await super().complete(model, messages, response_model)
+        scale = 100 if model.name == "b" else 1
+        return r.model_copy(
+            update={"usage": r.usage.model_copy(update={"cost_usd": CALL_COST * scale})}
+        )
+
+
+async def test_budget_with_100x_price_spread_and_concurrency(tmp_path):
+    selfplay = {"mode": "selfplay", "n_games": 8, "max_concurrency": 4}
+    probe = await run_batch(
+        cfg(n_games=1, mode="selfplay", batch_id="probe", models=["a"]),
+        SPECS,
+        SpreadFake(),
+        runs_dir=tmp_path,
+    )
+    cheap = probe["spent_usd"]
+    cap = cheap * 6
+    res = await run_batch(cfg(budget_usd=cap, **selfplay), SPECS, SpreadFake(), runs_dir=tmp_path)
+    assert res["status"] == "budget_stopped"
+    # g0 (a) runs alone, then g1 (b) runs alone with no estimate and alone blows the cap. The
+    # remaining bound: a model's first game can cost more than the cap; nothing else is
+    # allowed beside it, so overshoot is that one game (about 100 cheap games), not 4x it.
+    assert len(res["finished"]) == 2
+    assert res["spent_usd"] <= cap + cheap * 130
+
+
+async def test_unreadable_run_meta_is_never_a_fresh_batch(tmp_path):
+    await run_batch(cfg(n_games=1), SPECS, None, runs_dir=tmp_path)
+    (tmp_path / "t/run_meta.json").write_text('{"fingerprint": "ab')  # torn write
+    with pytest.raises(BatchMismatch, match="unreadable"):
+        await run_batch(cfg(n_games=1), SPECS, None, runs_dir=tmp_path)
+
+
+async def test_run_meta_written_via_replace(tmp_path):
+    await run_batch(cfg(n_games=1), SPECS, None, runs_dir=tmp_path)
+    assert not list((tmp_path / "t").glob("*.tmp"))
 
 
 async def test_resume_refuses_a_different_config(tmp_path):

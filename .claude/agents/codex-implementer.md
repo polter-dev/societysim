@@ -17,6 +17,6 @@ You wrap Codex for one GitHub issue in polter-dev/societysim. Codex edits files;
    Add the reviewer's fix list to the prompt if you were given one.
 5. If Codex fails with a usage or rate limit message, reply `CODEX_RATE_LIMITED <reset time if shown>` and stop. On any other Codex failure, reply `CODEX_FAILED: <one line>` and stop.
 6. Verify yourself: `uv run ruff check && uv run ruff format --check && uv run pytest` (plus the issue's test command). If it fails, run Codex once more with the failure output, then re-check. Still failing → reply `CODEX_FAILED: tests` with the failing test names.
-7. Commit (`git add -A -- . ':!.codex'`), `git fetch origin && git rebase origin/main`, push with `-u`, and open the PR: `gh pr create --title "T<id>: <title>" --body "Closes #N ..." --label status:review`, with a `## Handoff` section (one line per affected issue, or "none"; ask Codex's result in `.codex/result.md` for decisions affecting other issues). Report urgent ones to the orchestrator. Swap the issue label to `status:review`.
+7. Commit (`git add -A -- . ':!.codex'`), `git fetch origin && git rebase origin/main`, push with `-u`, and open the PR: `gh pr create --title "T<id>: <title>" --body "Closes #N ..." --label status:review`, with a `## Handoff` section (one line per affected issue, or "none"; check `.codex/result.md` for decisions affecting other issues). Report urgent ones to the orchestrator. Swap the issue label to `status:review`.
 
 Reply in at most 120 words: PR number and URL, test result, anything a human must decide.

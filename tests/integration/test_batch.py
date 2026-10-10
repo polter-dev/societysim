@@ -170,6 +170,33 @@ async def test_cancellation_stops_cleanly_and_rerun_resumes(tmp_path):
 async def test_scripted_batch_needs_no_client(tmp_path):
     res = await run_batch(cfg(n_games=3), SPECS, None, runs_dir=tmp_path)
     assert res["status"] == "completed" and res["spent_usd"] == 0
+    assert res["write_errors"] == {}
+
+
+async def test_lost_event_writes_are_counted_in_batch_meta(tmp_path, monkeypatch, caplog):
+    class Broken:
+        def write(self, s):
+            raise OSError("disk says no")
+
+    real_write = runner.JsonlSink.write
+
+    async def write(self, event):  # game t-g0001 loses its event seq 3
+        if event.game_id == "t-g0001" and event.seq == 3:
+            f, self._f = self._f, Broken()
+            try:
+                return await real_write(self, event)
+            finally:
+                self._f = f
+        return await real_write(self, event)
+
+    monkeypatch.setattr(runner.JsonlSink, "write", write)
+    res = await run_batch(cfg(n_games=2), SPECS, None, runs_dir=tmp_path)
+    assert res["status"] == "completed" and res["write_errors"] == {"t-g0001": 1}
+    meta = json.loads((tmp_path / "t/run_meta.json").read_text(encoding="utf-8"))
+    assert meta["write_errors"] == {"t-g0001": 1}
+    game = json.loads((tmp_path / "t/t-g0001.run_meta.json").read_text(encoding="utf-8"))
+    assert game["write_errors"] == 1 and game["agents"] == "scripted"
+    assert "t-g0001: 1 events missing" in caplog.text
 
 
 async def test_crashed_game_is_reported_not_lost(tmp_path):

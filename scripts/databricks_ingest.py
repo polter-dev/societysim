@@ -482,7 +482,11 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         games = [(load_game(p), p.parent.name) for p in logs]
         files = write_local(games, a.out)
-        n = {f.stem: len(f.read_text(encoding="utf-8").splitlines()) for f in files if f.suffix == ".jsonl"}
+        n = {
+            f.stem: len(f.read_text(encoding="utf-8").splitlines())
+            for f in files
+            if f.suffix == ".jsonl"
+        }
         print(f"wrote {n} rows to {a.out}")
 
     host, token = os.environ.get("DATABRICKS_HOST"), os.environ.get("DATABRICKS_TOKEN")

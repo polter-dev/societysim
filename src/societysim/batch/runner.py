@@ -330,6 +330,8 @@ async def run_batch(
 
     finished: list[str] = []
     failed: dict[str, str] = {}
+    # game_id -> events its JSONL sink could not write (holes in the log); kept across resumes
+    write_errors: dict[str, int] = dict(old.get("write_errors") or {})
     down: list[str] = []  # ProviderDown messages; any one stops new games
     started_ids: list[str] = []
     in_flight = 0
@@ -365,6 +367,7 @@ async def run_batch(
             "finished": finished,
             "skipped": skipped,
             "failed": failed,
+            "write_errors": write_errors,
             "provider_down": down,
             "invalid_output": {m: {"invalid": b, "calls": c} for m, (b, c) in invalid.items()},
             "invalid_stop": invalid_stop[0] if invalid_stop else None,
@@ -411,8 +414,9 @@ async def run_batch(
         _game.set(a.game_id)
         t0 = time.monotonic()
         outcome: dict[str, Any] = {}
+        jsonl = JsonlSink(cfg.batch_id, runs_dir)
         try:
-            sinks: list[Any] = [JsonlSink(cfg.batch_id, runs_dir)]
+            sinks: list[Any] = [jsonl]
             if neon_connect:
                 sinks.append(NeonSink(cfg.batch_id, connect=neon_connect, agents=agents))
             game = await run_game(a.game_config(cfg.game), make_agent, sinks, a.game_id, colors)
@@ -445,6 +449,11 @@ async def run_batch(
                 t.cancel()
             await asyncio.gather(*stray, return_exceptions=True)
         finally:
+            if jsonl.write_errors:
+                write_errors[a.game_id] = jsonl.write_errors
+                log.error(
+                    "game %s: %d events missing from its JSONL log", a.game_id, jsonl.write_errors
+                )
             in_flight -= 1
             reserved.pop(a.game_id, None)
             solo.discard(a.game_id)

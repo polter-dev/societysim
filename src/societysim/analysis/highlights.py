@@ -197,5 +197,7 @@ def find_highlights(games: list[GameData]) -> list[dict]:
 def write_highlights(batch_dir: Path, top: int = 10, out: Path | None = None) -> list[dict]:
     """Top moments of a batch, also written to `out` (default <batch_dir>/highlights.json)."""
     moments = find_highlights(load_batch(batch_dir))[:top]
-    (out or batch_dir / "highlights.json").write_text(json.dumps(moments, indent=2) + "\n", encoding="utf-8")
+    (out or batch_dir / "highlights.json").write_text(
+        json.dumps(moments, indent=2) + "\n", encoding="utf-8"
+    )
     return moments

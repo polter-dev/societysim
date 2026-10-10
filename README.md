@@ -1,7 +1,5 @@
 # societysim
 
-What happens when AI models from different companies play a game built on lying?
-
 societysim seats AI models at a table to play Werewolf, a game where a few players secretly work against everyone else and everybody has to decide who to trust. We record every move, including each model's private thoughts, then measure which models lie well, which ones catch liars, and which ones talk others into things.
 
 - Live viewer and leaderboard (Hugging Face Space): TODO(batch)
@@ -31,7 +29,7 @@ From the game logs we build:
 - **A replay viewer.** A round table with the players, their speech, accusation and vote arrows, and a timeline you can scrub. Watch as the narrator (roles and the wolf chat visible) or as a villager would have seen it. Click a player to see their private scratchpad and suspicion scores next to what they said out loud. Labeled lies pop up where they happen.
 - **Lie labels.** `societysim label` marks false role claims, false seer reports, a wolf turning on a fellow wolf, a seer hiding a wolf result, and votes that eliminated an innocent player. The raw log is never edited; labels go in a separate file.
 - **A per-model leaderboard and report.** Win, draw and loss rates with confidence intervals, skill ratings as wolf and as villager, how often each model lies and whether the lie worked, how well its suspicion scores pointed at the real wolves, and how often other players voted for someone it accused. Lie success and persuasion are correlations, not proof of cause.
-- **Highlights.** `societysim highlights` picks the best moments in a batch (a lie that swung a vote, a wolf who survived, a doctor save, a seer who led to a wolf) and links to them in the viewer.
+- **Highlights.** `societysim highlights` picks the best moments in a batch (a lie that swung a vote, a wolf who survived, a doctor save, a seer who found a wolf that the village then voted out) and links to them in the viewer.
 - **Narration.** An offline script turns a finished game's public events into spoken clips with ElevenLabs. It never voices private reasoning or the wolf chat. The viewer does not play the clips yet.
 - **A human seat.** `societysim play --human-seat p3` lets you take one seat yourself from the terminal, with the same information an AI in that seat gets.
 
@@ -45,10 +43,10 @@ The code is Python 3.12 (engine, batch runner and analysis, with Pydantic for da
 
 | Piece | What it does for us |
 |---|---|
-| Hugging Face | Most players are open models served through Inference Providers. Game logs are meant to go into a Dataset, and the viewer and leaderboard onto a Space (`scripts/deploy-space.sh` handles the Space; the Dataset upload is in progress). |
-| AMD | gpt-oss-20b runs on an AMD Radeon AI PRO R9700 GPU, served with vLLM on ROCm, as a self-hosted player. See [infra/amd/README.md](infra/amd/README.md). |
-| Databricks | Game logs become Delta tables, a notebook recomputes the metrics, an AI/BI dashboard sits on top, and MLflow tracks each batch. See [notebooks/databricks/README.md](notebooks/databricks/README.md). |
-| Neon | Serverless Postgres. `societysim sync-neon` copies games, events and labels in ([neon/schema.sql](neon/schema.sql)). Reading from Neon in the viewer is not done yet. |
+| Hugging Face | Most players are open models served through Inference Providers (Hugging Face's pay-per-use service that runs models hosted by other companies). Game logs are meant to go into a Dataset, and the viewer and leaderboard onto a Space (`scripts/deploy-space.sh` handles the Space; the Dataset upload is in progress). |
+| AMD | gpt-oss-20b runs on an AMD Radeon AI PRO R9700 GPU, served with vLLM (software that runs a model as a web service) on ROCm (AMD's toolkit for running AI on its GPUs), as a self-hosted player. See [infra/amd/README.md](infra/amd/README.md). |
+| Databricks | Game logs become Delta tables (Databricks' table format), a notebook recomputes the metrics, an AI/BI dashboard sits on top, and MLflow (an experiment tracker) records each batch as a run. See [notebooks/databricks/README.md](notebooks/databricks/README.md). |
+| Neon | Serverless Postgres database. `play` and `batch` with `--neon` stream events in while a game runs, and `societysim sync-neon` backfills finished batches ([neon/schema.sql](neon/schema.sql)). Read-only views serve the leaderboard (`leaderboard`, `leaderboard_by_batch`, `lies_by_model`). The viewer does not read from Neon yet. |
 | ElevenLabs | Text-to-speech for game narration. |
 | TypeSafe (Jev) | A classifier that reads each statement to help label lies. Labeling still works without it. |
 | Figma | Design for a viewer that someone who has never played Werewolf can follow. The viewer supports keyboard use, screen readers and reduced motion. |
@@ -70,9 +68,17 @@ That writes `runs/selfplay_smoke/selfplay_smoke-s0.jsonl`. To watch it:
 cd viewer && npm ci && npm run dev
 ```
 
-Then use "Open a log file" in the viewer and pick the `.jsonl`. For the full list of commands, including free labeling with `label --no-jev` and what real runs cost, see [docs/DEMO.md](docs/DEMO.md).
+Then use "Open a log file" in the viewer and pick the `.jsonl`. The viewer opens in villager view, which hides the scratchpads and lie labels, so switch the View menu to Narrator to see them. For the full list of commands, including free labeling with `label --no-jev` and what real runs cost, see [docs/DEMO.md](docs/DEMO.md).
 
-Games with real models need keys. Copy `.env.example` to `.env` and fill in the ones you have. The Hugging Face models need `HF_TOKEN`, Gemini needs `GEMINI_API_KEY`, `gpt-5-nano` and `gpt-5-mini` need `OPENAI_API_KEY`, the AMD model needs `AMD_VLLM_BASE_URL` and `AMD_API_KEY`, Jev labels need `TYPESAFE_API_KEY`, and narration needs `ELEVENLABS_API_KEY`.
+Games with real models need keys. Copy `.env.example` to `.env` and fill in the ones you have:
+
+- `HF_TOKEN`: the Hugging Face models
+- `GEMINI_API_KEY`: Gemini
+- `OPENAI_API_KEY`: `gpt-5-nano` and `gpt-5-mini`
+- `AMD_VLLM_BASE_URL` and `AMD_API_KEY`: the AMD model
+- `TYPESAFE_API_KEY`: Jev lie labels
+- `ELEVENLABS_API_KEY`: narration
+- `NEON_DATABASE_URL`: `--neon` and `sync-neon`
 
 ```bash
 uv run societysim doctor                                                 # ping every model in configs/models.yaml
@@ -82,7 +88,14 @@ uv run societysim label runs/smoke_batch
 uv run societysim report runs/smoke_batch                               # writes runs/smoke_batch/report/
 ```
 
-`batch` runs games in parallel, rotates models through seats and roles, stops starting new games before it would go over the config's `budget_usd`, and resumes if you run it again. The main experiment is `configs/mixed_v1.yaml` (100 mixed games). The viewer loads `data/report/index.json` by default; add `?index=<url>` to point it at another batch. `scripts/deploy-space.sh runs/<batch> <owner/space>` builds the viewer with a batch and uploads it to a Hugging Face Space.
+What these do:
+
+- `batch` runs games in parallel and rotates models through seats and roles.
+- It stops starting new games before it would go over the config's `budget_usd`, and resumes if you run it again.
+- The main experiment is `configs/mixed_v1.yaml` (100 mixed games).
+- After a batch, `uv run python -m societysim.analysis.postbatch runs/<batch>` runs label (without Jev), report and highlights in one go, and prints the numbers and upload commands to use next.
+- The viewer loads `data/report/index.json` by default; add `?index=<url>` to point it at another batch.
+- `scripts/deploy-space.sh runs/<batch> <owner/space>` builds the viewer with a batch and uploads it to a Hugging Face Space.
 
 ## Models
 

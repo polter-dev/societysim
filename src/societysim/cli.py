@@ -83,8 +83,13 @@ def play(
         str | None, typer.Option("--batch-id", help="Output directory name; default: config stem.")
     ] = None,
     neon: NeonFlag = False,
+    human_seat: Annotated[
+        str | None,
+        typer.Option("--human-seat", help="Play this seat yourself, e.g. p3. Logged as 'human'."),
+    ] = None,
 ) -> None:
     """Play one game and write its event log and run metadata."""
+    from societysim.agents import human
     from societysim.agents.llm_agent import llm_agents
     from societysim.agents.scripted import RandomAgent
     from societysim.config import GameConfig, load_yaml
@@ -101,13 +106,21 @@ def play(
         cfg = cfg.model_copy(update={"seed": seed})
     batch_id = batch_id if batch_id is not None else config.stem
     game_id = f"{batch_id}-s{cfg.seed}"
+    if human_seat is not None:
+        models = cfg.seat_models()
+        seats = [f"p{i}" for i in range(cfg.n_players)]
+        if human_seat not in seats or not models:
+            typer.echo(f"--human-seat must be one of {', '.join(seats)} with models in the config")
+            raise typer.Exit(1)
+        models[seats.index(human_seat)] = human.MODEL
+        cfg = cfg.model_copy(update={"models": models})
 
     load_dotenv()
     registry_path = Path(__file__).resolve().parents[2] / "configs/models.yaml"
     reg = load_registry(registry_path)
     reg.apply_env()
     try:
-        specs = reg.resolve(cfg.seat_models())
+        specs = reg.resolve([m for m in cfg.seat_models() if m != human.MODEL])
     except KeyError as exc:
         typer.echo(exc.args[0])
         raise typer.Exit(1) from None
@@ -144,15 +157,16 @@ def play(
     sinks = [JsonlSink(batch_id)]
     if connect := _neon_connect(neon):
         sinks.append(NeonSink(batch_id, connect=connect))
-    game = asyncio.run(
-        run_game(
-            cfg,
-            make_agent,
-            sinks,
-            game_id,
-            colors={s.name: s.color for s in specs},
+    if human_seat is not None:
+        make_agent = human.with_human(make_agent, human_seat)
+        sinks = [human.MarkDefaults(sink, human_seat) for sink in sinks]
+    try:
+        game = asyncio.run(
+            run_game(cfg, make_agent, sinks, game_id, colors={s.name: s.color for s in specs})
         )
-    )
+    except (EOFError, KeyboardInterrupt):
+        typer.echo(f"\ngame abandoned; partial log: {Path('runs') / batch_id / f'{game_id}.jsonl'}")
+        raise typer.Exit(130) from None
     typer.echo(Path("runs") / batch_id / f"{game_id}.jsonl")
     typer.echo(f"winner: {game.winner}")
 

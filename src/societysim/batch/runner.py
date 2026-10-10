@@ -41,6 +41,7 @@ Status = Literal[
     "running", "completed", "budget_stopped", "stopped_invalid", "failed", "interrupted"
 ]
 
+_now = time.monotonic  # the clock for durations and the ETA; tests replace it
 
 # A model whose calls fail this many times in a row without getting any tokens back is taken
 # as down (no credits, quota hit, key revoked); the batch stops starting games.
@@ -273,7 +274,11 @@ async def run_batch(
     on_progress, if given, gets a dict after each game ends (event "finished" or "failed", with
     done, total, game_id, winner or reason, seconds, spent, budget, running, eta_seconds) and
     once when the guard stops new games (event "stopped", with reason, spent, budget, running).
-    done counts games skipped on resume. eta_seconds is None until a game ends in this run.
+    done counts games skipped on resume. eta_seconds is remaining games divided by the observed
+    finish rate (games finished in this run per wall second since it began, so it already
+    reflects concurrency, slow models and the lone first game of each unseen model). It is None
+    until a game finishes in this run (failed games say nothing about pace); callers show
+    "estimating..." for None.
     """
     out = Path(runs_dir) / cfg.batch_id
     out.mkdir(parents=True, exist_ok=True)
@@ -341,7 +346,7 @@ async def run_batch(
     in_flight = 0
     sem = asyncio.Semaphore(cfg.max_concurrency)  # global cap on games in flight
     metered: MeteredClient | None = None
-    durations: list[float] = []  # wall seconds of games that ended in this run
+    run_t0 = _now()
     total = cfg.n_games
 
     def progress(event: str, **info: Any) -> None:
@@ -416,7 +421,7 @@ async def run_batch(
     async def play(a: Assignment) -> None:
         nonlocal in_flight
         _game.set(a.game_id)
-        t0 = time.monotonic()
+        t0 = _now()
         outcome: dict[str, Any] = {}
         jsonl = JsonlSink(cfg.batch_id, runs_dir)
         try:
@@ -463,10 +468,9 @@ async def run_batch(
             solo.discard(a.game_id)
             sem.release()
             if outcome:
-                seconds = time.monotonic() - t0
-                durations.append(seconds)
+                seconds = _now() - t0
                 done = len(skipped) + len(finished) + len(failed)
-                eta = sum(durations) / len(durations) * (total - done) / cfg.max_concurrency
+                eta = (_now() - run_t0) / len(finished) * (total - done) if finished else None
                 progress(
                     **outcome,
                     done=done,

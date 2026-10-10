@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 from societysim.cli import app
 from societysim.logging.sinks.neon import find_prunable, prune_games
 
-NOW = datetime.now(UTC)  # the CLI uses the real clock, so build ages relative to it
+NOW = datetime.now(UTC)  # stands in for the database clock; the CLI uses db_now from the query
 
 
 def _game(gid, batch="real", has_end=True, age_h=48, status="finished", events=10, labels=2):
@@ -17,7 +17,8 @@ def _game(gid, batch="real", has_end=True, age_h=48, status="finished", events=1
         "game_id": gid,
         "batch_id": batch,
         "status": status,
-        "started_at": None if age_h is None else NOW - timedelta(hours=age_h),
+        "db_now": NOW,
+        "last_activity": None if age_h is None else NOW - timedelta(hours=age_h),
         "has_end": has_end,
         "events": events,
         "labels": labels,
@@ -75,7 +76,7 @@ class _Tx:
 
 
 async def test_find_prunable_reasons():
-    found = await find_prunable(PgFake(), older_than_hours=6, batch_ids=["smoke"], now=NOW)
+    found = await find_prunable(PgFake(), older_than_hours=6, batch_ids=["smoke"])
     reasons = {g["game_id"]: g["reason"] for g in found}
     assert list(reasons) == ["part-1", "t-1", "t-2", "fixture-0001"]
     assert reasons["part-1"].startswith("partial: no game_end")
@@ -84,14 +85,48 @@ async def test_find_prunable_reasons():
 
 
 async def test_find_prunable_without_batches_leaves_test_batch_alone():
-    found = await find_prunable(PgFake(), now=NOW)
+    found = await find_prunable(PgFake())
     assert [g["game_id"] for g in found] == ["part-1", "fixture-0001"]
 
 
 async def test_find_prunable_age_cutoff():
-    games = [_game("a", has_end=False, age_h=5), _game("b", has_end=False, age_h=7)]
-    found = await find_prunable(PgFake(games), older_than_hours=6, now=NOW)
+    games = [
+        _game("a", has_end=False, age_h=5, status="running"),
+        _game("b", has_end=False, age_h=7, status="running"),
+    ]
+    found = await find_prunable(PgFake(games), older_than_hours=6)
     assert [g["game_id"] for g in found] == ["b"]
+
+
+async def test_running_game_is_judged_by_database_time_not_local_time():
+    # A running game active 1h ago by the database clock. The machine running the CLI is
+    # years ahead, but that must not make the game look stale.
+    db_now = datetime(2020, 1, 1, tzinfo=UTC)
+    live = _game("live", has_end=False, age_h=1, status="running") | {"db_now": db_now}
+    live["last_activity"] = db_now - timedelta(hours=1)
+    long_running = _game("long", has_end=False, age_h=8, status="running") | {"db_now": db_now}
+    long_running["last_activity"] = db_now - timedelta(hours=1)  # old start, recent events
+    assert await find_prunable(PgFake([live, long_running])) == []
+
+
+async def test_candidate_query_reads_the_database_clock_and_event_timestamps():
+    from societysim.logging.sinks.neon import _PRUNE_CANDIDATES
+
+    assert "now() as db_now" in _PRUNE_CANDIDATES
+    assert "max((e.event -> 'meta' ->> 'ts')::timestamptz)" in _PRUNE_CANDIDATES
+
+
+async def test_finished_game_without_game_end_row_is_not_partial():
+    lost_end = _game("lost-end", has_end=False, age_h=48, status="finished")
+    stale_running = _game("stale", has_end=False, age_h=48, status="running")
+    found = await find_prunable(PgFake([lost_end, stale_running]))
+    assert [g["game_id"] for g in found] == ["stale"]
+
+
+async def test_fixture_match_is_exact_not_a_prefix():
+    games = [_game("fixture-0001"), _game("fixture-real-1", batch="fixture-run")]
+    found = await find_prunable(PgFake(games))
+    assert [g["game_id"] for g in found] == ["fixture-0001"]
 
 
 async def test_prune_games_runs_in_a_transaction_on_only_those_ids():

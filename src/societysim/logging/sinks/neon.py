@@ -304,8 +304,17 @@ async def delete_games(conn: Any, game_ids: list[str]) -> dict[str, Any]:
     }
 
 
+# Game ids in fixtures/sample_game.jsonl. Exact ids only: a real batch may start with "fixture".
+FIXTURE_GAME_IDS = frozenset({"fixture-0001"})
+
 _PRUNE_CANDIDATES = """
-select g.game_id, g.batch_id, g.status, g.started_at,
+select g.game_id, g.batch_id, g.status,
+       now() as db_now,
+       greatest(
+           g.started_at,
+           (select max((e.event -> 'meta' ->> 'ts')::timestamptz)
+            from events e where e.game_id = g.game_id)
+       ) as last_activity,
        exists (
            select 1 from events e where e.game_id = g.game_id and e.type = 'game_end'
        ) as has_end,
@@ -321,28 +330,33 @@ async def find_prunable(
     *,
     older_than_hours: float = 6,
     batch_ids: list[str] | None = None,
-    now: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """Read-only. Games that should not reach the live leaderboard, each with the reason why.
 
-    Reasons: `test batch <id>` (batch id given by the caller), `fixture` (game id starts with
-    fixture-), and `partial` (no game_end event and started more than `older_than_hours` ago;
-    younger games may still be running, and games with no start time are left alone).
+    Reasons: `test batch <id>` (exact batch id given by the caller), `fixture` (a game id in
+    FIXTURE_GAME_IDS, exact match), and `partial`: status running or failed, no game_end event,
+    and no activity for more than `older_than_hours`. Activity is the newest event timestamp
+    (or the start time) and the age is measured against the database's now(), never this
+    machine's clock. A finished game is never partial, even if its game_end row was lost.
+    A game with no known activity time is left alone.
     """
-    now = now or datetime.now(UTC)
-    cutoff = now - timedelta(hours=older_than_hours)
     test_batches = set(batch_ids or [])
     found = []
     for r in await conn.fetch(_PRUNE_CANDIDATES):
-        started = r["started_at"]
-        if started is not None and started.tzinfo is None:
-            started = started.replace(tzinfo=UTC)
+        last = r["last_activity"]
+        if last is not None and last.tzinfo is None:
+            last = last.replace(tzinfo=UTC)
         if r["batch_id"] in test_batches:
             reason = f"test batch {r['batch_id']}"
-        elif r["game_id"].startswith("fixture-"):
+        elif r["game_id"] in FIXTURE_GAME_IDS:
             reason = "fixture"
-        elif not r["has_end"] and started is not None and started < cutoff:
-            reason = f"partial: no game_end, started {started:%Y-%m-%d %H:%M} UTC"
+        elif (
+            r["status"] in ("running", "failed")
+            and not r["has_end"]
+            and last is not None
+            and last < r["db_now"] - timedelta(hours=older_than_hours)
+        ):
+            reason = f"partial: no game_end, last activity {last:%Y-%m-%d %H:%M} UTC"
         else:
             continue
         found.append(

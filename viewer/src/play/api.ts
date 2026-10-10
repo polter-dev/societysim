@@ -14,22 +14,38 @@ export class PlayError extends Error {
   }
 }
 
-const FRIENDLY: Record<number, string> = {
-  429: "Too many games today. Try again tomorrow, or watch a replay.",
-  403: "Couldn't verify you're human. Please retry the check.",
-  409: "It's not your turn.",
-  401: "Your seat session has expired.",
+/** Our own wording per server error code. The server's `message` is never shown. */
+export const BY_CODE: Record<string, string> = {
+  rate_limited: "Slow down a little and try again in a minute.",
+  too_many_games_today: "Too many games today. Try again tomorrow, or watch a replay.",
+  active_game_exists: "You already have a game running. Finish it or wait for it to end.",
+  at_capacity: "The server is full right now. Try again in a few minutes, or watch a replay.",
+  bot_check_failed: "Couldn't verify you're human. Please retry the check.",
+  forbidden: "You can't start a game from here. Watch a replay instead.",
+  budget_exhausted: "Today's budget is used up. Watch a replay instead.",
+  play_disabled: "Play is paused right now. Watch a replay instead.",
+  invalid_request: "That request wasn't valid. Check your settings and try again.",
+  not_your_turn: "It's not your turn.",
+  game_not_found: "That game wasn't found. It may have ended.",
+  unauthorized: "Your seat session has expired.",
+  payload_too_large: "That was too long. Shorten it and try again.",
 };
 
-/** 503 is either "play is paused" or "today's budget is used up"; the server's detail text says which. */
-function unavailable(detail: string): string {
-  if (/budget|closed|today/i.test(detail)) return "Today's budget is used up. Watch a replay instead.";
-  if (/paus|disabled/i.test(detail)) return "Play is paused right now. Watch a replay instead.";
-  return "Play is closed right now (paused or out of budget). Watch a replay instead.";
-}
+const BY_STATUS: Record<number, string> = {
+  401: BY_CODE.unauthorized,
+  403: BY_CODE.bot_check_failed,
+  404: BY_CODE.game_not_found,
+  409: BY_CODE.not_your_turn,
+  413: BY_CODE.payload_too_large,
+  422: BY_CODE.invalid_request,
+  429: BY_CODE.rate_limited,
+  503: "Play is closed right now (paused or out of budget). Watch a replay instead.",
+};
 
-export const friendlyMessage = (status: number, detail = ""): string =>
-  (status === 503 ? unavailable(detail) : FRIENDLY[status]) ?? (status >= 500 ? "The game server had a problem. Try again." : `Request failed (${status}).`);
+export const friendlyMessage = (status: number, code = ""): string =>
+  BY_CODE[code] ??
+  BY_STATUS[status] ??
+  (status >= 500 ? "The game server had a problem. Try again." : `Request failed (${status}).`);
 
 const baseUrl = () => ((import.meta.env.VITE_PLAY_API_URL as string | undefined) ?? "").replace(/\/$/, "");
 
@@ -70,14 +86,14 @@ async function call<T>(path: string, init: { method?: string; body?: unknown; to
     throw new PlayError(0, "Can't reach the game server.");
   }
   if (!res.ok) {
-    let detail = "";
+    let code = "";
     try {
-      const d = ((await res.json()) as { detail?: unknown }).detail;
-      if (typeof d === "string") detail = d;
+      const c = ((await res.json()) as { error?: unknown }).error;
+      if (typeof c === "string") code = c;
     } catch {
       /* no JSON body */
     }
-    throw new PlayError(res.status, friendlyMessage(res.status, detail));
+    throw new PlayError(res.status, friendlyMessage(res.status, code));
   }
   return (await res.json()) as T;
 }

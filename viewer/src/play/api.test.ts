@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildAction } from "./action";
-import { PlayError, TOKEN_PREFIX, getLimits, getMe, postAction, startGame } from "./api";
+import { BY_CODE, PlayError, TOKEN_PREFIX, getLimits, getMe, postAction, startGame } from "./api";
 import type { PendingAction } from "./types";
 
 const TOKEN = "tok-secret-123";
@@ -57,31 +57,34 @@ describe("api client", () => {
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBeUndefined();
   });
 
+  it.each(Object.entries(BY_CODE))("maps error code %s to our own text, not the server's message", async (code, text) => {
+    fetchMock.mockReturnValue(json({ error: code, message: "SERVER WORDING" }, 400));
+    const e = await getLimits().catch((x) => x);
+    expect(e).toBeInstanceOf(PlayError);
+    expect(e.message).toBe(text);
+    expect(e.message).not.toContain("SERVER");
+  });
+
+  it("covers every code the server returns", () => {
+    expect(Object.keys(BY_CODE).sort()).toEqual(
+      [
+        "rate_limited", "too_many_games_today", "active_game_exists", "at_capacity", "bot_check_failed",
+        "forbidden", "budget_exhausted", "play_disabled", "invalid_request", "not_your_turn",
+        "game_not_found", "unauthorized", "payload_too_large",
+      ].sort(),
+    );
+  });
+
   it.each([
-    [429, /too many games today/i],
+    [429, /slow down/i],
     [403, /verify you're human/i],
     [503, /closed right now/i],
     [409, /not your turn/i],
-  ])("maps %i to a friendly message", async (status, re) => {
+  ])("falls back to status %i when there is no error code", async (status, re) => {
     fetchMock.mockReturnValue(json({ detail: "x" }, status));
     const e = await getLimits().catch((x) => x);
-    expect(e).toBeInstanceOf(PlayError);
     expect(e.status).toBe(status);
     expect(e.message).toMatch(re);
-  });
-
-  it("tells paused from out of budget on 503 using the server's detail", async () => {
-    fetchMock.mockReturnValue(json({ detail: "play is closed for today" }, 503));
-    await expect(getLimits()).rejects.toThrow(/budget is used up/i);
-    fetchMock.mockReturnValue(json({ detail: "play is paused" }, 503));
-    await expect(getLimits()).rejects.toThrow(/paused/i);
-  });
-
-  it("tells paused from out of budget on 503 using the server's detail", async () => {
-    fetchMock.mockReturnValue(json({ detail: "play is closed for today" }, 503));
-    await expect(getLimits()).rejects.toThrow(/budget is used up/i);
-    fetchMock.mockReturnValue(json({ detail: "play is paused" }, 503));
-    await expect(getLimits()).rejects.toThrow(/paused/i);
   });
 
   it("reports a network failure", async () => {

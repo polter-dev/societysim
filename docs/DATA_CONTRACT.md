@@ -343,10 +343,9 @@ files.
 ## Game setup
 
 The settings screen has two modes. Both produce one **setup JSON**, a `GameSetup`
-(`src/societysim/setup.py`, schema `schema/game_setup.schema.json`). There is no game server
-yet: the UI shows or downloads the JSON, and someone runs it with
-`uv run societysim play --setup <file.json>`. A future server endpoint would accept the same JSON
-unchanged. `play --setup` reads YAML too.
+(`src/societysim/setup.py`, schema `schema/game_setup.schema.json`). The UI can show or
+download the JSON for `uv run societysim play --setup <file.json>`, or send it to the game server
+as `setup` in `POST /api/games` (see "Play API"). `play --setup` reads YAML too.
 
 ### Basic
 
@@ -433,6 +432,101 @@ Availability is a snapshot from the machine that built the catalog, not live.
    "color": "#ed1c24", "available": false,
    "unavailable_reason": "missing API base for amd-gpt-oss-20b; set AMD_VLLM_BASE_URL in .env"}]}
 ```
+
+## Play API
+
+A visitor starts a game and plays one seat against the models, or watches an all-AI game. The
+server is `src/societysim/server/` (FastAPI, the `server` extra):
+`uv run --extra server uvicorn --factory societysim.server.app:create_app`. Request and response
+shapes are in `schema/play_api.schema.json` (`$defs`, plus `x-endpoints` mapping each endpoint
+to them). All bodies are JSON and closed: an unknown key is a 422. Errors are FastAPI's
+`{"detail": <string or list>}`.
+
+| Endpoint | Auth | Request | Response |
+|---|---|---|---|
+| `POST /api/games` | none (Turnstile token in the body) | `StartGame` | `StartedGame` |
+| `GET /api/games/{id}/me` | seat token | | `Me` |
+| `POST /api/games/{id}/action` | seat token | `ActionBody` | `{"accepted": true}` |
+| `GET /api/limits` | none | | `{"play_enabled": bool, "remaining_today": int}` |
+| `GET /api/health` | none | | `{"ok": true}` |
+
+### Starting a game
+
+```json
+{"setup": {"mode": "basic"}, "turnstile_token": "<token>", "watch_only": false}
+```
+
+- `setup` is a `GameSetup` (see "Game setup" above), default `{"mode": "basic"}`. The server
+  always draws the seed itself, so a `seed` in the setup is ignored: a known seed would give away
+  the role deal. Without `watch_only`, `human_seat` defaults to `p0`; with `seats`, one seat must
+  have model `"human"`. A watch-only game must not have a human seat.
+- `turnstile_token`: at most 2048 characters. Checked by the admission step (#281).
+- Response: `{"game_id": "visitor-<16 hex>", "seat": "p0", "seat_token": "<43 chars>"}`;
+  `seat` and `seat_token` are null for a watch-only game. The token is 256 random bits and the
+  server keeps only its SHA-256, so it can't be shown again. Keep it for the rest of the game.
+- Errors: 422 bad setup (the detail names each problem), 429 or 403 from admission, 503 when play
+  is off or today's games are used up.
+
+The other seats are LLM agents from `configs/models.yaml`. The game streams to Neon like
+`play --neon` and is logged to `runs/visitor/<game_id>.jsonl` with run_meta `agents: "llm"` and
+the visitor's seat as model `"human"`, so it stays out of the rankings.
+
+### Your seat: `GET /api/games/{id}/me`
+
+Send `Authorization: Bearer <seat_token>`. 404 for an unknown game (ended games are kept about
+an hour), 401 for a missing or wrong token (and for every token on a watch-only game).
+
+| Field | Type | Notes |
+|---|---|---|
+| `game_id`, `seat`, `name` | string | Your seat and its player name |
+| `status` | `"running"` \| `"finished"` \| `"forfeit"` \| `"failed"` | |
+| `winner` | `"wolves"` \| `"villagers"` \| `"draw"` \| null | Set when finished |
+| `role` | role | Your own role only |
+| `alive` | boolean | |
+| `day`, `phase` | integer, phase | The game clock |
+| `observation` | string \| null | Exactly what a model in your seat is shown, from `agents/observation.py`: your private knowledge (wolf partners, Seer checks, Doctor protects), the dead with their revealed roles, and the public history. Other players' words are quoted. Null once you are dead |
+| `pending_action` | object \| null | Set while the game waits for you |
+| `pending_action.kind` | `statement` \| `vote` \| `wolf_chat` \| `lone_wolf` \| `seer` \| `doctor` | Which reply shape to send |
+| `pending_action.targets` | list of seat ids | Legal choices (accuse targets for a statement); a vote may also be `"abstain"` |
+| `pending_action.others` | list of seat ids | The players you may rate in `suspicion` |
+| `pending_action.deadline` | number | Unix seconds |
+| `players` | list of `{seat, name, alive}` | Public |
+
+Nothing else is returned: no other seat's role, reasoning or suspicion. The Neon feed of a
+running game does hold all of that, so a play client must not show the live Neon events of the
+game its visitor is in until that game has ended.
+
+### Moving: `POST /api/games/{id}/action`
+
+Same auth. The body is the reply shape a model sends for `pending_action.kind`
+(`agents/schemas.py`): `StatementResponse`, `VoteResponse`, `WolfChatResponse` or
+`TargetResponse` (for `lone_wolf`, `seer`, `doctor`).
+
+```json
+{"private_reasoning": {"thoughts": "", "suspicion": [{"player": "p3", "p": 0.8}]},
+ "action": {"text": "Bea has dodged every question.", "accuse": ["p3"],
+            "claim_role": null, "seer_report": null}}
+```
+
+- `suspicion` may leave players out; they default to 0.5 and the event gets
+  `meta.suspicion_default: true`, as for the terminal human seat. `thoughts` is not logged.
+- Statement `text` and wolf chat `message`: control and format characters are stripped, line
+  breaks become spaces, and the result must be 1 to 280 characters.
+- The orchestrator's own check runs before the move is accepted: legal target, suspicion only
+  over `others`, a valid `seer_report`.
+- Errors: 409 when no turn is pending for you (including a second move for the same turn), 422
+  for a bad reply (the detail says why; the turn stays open), 413 for a body over 8 KB.
+
+### Timeouts
+
+Each turn waits 90 s. A turn that runs out falls back exactly like a model's invalid reply: two
+`invalid_output` events (`error: "turn timed out"`), then `fallback_action` (abstain for a vote,
+a random legal target at night, silence for a statement). The retry does not wait again. Three
+timeouts in a row end the game as a forfeit: `status: "forfeit"`, the log stops without
+`game_end`, run_meta gets `forfeit: true`, and Neon marks the game `failed`.
+
+Visitor text reaches the models only through `observation.py`, as one line in double quotes it
+can't close or break out of, like every other player's speech.
 
 ## Neon Data API
 

@@ -1,6 +1,7 @@
 """Play API (#280): an in-process app with scripted agents or the fake client. No paid calls."""
 
 import asyncio
+import itertools
 import json
 from pathlib import Path
 
@@ -26,6 +27,14 @@ SAY = "I think we should vote carefully."
 
 def scripted(cfg):
     return RandomAgent, {}
+
+
+@pytest.fixture(autouse=True)
+def seeds(monkeypatch):
+    """The server draws each game's seed; pin them to 7, 8, 9... so games replay. With seed 7
+    p0 is a wolf (a turn on night 1, alive through day 1); seed 8 makes p0 a villager."""
+    seeds = itertools.count(7)
+    monkeypatch.setattr("societysim.server.manager.secrets.randbelow", lambda n: next(seeds))
 
 
 @pytest.fixture

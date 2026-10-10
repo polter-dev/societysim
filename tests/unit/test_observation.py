@@ -3,7 +3,7 @@
 import copy
 import re
 
-from test_leakage import GAMES, WOLFCHAT, build, statement_text
+from helpers import GAMES, WOLFCHAT, build, statement_text
 
 from societysim.agents.observation import LAST_WORDS, MAX_CHARS, OMITTED, observe
 from societysim.logging.events import Event, EventType, Visibility

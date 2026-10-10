@@ -1,0 +1,3 @@
+'use client';
+const candles = [[44.1,30.9],[56.6,31.7],[61.9,43.5],[58.0,59.0],[42.8,59.9]];
+export default function ForestTable({paused}:{paused:boolean}){return <div className={`forest-scene ${paused?'still':''}`} aria-hidden="true"><div className="table-light"/><div className="scene-art-plane">{candles.map(([x,y],i)=><span className="candle-light" key={i} style={{left:`${x}%`,top:`${y}%`,animationDelay:`-${i*.43}s`}}><i/></span>)}</div>{Array.from({length:64},(_,i)=><i key={i} className="firefly" style={{left:`${(i*37+7)%100}%`,top:`${(i*23+13)%100}%`,animationDelay:`-${i*.7}s`,animationDuration:`${6+i%7}s`,width:`${2+i%3}px`,height:`${2+i%3}px`}}/>)}</div>}

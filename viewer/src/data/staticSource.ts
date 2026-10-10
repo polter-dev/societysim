@@ -3,7 +3,7 @@ import { staticSource, type GameSource, type GameSummary } from "./source";
 
 /**
  * One entry of `<batch>/report/index.json`, written by `societysim report` (analysis/report.py).
- * `file` is relative to the batch dir, one level above index.json.
+ * Root deployments put `file` alongside index.json; legacy report/index.json sits one level below it.
  */
 export interface IndexEntry {
   game_id: string;
@@ -14,8 +14,8 @@ export interface IndexEntry {
   seats: Record<string, { name: string; model: string; role: string }>;
 }
 
-/** The deploy layout: a batch dir copied to `data/` next to the viewer (scripts/deploy-space.sh). */
-export const DEFAULT_INDEX_URL = "data/report/index.json";
+/** Published site layout: index.json and game logs share the site root. */
+export const DEFAULT_INDEX_URL = "./index.json";
 
 export async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -39,7 +39,7 @@ export const summarize = (e: IndexEntry): GameSummary => ({
 export function indexSource(indexUrl: string, base = window.location.href): GameSource {
   const absIndex = new URL(indexUrl, base);
   const loaded = fetchJson<IndexEntry[]>(absIndex.href).then((entries) => {
-    const urls = Object.fromEntries(entries.map((e) => [e.game_id, new URL(`../${e.file}`, absIndex).href]));
+    const urls = Object.fromEntries(entries.map((e) => [e.game_id, new URL(e.file, absIndex.pathname.endsWith("/report/index.json") ? new URL("../", absIndex) : absIndex).href]));
     return { entries, urls, source: staticSource(urls) };
   });
   loaded.catch(() => {}); // surfaced by whichever method awaits it
@@ -52,4 +52,14 @@ export function indexSource(indexUrl: string, base = window.location.href): Game
       return url ? fetchLabels(siblingLabelsUrl(url)) : [];
     },
   };
+}
+
+/** ?base overrides the published data root; never a filesystem path. */
+export function publishedBase(search: string, href: string): URL {
+  const value = new URLSearchParams(search).get('base');
+  const url = value ? new URL(value, href) : new URL('./', href);
+  if (!/^https?:$/.test(url.protocol)) throw new Error('Batch base must be an HTTP or HTTPS URL');
+  url.search = ''; url.hash = '';
+  if (!url.pathname.endsWith('/')) url.pathname += '/';
+  return url;
 }

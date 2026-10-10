@@ -61,3 +61,16 @@ describe("indexSource", () => {
     await expect(indexSource("data/report/index.json", base).loadGame("nope")).rejects.toThrow(/unknown game/);
   });
 });
+
+// Root layout used by society-sim.us, independent of the older report/ deployment.
+describe('published root layout',()=>{
+ it('loads index, logs and sibling labels from one directory',async()=>{
+  const root='https://host.test/batch/';
+  const asked=serve({[`${root}index.json`]:JSON.stringify([entry]),[`${root}sample_game.jsonl`]:fixture,[`${root}sample_game.labels.jsonl`]:labelsText});
+  const src=indexSource('./index.json',root);
+  await src.listGames();
+  expect((await src.loadGame(entry.game_id)).errors).toEqual([]);
+  expect(await src.loadLabels!(entry.game_id)).not.toHaveLength(0);
+  expect(asked).toEqual([`${root}index.json`,`${root}sample_game.jsonl`,`${root}sample_game.labels.jsonl`]);
+ });
+});

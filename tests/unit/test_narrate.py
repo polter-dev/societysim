@@ -125,6 +125,9 @@ def test_no_hidden_info():
     assert not [n for n in NAMES if n in end]
     # A public doctor_save would still say nothing: it has no template.
     assert narrator_line(ev("doctor_save", "night", target="p0", saved=True), {}) is None
+    # Any non-public event is silent, even a type that has a template.
+    secret = ev("elimination", target="p0", role="wolf", visibility=Visibility.NARRATOR)
+    assert narrator_line(secret, {"p0": "Ava"}) is None
 
 
 def test_categories_and_voices():
@@ -149,6 +152,10 @@ def test_categories_and_voices():
     assert p1["voice_id"] == VOICES.default_model_voice
     only_speech = build_clips(events, VOICES, ("speech",))
     assert {c["category"] for c in only_speech} == {"narrator", "speech"}
+    # A statement that is not public is never voiced as speech.
+    i = next(c["seq"] for c in by_cat["speech"])
+    events[i] = events[i].model_copy(update={"visibility": Visibility.WOLVES})
+    assert i not in {c["seq"] for c in build_clips(events, VOICES, ("speech",))}
 
 
 def test_voices_yaml():

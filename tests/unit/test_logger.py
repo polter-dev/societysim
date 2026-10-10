@@ -7,6 +7,8 @@ from jsonschema import Draft202012Validator
 
 from societysim.logging.events import EventLogger
 from societysim.logging.sinks.jsonl import JsonlSink
+from societysim.models.cache import CachedUsage
+from societysim.models.client import Usage
 
 ROOT = Path(__file__).parents[2]
 SCHEMA = json.loads((ROOT / "schema/events.schema.json").read_text())
@@ -55,6 +57,19 @@ async def test_jsonl_seq_schema_and_meta(tmp_path):
     meta = json.loads((tmp_path / "b1/g1.run_meta.json").read_text())
     assert meta["seed"] == 7 and meta["models"] == ["m"] and meta["config"] == {"k": 1}
     assert {"git_sha", "started_at"} <= meta.keys()
+
+
+async def test_jsonl_writes_usage_cached_flag(tmp_path):
+    logger = EventLogger("g1", [JsonlSink("b1", tmp_path)])
+    await logger.start_game({}, seed=1, models=["m"])
+    vote = dict(t=1, day=1, phase="vote", type="vote", visibility="public", actor="p0")
+    logger.log(**vote, meta={"usage": CachedUsage(model="m", input_tokens=5)})
+    logger.log(**vote, meta={"usage": Usage(model="m", input_tokens=5)})
+    await logger.close()
+    lines = [json.loads(x) for x in (tmp_path / "b1/g1.jsonl").read_text().splitlines()]
+    for x in lines:
+        Draft202012Validator(SCHEMA).validate(x)
+    assert [x["meta"]["usage"]["cached"] for x in lines] == [True, False]
 
 
 async def test_two_games_one_batch_have_own_run_meta(tmp_path):

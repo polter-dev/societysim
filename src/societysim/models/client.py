@@ -27,6 +27,7 @@ class Usage(BaseModel):
     cost_usd: float = 0.0  # estimate; does not assume prompt caching
     latency_ms: int = 0
     attempts: int = 1
+    cached: bool = False  # served from the cassette cache (free); added in schema_version 2
 
 
 class CompletionResult(BaseModel):

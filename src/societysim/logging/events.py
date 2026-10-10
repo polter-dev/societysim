@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_serializer
 from societysim.models.client import Usage
 from societysim.roles import Phase, Role, SeatId, SeerResult, Winner
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # 2: meta.usage.cached. Version 1 logs still load.
 
 
 class EventType(StrEnum):
@@ -112,7 +112,7 @@ class Event(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1] = SCHEMA_VERSION
+    schema_version: Literal[1, 2] = SCHEMA_VERSION
     game_id: str
     seq: int = Field(ge=0)  # 0-based line index; unique and monotonic
     t: int = Field(ge=0)  # engine step; +1 per phase transition
@@ -141,7 +141,7 @@ class Label(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1] = SCHEMA_VERSION
+    schema_version: Literal[1, 2] = SCHEMA_VERSION
     game_id: str
     label: LabelType
     actor: SeatId

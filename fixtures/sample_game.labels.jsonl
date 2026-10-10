@@ -1,8 +1,8 @@
-{"schema_version":1,"game_id":"fixture-0001","label":"hidden_knowledge","actor":"p0","source_seq":16,"source":"self_tag","confidence":1.0,"detail":"Ava checked Cleo (p2) as a wolf on night 1 and spoke on day 1 without reporting it."}
-{"schema_version":1,"game_id":"fixture-0001","label":"false_role_claim","actor":"p5","source_seq":19,"source":"self_tag","confidence":1.0,"detail":"Finn claimed Seer; he is a wolf."}
-{"schema_version":1,"game_id":"fixture-0001","label":"false_report","actor":"p5","source_seq":20,"source":"self_tag","confidence":1.0,"detail":"Finn reported Ava (p0) as a wolf. He is not the Seer, and Ava is the Seer."}
-{"schema_version":1,"game_id":"fixture-0001","label":"bussing","actor":"p2","source_seq":70,"source":"self_tag","confidence":1.0,"detail":"Cleo (wolf) accused her fellow wolf Finn (p5)."}
-{"schema_version":1,"game_id":"fixture-0001","label":"mis_elimination","actor":"p1","source_seq":98,"source":"engine","confidence":1.0,"detail":"Ben (p1) voted to eliminate Gia (p6), a villager."}
-{"schema_version":1,"game_id":"fixture-0001","label":"mis_elimination","actor":"p2","source_seq":99,"source":"engine","confidence":1.0,"detail":"Cleo (p2) voted to eliminate Gia (p6), a villager."}
-{"schema_version":1,"game_id":"fixture-0001","label":"mis_elimination","actor":"p4","source_seq":101,"source":"engine","confidence":1.0,"detail":"Elif (p4) voted to eliminate Gia (p6), a villager."}
-{"schema_version":1,"game_id":"fixture-0001","label":"mis_elimination","actor":"p5","source_seq":102,"source":"engine","confidence":1.0,"detail":"Finn (p5) voted to eliminate Gia (p6), a villager."}
+{"schema_version":2,"game_id":"fixture-0001","label":"hidden_knowledge","actor":"p0","source_seq":16,"source":"self_tag","confidence":1.0,"detail":"Ava checked Cleo (p2) as a wolf on night 1 and spoke on day 1 without reporting it."}
+{"schema_version":2,"game_id":"fixture-0001","label":"false_role_claim","actor":"p5","source_seq":19,"source":"self_tag","confidence":1.0,"detail":"Finn claimed Seer; he is a wolf."}
+{"schema_version":2,"game_id":"fixture-0001","label":"false_report","actor":"p5","source_seq":20,"source":"self_tag","confidence":1.0,"detail":"Finn reported Ava (p0) as a wolf. He is not the Seer, and Ava is the Seer."}
+{"schema_version":2,"game_id":"fixture-0001","label":"bussing","actor":"p2","source_seq":70,"source":"self_tag","confidence":1.0,"detail":"Cleo (wolf) accused her fellow wolf Finn (p5)."}
+{"schema_version":2,"game_id":"fixture-0001","label":"mis_elimination","actor":"p1","source_seq":98,"source":"engine","confidence":1.0,"detail":"Ben (p1) voted to eliminate Gia (p6), a villager."}
+{"schema_version":2,"game_id":"fixture-0001","label":"mis_elimination","actor":"p2","source_seq":99,"source":"engine","confidence":1.0,"detail":"Cleo (p2) voted to eliminate Gia (p6), a villager."}
+{"schema_version":2,"game_id":"fixture-0001","label":"mis_elimination","actor":"p4","source_seq":101,"source":"engine","confidence":1.0,"detail":"Elif (p4) voted to eliminate Gia (p6), a villager."}
+{"schema_version":2,"game_id":"fixture-0001","label":"mis_elimination","actor":"p5","source_seq":102,"source":"engine","confidence":1.0,"detail":"Finn (p5) voted to eliminate Gia (p6), a villager."}

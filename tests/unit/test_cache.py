@@ -85,7 +85,9 @@ async def test_full_game_replays_byte_identical(tmp_path):
 
     async def play(client):
         game = await run_game(config, llm_agents(client, {"m": SPEC}), [], "g")
-        return [e.model_dump_json(exclude={"meta": {"ts"}}) for e in game.events]
+        # replay differs from the recording only in usage.cached, which is the point of it
+        skip = {"meta": {"ts": True, "usage": {"cached"}}}
+        return [e.model_dump_json(exclude=skip) for e in game.events]
 
     recorded = await play(CachedClient(FakeClient(players=seats, seed=1), tmp_path, "record"))
     inner = FakeClient(players=seats, seed=2)

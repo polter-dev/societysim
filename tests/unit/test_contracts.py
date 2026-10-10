@@ -61,6 +61,14 @@ def test_event_rejects_names_and_unknown_fields():
         Event.model_validate({**base, "extra": 1})
 
 
+def test_version_1_line_without_cached_still_loads():
+    v1 = json.loads(next(x for x in EVENT_LINES if '"usage"' in x))
+    v1["schema_version"] = 1
+    del v1["meta"]["usage"]["cached"]
+    event = Event.model_validate(v1)
+    assert event.schema_version == 1 and event.meta.usage.cached is False
+
+
 def test_event_meta_drops_none_keys():
     line = Event(
         game_id="g", seq=0, t=0, day=0, phase="setup", type="game_start", visibility="narrator"

@@ -53,7 +53,7 @@ export type LabelType = "false_role_claim" | "false_report" | "bussing" | "hidde
  * One line of <game_id>.jsonl.
  */
 export interface Event {
-  schema_version: 1;
+  schema_version: 1 | 2;
   game_id: string;
   seq: number;
   t: number;
@@ -143,6 +143,7 @@ export interface Usage {
   cost_usd: number;
   latency_ms: number;
   attempts: number;
+  cached: boolean;
 }
 /**
  * One line of <game_id>.labels.jsonl. The raw game log is never edited.
@@ -151,7 +152,7 @@ export interface Usage {
  * via the `definition` "Label".
  */
 export interface Label {
-  schema_version: 1;
+  schema_version: 1 | 2;
   game_id: string;
   label: LabelType;
   actor: string;

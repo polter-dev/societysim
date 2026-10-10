@@ -93,13 +93,15 @@ models:
   # (--served-model-name $AMD_MODEL = openai/gpt-oss-20b), hence the doubled prefix. doctor and
   # play check GET {api_base}/models lists that id before any game call.
   # Cost is 0: the AMD quota is minutes, not dollars. $/game = hours x AMD_PRICE_PER_HOUR.
-  # max_tokens leaves room for gpt-oss reasoning at its default effort.
+  # Low reasoning effort (#151): at default effort a turn spent most of its time reasoning at
+  # ~33 tok/s single stream. max_tokens caps a runaway turn at about a minute.
   - name: amd-gpt-oss-20b
     litellm_model: openai/openai/gpt-oss-20b
     api_base: ${AMD_VLLM_BASE_URL} # https://<name>.trycloudflare.com/v1
     api_key_env: AMD_API_KEY
     structured: json_schema # vLLM guided decoding (xgrammar, else outlines)
-    max_tokens: 4096
+    reasoning_effort: low # LiteLLM's openai/ route passes it through; vLLM applies it to gpt-oss
+    max_tokens: 2048
     input_cost_per_mtok: 0
     output_cost_per_mtok: 0
     color: "#ed1c24"

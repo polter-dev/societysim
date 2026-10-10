@@ -163,3 +163,9 @@ curl -s -H "Authorization: Bearer $AMD_API_KEY" "$AMD_VLLM_BASE_URL/models"
 ```
 
 Then either set `litellm_model` to `openai/<listed id>` or restart `serve.sh` so it serves `$AMD_MODEL` again. A server started by any earlier `serve.sh` already lists `openai/gpt-oss-20b`, so pulling this change needs no restart.
+
+## Reasoning effort and speed
+
+The `amd-gpt-oss-20b` entry sets `reasoning_effort: low` and `max_tokens: 2048` (#151). LiteLLM's `openai/` route sends `reasoning_effort` as a top-level request field, and vLLM applies it to gpt-oss. Pulling this change needs no server restart.
+
+Baseline before the change, at gpt-oss's default (medium) effort: vLLM generated about 33 tokens/s with one request running, and after about 15 minutes the game log had only 32 events (a full game is 300 to 400). Most of each turn went to reasoning tokens. At 33 tokens/s the 2048-token cap bounds a runaway turn at about a minute.

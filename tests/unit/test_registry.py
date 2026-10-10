@@ -92,6 +92,28 @@ def test_amd_entry_routes_to_self_hosted_server(monkeypatch):
     assert "api_key" not in request_kwargs(reg.get("gpt-5-nano"), Ping)
 
 
+def test_amd_uses_low_reasoning_and_others_unchanged(monkeypatch):
+    from societysim.models.client import request_kwargs
+
+    monkeypatch.setenv("AMD_VLLM_BASE_URL", "http://127.0.0.1:8000/v1")
+    monkeypatch.setenv("AMD_API_KEY", "amd-key")
+    reg = load_registry(DEFAULT_PATH)
+    kw = {m.name: request_kwargs(m, Ping) for m in reg.models}
+    sent = {name: (k.get("reasoning_effort"), k["max_tokens"]) for name, k in kw.items()}
+    assert sent == {
+        "qwen3-235b": (None, 1024),
+        "llama4-maverick": (None, 1024),
+        "gemma4-26b": (None, 1024),
+        "gpt-oss-120b": ("low", 2048),
+        "deepseek-v3.1": (None, 1024),
+        "gemini-flash-lite": ("disable", 1024),
+        "gemini-flash": ("disable", 1024),
+        "amd-gpt-oss-20b": ("low", 2048),
+        "gpt-5-nano": ("minimal", 2048),
+        "gpt-5-mini": ("minimal", 2048),
+    }
+
+
 def test_play_missing_amd_vars_fails_fast(tmp_path, monkeypatch):
     monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
     monkeypatch.delenv("AMD_VLLM_BASE_URL", raising=False)

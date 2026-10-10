@@ -10,6 +10,7 @@ leaderboard.json (read by the viewer, T4.9 and T6.2):
       "schema": 1,
       "games": int,                        # games in the batch
       "label_sources": ["self_tag", "jev"],
+      "wolf_side_advantage": {"overall": {mu, sigma, ordinal}, "sided": {...}} | null,
       "models": [                          # sorted by openskill.ordinal, best first
         {
           "model": str,
@@ -40,9 +41,16 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-from societysim.analysis.metrics import GameData, compute_metrics, load_game  # noqa: E402
+from societysim.analysis.metrics import (  # noqa: E402
+    SOURCES as LABEL_SOURCES,
+)
+from societysim.analysis.metrics import (  # noqa: E402
+    WOLF_SIDE,
+    GameData,
+    compute_metrics,
+    load_game,
+)
 
-LABEL_SOURCES = ("self_tag", "jev")
 SCHEMA = 1
 
 
@@ -79,8 +87,8 @@ def build_index(games: list[tuple[Path, GameData]]) -> list[dict]:
     return out
 
 
-def build_leaderboard(metrics: dict[str, dict]) -> dict:
-    base = metrics[LABEL_SOURCES[0]]
+def build_leaderboard(metrics: dict) -> dict:
+    base = metrics
     ratings = base["openskill"]["overall"]
     rows = []
     for model, groups in base["models"].items():
@@ -99,7 +107,7 @@ def build_leaderboard(metrics: dict[str, dict]) -> dict:
                 "invalid_output_rate": a.get("invalid_output_rate"),
                 "cost_usd_per_game": a.get("cost_usd_per_game"),
                 "lie_rate": {
-                    src: metrics[src]["models"][model].get("all", {}).get("lie_rate")
+                    src: groups.get("all", {}).get("lies", {}).get(src, {}).get("lie_rate")
                     for src in LABEL_SOURCES
                 },
             }
@@ -109,16 +117,9 @@ def build_leaderboard(metrics: dict[str, dict]) -> dict:
         "schema": SCHEMA,
         "games": base["games"],
         "label_sources": list(LABEL_SOURCES),
+        "wolf_side_advantage": base["openskill"].get(WOLF_SIDE),
         "models": rows,
     }
-
-
-def _base_rate(ls: dict) -> float | None:
-    """No-lie base rate of 'voted the way it implied', whatever metrics.py names the key."""
-    for k, v in ls.items():
-        if "base" in k and isinstance(v, int | float):
-            return v
-    return None
 
 
 def _table(head: list[str], rows: list[list[str]]) -> list[str]:
@@ -127,7 +128,7 @@ def _table(head: list[str], rows: list[list[str]]) -> list[str]:
     return lines + [""]
 
 
-def render_markdown(metrics: dict[str, dict], board: dict) -> str:
+def render_markdown(metrics: dict, board: dict) -> str:
     lines = [
         "# Batch report",
         "",
@@ -138,6 +139,15 @@ def render_markdown(metrics: dict[str, dict], board: dict) -> str:
         "Ranked by OpenSkill ordinal (equal-weight sides plus a side-advantage dummy player).",
         "",
     ]
+    side = board.get("wolf_side_advantage")
+    if side:
+        o = side["overall"]
+        lines += [
+            f"Wolf-side advantage (dummy player): mu {_num(o['mu'])}, "
+            f"ordinal {_num(o['ordinal'])}. "
+            "Above 0 means the wolf side wins more than its prior; it is not a model.",
+            "",
+        ]
     lines += _table(
         ["Model", "Games", "Win rate", "95% CI", "Wolf win", "Village win", "Ordinal"],
         [
@@ -179,10 +189,10 @@ def render_markdown(metrics: dict[str, dict], board: dict) -> str:
         [
             [
                 m,
-                str(metrics[LABEL_SOURCES[0]]["models"][m]["all"]["statements"]),
-                *(_pct(metrics[s]["models"][m]["all"]["lie_rate"]) for s in LABEL_SOURCES),
+                str(metrics["models"][m]["all"]["statements"]),
+                *(_pct(metrics["models"][m]["all"]["lies"][s]["lie_rate"]) for s in LABEL_SOURCES),
             ]
-            for m in metrics[LABEL_SOURCES[0]]["models"]
+            for m in metrics["models"]
         ],
     )
     lines += [
@@ -195,16 +205,16 @@ def render_markdown(metrics: dict[str, dict], board: dict) -> str:
     ]
     head = ["Model", "Source", "Moved", "Voted as lie implied", "No-lie base rate"]
     rows = []
-    for m in metrics[LABEL_SOURCES[0]]["models"]:
+    for m in metrics["models"]:
         for s in LABEL_SOURCES:
-            ls = metrics[s]["models"][m]["all"]["lie_success"]
+            ls = metrics["models"][m]["all"]["lies"][s]["lie_success"]
             rows.append(
                 [
                     m,
                     s,
                     f"{_pct(ls['share_moved'])} ({ls['comparisons']})",
                     f"{_pct(ls['share_followed'])} ({ls['voters']})",
-                    _pct(_base_rate(ls)),
+                    _pct(ls["base_rate"]),
                 ]
             )
     lines += _table(head, rows)
@@ -215,8 +225,8 @@ def render_markdown(metrics: dict[str, dict], board: dict) -> str:
         "",
     ]
     prow = []
-    for m in metrics[LABEL_SOURCES[0]]["models"]:
-        p = metrics[LABEL_SOURCES[0]]["models"][m]["all"]["persuasion"]
+    for m in metrics["models"]:
+        p = metrics["models"][m]["all"]["persuasion"]
         prow.append([m, str(p["accusations"]), str(p["voters"]), _pct(p["share"])])
     lines += _table(["Model", "Accusations", "Voters", "Followed"], prow)
     lines += [
@@ -249,7 +259,8 @@ def render_markdown(metrics: dict[str, dict], board: dict) -> str:
         "`models` (best OpenSkill ordinal first) has `model`, `games`, `win_rate`, `win_ci`, "
         "`wolf_win_rate`, `village_win_rate`, `openskill {mu, sigma, ordinal}`, `detection_auc`, "
         "`detection_brier`, `invalid_output_rate`, `cost_usd_per_game` and "
-        "`lie_rate {self_tag, jev}`. Any value can be null when there is no data. The full "
+        "`lie_rate {self_tag, jev}`, plus top-level `wolf_side_advantage`. "
+        "Any value can be null when there is no data. The full "
         "field list is in the `analysis/report.py` docstring.",
         "",
     ]
@@ -312,7 +323,7 @@ def write_report(batch_dir: Path) -> Path:
     out = batch_dir / "report"
     out.mkdir(exist_ok=True)
     data = [g for _, g in games]
-    metrics: dict[str, Any] = {s: compute_metrics(data, s) for s in LABEL_SOURCES}
+    metrics: dict[str, Any] = compute_metrics(data)
     board = build_leaderboard(metrics)
     write_charts(board, out)
 

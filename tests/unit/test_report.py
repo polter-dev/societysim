@@ -40,6 +40,9 @@ def test_report_md_labels_and_sources(tmp_path):
     assert "Persuasion (exploratory)" in md
     assert "No-lie base rate" in md
     assert "Lie rate (self_tag)" in md and "Lie rate (jev)" in md
+    rows = [ln for ln in md.splitlines() if "| self_tag |" in ln or "| jev |" in ln]
+    assert any("| self_tag |" in ln for ln in rows) and any("| jev |" in ln for ln in rows)
+    assert "Wolf-side advantage" in md
 
 
 def test_leaderboard_shape(tmp_path):
@@ -60,10 +63,12 @@ def test_leaderboard_shape(tmp_path):
     ords = [r["openskill"]["ordinal"] for r in board["models"]]
     assert ords == sorted(ords, reverse=True)
     metrics = json.loads((out / "metrics.json").read_text())
-    assert set(metrics) == {"self_tag", "jev"}
     # the fixture has self_tag labels only: jev must not inherit them
-    assert metrics["self_tag"]["by_group"]["all"]["lies"] > 0
-    assert metrics["jev"]["by_group"]["all"]["lies"] == 0
+    lies = metrics["by_group"]["all"]["lies"]
+    assert lies["self_tag"]["lies"] > 0
+    assert lies["jev"]["lies"] == 0
+    assert "ordinal" in board["wolf_side_advantage"]["overall"]
+    assert all("wolf_side" not in r["model"] for r in board["models"])
 
 
 def test_index_json(tmp_path):

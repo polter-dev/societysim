@@ -79,9 +79,12 @@ def seer_check(
     usage: Usage | None = None,
 ) -> SeerResult | None:
     """Record the Seer's check. Call before `resolve_night`, so a target killed tonight still
-    gets a result. A dead Seer gets no check and no event."""
-    if target not in legal_targets(state, seer, Phase.NIGHT):
+    gets a result. A dead Seer gets no check and no event. A living actor's illegal
+    target raises ValueError before changing state or logging an event."""
+    if seer not in state.alive:
         return None
+    if target not in legal_targets(state, seer, Phase.NIGHT):
+        raise ValueError(f"Illegal Seer target {target!r} for {seer!r}")
     result: SeerResult = "wolf" if state.roles[target] is Role.WOLF else "not_wolf"
     state.seer_results[seer].append((state.day, target, result))
     _emit(
@@ -117,7 +120,14 @@ def resolve_night(
     Logs night_kill, then doctor_save (if a living Doctor protected someone), then
     death_reveal: one per death, or one with target None when nobody died. A save on the
     kill target prevents the death. The save also sets the Doctor's no-repeat marker.
+    `save=None` means the orchestrator supplied no save. A dead Doctor's save is
+    ignored; an illegal save from a living actor raises ValueError before any event
+    or state change.
     """
+    doctor_saves = doctor is not None and doctor in state.alive and save is not None
+    if doctor_saves and save not in legal_targets(state, doctor, Phase.NIGHT):
+        raise ValueError(f"Illegal Doctor target {save!r} for {doctor!r}")
+
     _emit(
         state,
         log,
@@ -128,11 +138,7 @@ def resolve_night(
         tally=dict(tally) if tally is not None else None,
     )
     saved = False
-    if (
-        doctor is not None
-        and save is not None
-        and save in legal_targets(state, doctor, Phase.NIGHT)
-    ):
+    if doctor_saves:
         saved = save == kill
         state.last_doctor_protect = save
         state.last_doctor_protect_night = state.day

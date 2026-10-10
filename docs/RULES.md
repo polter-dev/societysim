@@ -33,6 +33,8 @@ Standard rules, close to Ultimate Werewolf. Every rule here is a config flag; th
   - A lone surviving wolf skips the chat rounds and only proposes.
 
 ## Votes
+Votes name another living player; self-votes are illegal.
+
 - The tally counts only non-abstain votes. If everyone abstains or the top is tied, the result is `no_elimination`.
 - `meta.tally` is always logged.
 

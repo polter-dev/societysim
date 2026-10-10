@@ -79,8 +79,10 @@ def test_doctor_cannot_repeat_previous_night_but_can_after_gap(game):
     start_phase(state, log, Phase.NIGHT)
     before = len(log.events)
     victim = next(s for s in seats(state, Role.VILLAGER) if s != protected)
-    assert resolve_night(state, log, victim, save=protected, doctor=doctor) == [victim]
-    assert all(event.type is not EventType.DOCTOR_SAVE for event in log.events[before:])
+    with pytest.raises(ValueError):
+        resolve_night(state, log, victim, save=protected, doctor=doctor)
+    assert len(log.events) == before
+    assert victim in state.alive
     assert state.last_doctor_protect_night == 1
 
     start_phase(state, log, Phase.NIGHT)
@@ -106,7 +108,7 @@ def test_seer_checks_target_before_target_dies(game):
     assert seer_check(state, log, seer, seat(state, Role.WOLF)) == "wolf"
 
 
-def test_dead_or_wrong_role_actors_produce_no_special_event(game):
+def test_dead_actors_produce_no_special_event(game):
     state, log = game
     seer = seat(state, Role.SEER)
     doctor = seat(state, Role.DOCTOR)
@@ -115,16 +117,44 @@ def test_dead_or_wrong_role_actors_produce_no_special_event(game):
     state.alive.remove(doctor)
     before = len(log.events)
     assert seer_check(state, log, seer, villager) is None
-    assert seer_check(state, log, villager, seat(state, Role.WOLF)) is None
     assert len(log.events) == before
     resolve_night(state, log, villager, save=villager, doctor=doctor)
     assert all(event.type is not EventType.DOCTOR_SAVE for event in log.events[before:])
     assert state.last_doctor_protect is None
 
+
+def test_living_actors_reject_illegal_special_targets_before_any_event(game):
+    state, log = game
+    seer = seat(state, Role.SEER)
+    doctor = seat(state, Role.DOCTOR)
+    dead_target = seat(state, Role.VILLAGER)
+    state.alive.remove(dead_target)
+    victim = next(s for s in seats(state, Role.VILLAGER) if s in state.alive)
     before = len(log.events)
-    another_villager = next(s for s in seats(state, Role.VILLAGER) if s in state.alive)
-    resolve_night(state, log, another_villager, save=another_villager, doctor=villager)
-    assert all(event.type is not EventType.DOCTOR_SAVE for event in log.events[before:])
+    for actor, target in [(seer, seer), (seer, dead_target), (victim, doctor)]:
+        with pytest.raises(ValueError):
+            seer_check(state, log, actor, target)
+        assert len(log.events) == before
+        assert state.seer_results[seer] == []
+
+    for actor, target in [(doctor, dead_target), (victim, doctor)]:
+        with pytest.raises(ValueError):
+            resolve_night(state, log, victim, save=target, doctor=actor)
+        assert len(log.events) == before
+        assert victim in state.alive
+        assert state.last_doctor_protect is None
+
+
+def test_living_doctor_with_no_save_does_not_log_save(game):
+    state, log = game
+    doctor = seat(state, Role.DOCTOR)
+    victim = seat(state, Role.VILLAGER)
+    assert resolve_night(state, log, victim, doctor=doctor) == [victim]
+    assert [event.type for event in log.events[1:]] == [
+        EventType.NIGHT_KILL,
+        EventType.DEATH_REVEAL,
+    ]
+    assert state.last_doctor_protect is None
 
 
 @pytest.mark.parametrize(

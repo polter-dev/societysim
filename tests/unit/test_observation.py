@@ -5,7 +5,7 @@ import re
 import unicodedata
 
 import pytest
-from helpers import GAMES, WOLFCHAT, build, statement_text
+from helpers import GAMES, GAMES10, WOLFCHAT, build, statement_text
 
 from societysim.agents.observation import LAST_WORDS, MAX_CHARS, OMITTED, observe, quote_chars
 from societysim.logging.events import Event, EventType, Visibility
@@ -130,6 +130,19 @@ def test_suspicion_list_gives_bare_ids_of_every_other_living_player_with_count()
     assert f"except you ({seat}): {', '.join(others)}." in line
     assert 'must be the bare seat id, like "' in line
     assert not any(name(s) in line for s in state.seats)  # no "Name (pX)": gemma copied it
+
+
+def test_ten_player_suspicion_list_starts_with_nine_entries():
+    game = GAMES10[True]
+    state, events = game.checkpoints["night1"]
+    seat = game.cast["villager"]
+    assert len(state.seats) == len(state.alive) == 10
+    text = observe(state, events, seat)
+    others = [s for s in state.seats if s != seat]
+    assert (
+        f'"suspicion" needs exactly 9 entries, one per living player except you ({seat}): ' in text
+    )
+    assert ", ".join(others) in text and others[-1] == "p9"
 
 
 def test_deterministic():

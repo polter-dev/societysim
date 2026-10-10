@@ -11,7 +11,7 @@ every role x every checkpoint (night, day, vote; with and without role reveal):
 import copy
 
 import pytest
-from helpers import CANARY_P, GAMES, SECRET, WOLFCHAT
+from helpers import CANARY_P, GAMES, GAMES10, SECRET, WOLFCHAT
 
 from societysim.agents.observation import observe, visible
 from societysim.logging.events import Event, EventType, Visibility
@@ -38,15 +38,16 @@ CHECKPOINTS = ["night1", "day1", "vote1", "night2", "day2", "vote2"]
 
 
 VIEWERS = {Role.WOLF: "wolf", Role.SEER: "seer", Role.DOCTOR: "doctor", Role.VILLAGER: "villager"}
+SIZES = {7: GAMES, 10: GAMES10}
 
 matrix = pytest.mark.parametrize(
-    ("reveal", "checkpoint", "role"),
-    [(r, c, role) for r in (True, False) for c in CHECKPOINTS for role in Role],
+    ("n", "reveal", "checkpoint", "role"),
+    [(n, r, c, role) for n in SIZES for r in (True, False) for c in CHECKPOINTS for role in Role],
 )
 
 
-def setup(reveal, checkpoint, role):
-    game = GAMES[reveal]
+def setup(reveal, checkpoint, role, n=7):
+    game = SIZES[n][reveal]
     state, events = game.checkpoints[checkpoint]
     end = Event(
         game_id="leak",
@@ -62,8 +63,8 @@ def setup(reveal, checkpoint, role):
 
 
 @matrix
-def test_no_private_field_or_narrator_text(reveal, checkpoint, role):
-    state, events, seat = setup(reveal, checkpoint, role)
+def test_no_private_field_or_narrator_text(n, reveal, checkpoint, role):
+    state, events, seat = setup(reveal, checkpoint, role, n)
     obs = observe(state, events, seat)
     assert SECRET not in obs
     assert str(CANARY_P) not in obs
@@ -75,9 +76,10 @@ def test_no_private_field_or_narrator_text(reveal, checkpoint, role):
 
 
 @pytest.mark.parametrize(
-    ("reveal", "checkpoint", "role", "hidden"),
+    ("n", "reveal", "checkpoint", "role", "hidden"),
     [
-        (r, c, role, t)
+        (n, r, c, role, t)
+        for n in SIZES
         for r in (True, False)
         for c in CHECKPOINTS
         for role in Role
@@ -85,8 +87,8 @@ def test_no_private_field_or_narrator_text(reveal, checkpoint, role):
         if t not in ALLOWED[role]
     ],
 )
-def test_removing_hidden_events_changes_nothing(reveal, checkpoint, role, hidden):
-    state, events, seat = setup(reveal, checkpoint, role)
+def test_removing_hidden_events_changes_nothing(n, reveal, checkpoint, role, hidden):
+    state, events, seat = setup(reveal, checkpoint, role, n)
     stripped = [e for e in events if e.type is not hidden]
     assert observe(state, events, seat) == observe(state, stripped, seat)
 
@@ -106,8 +108,8 @@ def test_seer_and_doctor_see_only_their_own_events(hidden):
 
 
 @matrix
-def test_hidden_state_changes_nothing(reveal, checkpoint, role):
-    state, events, seat = setup(reveal, checkpoint, role)
+def test_hidden_state_changes_nothing(n, reveal, checkpoint, role):
+    state, events, seat = setup(reveal, checkpoint, role, n)
     other = copy.deepcopy(state)
     # Shuffle every other player's role (wolves keep their pack: they know it).
     keep = {seat} | (
@@ -126,9 +128,10 @@ def test_hidden_state_changes_nothing(reveal, checkpoint, role):
     assert observe(state, events, seat) == observe(other, events, seat)
 
 
+@pytest.mark.parametrize("n", SIZES)
 @pytest.mark.parametrize("checkpoint", CHECKPOINTS)
-def test_dead_players_get_no_observation(checkpoint):
-    state, events = GAMES[True].checkpoints[checkpoint]
+def test_dead_players_get_no_observation(checkpoint, n):
+    state, events = SIZES[n][True].checkpoints[checkpoint]
     dead = [s for s in state.seats if s not in state.alive]
     for seat in dead:
         with pytest.raises(ValueError, match="dead"):

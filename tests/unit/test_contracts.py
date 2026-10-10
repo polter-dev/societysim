@@ -14,7 +14,7 @@ from societysim.agents.schemas import (
     WolfChatResponse,
 )
 from societysim.config import BatchConfig, GameConfig, ModelSpec, RoleCounts, load_yaml
-from societysim.logging.events import Event, EventType, Label, LabelType
+from societysim.logging.events import SCHEMA_VERSION, Event, EventType, Label, LabelType
 from societysim.roles import Role, Team
 
 ROOT = Path(__file__).parents[2]
@@ -59,6 +59,24 @@ def test_event_rejects_names_and_unknown_fields():
         Event.model_validate({**base, "target": "Ava"})
     with pytest.raises(ValidationError):
         Event.model_validate({**base, "extra": 1})
+
+
+def test_seat_ids_go_up_to_p9_and_new_lines_are_version_3():
+    base = json.loads(EVENT_LINES[18])  # an accusation
+    validator = Draft202012Validator(SCHEMA)
+    for seat in ("p0", "p9"):
+        validator.validate({**base, "actor": seat, "target": seat})
+        assert Event.model_validate({**base, "actor": seat}).actor == seat
+    for bad in ("p10", "p", "q1"):
+        with pytest.raises(ValidationError):
+            Event.model_validate({**base, "target": bad})
+        assert not validator.is_valid({**base, "target": bad})
+    assert Event.model_validate({**base, "schema_version": 2}).schema_version == 2  # still loads
+    unversioned = {k: v for k, v in base.items() if k != "schema_version"}
+    assert Event.model_validate(unversioned).schema_version == SCHEMA_VERSION == 3
+    assert GameConfig(n_players=10).n_players == 10
+    with pytest.raises(ValidationError):
+        GameConfig(n_players=11)
 
 
 def test_version_1_line_without_cached_still_loads():
@@ -111,7 +129,7 @@ def test_suspicion_probability_is_checked():
         SuspicionEntry(player="p1", p=1.5)
 
 
-@pytest.mark.parametrize(("n", "villagers"), [(7, 3), (8, 4), (9, 5)])
+@pytest.mark.parametrize(("n", "villagers"), [(7, 3), (8, 4), (9, 5), (10, 6)])
 def test_default_role_counts(n, villagers):
     roles = GameConfig(n_players=n).roles
     assert (roles.wolves, roles.seers, roles.doctors, roles.villagers) == (2, 1, 1, villagers)

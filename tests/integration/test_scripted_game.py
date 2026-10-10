@@ -1,6 +1,8 @@
 """Full games played by RandomAgent. No API calls: checks schema, termination and replay."""
 
+import hashlib
 import json
+from collections import Counter
 from functools import partial
 from pathlib import Path
 
@@ -21,12 +23,12 @@ VALIDATOR = Draft202012Validator(SCHEMA)
 WINNERS = ("wolves", "villagers", "draw")
 
 
-async def play(seed: int, out: Path, **agent_kw):
-    """Play one 7-player game with a JsonlSink under `out`. Returns (game, JSONL bytes)."""
+async def play(seed: int, out: Path, n_players: int = 7, **agent_kw):
+    """Play one game (7 players by default) with a JsonlSink under `out`.
+    Returns (game, JSONL bytes)."""
     sink = JsonlSink("batch", runs_dir=out)
-    game = await run_game(
-        GameConfig(n_players=7, seed=seed), partial(RandomAgent, **agent_kw), [sink], "g"
-    )
+    config = GameConfig(n_players=n_players, seed=seed)
+    game = await run_game(config, partial(RandomAgent, **agent_kw), [sink], "g")
     return game, (out / "batch" / "g.jsonl").read_bytes()
 
 
@@ -103,6 +105,38 @@ async def test_same_seed_replays_byte_identical(tmp_path):
     _, first = await play(7, tmp_path.joinpath("a"))
     _, second = await play(7, tmp_path.joinpath("b"))
     assert first == second
+
+
+async def test_seven_player_log_matches_the_pre_ten_seat_engine(tmp_path):
+    """sha256 of the seed-7 log recorded on main before #250 (schema_version 2). The 10-seat
+    change only bumps schema_version, so with that put back the bytes must be identical. An
+    intended engine change updates this hash in its own PR."""
+    _, data = await play(7, tmp_path)
+    assert data.count(b'"schema_version":3,') == len(data.splitlines())
+    old = data.replace(b'"schema_version":3,', b'"schema_version":2,')
+    assert hashlib.sha256(old).hexdigest() == (
+        "42085758312f1ba7de0cb798e7dcdf9fec58b6da170d2bf90a5585995852ec46"
+    )
+
+
+@pytest.mark.parametrize("seed", range(3))
+async def test_ten_player_game_completes_deterministically(tmp_path, seed):
+    game, first = await play(seed, tmp_path.joinpath("a"), n_players=10)
+    _, second = await play(seed, tmp_path.joinpath("b"), n_players=10)
+    assert first == second
+    assert game.winner in WINNERS
+    events = [json.loads(line) for line in first.decode().splitlines()]
+    for event in events:
+        VALIDATOR.validate(event)
+    seats = events[0]["meta"]["seats"]
+    assert list(seats) == [f"p{i}" for i in range(10)]
+    assert len({s["name"] for s in seats.values()}) == 10
+    roles = events[-1]["meta"]["roles"]
+    assert Counter(roles.values()) == {"wolf": 2, "seer": 1, "doctor": 1, "villager": 6}
+    actors = {e["actor"] for e in events if e["actor"]} | {
+        e["target"] for e in events if e["target"]
+    }
+    assert actors <= set(seats)
 
 
 async def test_different_seeds_diverge(tmp_path):

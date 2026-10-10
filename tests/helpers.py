@@ -138,8 +138,10 @@ def discussion(state, log, cast, day, snap):
             snap(f"day{day}")
 
 
-def build(reveal: bool = True, seed: int = 3) -> Game:
-    config = GameConfig(seed=seed, rules=RuleFlags(reveal_role_on_death=reveal))
+def build(reveal: bool = True, seed: int = 3, n_players: int = 7) -> Game:
+    config = GameConfig(
+        seed=seed, n_players=n_players, rules=RuleFlags(reveal_role_on_death=reveal)
+    )
     state = GameState(config)
     log = MemoryLog()
     by_role = {r: [s for s in state.seats if state.roles[s] is r] for r in Role}
@@ -234,3 +236,4 @@ def build(reveal: bool = True, seed: int = 3) -> Game:
 
 
 GAMES = {reveal: build(reveal) for reveal in (True, False)}
+GAMES10 = {reveal: build(reveal, n_players=10) for reveal in (True, False)}  # p0..p9

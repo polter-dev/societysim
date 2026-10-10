@@ -164,6 +164,26 @@ def test_human_seat_plays_against_llms_and_is_logged_as_human(tmp_path, monkeypa
     assert evs[-1]["type"] == EventType.GAME_END
 
 
+def test_human_seat_works_in_a_ten_player_game(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", _answer)
+    config = tmp_path / "ten.yaml"
+    config.write_text("n_players: 10\nseed: 0\nmodels: [gemma4-26b]\n")
+    args = ["play", "--config", str(config), "--human-seat", "p9", "--batch-id", "h"]
+    result = RUNNER.invoke(app, args)
+    assert result.exit_code == 0, result.output
+    evs = events(tmp_path / "runs/h/h-s0.jsonl")
+    seats = evs[0]["meta"]["seats"]
+    assert list(seats) == [f"p{i}" for i in range(10)]
+    assert seats["p9"]["model"] == "human"
+    assert sum(s["model"] == "gemma4-26b" for s in seats.values()) == 9
+    assert any(
+        e["actor"] == "p9" and e["meta"].get("usage", {}).get("model") == "human" for e in evs
+    )
+    assert sorted(evs[-1]["meta"]["roles"].values()).count("wolf") == 2
+    assert evs[-1]["type"] == EventType.GAME_END
+
+
 def test_human_seat_stdin_eof_abandons_the_game(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     args = ["play", "--config", str(CONFIG), "--human-seat", "p0", "--batch-id", "h"]

@@ -3,11 +3,11 @@ from collections import Counter
 import pytest
 
 from societysim.config import GameConfig, RoleCounts
-from societysim.engine.state import GameState
+from societysim.engine.state import NAMES, GameState
 from societysim.roles import Phase, Role
 
 
-@pytest.mark.parametrize(("n", "villagers"), [(7, 3), (8, 4), (9, 5)])
+@pytest.mark.parametrize(("n", "villagers"), [(7, 3), (8, 4), (9, 5), (10, 6)])
 def test_default_setup_counts_and_seats(n, villagers):
     state = GameState(GameConfig(n_players=n, seed=42))
     assert state.seats == tuple(f"p{i}" for i in range(n))
@@ -69,3 +69,10 @@ def test_distinct_models_keep_configured_seats_without_consuming_randomness():
     assert state.models == dict(zip(state.seats, models, strict=True))
     assert state.roles == without_models.roles
     assert state.speaking_order() == without_models.speaking_order()
+
+
+def test_ten_seats_add_a_tenth_name_and_keep_the_first_nine():
+    assert NAMES[:9] == ("Ava", "Ben", "Cleo", "Dev", "Elif", "Finn", "Gia", "Hugo", "Iris")
+    state = GameState(GameConfig(n_players=10, seed=3))
+    assert state.seats[-1] == "p9"
+    assert set(state.names.values()) == set(NAMES) and len(NAMES) == 10

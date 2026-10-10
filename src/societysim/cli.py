@@ -271,7 +271,9 @@ def _progress_line(e: dict) -> str:
         end = f"failed: {str(e['reason'])[:80]}"
     else:
         end = f"finished ({e['winner'] or 'no winner'})"
-    eta = "ETA n/a" if e["eta_seconds"] is None else f"ETA ~{_hm(e['eta_seconds'], eta=True)}"
+    eta = (
+        "ETA estimating…" if e["eta_seconds"] is None else f"ETA ~{_hm(e['eta_seconds'], eta=True)}"
+    )
     return (
         f"[{e['done']}/{e['total']}] {e['game_id']} {end} in {_hm(e['seconds'])} | {money} "
         f"| {e['running']} running | {eta}"

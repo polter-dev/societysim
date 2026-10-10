@@ -874,6 +874,17 @@ async def test_eta_is_none_until_a_game_finishes_and_skips_resumed_games(tmp_pat
     assert [(e["done"], e["eta_seconds"]) for e in events] == [(3, 0)]
 
 
+def test_cli_progress_line_says_estimating_until_there_is_an_eta():
+    from societysim.cli import _progress_line
+
+    e = {
+        "event": "failed", "reason": "boom", "done": 1, "total": 3, "game_id": "g", "seconds": 5,
+        "spent": 0, "budget": 5, "running": 2, "eta_seconds": None,
+    }  # fmt: skip
+    assert _progress_line(e).endswith("| ETA estimating…")
+    assert _progress_line({**e, "eta_seconds": 600}).endswith("| ETA ~10m")
+
+
 def test_cli_batch_prints_a_progress_line_per_game(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     path = write_config(tmp_path)

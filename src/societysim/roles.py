@@ -29,7 +29,7 @@ class Phase(StrEnum):
     VOTE = "vote"
 
 
-# Seat ids are the only way events and responses refer to players: "p0".."p8".
-SeatId = Annotated[str, Field(pattern=r"^p[0-8]$")]
+# Seat ids are the only way events and responses refer to players: "p0".."p9".
+SeatId = Annotated[str, Field(pattern=r"^p[0-9]$")]
 SeerResult = Literal["wolf", "not_wolf"]
 Winner = Literal["wolves", "villagers", "draw"]

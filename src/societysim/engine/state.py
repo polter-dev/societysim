@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from societysim.config import GameConfig
 from societysim.roles import Phase, Role, SeerResult
 
-NAMES = ("Ava", "Ben", "Cleo", "Dev", "Elif", "Finn", "Gia", "Hugo", "Iris")
+NAMES = ("Ava", "Ben", "Cleo", "Dev", "Elif", "Finn", "Gia", "Hugo", "Iris", "Jude")
 # During night N, state.day is N; day N keeps the same value.
 type NightNumber = int
 

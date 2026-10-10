@@ -37,7 +37,7 @@ export type EventType =
 export type Visibility = "public" | "wolves" | "seer" | "doctor" | "narrator";
 /**
  * This interface was referenced by `undefined`'s JSON-Schema definition
- * via the `patternProperty` "^p[0-8]$".
+ * via the `patternProperty` "^p[0-9]$".
  *
  * This interface was referenced by `Event`'s JSON-Schema
  * via the `definition` "Role".
@@ -53,7 +53,7 @@ export type LabelType = "false_role_claim" | "false_report" | "bussing" | "hidde
  * One line of <game_id>.jsonl.
  */
 export interface Event {
-  schema_version: 1 | 2;
+  schema_version: 1 | 2 | 3;
   game_id: string;
   seq: number;
   t: number;
@@ -100,7 +100,7 @@ export interface EventMeta {
   tally?: {
     /**
      * This interface was referenced by `undefined`'s JSON-Schema definition
-     * via the `patternProperty` "^p[0-8]$".
+     * via the `patternProperty` "^p[0-9]$".
      */
     [k: string]: number;
   } | null;
@@ -119,7 +119,7 @@ export interface EventMeta {
 }
 /**
  * This interface was referenced by `undefined`'s JSON-Schema definition
- * via the `patternProperty` "^p[0-8]$".
+ * via the `patternProperty` "^p[0-9]$".
  *
  * This interface was referenced by `Event`'s JSON-Schema
  * via the `definition` "Seat".
@@ -152,7 +152,7 @@ export interface Usage {
  * via the `definition` "Label".
  */
 export interface Label {
-  schema_version: 1 | 2;
+  schema_version: 1 | 2 | 3;
   game_id: string;
   label: LabelType;
   actor: string;

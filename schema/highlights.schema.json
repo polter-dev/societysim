@@ -41,7 +41,7 @@
         "actor": {
           "anyOf": [
             {
-              "pattern": "^p[0-8]$",
+              "pattern": "^p[0-9]$",
               "type": "string"
             },
             {
@@ -72,7 +72,7 @@
         "target": {
           "anyOf": [
             {
-              "pattern": "^p[0-8]$",
+              "pattern": "^p[0-9]$",
               "type": "string"
             },
             {

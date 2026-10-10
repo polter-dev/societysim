@@ -4,7 +4,7 @@ Standard rules, close to Ultimate Werewolf. Every rule here is a config flag; th
 
 ## Setup and flow
 
-- 7–9 players. Default roles: 2 Werewolves, 1 Seer, 1 Doctor, the rest Villagers.
+- 7–10 players. Default roles: 2 Werewolves, 1 Seer, 1 Doctor, the rest Villagers.
 - The game starts with Night 1, then alternates Day and Night.
 - **Night:** the wolves agree on one kill in a private wolf channel (2 rounds of message + proposed target; if they still disagree, the plurality target wins and a tie is broken by the seeded RNG). The Seer inspects one player and learns wolf / not wolf. The Doctor protects one player; if that is the wolves' target, they survive.
 - **Day:** night results are announced (who died; their role is revealed). Then 2 discussion rounds; every living player makes one public statement (at most 80 words) per round, in a seeded random order. Then everyone votes for a player or abstains, all at once. Plurality is eliminated and their role is revealed.
@@ -14,7 +14,7 @@ Standard rules, close to Ultimate Werewolf. Every rule here is a config flag; th
 
 ## Role counts
 - 7 players: 2 wolves, 1 Seer, 1 Doctor, 3 Villagers.
-- 8 players: 4 Villagers. 9 players: 5 Villagers.
+- 8 players: 4 Villagers. 9 players: 5 Villagers. 10 players: 6 Villagers (2 wolves among 10; with a human seat, 1 human and 9 models).
 - A 3-wolf setup is available through config.
 
 ## Win checks and draws

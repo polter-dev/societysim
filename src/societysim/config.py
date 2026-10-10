@@ -79,7 +79,7 @@ class RoleCounts(_Config):
 
 
 class GameConfig(_Config):
-    n_players: int = Field(7, ge=7, le=9)
+    n_players: int = Field(7, ge=7, le=10)
     seed: int = 0
     roles: RoleCounts = RoleCounts()
     rules: RuleFlags = RuleFlags()

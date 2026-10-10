@@ -31,7 +31,7 @@
           "anyOf": [
             {
               "patternProperties": {
-                "^p[0-8]$": {
+                "^p[0-9]$": {
                   "$ref": "#/$defs/Seat"
                 }
               },
@@ -144,7 +144,7 @@
           "anyOf": [
             {
               "patternProperties": {
-                "^p[0-8]$": {
+                "^p[0-9]$": {
                   "type": "integer"
                 }
               },
@@ -187,7 +187,7 @@
           "anyOf": [
             {
               "patternProperties": {
-                "^p[0-8]$": {
+                "^p[0-9]$": {
                   "$ref": "#/$defs/Role"
                 }
               },
@@ -342,7 +342,7 @@
       "additionalProperties": false,
       "properties": {
         "player": {
-          "pattern": "^p[0-8]$",
+          "pattern": "^p[0-9]$",
           "type": "string"
         },
         "p": {
@@ -426,7 +426,8 @@
         "schema_version": {
           "enum": [
             1,
-            2
+            2,
+            3
           ],
           "type": "integer"
         },
@@ -437,7 +438,7 @@
           "$ref": "#/$defs/LabelType"
         },
         "actor": {
-          "pattern": "^p[0-8]$",
+          "pattern": "^p[0-9]$",
           "type": "string"
         },
         "source_seq": {
@@ -481,7 +482,8 @@
     "schema_version": {
       "enum": [
         1,
-        2
+        2,
+        3
       ],
       "type": "integer"
     },
@@ -512,7 +514,7 @@
     "actor": {
       "anyOf": [
         {
-          "pattern": "^p[0-8]$",
+          "pattern": "^p[0-9]$",
           "type": "string"
         },
         {
@@ -523,7 +525,7 @@
     "target": {
       "anyOf": [
         {
-          "pattern": "^p[0-8]$",
+          "pattern": "^p[0-9]$",
           "type": "string"
         },
         {

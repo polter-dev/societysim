@@ -11,7 +11,7 @@ LLM agents from different providers play Werewolf. A deterministic Python engine
 1. **The engine is deterministic.** `src/societysim/engine/` does no I/O and makes no LLM calls. All randomness comes from one `random.Random(seed)`.
 2. **No information leaks.** Prompts are built only in `agents/observation.py`. Players see only what their role allows. Wolves see the wolf channel; nobody else does. Leakage tests must stay green.
 3. **Contracts are shared.** The event schema (`logging/events.py` → `schema/events.schema.json` → `viewer/src/types/events.ts`), agent response schemas (`agents/schemas.py`) and the model client Protocol are used by all three teams. Changing them needs its own ticket, a `schema_version` bump, and regenerated schema files in the same PR.
-4. **`actor` and `target` in events are seat ids** (`p0`…`p8`), never names.
+4. **`actor` and `target` in events are seat ids** (`p0`…`p9`), never names.
 5. **The raw game log is never edited.** Labels go in `<game_id>.labels.jsonl` next to it.
 6. **No secrets in git.** Keys live in `.env` (see `.env.example`).
 7. **Stay inside your ticket.** Only touch the files listed under "Files touched". If you need to change something outside it, say so in the PR and don't do it.

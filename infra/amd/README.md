@@ -13,27 +13,37 @@ What the script does, in order:
 
 Re-running it is safe. Finished steps are skipped and a healthy server is reused.
 
+## First, on your laptop: make an API key
+
+```bash
+openssl rand -hex 32
+```
+
+Put it in `.env` in the repo root as `AMD_API_KEY=<that value>`. The server requires it, and `serve.sh` refuses to start without a key of at least 32 characters. The script never prints, logs or stores the key; it keeps only a hash so it can tell when the key changes.
+
 ## On the AMD box
 
 1. Go to AUP Learning Cloud, then **Start My Server → Custom Repos → Basic GPU Environment**. Pick the R9700 system under Configuration and set the runtime to at least 3 hours. The first run downloads several GB of wheels and about 14 GB of weights to the NFS home, which is slow. Then **Launch Server**.
 2. Open a Terminal and run:
 
    ```bash
-   git clone -b issue-41-amd-vllm https://github.com/polter-dev/societysim.git   # after merge: drop "-b issue-41-amd-vllm"
+   git clone https://github.com/polter-dev/societysim.git
    cd societysim
+   read -rs AMD_API_KEY && export AMD_API_KEY   # paste the same key, press Enter (not echoed, not in history)
    bash infra/amd/serve.sh
    ```
 
-3. Wait for the box that starts with `Put these two lines in .env`. It looks like this:
+   To test a branch that isn't merged yet, add `-b <branch>` to the `git clone`.
+
+3. Wait for the box that starts with `Put this line in .env`. It looks like this:
 
    ```
    AMD_VLLM_BASE_URL=https://<random-words>.trycloudflare.com/v1
-   AMD_API_KEY=amd-...
    ```
 
-   The key is generated on the first run and saved in `~/amd-serve/api_key`. To choose your own key, run `AMD_API_KEY=... bash infra/amd/serve.sh` instead.
+If you change the key, export the new one and run `serve.sh` again. It restarts the server and the stats logger with the new key.
 
-The server, tunnel and stats logger keep running if you close the terminal tab. They stop when the session's runtime ends.
+The server, tunnel and stats logger keep running if you close the terminal tab. They stop when the session's runtime ends. In a new terminal, run `read -rs AMD_API_KEY && export AMD_API_KEY` again before `serve.sh`.
 
 Useful while it runs:
 
@@ -45,7 +55,7 @@ tail -f ~/amd-serve/logs/stats.log      # sampled /metrics and GPU use
 
 ## On your laptop
 
-Put the two printed lines in `.env` in the repo root, replacing any older values. The URL changes every time the tunnel restarts. Then:
+Put the printed `AMD_VLLM_BASE_URL` line in `.env` next to `AMD_API_KEY`, replacing any older URL. The URL changes every time the tunnel restarts. Then:
 
 ```bash
 uv run societysim doctor --model 'amd-*'

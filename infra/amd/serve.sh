@@ -21,7 +21,7 @@
 #                      model name; keep it in sync with litellm_model in configs/models.yaml.
 #   AMD_GGUF_REPO/FILE GGUF used by the llama.cpp fallback (default ggml-org/gpt-oss-20b-GGUF).
 #   AMD_BACKEND        auto | vllm | llamacpp (default auto)
-#   AMD_API_KEY        bearer key the server requires; generated and saved if unset
+#   AMD_API_KEY        required, 32+ chars (openssl rand -hex 32); same value in the laptop .env
 #   AMD_WORK           working dir for venvs, weights, logs (default ~/amd-serve)
 #   AMD_PORT           local port (default 8000)
 #   AMD_TUNNEL         1 = open a cloudflared quick tunnel (default), 0 = localhost only
@@ -67,8 +67,10 @@ export HF_HOME="${HF_HOME:-$AMD_WORK/hf}"
 export PATH="$AMD_WORK/bin:$PATH:/opt/rocm/bin"
 [ -x "$SYS_PY" ] || SYS_PY=python3
 
+umask 077 # logs and state are for this user only
 mkdir -p "$AMD_WORK/bin" "$AMD_WORK/logs" "$HF_HOME"
 LOGS="$AMD_WORK/logs"
+chmod 700 "$AMD_WORK" "$LOGS"
 
 log() { printf '\n[%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
 warn() { printf '[%s] WARNING: %s\n' "$(date +%H:%M:%S)" "$*" >&2; }
@@ -80,6 +82,8 @@ trap 'warn "command failed (exit $?) at line $LINENO: $BASH_COMMAND"' ERR
 
 alive() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
 healthy() { curl -sf -m 5 "$LOCAL/health" >/dev/null 2>&1; }
+# curl with the bearer key fed on stdin, so the key never appears in argv, logs or traces.
+authcurl() { printf 'Authorization: Bearer %s\n' "$AMD_API_KEY" | curl -H @- "$@"; }
 
 # Run a background process in its own session so it survives the terminal; record its pid.
 spawn() { # spawn <pidfile> <logfile> cmd...
@@ -123,26 +127,26 @@ EOF
   fi
 }
 
-# Use AMD_API_KEY if set, else the saved key, else a new one. KEY_CHANGED=1 means a running
-# server has an old key and must restart.
+# AMD_API_KEY must come from the user; the script never prints or stores it. Only its hash is
+# kept, to notice a new key: KEY_CHANGED=1 means a running server has the old one and restarts.
 KEY_CHANGED=0
 api_key() {
-  local saved
-  saved=$(cat "$AMD_WORK/api_key" 2>/dev/null || true)
-  if [ -z "${AMD_API_KEY:-}" ] && [ -n "$saved" ]; then
-    AMD_API_KEY=$saved
-  else
-    if [ -z "${AMD_API_KEY:-}" ]; then
-      AMD_API_KEY="amd-$("$SYS_PY" -c 'import secrets; print(secrets.token_urlsafe(24))')"
-      log "Generated a new API key"
-    fi
-    if [ "$AMD_API_KEY" != "$saved" ]; then
-      (umask 077 && echo "$AMD_API_KEY" >"$AMD_WORK/api_key")
-      echo "saved the API key to $AMD_WORK/api_key"
-      KEY_CHANGED=1
-    fi
+  local key=${AMD_API_KEY:-}
+  if [ "${#key}" -lt 32 ]; then
+    die "AMD_API_KEY is unset or shorter than 32 characters. Generate one with
+    openssl rand -hex 32
+put it in .env on your laptop as AMD_API_KEY=..., then here run
+    read -rs AMD_API_KEY && export AMD_API_KEY    # paste it, press Enter (not echoed)
+and run this script again."
   fi
   export AMD_API_KEY
+  rm -f "$AMD_WORK/api_key" # plain-text key written by an older version of this script
+  local hash
+  hash=$("$SYS_PY" -c 'import hashlib, os; print(hashlib.sha256(os.environ["AMD_API_KEY"].encode()).hexdigest())')
+  if [ "$hash" != "$(cat "$AMD_WORK/api_key.sha256" 2>/dev/null || true)" ]; then
+    echo "$hash" >"$AMD_WORK/api_key.sha256"
+    KEY_CHANGED=1
+  fi
 }
 
 base_venv() {
@@ -368,12 +372,14 @@ start_vllm() { # start_vllm xgrammar|outlines
     so=(--guided-decoding-backend "$1")
   fi
   log "Starting vLLM: $AMD_MODEL on $LOCAL, structured-output backend $1"
+  # The key goes in VLLM_API_KEY (same as --api-key), so vLLM's startup log of its arguments and
+  # `ps` never show it. smoke() checks that unauthenticated requests get 401.
   # shellcheck disable=SC1091
   (
     source "$VLLM_VENV/serve.env"
-    spawn "$AMD_WORK/server.pid" "$LOGS/server.log" \
+    VLLM_API_KEY="$AMD_API_KEY" spawn "$AMD_WORK/server.pid" "$LOGS/server.log" \
       "$VLLM_VENV/bin/vllm" serve "$AMD_MODEL" --served-model-name "$AMD_MODEL" \
-      --host 127.0.0.1 --port "$AMD_PORT" --api-key "$AMD_API_KEY" \
+      --host 127.0.0.1 --port "$AMD_PORT" \
       --max-model-len "$AMD_MAX_MODEL_LEN" --gpu-memory-utilization "$AMD_GPU_MEM_UTIL" \
       --max-num-seqs 16 "${so[@]}"
   )
@@ -392,9 +398,10 @@ smoke() {
       die "a request without the API key got HTTP $code, not 401. Not opening a public tunnel."
     warn "a request without the API key got HTTP $code, expected 401"
   fi
-  "$SYS_PY" - "$LOCAL" "$AMD_API_KEY" "$AMD_MODEL" <<'EOF'
-import json, sys, time, urllib.request
-base, key, model = sys.argv[1:4]
+  "$SYS_PY" - "$LOCAL" "$AMD_MODEL" <<'EOF'
+import json, os, sys, time, urllib.request
+base, model = sys.argv[1:3]
+key = os.environ["AMD_API_KEY"]
 schema = {
     "type": "object",
     "properties": {"ok": {"type": "boolean"}, "word": {"type": "string"}},
@@ -536,8 +543,9 @@ print(d(sys.argv[1], sys.argv[2]))' "$AMD_GGUF_REPO" "$AMD_GGUF_FILE") || return
     extra=(--chat-template-kwargs '{"reasoning_effort": "low"}')
   fi
   log "Starting llama-server on $LOCAL (4 parallel slots of $AMD_MAX_MODEL_LEN tokens)"
-  spawn "$AMD_WORK/server.pid" "$LOGS/server.log" "$LLAMA_BIN" -m "$gguf" \
-    --host 127.0.0.1 --port "$AMD_PORT" --api-key "$AMD_API_KEY" --alias "$AMD_MODEL" -ngl 999 \
+  # LLAMA_API_KEY is llama-server's env form of --api-key; keeps the key off the command line.
+  LLAMA_API_KEY="$AMD_API_KEY" spawn "$AMD_WORK/server.pid" "$LOGS/server.log" "$LLAMA_BIN" \
+    -m "$gguf" --host 127.0.0.1 --port "$AMD_PORT" --alias "$AMD_MODEL" -ngl 999 \
     -c $((AMD_MAX_MODEL_LEN * 4)) --parallel 4 --jinja --metrics "${extra[@]}"
   echo "llama.cpp" >"$AMD_WORK/backend"
   wait_healthy "$AMD_WORK/server.pid" "$LOGS/server.log" || return 1
@@ -555,7 +563,7 @@ stats_loop() { # runs detached via `serve.sh _stats`; appends one sample per int
   while true; do
     {
       echo "=== $(date '+%Y-%m-%dT%H:%M:%S%z') backend=$(cat "$AMD_WORK/backend" 2>/dev/null)"
-      curl -s -m 5 -H "Authorization: Bearer $AMD_API_KEY" "$LOCAL/metrics" | grep -E "$re" || true
+      authcurl -s -m 5 "$LOCAL/metrics" | grep -E "$re" || true
       if command -v rocm-smi >/dev/null; then
         rocm-smi --showuse --showmemuse --showpower 2>/dev/null | grep -E '^(GPU|card)' || true
       elif command -v amd-smi >/dev/null; then
@@ -566,9 +574,9 @@ stats_loop() { # runs detached via `serve.sh _stats`; appends one sample per int
   done
 }
 
-start_stats() {
+start_stats() { # the logger takes AMD_API_KEY from its env; cmd_up restarts it with the server
   alive "$AMD_WORK/stats.pid" && return 0
-  AMD_API_KEY="$AMD_API_KEY" spawn "$AMD_WORK/stats.pid" /dev/null bash "$0" _stats
+  spawn "$AMD_WORK/stats.pid" /dev/null bash "$0" _stats
   log "Serving stats every ${AMD_STATS_INTERVAL}s -> $LOGS/stats.log (vLLM also logs throughput to $LOGS/server.log)"
 }
 
@@ -597,8 +605,7 @@ start_tunnel() {
   fi
   echo "checking $url/v1/models from the public side (DNS can take a minute)"
   for _ in $(seq 30); do
-    code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 \
-      -H "Authorization: Bearer $AMD_API_KEY" "$url/v1/models" || true)
+    code=$(authcurl -s -o /dev/null -w '%{http_code}' -m 10 "$url/v1/models" || true)
     [ "$code" = 200 ] && { echo "public endpoint OK"; return 0; }
     sleep 4
   done
@@ -611,10 +618,10 @@ summary() {
   log "Ready. Backend: $(cat "$AMD_WORK/backend")"
   cat <<EOF
 ----------------------------------------------------------------------------
-Put these two lines in .env on the machine that runs societysim:
+Put this line in .env on the machine that runs societysim, next to the same
+AMD_API_KEY you exported here (this script never prints the key):
 
 AMD_VLLM_BASE_URL=$url/v1
-AMD_API_KEY=$AMD_API_KEY
 
 Then:  uv run societysim doctor --model 'amd-*'
 Logs:  $LOGS/server.log  (server)   $LOGS/stats.log  (stats)
@@ -628,15 +635,18 @@ EOF
 # --- commands --------------------------------------------------------------------------------
 
 cmd_up() {
+  touch "$LOGS/serve.log" && chmod 600 "$LOGS"/*.log
   exec > >(tee -a "$LOGS/serve.log") 2>&1
   log "serve.sh up: model=$AMD_MODEL backend=$AMD_BACKEND work=$AMD_WORK"
-  preflight
   api_key
+  preflight
   base_venv
   if [ "$KEY_CHANGED" = 0 ] && alive "$AMD_WORK/server.pid" && healthy; then
     log "Server already running ($(cat "$AMD_WORK/backend")); reusing it"
   else
+    [ "$KEY_CHANGED" = 1 ] && log "API key changed; restarting the server and stats logger"
     kill_pidfile "$AMD_WORK/server.pid"
+    kill_pidfile "$AMD_WORK/stats.pid" # it holds the old key
     local served=0
     case "$AMD_BACKEND" in
       auto | vllm)

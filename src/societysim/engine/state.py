@@ -7,6 +7,8 @@ from societysim.config import GameConfig
 from societysim.roles import Phase, Role, SeerResult
 
 NAMES = ("Ava", "Ben", "Cleo", "Dev", "Elif", "Finn", "Gia", "Hugo", "Iris")
+# During night N, state.day is N; day N keeps the same value.
+type NightNumber = int
 
 
 @dataclass
@@ -19,12 +21,12 @@ class GameState:
     models: dict[str, str] = field(init=False)
     roles: dict[str, Role] = field(init=False)
     alive: set[str] = field(init=False)
-    day: int = 0
+    day: int = 0  # Increment exactly once at each night start, never at day start.
     phase: Phase = Phase.SETUP
     t: int = 0
     last_doctor_protect: str | None = None
-    last_doctor_protect_night: int | None = None
-    seer_results: dict[str, list[tuple[int, str, SeerResult]]] = field(default_factory=dict)
+    last_doctor_protect_night: NightNumber | None = None
+    seer_results: dict[str, list[tuple[NightNumber, str, SeerResult]]] = field(default_factory=dict)
     rng: random.Random = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -36,8 +38,6 @@ class GameState:
         self.names = dict(zip(self.seats, names, strict=True))
 
         models = self.config.seat_models()
-        if len(self.config.models) == self.config.n_players:
-            self.rng.shuffle(models)
         self.models = dict(zip(self.seats, models, strict=True)) if models else {}
 
         counts = self.config.roles

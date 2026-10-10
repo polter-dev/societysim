@@ -60,3 +60,12 @@ def test_speaking_order_excludes_dead_and_uses_seat_order_as_input():
 def test_one_model_is_repeated_at_every_seat():
     state = GameState(GameConfig(models=["same"]))
     assert state.models == dict.fromkeys(state.seats, "same")
+
+
+def test_distinct_models_keep_configured_seats_without_consuming_randomness():
+    models = [f"model-{i}" for i in range(7)]
+    state = GameState(GameConfig(seed=17, models=models))
+    without_models = GameState(GameConfig(seed=17))
+    assert state.models == dict(zip(state.seats, models, strict=True))
+    assert state.roles == without_models.roles
+    assert state.speaking_order() == without_models.speaking_order()

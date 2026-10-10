@@ -169,15 +169,24 @@ vote_days_dead AS (
 lie_days AS (
   SELECT game_id, label, liar, source, collect_set(day) AS days
   FROM ls_labels GROUP BY game_id, label, liar, source
+),
+base_votes AS (
+  SELECT l.game_id, l.idx, v.target, {FOLLOWS} AS followed,
+         row_number() OVER (
+           PARTITION BY l.game_id, l.liar, l.label, l.source, vd.day, v.actor
+           ORDER BY l.idx, v.seq
+         ) AS rn
+  FROM ls_labels l
+  JOIN lie_days ld USING (game_id, label, liar, source)
+  JOIN vote_days_dead vd ON vd.game_id = l.game_id
+   AND NOT array_contains(ld.days, vd.day) AND size(array_intersect(l.named, vd.dead)) = 0
+  JOIN events v ON v.game_id = l.game_id AND v.type = 'vote' AND v.day = vd.day
+               AND NOT array_contains(l.wolves, v.actor) AND v.actor <> l.liar
 )
-SELECT l.game_id, l.idx, count(v.seq) AS base_voters, coalesce(sum({FOLLOWS}), 0) AS base_followed
-FROM ls_labels l
-JOIN lie_days ld USING (game_id, label, liar, source)
-JOIN vote_days_dead vd ON vd.game_id = l.game_id
- AND NOT array_contains(ld.days, vd.day) AND size(array_intersect(l.named, vd.dead)) = 0
-JOIN events v ON v.game_id = l.game_id AND v.type = 'vote' AND v.day = vd.day
-             AND NOT array_contains(l.wolves, v.actor) AND v.actor <> l.liar
-GROUP BY l.game_id, l.idx
+SELECT game_id, idx, count(*) AS base_voters, coalesce(sum(followed), 0) AS base_followed,
+       count_if(target IS NULL) AS base_abstained
+FROM base_votes WHERE rn = 1
+GROUP BY game_id, idx
 """)
 
 spark.sql("""
@@ -186,7 +195,8 @@ SELECT l.game_id, l.liar AS seat, l.source,
        sum(coalesce(m.comparisons, 0)) AS comparisons, sum(coalesce(m.moved, 0)) AS moved,
        sum(coalesce(v.voters, 0)) AS voters, sum(coalesce(v.followed, 0)) AS followed,
        sum(coalesce(b.base_voters, 0)) AS base_voters,
-       sum(coalesce(b.base_followed, 0)) AS base_followed
+       sum(coalesce(b.base_followed, 0)) AS base_followed,
+       sum(coalesce(b.base_abstained, 0)) AS base_abstained
 FROM ls_labels l
 LEFT JOIN ls_moves m USING (game_id, idx)
 LEFT JOIN (SELECT game_id, idx, count(*) AS voters, sum(followed) AS followed
@@ -222,7 +232,8 @@ agg AS (
          sum(coalesce(ls.comparisons, 0)) AS comparisons, sum(coalesce(ls.moved, 0)) AS moved,
          sum(coalesce(ls.voters, 0)) AS voters, sum(coalesce(ls.followed, 0)) AS followed,
          sum(coalesce(ls.base_voters, 0)) AS base_voters,
-         sum(coalesce(ls.base_followed, 0)) AS base_followed
+         sum(coalesce(ls.base_followed, 0)) AS base_followed,
+         sum(coalesce(ls.base_abstained, 0)) AS base_abstained
   FROM seat_groups sg
   CROSS JOIN (SELECT explode(array('self_tag', 'jev')) AS source) src
   LEFT JOIN statements st ON st.game_id = sg.game_id AND st.seat = sg.seat
@@ -412,6 +423,7 @@ METRIC_COLUMNS = {
         "followed",
         "base_voters",
         "base_followed",
+        "base_abstained",
         "lie_rate",
         "share_moved",
         "share_followed",

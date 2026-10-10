@@ -209,6 +209,17 @@ def test_doctor_survives_non_ascii_error_on_cp1252(monkeypatch):
     assert "FAIL" in res.output
 
 
+def test_doctor_notes_unpriced_model_only(monkeypatch):
+    monkeypatch.setattr(
+        "societysim.models.client.estimate_cost",
+        lambda spec, i, o: 0.0 if spec.name == "gpt-5-nano" else 1.0,
+    )
+    res = _run_doctor(monkeypatch, {"json_schema"}, "--model", "gpt-5-*")
+    assert res.exit_code == 0, res.output
+    assert res.output.count("note: no price for") == 1
+    assert "note: no price for gpt-5-nano;" in res.output
+
+
 def test_doctor_no_match(monkeypatch):
     res = _run_doctor(monkeypatch, set(), "--model", "zzz*")
     assert res.exit_code == 1

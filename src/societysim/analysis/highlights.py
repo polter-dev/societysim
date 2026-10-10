@@ -114,7 +114,7 @@ def wolf_survival_moments(g: GameData) -> list[dict]:
         outcome = f"{_name(g, end.target)} was eliminated instead" if swap else "nobody went out"
         desc = (
             f"{_name(g, wolf, 'wolf')} lied on day {day} and survived the vote "
-            f"({against} votes against); {outcome}."
+            f"({against} vote{'' if against == 1 else 's'} against); {outcome}."
         )
         score = 1 + against + 2 * swap
         out.append(
@@ -146,7 +146,8 @@ def role_action_moments(g: GameData) -> list[dict]:
             )
             desc = (
                 f"{_name(g, e.actor, 'seer')} found {_name(g, e.target)} on night {e.day}; "
-                f"the village voted them out on day {elim.day} ({votes} votes)."
+                f"the village voted them out on day {elim.day} "
+                f"({votes} vote{'' if votes == 1 else 's'})."
             )
             seqs = (e.seq, elim.seq)
             out.append(

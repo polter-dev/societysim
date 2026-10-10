@@ -93,6 +93,13 @@ def test_wolf_survival_counts_votes_against():
     assert m["seq"] == [19, 54]
 
 
+def test_one_vote_is_singular():
+    g = game()
+    edit(g, 44, target="p5")
+    (m,) = [m for m in wolf_survival_moments(g) if m["actor"] == "p5"]
+    assert "(1 vote against)" in m["description"]
+
+
 def test_seer_led_elimination():
     g = game()  # p0 checked Finn (p5) as a wolf on night 2; make day 2 vote Finn out
     for seq in (98, 99, 101, 103):

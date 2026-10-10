@@ -283,7 +283,7 @@ def doctor(
     Prints which modes work with latency and cost. Exits 1 if any model has no working mode
     or if its configured `structured` mode fails.
     """
-    from societysim.models.client import LiteLLMClient
+    from societysim.models.client import LiteLLMClient, estimate_cost
     from societysim.models.registry import (
         check_served_models,
         load_registry,
@@ -331,6 +331,11 @@ def doctor(
             enc = getattr(sys.stdout, "encoding", None) or "utf-8"
             detail = detail.encode(enc, "replace").decode(enc)
             typer.echo(f"    {mark} {r.mode:<12} {detail}")
+        if estimate_cost(spec, 1_000_000, 1_000_000) == 0:
+            typer.echo(
+                f"    note: no price for {spec.name}; its cost reads $0 and the batch budget "
+                "can't limit it. Set input/output_cost_per_mtok in models.yaml unless it's free."
+            )
     if failed:
         raise typer.Exit(1)
 
@@ -405,15 +410,18 @@ def sync_neon(
     )
 
     load_dotenv()
-    if not os.environ.get("NEON_DATABASE_URL"):
-        typer.echo("NEON_DATABASE_URL is not set")
-        raise typer.Exit(1)
     if delete:
         if batch_dir is not None:
             typer.echo("give either BATCH_DIR or --delete, not both")
             raise typer.Exit(1)
-    elif batch_dir is None or not batch_dir.is_dir():
+    elif batch_dir is None:
+        typer.echo("give a batch dir to sync, or --delete GAME_ID")
+        raise typer.Exit(1)
+    elif not batch_dir.is_dir():
         typer.echo(f"not a directory: {batch_dir}")
+        raise typer.Exit(1)
+    if not os.environ.get("NEON_DATABASE_URL"):
+        typer.echo("NEON_DATABASE_URL is not set")
         raise typer.Exit(1)
 
     async def run():

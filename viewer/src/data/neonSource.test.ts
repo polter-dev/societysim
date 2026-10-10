@@ -195,7 +195,12 @@ describe("withFallback", () => {
     loadGame: async () => ({ events: full, errors: [] }),
     pollEvents: async () => [],
     loadLabels: async () => [{ detail: "from static" } as never],
+    audioIndexUrl: async (id) => `https://static.test/${id}.audio/index.json`,
   };
+
+  it("takes narration from the static files", async () => {
+    expect(await withFallback(neonSource(), fallback).audioIndexUrl!(ID)).toBe(`https://static.test/${ID}.audio/index.json`);
+  });
 
   it("uses the static source when Neon fails", async () => {
     vi.stubGlobal("fetch", async () => new Response("", { status: 503 }));

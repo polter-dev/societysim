@@ -174,5 +174,7 @@ export function withFallback(primary: NeonSource, fallback: GameSource): NeonSou
       return game;
     },
     loadLabels: async (id) => (await (servedBy.get(id) ?? primary)).loadLabels?.(id) ?? [],
+    // Narration mp3s are static files only (a running game has none).
+    audioIndexUrl: fallback.audioIndexUrl,
   };
 }

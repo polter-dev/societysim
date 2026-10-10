@@ -19,6 +19,8 @@
 # HF_TOKEN must be set in the environment (write access to the Space). It is read by
 # huggingface_hub directly and never printed or passed on a command line.
 #
+# The site also gets devui/ (a plain test page, see devui/README.md) at /devui/.
+#
 # Test hooks: SOCIETYSIM_SKIP_VIEWER_BUILD=1 skips npm and copies SOCIETYSIM_VIEWER_DIST
 # (default viewer/dist) as is.
 set -euo pipefail
@@ -96,6 +98,10 @@ cp -R "$dist/." "$stage/"
 mkdir -p "$stage/data"
 # .cache holds raw judge responses; the PNGs are for report.md, not the viewer.
 rsync -a --exclude '.cache' --exclude '*.png' "$batch/" "$stage/data/"
+# Dev test UI at /devui/, reading the same data/; it fetches the JSON Schemas at runtime.
+mkdir -p "$stage/devui/schema"
+cp "$root/devui/index.html" "$stage/devui/"
+cp "$root"/schema/*.schema.json "$stage/devui/schema/"
 cat >"$stage/README.md" <<'EOF'
 ---
 title: SocietySim
@@ -114,6 +120,7 @@ if [[ -n "$out" ]]; then
   echo "serve it:    python -m http.server -d $out 8000"
   echo "index:       http://localhost:8000/"
   echo "leaderboard: http://localhost:8000/?page=leaderboard"
+  echo "dev UI:      http://localhost:8000/devui/"
   if [[ -f "$batch/highlights.json" ]]; then
     link=$(python3 -c 'import json,sys; h=json.load(open(sys.argv[1])); print(h[0].get("link","") if h else "")' "$batch/highlights.json")
     [[ -z "$link" ]] || echo "top moment:  http://localhost:8000/$link"

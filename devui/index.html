@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SocietySim dev UI</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #111; background: #fff; }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  h2 { font-size: 15px; margin: 20px 0 6px; }
+  fieldset { margin: 8px 0; }
+  input[type=text], input[type=password] { width: 22em; max-width: 90%; }
+  table { border-collapse: collapse; margin: 4px 0; }
+  th, td { border: 1px solid #ccc; padding: 2px 6px; text-align: left; vertical-align: top; }
+  th { background: #f3f3f3; }
+  th.sortable { cursor: pointer; }
+  .ok { color: #070; }
+  .bad { color: #b00; }
+  .priv { background: #fff7e0; }
+  .label { background: #fde; border-radius: 3px; padding: 0 3px; margin-right: 3px; }
+  .scroll { overflow-x: auto; }
+  .muted { color: #666; }
+  pre { margin: 0; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>SocietySim dev UI <span class="muted">(throwaway test tool; not the viewer)</span></h1>
+
+<fieldset>
+  <legend>Source</legend>
+  <label><input type="radio" name="mode" value="static" checked> Static files</label>
+  <label>base <input type="text" id="base" value="../data/"></label>
+  <label>schemas <input type="text" id="schemas" value="schema/"></label>
+  <br>
+  <label><input type="radio" name="mode" value="neon"> Neon Data API</label>
+  <label>url <input type="text" id="neon" placeholder="https://.../rest/v1"></label>
+  <label>anon key (optional) <input type="password" id="key" autocomplete="off"></label>
+  <button id="load">Load</button>
+  <div class="muted">URL params: ?base=, ?schemas=, ?neon=, ?key=. Keys are never stored.</div>
+</fieldset>
+
+<div id="status" class="muted"></div>
+<div id="out"></div>
+
+<h2>Contract check</h2>
+<table id="contract"><thead><tr><th>file</th><th>result</th></tr></thead><tbody></tbody></table>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const qs = new URLSearchParams(location.search);
+if (qs.get("base")) $("base").value = qs.get("base");
+if (qs.get("schemas")) $("schemas").value = qs.get("schemas");
+if (qs.get("neon")) { $("neon").value = qs.get("neon"); document.querySelector("input[value=neon]").checked = true; }
+if (qs.get("key")) $("key").value = qs.get("key");
+
+function el(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  Object.assign(e, props || {});
+  for (const k of kids) e.append(k);
+  return e;
+}
+const fmt = (v) => v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+const dirUrl = (s) => new URL(s.endsWith("/") ? s : s + "/", location.href).href;
+
+// ---- tiny JSON Schema check: $ref anyOf const enum type required properties
+// additionalProperties patternProperties propertyNames items prefixItems
+// min/maxItems minimum maximum pattern. Returns a list of problems.
+function check(schema, root, v, path, errs) {
+  if (errs.length >= 20) return;
+  if (schema.$ref) {
+    let t = root;
+    for (const p of schema.$ref.replace(/^#\//, "").split("/")) t = t[p];
+    return check(t, root, v, path, errs);
+  }
+  if (schema.anyOf) {
+    const subs = schema.anyOf.map((s) => { const e = []; check(s, root, v, path, e); return e; });
+    if (!subs.some((e) => e.length === 0)) errs.push(`${path}: matches none of the allowed shapes (${subs[0][0] || "?"})`);
+    return;
+  }
+  if ("const" in schema && v !== schema.const) errs.push(`${path}: expected ${JSON.stringify(schema.const)}`);
+  if (schema.enum && !schema.enum.includes(v)) errs.push(`${path}: ${JSON.stringify(v)} not in ${JSON.stringify(schema.enum)}`);
+  if (schema.type) {
+    const t = Array.isArray(v) ? "array" : v === null ? "null" : typeof v;
+    const okType = schema.type === t || (schema.type === "integer" && Number.isInteger(v)) ||
+      (schema.type === "number" && t === "number");
+    if (!okType) { errs.push(`${path}: expected ${schema.type}, got ${t}`); return; }
+  }
+  if (typeof v === "string" && schema.pattern && !new RegExp(schema.pattern).test(v)) errs.push(`${path}: does not match ${schema.pattern}`);
+  if (typeof v === "number") {
+    if ("minimum" in schema && v < schema.minimum) errs.push(`${path}: below ${schema.minimum}`);
+    if ("maximum" in schema && v > schema.maximum) errs.push(`${path}: above ${schema.maximum}`);
+  }
+  if (Array.isArray(v)) {
+    if ("minItems" in schema && v.length < schema.minItems) errs.push(`${path}: fewer than ${schema.minItems} items`);
+    if ("maxItems" in schema && v.length > schema.maxItems) errs.push(`${path}: more than ${schema.maxItems} items`);
+    v.forEach((x, i) => {
+      const s = schema.prefixItems && i < schema.prefixItems.length ? schema.prefixItems[i] : schema.items;
+      if (s) check(s, root, x, `${path}[${i}]`, errs);
+    });
+  } else if (v && typeof v === "object") {
+    for (const r of schema.required || []) if (!(r in v)) errs.push(`${path}: missing required "${r}"`);
+    const props = schema.properties || {}, pats = Object.entries(schema.patternProperties || {});
+    for (const [k, x] of Object.entries(v)) {
+      const p = `${path}.${k}`;
+      if (schema.propertyNames) check(schema.propertyNames, root, k, `${p} (key)`, errs);
+      const matched = pats.filter(([re]) => new RegExp(re).test(k));
+      if (k in props) check(props[k], root, x, p, errs);
+      else if (matched.length) matched.forEach(([, s]) => check(s, root, x, p, errs));
+      else if (schema.additionalProperties === false) errs.push(`${p}: unknown field`);
+      else if (schema.additionalProperties && typeof schema.additionalProperties === "object") check(schema.additionalProperties, root, x, p, errs);
+    }
+  }
+}
+
+const schemaCache = {};
+async function getSchema(name) {
+  if (!schemaCache[name]) {
+    schemaCache[name] = fetch(new URL(`${name}.schema.json`, dirUrl($("schemas").value))).then((r) => {
+      if (!r.ok) throw new Error(`schema ${name}: HTTP ${r.status}`);
+      return r.json();
+    });
+  }
+  return schemaCache[name];
+}
+const contractRows = {};
+function report(file, errs) {
+  let row = contractRows[file];
+  if (!row) {
+    row = contractRows[file] = el("tr", {}, el("td"), el("td"));
+    $("contract").tBodies[0].append(row);
+  }
+  row.cells[0].textContent = file;
+  row.cells[1].replaceChildren(errs.length === 0 ? el("span", { className: "ok", textContent: "OK" })
+    : el("span", { className: "bad", textContent: errs.join("\n") + (errs.length >= 20 ? "\n..." : "") }));
+  if (errs.length) row.cells[1].firstChild.style.whiteSpace = "pre-wrap";
+}
+async function validate(file, schemaName, data) {
+  try {
+    const s = await getSchema(schemaName);
+    const errs = [];
+    check(s, s, data, "$", errs);
+    report(file, errs);
+  } catch (e) { report(file, [String(e.message || e)]); }
+}
+async function validateLines(file, schemaName, rows, def) {
+  try {
+    const s = await getSchema(schemaName);
+    const sub = def ? { $ref: `#/$defs/${def}` } : s;
+    const errs = [];
+    rows.forEach((r, i) => check(sub, s, r, `line ${i}`, errs));
+    report(file, errs);
+  } catch (e) { report(file, [String(e.message || e)]); }
+}
+
+// ---- tables
+function table(rows, cols, opts = {}) {
+  cols = cols || [...new Set(rows.flatMap((r) => Object.keys(r)))];
+  const t = el("table");
+  const body = el("tbody");
+  let sort = { col: null, dir: 1 };
+  const draw = () => {
+    const rs = rows.slice();
+    if (sort.col !== null) {
+      const get = (r) => { const v = opts.value ? opts.value(r, sort.col) : r[sort.col]; return v === "" ? null : v; };
+      rs.sort((a, b) => {
+        const x = get(a), y = get(b);
+        if (x === null || x === undefined) return y === null || y === undefined ? 0 : 1;
+        if (y === null || y === undefined) return -1;
+        return (x < y ? -1 : x > y ? 1 : 0) * sort.dir;
+      });
+    }
+    body.replaceChildren(...rs.map((r) => {
+      const tr = el("tr");
+      for (const c of cols) {
+        const td = el("td");
+        const v = opts.cell ? opts.cell(r, c) : null;
+        td.append(v instanceof Node ? v : fmt(v !== null && v !== undefined ? v : r[c]));
+        tr.append(td);
+      }
+      return tr;
+    }));
+  };
+  const head = el("tr", {}, ...cols.map((c) => el("th", {
+    className: "sortable", textContent: c, title: "click to sort",
+    onclick: () => { sort = { col: c, dir: sort.col === c ? -sort.dir : 1 }; draw(); },
+  })));
+  t.append(el("thead", {}, head), body);
+  draw();
+  return el("div", { className: "scroll" }, t);
+}
+function section(title, ...kids) {
+  const s = el("section", {}, el("h2", { textContent: title }), ...kids);
+  $("out").append(s);
+  return s;
+}
+
+// ---- static mode
+async function getJson(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  return r.json();
+}
+async function getLines(url, optional) {
+  const r = await fetch(url);
+  if (!r.ok) { if (optional) return null; throw new Error(`${url}: HTTP ${r.status}`); }
+  return (await r.text()).split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
+}
+const flat = (o, pre = "") => Object.entries(o || {}).flatMap(([k, v]) =>
+  v && typeof v === "object" && !Array.isArray(v) ? flat(v, `${pre}${k}.`) : [[pre + k, v]]);
+
+async function loadStatic() {
+  const base = dirUrl($("base").value);
+  const rel = (p) => new URL(p, base).href;
+  const files = [
+    ["report/index.json", "index"], ["report/leaderboard.json", "leaderboard"],
+    ["report/metrics.json", "metrics"], ["highlights.json", "highlights"],
+  ];
+  const data = {};
+  await Promise.all(files.map(async ([f, s]) => {
+    try { data[f] = await getJson(rel(f)); validate(f, s, data[f]); }
+    catch (e) { report(f, [String(e.message)]); }
+  }));
+
+  const lb = data["report/leaderboard.json"];
+  if (lb) {
+    section(`Leaderboard (${lb.games} games)`, table(lb.models, null, {
+      cell: (r, c) => c === "openskill" ? fmt(r.openskill && r.openskill.ordinal) : c === "lie_rate" ? fmt(r.lie_rate) : null,
+      value: (r, c) => c === "openskill" ? r.openskill && r.openskill.ordinal : r[c],
+    }));
+  }
+  const m = data["report/metrics.json"];
+  if (m) {
+    const kv = (obj) => table(flat(obj).map(([k, v]) => ({ key: k, value: v })), ["key", "value"]);
+    section("Metrics summary", kv(m.summary));
+    section("Metrics speed", table(Object.entries(m.speed || {}).map(([model, s]) => ({ model, ...s }))));
+  }
+  const hl = data["highlights.json"];
+  if (hl) {
+    section(`Highlights (${hl.length})`, table(hl, ["type", "score", "game_id", "day", "description", "link"], {
+      cell: (r, c) => c === "link" ? el("a", { href: `../${r.link}`, textContent: r.link, title: "opens the real viewer" }) : null,
+    }));
+  }
+  const idx = data["report/index.json"];
+  if (idx) {
+    const detail = el("div");
+    const games = table(idx.map((g) => ({ ...g, seats: undefined, models: [...new Set(Object.values(g.seats).map((s) => s.model))].join(", ") })),
+      ["game_id", "seed", "days", "winner", "models", "open"], {
+        cell: (r, c) => c === "open" ? el("button", { textContent: "open", onclick: () => openGame(idx.find((g) => g.game_id === r.game_id), base) }) : null,
+        value: (r, c) => c === "open" ? null : r[c],
+      });
+    section(`Games (${idx.length})`, games);
+    section("Game", detail);
+    detail.id = "game";
+    if (qs.get("game") && idx.some((g) => g.game_id === qs.get("game"))) openGame(idx.find((g) => g.game_id === qs.get("game")), base);
+  }
+}
+
+async function openGame(entry, base) {
+  const box = $("game");
+  box.replaceChildren(`loading ${entry.game_id}...`);
+  try {
+    // "file" is relative to the batch dir, one level above report/index.json
+    const logUrl = new URL(entry.file, base).href;
+    const events = await getLines(logUrl, false);
+    const labels = (await getLines(logUrl.replace(/\.jsonl$/, ".labels.jsonl"), true)) || [];
+    validateLines(`${entry.file}`, "events", events);
+    if (labels.length) validateLines(entry.file.replace(/\.jsonl$/, ".labels.jsonl"), "events", labels, "Label");
+    else report(entry.file.replace(/\.jsonl$/, ".labels.jsonl"), []);
+    const bySeq = {};
+    for (const l of labels) (bySeq[l.source_seq] = bySeq[l.source_seq] || []).push(l);
+    const toggle = el("input", { type: "checkbox" });
+    const wrap = el("div", { className: "scroll" });
+    const seatLine = el("div", { className: "muted" });
+    const draw = () => {
+      const priv = toggle.checked;
+      seatLine.textContent = priv
+        ? Object.entries(entry.seats).map(([s, v]) => `${s} ${v.name} (${v.model}, ${v.role})`).join("; ")
+        : Object.entries(entry.seats).map(([s, v]) => `${s} ${v.name}`).join("; ");
+      const cols = ["seq", "day/phase", "actor", "type", "target", "public_text", "labels"].concat(priv ? ["visibility", "private_reasoning", "suspicion"] : []);
+      wrap.replaceChildren(table(events.filter((e) => priv || e.visibility === "public"), cols, {
+        cell: (e, c) => {
+          if (c === "day/phase") return `${e.day} ${e.phase}`;
+          if (c === "labels") return el("span", {}, ...(bySeq[e.seq] || []).map((l) => el("span", { className: "label", textContent: `${l.label} [${l.source}]`, title: l.detail })));
+          if (c === "private_reasoning" || c === "visibility" || c === "suspicion") {
+            const td = el("pre", { className: "priv", textContent: fmt(e[c]) });
+            return td;
+          }
+          return null;
+        },
+        value: (e, c) => c === "day/phase" ? e.day : c === "labels" ? (bySeq[e.seq] || []).length : e[c],
+      }));
+    };
+    toggle.onchange = draw;
+    box.replaceChildren(el("h3", { textContent: `${entry.game_id}  winner: ${entry.winner}` }),
+      el("label", {}, toggle, " narrator view (private reasoning, suspicion, wolf channel, roles)"), seatLine, wrap);
+    draw();
+  } catch (e) { box.replaceChildren(el("span", { className: "bad", textContent: String(e.message) })); }
+}
+
+// ---- Neon mode
+async function loadNeon() {
+  const base = $("neon").value.replace(/\/+$/, "");
+  const headers = $("key").value ? { Authorization: `Bearer ${$("key").value}` } : {};
+  const q = async (name, query) => {
+    const r = await fetch(`${base}/${name}?${query}`, { headers });
+    if (!r.ok) throw new Error(`${name}: HTTP ${r.status}`);
+    const rows = await r.json();
+    section(`${name} (${rows.length})`, rows.length ? table(rows) : el("div", { className: "muted", textContent: "no rows" }));
+    return rows;
+  };
+  const jobs = [
+    ["games", "select=game_id,batch_id,status,winner,models,agents&status=eq.finished&or=(agents.is.null,agents.neq.scripted)&order=started_at.desc.nullslast"],
+    ["leaderboard", "select=model,seat_games,wins,win_rate&order=win_rate.desc.nullslast"],
+    ["leaderboard_by_batch", "select=*"],
+    ["lies_by_model", "select=*"],
+  ];
+  for (const [name, query] of jobs) {
+    try { await q(name, query); } catch (e) { section(name, el("span", { className: "bad", textContent: String(e.message) })); }
+  }
+}
+
+async function load() {
+  $("out").replaceChildren();
+  $("contract").tBodies[0].replaceChildren();
+  for (const k of Object.keys(contractRows)) delete contractRows[k];
+  for (const k of Object.keys(schemaCache)) delete schemaCache[k];
+  $("status").textContent = "loading...";
+  try {
+    if (document.querySelector("input[name=mode]:checked").value === "neon") {
+      if (!$("neon").value) throw new Error("enter a Data API url");
+      await loadNeon();
+      report("(Neon rows)", []);
+      $("contract").tBodies[0].rows[0].cells[1].textContent = "not checked: schemas cover the static files only";
+    } else await loadStatic();
+    $("status").textContent = "done";
+  } catch (e) { $("status").textContent = ""; $("out").append(el("div", { className: "bad", textContent: String(e.message) })); }
+}
+$("load").onclick = load;
+load();
+</script>
+</body>
+</html>

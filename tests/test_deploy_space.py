@@ -3,6 +3,10 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
+import urllib.request
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -85,3 +89,36 @@ def test_dry_run_still_lists_and_uploads_nothing(tmp_path):
     assert r.returncode == 0, r.stderr
     assert "dry run: nothing uploaded" in r.stdout
     assert "./data/report/index.json" in r.stdout
+
+
+def test_out_includes_devui_served_with_data(tmp_path):
+    batch = _batch(tmp_path)
+    out = tmp_path / "site"
+    r = _run(tmp_path, "--out", str(out), str(batch))
+    assert r.returncode == 0, r.stderr
+    assert "/devui/" in r.stdout
+    assert (out / "devui/index.html").is_file()
+    assert (out / "devui/schema/events.schema.json").is_file()
+    assert (out / "index.html").read_text() == "<html></html>"  # real viewer untouched
+
+    class Quiet(SimpleHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), partial(Quiet, directory=str(out)))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{server.server_port}"
+
+        def get(path):
+            with urllib.request.urlopen(base + path) as resp:
+                return resp.read().decode()
+
+        assert "SocietySim dev UI" in get("/devui/index.html")
+        index = json.loads(get("/data/report/index.json"))
+        assert json.loads(get("/devui/schema/index.schema.json"))["$id"] == "index.schema.json"
+        for name in ("leaderboard", "metrics"):
+            json.loads(get(f"/data/report/{name}.json"))
+        assert get(f"/data/{index[0]['file']}").strip()
+    finally:
+        server.shutdown()

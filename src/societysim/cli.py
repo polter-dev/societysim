@@ -24,6 +24,50 @@ def version() -> None:
     typer.echo(__version__)
 
 
+@app.command()
+def doctor(
+    model: Annotated[
+        str, typer.Option("--model", help="Glob of model names from models.yaml.")
+    ] = "*",
+    config: Annotated[Path, typer.Option("--config", help="Model registry file.")] = Path(
+        "configs/models.yaml"
+    ),
+) -> None:
+    """Ping each model with a tiny structured call in every structured mode.
+
+    Prints which modes work with latency and cost. Exits 1 if any model has no working mode
+    or if its configured `structured` mode fails.
+    """
+    from societysim.models.client import LiteLLMClient
+    from societysim.models.registry import load_registry, probe_model
+
+    load_dotenv()
+    reg = load_registry(config)
+    specs = reg.match(model)
+    if not specs:
+        typer.echo(f"no model matches {model!r}")
+        raise typer.Exit(1)
+    client = LiteLLMClient(limits=reg.limits())
+
+    async def run():
+        return await asyncio.gather(*(probe_model(client, s) for s in specs))
+
+    failed = False
+    for spec, results in zip(specs, asyncio.run(run()), strict=True):
+        working = [r.mode for r in results if r.ok]
+        configured_ok = any(r.mode == spec.structured and r.ok for r in results)
+        status = "ok" if configured_ok else ("WORKS ONLY WITH " if working else "FAIL")
+        if not configured_ok:
+            failed = True
+        typer.echo(f"{spec.name}: {status}{', '.join(working) if not configured_ok else ''}")
+        for r in results:
+            mark = "ok  " if r.ok else "fail"
+            detail = f"{r.latency_ms} ms, ${r.cost_usd:.5f}" if r.ok else (r.error or "")[:120]
+            typer.echo(f"    {mark} {r.mode:<12} {detail}")
+    if failed:
+        raise typer.Exit(1)
+
+
 class JevFailed(Exception):
     """Jev could not classify a game; the message is safe to print (no key, no URL)."""
 

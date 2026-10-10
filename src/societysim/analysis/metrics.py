@@ -67,6 +67,11 @@ class GameData:
         return self.events[0].game_id
 
     @property
+    def by_seq(self) -> dict[int, Event]:
+        """Events keyed by seq. seq is an id, not a list position: look events up here."""
+        return {e.seq: e for e in self.events}
+
+    @property
     def roles(self) -> dict[str, Role]:
         return {s: seat.role for s, seat in (self.events[0].meta.seats or {}).items()}
 
@@ -177,15 +182,15 @@ class Row:
 
 
 def _last_suspicion(events: list[Event], actor: str, before: int, player: str) -> float | None:
-    for e in reversed(events[:before]):
-        if e.actor == actor and e.suspicion is not None:
+    for e in reversed(events):
+        if e.seq < before and e.actor == actor and e.suspicion is not None:
             return next((s.p for s in e.suspicion if s.player == player), None)
     return None
 
 
 def _dead_before(events: list[Event], seq: int) -> set[str]:
     deaths = (EventType.DEATH_REVEAL, EventType.ELIMINATION)
-    return {e.target for e in events[:seq] if e.type in deaths and e.target}
+    return {e.target for e in events if e.seq < seq and e.type in deaths and e.target}
 
 
 def lie_success(game: GameData, label: Label, seen_base: set | None = None) -> dict:
@@ -209,7 +214,8 @@ def lie_success(game: GameData, label: Label, seen_base: set | None = None) -> d
     if label.label not in SUCCESS_TYPES:
         raise ValueError(f"no lie success for {label.label}")
     events, roles, s, liar = game.events, game.roles, label.source_seq, label.actor
-    src = events[s]
+    by_seq = game.by_seq
+    src = by_seq[s]
     wolves = {p for p, r in roles.items() if r is Role.WOLF}
     named = {liar}
     if label.label is LabelType.BUSSING:
@@ -248,7 +254,7 @@ def lie_success(game: GameData, label: Label, seen_base: set | None = None) -> d
             out["moved"] += after[subj] > before if rose else after[subj] < before
 
     lie_days = {
-        events[lb.source_seq].day
+        by_seq[lb.source_seq].day
         for lb in game.labels
         if (lb.label, lb.actor, lb.source) == (label.label, liar, label.source)
     }
@@ -285,6 +291,7 @@ def game_rows(game: GameData) -> dict[str, Row]:
         row.survival_days = final_day
 
     accused: dict[tuple[str, int], set[str]] = defaultdict(set)
+    accused_day: dict[tuple[str, int], int] = {}
     last_susp: dict[tuple[str, int], Event] = {}
     for e in events:
         row = rows.get(e.actor) if e.actor else None
@@ -301,7 +308,9 @@ def game_rows(game: GameData) -> dict[str, Row]:
         if e.type is EventType.INVALID_OUTPUT:
             row.invalid += 1
         if e.type is EventType.ACCUSATION and e.target:
-            accused[(e.actor, e.meta.statement_seq or e.seq)].add(e.target)
+            key = (e.actor, e.meta.statement_seq or e.seq)
+            accused[key].add(e.target)
+            accused_day[key] = e.day  # the statement's day; the statement itself may be missing
         if e.suspicion is not None and roles[e.actor] is not Role.WOLF:
             last_susp[(e.actor, e.day)] = e
         if u := e.meta.usage:
@@ -317,7 +326,7 @@ def game_rows(game: GameData) -> dict[str, Row]:
 
     votes = [e for e in events if e.type is EventType.VOTE]
     for (actor, stmt), targets in accused.items():
-        day = events[stmt].day
+        day = accused_day[(actor, stmt)]
         others = [v for v in votes if v.day == day and v.actor != actor]
         rows[actor].accusations += 1
         rows[actor].pers_voters += len(others)

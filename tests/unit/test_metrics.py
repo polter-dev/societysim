@@ -358,3 +358,36 @@ def test_load_batch_skips_unfinished_games(tmp_path, capsys):
     games = load_batch(tmp_path)
     assert [g.game_id for g in games] == ["fixture-0001"]
     assert "cut.jsonl has no game_end, skipped" in capsys.readouterr().out
+
+
+def _renumbered(game: GameData) -> GameData:
+    """Same game with seq = 2 * position + 1: starts at 1, has gaps, never equals the position."""
+
+    def f(q):
+        return None if q is None else 2 * q + 1
+
+    events = []
+    for e in game.events:
+        meta = e.meta.model_copy(update={"statement_seq": f(e.meta.statement_seq)})
+        events.append(e.model_copy(update={"seq": f(e.seq), "meta": meta}))
+    labels = [lb.model_copy(update={"source_seq": f(lb.source_seq)}) for lb in game.labels]
+    return GameData(events, labels)
+
+
+def test_metrics_use_seq_as_an_id_not_a_list_position(game, m):
+    shifted = _renumbered(game)
+    assert shifted.events[5].seq != 5
+    m2 = compute_metrics([shifted])  # used to raise IndexError, or read the wrong events
+    assert m2["models"] == m["models"]
+    for kind in (LabelType.FALSE_ROLE_CLAIM, LabelType.FALSE_REPORT, LabelType.BUSSING):
+        assert lie_success(shifted, _label(shifted, kind)) == lie_success(game, _label(game, kind))
+
+
+def test_persuasion_survives_a_missing_statement_event(game, m):
+    # real logs have gaps: the accusation's statement_seq can point at an event not in the log
+    cut = _renumbered(game)
+    gone = next(e for e in cut.events if e.type is EventType.ACCUSATION).meta.statement_seq
+    cut.events = [e for e in cut.events if e.seq != gone]
+    p = compute_metrics([cut])["models"]
+    for model, groups in m["models"].items():
+        assert p[model]["all"]["persuasion"] == groups["all"]["persuasion"]

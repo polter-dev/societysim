@@ -1,4 +1,4 @@
-"""Load game logs into Databricks Delta tables: games, events, labels, batch_metrics.
+"""Load game logs into Databricks Delta tables (games, events, labels, batch_metrics, ...).
 
     uv run python scripts/databricks_ingest.py --fixture            # fixtures/sample_game.jsonl
     uv run python scripts/databricks_ingest.py --runs runs/<batch>  # finished games under a dir
@@ -11,9 +11,11 @@ until it finishes and prints its state and run page URL. A failed run prints the
 error and exits 1. With --dry-run it prints the API calls instead of sending them.
 
 Always writes games.jsonl, events.jsonl, labels.jsonl, batch_metrics.jsonl (the headline T3.3
-metrics of each batch, long format, for the MLflow notebook) and metrics.json (the T3.3 metrics
-on all the games, as `societysim report` computes them) to --out. A log without a game_end event
-(a batch still running) is skipped. With DATABRICKS_HOST and
+metrics of each batch, long format, for the MLflow notebook), deception_pairs.jsonl (the "who
+fools whom" matrix of each batch, one row per label source, liar model and listener model; read
+from <batch>/report/metrics.json when `societysim report` ran, else computed the same way) and
+metrics.json (the T3.3 metrics on all the games, as `societysim report` computes them) to --out.
+A log without a game_end event (a batch still running) is skipped. With DATABRICKS_HOST and
 DATABRICKS_TOKEN set (and no --dry-run) it also creates the schema and volume, uploads those
 files through the Files REST API and creates one Delta table per file with read_files through
 the SQL Statement API. Free Edition is serverless only, so a SQL warehouse runs the statements:
@@ -28,6 +30,7 @@ Rows are newline-delimited JSON, not Parquet: pyarrow is not a dependency here.
 
 import argparse
 import base64
+import contextlib
 import json
 import os
 import re
@@ -38,7 +41,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from societysim.analysis.metrics import GameData, compute_metrics, load_game
+from societysim.analysis.metrics import GameData, compute_metrics, deception_matrix, load_game
 from societysim.logging.events import EventType
 from societysim.logging.textio import read_text_lenient
 
@@ -105,6 +108,22 @@ SCHEMAS: dict[str, dict[str, str]] = {
         "grp": "STRING",
         "metric": "STRING",
         "value": "DOUBLE",
+    },
+    "deception_pairs": {
+        "batch_id": "STRING",
+        "source": "STRING",  # label source: self_tag or jev
+        "liar_model": "STRING",
+        "listener_model": "STRING",
+        "heard": "INT",
+        "voters": "INT",
+        "followed": "INT",
+        "vote_follow_rate": "DOUBLE",
+        "ci_low": "DOUBLE",
+        "ci_high": "DOUBLE",
+        "moved": "INT",
+        "belief_shift_rate": "DOUBLE",
+        "baseline_rate": "DOUBLE",
+        "exploratory": "BOOLEAN",
     },
 }
 
@@ -176,7 +195,56 @@ def batch_metric_rows(games: list[tuple[GameData, str]]) -> list[dict]:
     return rows
 
 
-def build_rows(games: list[tuple[GameData, str]]) -> dict[str, list[dict]]:
+def deception_pair_rows(games: list[tuple[GameData, str]], matrices: dict[str, dict]) -> list[dict]:
+    """One row per (batch, label source, liar model, listener model) of the deception matrix.
+
+    `matrices` maps batch_id to a metrics.json `deception_matrix`; a batch missing from it is
+    computed from its games, as `societysim report` does.
+    """
+    batches: dict[str, list[GameData]] = {}
+    for g, batch_id in games:
+        batches.setdefault(batch_id, []).append(g)
+    rows = []
+    for batch_id, gs in batches.items():
+        dm = matrices.get(batch_id) or deception_matrix(gs)
+        for source, liars in dm["pairs"].items():
+            for liar, listeners in liars.items():
+                for listener, c in listeners.items():
+                    lo, hi = c["vote_follow_ci"] or (None, None)
+                    rows.append(
+                        {
+                            "batch_id": batch_id,
+                            "source": source,
+                            "liar_model": liar,
+                            "listener_model": listener,
+                            "heard": c["heard"],
+                            "voters": c["voters"],
+                            "followed": c["followed"],
+                            "vote_follow_rate": c["vote_follow_rate"],
+                            "ci_low": lo,
+                            "ci_high": hi,
+                            "moved": c["moved"],
+                            "belief_shift_rate": c["belief_shift_rate"],
+                            "baseline_rate": c["baseline_rate"],
+                            "exploratory": dm["exploratory"],
+                        }
+                    )
+    return rows
+
+
+def read_matrices(logs: list[Path]) -> dict[str, dict]:
+    """batch_id -> deception_matrix from <batch>/report/metrics.json, where that file exists."""
+    out = {}
+    for p in logs:
+        f = p.parent / "report" / "metrics.json"
+        with contextlib.suppress(OSError, ValueError, KeyError):
+            out[p.parent.name] = json.loads(read_text_lenient(f))["deception_matrix"]
+    return out
+
+
+def build_rows(
+    games: list[tuple[GameData, str]], matrices: dict[str, dict] | None = None
+) -> dict[str, list[dict]]:
     """games: (game, batch_id) pairs -> rows for each table, keys in SCHEMAS column order."""
     out: dict[str, list[dict]] = {t: [] for t in SCHEMAS}
     for g, batch_id in games:
@@ -244,14 +312,17 @@ def build_rows(games: list[tuple[GameData, str]]) -> dict[str, list[dict]]:
                 }
             )
     out["batch_metrics"] = batch_metric_rows(games)
+    out["deception_pairs"] = deception_pair_rows(games, matrices or {})
     return out
 
 
-def write_local(games: list[tuple[GameData, str]], out: Path) -> list[Path]:
+def write_local(
+    games: list[tuple[GameData, str]], out: Path, matrices: dict[str, dict] | None = None
+) -> list[Path]:
     """Write <table>.jsonl for each table plus metrics.json to `out`; return the paths."""
     out.mkdir(parents=True, exist_ok=True)
     paths = []
-    for table, rows in build_rows(games).items():
+    for table, rows in build_rows(games, matrices).items():
         p = out / f"{table}.jsonl"
         p.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
         paths.append(p)
@@ -482,7 +553,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 1
         games = [(load_game(p), p.parent.name) for p in logs]
-        files = write_local(games, a.out)
+        files = write_local(games, a.out, read_matrices(logs))
         n = {
             f.stem: len(f.read_text(encoding="utf-8").splitlines())
             for f in files

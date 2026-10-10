@@ -23,6 +23,7 @@ spec.loader.exec_module(ingest)
 def test_rows_from_fixture():
     rows = ingest.build_rows([(load_game(FIXTURE), "fixtures")])
     bm = rows.pop("batch_metrics")
+    rows.pop("deception_pairs")
     assert {t: len(r) for t, r in rows.items()} == {"games": 1, "events": 118, "labels": 8}
     assert bm and all(list(r) == list(ingest.SCHEMAS["batch_metrics"]) for r in bm)
     for table, rs in rows.items():
@@ -61,6 +62,7 @@ def test_dry_run_without_credentials(tmp_path, monkeypatch, capsys):
     names = sorted(p.name for p in tmp_path.iterdir())
     assert names == [
         "batch_metrics.jsonl",
+        "deception_pairs.jsonl",
         "events.jsonl",
         "games.jsonl",
         "labels.jsonl",
@@ -102,6 +104,7 @@ def test_credentials_trigger_upload(tmp_path, monkeypatch):
         "events.jsonl",
         "labels.jsonl",
         "batch_metrics.jsonl",
+        "deception_pairs.jsonl",
         "metrics.json",
     ]
     assert seen["target"] == ("workspace", "ss", "raw", "wh1")
@@ -187,7 +190,7 @@ def test_upload_creates_volume_uploads_and_builds_tables(tmp_path):
         "CREATE SCHEMA IF NOT EXISTS workspace.societysim",
         "CREATE VOLUME IF NOT EXISTS workspace.societysim.raw",
     ]
-    tables = ("games", "events", "labels", "batch_metrics")
+    tables = ("games", "events", "labels", "batch_metrics", "deception_pairs")
     for table, stmt in zip(tables, statements[2:], strict=True):
         assert stmt.startswith(f"CREATE OR REPLACE TABLE workspace.societysim.{table} AS")
         assert f"read_files('/Volumes/workspace/societysim/raw/{table}.jsonl'" in stmt
@@ -200,7 +203,7 @@ def test_upload_creates_volume_uploads_and_builds_tables(tmp_path):
     assert all(r.url.params["overwrite"] == "true" for r in puts)
     assert puts[1].content == (tmp_path / "events.jsonl").read_bytes()
     # every statement polled once after PENDING; uploads happen before the tables are built
-    assert sum(r.url.path.endswith("/s1") for r in log) == 6
+    assert sum(r.url.path.endswith("/s1") for r in log) == 7
     first_table = next(i for i, r in enumerate(log) if b"CREATE OR REPLACE" in r.content)
     assert max(i for i, r in enumerate(log) if r.method == "PUT") < first_table
 
@@ -233,11 +236,66 @@ def test_batch_metrics_per_batch():
     assert sum(r["batch_id"] == "b1" for r in rows) == n_summaries * 15
 
 
+def cell(heard, voters, followed, moved, ci, base):
+    rate = followed / voters if voters else None
+    return {
+        "heard": heard, "comparisons": heard, "moved": moved, "voters": voters,
+        "followed": followed, "vote_follow_rate": rate, "vote_follow_ci": ci,
+        "belief_shift_rate": moved / heard if heard else None,
+        "belief_shift_ci": None, "baseline_rate": base, "baseline_voters": voters,
+    }  # fmt: skip
+
+
+def test_deception_pairs_from_metrics_json():
+    dm = {
+        "exploratory": True,
+        "baseline": {},
+        "pairs": {
+            "self_tag": {
+                "a": {"a": cell(4, 4, 3, 2, [0.3, 0.95], 0.5), "b": cell(2, 0, 0, 1, None, None)},
+                "b": {"a": cell(6, 5, 1, 0, [0.04, 0.6], 0.2)},
+            },
+            "jev": {},
+        },
+    }
+    g = load_game(FIXTURE)
+    rows = ingest.deception_pair_rows([(g, "b1")], {"b1": dm})
+    assert rows == [
+        {"batch_id": "b1", "source": "self_tag", "liar_model": "a", "listener_model": "a",
+         "heard": 4, "voters": 4, "followed": 3, "vote_follow_rate": 0.75, "ci_low": 0.3,
+         "ci_high": 0.95, "moved": 2, "belief_shift_rate": 0.5, "baseline_rate": 0.5,
+         "exploratory": True},
+        {"batch_id": "b1", "source": "self_tag", "liar_model": "a", "listener_model": "b",
+         "heard": 2, "voters": 0, "followed": 0, "vote_follow_rate": None, "ci_low": None,
+         "ci_high": None, "moved": 1, "belief_shift_rate": 0.5, "baseline_rate": None,
+         "exploratory": True},
+        {"batch_id": "b1", "source": "self_tag", "liar_model": "b", "listener_model": "a",
+         "heard": 6, "voters": 5, "followed": 1, "vote_follow_rate": 0.2, "ci_low": 0.04,
+         "ci_high": 0.6, "moved": 0, "belief_shift_rate": 0.0, "baseline_rate": 0.2,
+         "exploratory": True},
+    ]  # fmt: skip
+    assert all(list(r) == list(ingest.SCHEMAS["deception_pairs"]) for r in rows)
+
+
+def test_deception_pairs_computed_without_metrics_json(tmp_path):
+    g = load_game(FIXTURE)
+    want = json.loads(json.dumps(compute_metrics([g])["deception_matrix"]))
+    rows = ingest.deception_pair_rows([(g, "b1")], {})
+    n = sum(len(ls) for src in want["pairs"].values() for ls in src.values())
+    assert len(rows) == n > 0
+    # a metrics.json under <batch>/report is picked up and wins
+    batch = tmp_path / "b9"
+    (batch / "report").mkdir(parents=True)
+    log = batch / "g.jsonl"
+    (batch / "report" / "metrics.json").write_text(json.dumps({"deception_matrix": want}))
+    assert ingest.read_matrices([log, tmp_path / "none" / "g.jsonl"]) == {"b9": want}
+
+
 # --- dashboard -----------------------------------------------------------------------------
 
 SQL_WORDS = {
     "select", "from", "where", "and", "or", "not", "as", "group", "by", "all", "order",
-    "count", "date_trunc", "to_timestamp",
+    "count", "date_trunc", "to_timestamp", "desc", "limit",
 }  # fmt: skip
 SCHEMA_PREFIX = "workspace.societysim."
 
@@ -285,7 +343,9 @@ def test_dashboard_queries_use_known_tables_and_columns():
                 assert f["expression"].strip("`") in outputs[ds], (w["name"], f)
             enc = w["spec"]["encodings"]
             used = [e["fieldName"] for e in enc.get("columns", [])]
-            used += [e["fieldName"] for k, e in enc.items() if k != "columns"]
+            for k, e in enc.items():
+                if k != "columns":  # "extra" (tooltip fields) is a list of encodings
+                    used += [x["fieldName"] for x in (e if isinstance(e, list) else [e])]
             assert set(used) <= names, w["name"]
     assert charted == set(outputs)
     for p in dash["pages"]:

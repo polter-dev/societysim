@@ -44,6 +44,26 @@
         "FROM workspace.societysim.games\n",
         "GROUP BY ALL"
       ]
+    },
+    {
+      "name": "deception_heat",
+      "displayName": "Who fools whom (self-tag)",
+      "queryLines": [
+        "SELECT liar_model, listener_model, vote_follow_rate, voters\n",
+        "FROM workspace.societysim.metrics_deception\n",
+        "WHERE source = 'self_tag'"
+      ]
+    },
+    {
+      "name": "deception_top",
+      "displayName": "Top fooling pairs",
+      "queryLines": [
+        "SELECT source, liar_model, listener_model, voters, vote_follow_rate, baseline_rate\n",
+        "FROM workspace.societysim.metrics_deception\n",
+        "WHERE voters >= 5\n",
+        "ORDER BY vote_follow_rate DESC\n",
+        "LIMIT 15"
+      ]
     }
   ],
   "pages": [
@@ -543,6 +563,175 @@
             "y": 28,
             "width": 6,
             "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "deception_heatmap",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "deception_heat",
+                  "fields": [
+                    {
+                      "name": "liar_model",
+                      "expression": "`liar_model`"
+                    },
+                    {
+                      "name": "listener_model",
+                      "expression": "`listener_model`"
+                    },
+                    {
+                      "name": "vote_follow_rate",
+                      "expression": "`vote_follow_rate`"
+                    },
+                    {
+                      "name": "voters",
+                      "expression": "`voters`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "heatmap",
+              "encodings": {
+                "x": {
+                  "fieldName": "listener_model",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Listener"
+                },
+                "y": {
+                  "fieldName": "liar_model",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Liar"
+                },
+                "color": {
+                  "fieldName": "vote_follow_rate",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Voted the lie's way"
+                },
+                "extra": [
+                  {
+                    "fieldName": "voters",
+                    "displayName": "Votes (n)"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Who fools whom: share of votes that followed the liar (self-tag)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 34,
+            "width": 3,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "deception_top_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "deception_top",
+                  "fields": [
+                    {
+                      "name": "source",
+                      "expression": "`source`"
+                    },
+                    {
+                      "name": "liar_model",
+                      "expression": "`liar_model`"
+                    },
+                    {
+                      "name": "listener_model",
+                      "expression": "`listener_model`"
+                    },
+                    {
+                      "name": "voters",
+                      "expression": "`voters`"
+                    },
+                    {
+                      "name": "vote_follow_rate",
+                      "expression": "`vote_follow_rate`"
+                    },
+                    {
+                      "name": "baseline_rate",
+                      "expression": "`baseline_rate`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "source",
+                    "displayName": "Source",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "liar_model",
+                    "displayName": "Liar",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "listener_model",
+                    "displayName": "Listener",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "voters",
+                    "displayName": "Votes",
+                    "type": "number",
+                    "displayAs": "number"
+                  },
+                  {
+                    "fieldName": "vote_follow_rate",
+                    "displayName": "Voted the lie's way",
+                    "type": "number",
+                    "displayAs": "number"
+                  },
+                  {
+                    "fieldName": "baseline_rate",
+                    "displayName": "Truthful baseline",
+                    "type": "number",
+                    "displayAs": "number"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Top fooling pairs (at least 5 votes)"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 34,
+            "width": 3,
+            "height": 8
           }
         }
       ]

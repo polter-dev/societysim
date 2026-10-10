@@ -399,6 +399,69 @@ assert not bad, "Spark metrics differ from metrics.json"
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## Who fools whom
+# MAGIC Reads `deception_pairs` (one row per batch, label source, liar model and listener model,
+# MAGIC from the `deception_matrix` in each batch's `metrics.json`) and adds the batches up. A cell
+# MAGIC is how often a listener model voted the way a liar model's lies pointed, out of the votes
+# MAGIC it cast after hearing them (`voters`). Wilson 95% interval. `baseline_rate` is the rate
+# MAGIC the same listener showed for truthful claims, averaged over votes, so a cell far above it
+# MAGIC is a lie that worked. Exploratory, like lie success.
+
+# COMMAND ----------
+
+deception = spark.sql("""
+WITH c AS (
+  SELECT source, liar_model, listener_model, sum(heard) AS heard, sum(voters) AS voters,
+         sum(followed) AS followed, sum(moved) AS moved,
+         sum(baseline_rate * voters) / sum(IF(baseline_rate IS NULL, 0, voters)) AS baseline_rate
+  FROM deception_pairs GROUP BY source, liar_model, listener_model
+), w AS (
+  SELECT *, followed / voters AS vote_follow_rate, 1.96 AS z FROM c WHERE voters > 0
+)
+SELECT source, liar_model, listener_model, heard, voters, followed, vote_follow_rate,
+       (vote_follow_rate + z * z / (2 * voters)
+        - z * sqrt(vote_follow_rate * (1 - vote_follow_rate) / voters
+                   + z * z / (4 * voters * voters))) / (1 + z * z / voters) AS ci_low,
+       (vote_follow_rate + z * z / (2 * voters)
+        + z * sqrt(vote_follow_rate * (1 - vote_follow_rate) / voters
+                   + z * z / (4 * voters * voters))) / (1 + z * z / voters) AS ci_high,
+       moved, baseline_rate
+FROM w ORDER BY source, liar_model, listener_model
+""")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Self-tag matrix: liar model down, listener model across, vote-follow rate in each cell.
+
+# COMMAND ----------
+
+display(
+    deception.filter("source = 'self_tag'")
+    .groupBy("liar_model")
+    .pivot("listener_model")
+    .agg({"vote_follow_rate": "first"})
+    .orderBy("liar_model")
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Pairs ranked by vote-follow rate, only where at least 5 votes were cast (one vote would
+# MAGIC otherwise top the list). The dashboard reads the full table `metrics_deception` and
+# MAGIC applies the same cut-off.
+
+# COMMAND ----------
+
+display(
+    deception.filter("voters >= 5")
+    .orderBy("vote_follow_rate", ascending=False)
+    .select("source", "liar_model", "listener_model", "voters", "vote_follow_rate", "baseline_rate")
+)
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## Save the metric tables
 # MAGIC The AI/BI dashboard (`societysim.lvdash.json`) reads these, so they are only written once
 # MAGIC the check above passes. The dashboard test checks its queries against these columns.
@@ -431,12 +494,26 @@ METRIC_COLUMNS = {
     ],
     "metrics_detection": ["model", "grp", "n", "brier", "auc"],
     "metrics_persuasion": ["model", "grp", "accusations", "voters", "hits", "share"],
+    "metrics_deception": [
+        "source",
+        "liar_model",
+        "listener_model",
+        "heard",
+        "voters",
+        "followed",
+        "vote_follow_rate",
+        "ci_low",
+        "ci_high",
+        "moved",
+        "baseline_rate",
+    ],
 }
 frames = {
     "metrics_win_rates": win_rates,
     "metrics_lies": lies,
     "metrics_detection": detection,
     "metrics_persuasion": persuasion,
+    "metrics_deception": deception,
 }
 for name, df in frames.items():
     (

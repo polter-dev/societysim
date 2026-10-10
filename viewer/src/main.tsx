@@ -4,6 +4,9 @@ import App from "./App";
 import { DEFAULT_INDEX_URL, indexSource, publishedBase } from "./data/staticSource";
 import IndexPage from "./pages/Index";
 import LeaderboardPage from "./pages/Leaderboard";
+import NewGamePage from "./pages/NewGame";
+import ResearchPage from "./pages/Research";
+import "./pages/pages.css";
 import "./a11y.css";
 
 // Routes: ?game=<id> or ?log=<url> or ?page=replay -> replay, ?page=leaderboard, else the game index.
@@ -28,17 +31,22 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {baseError && <p role="alert">Could not use batch base: {baseError}</p>}
     <nav aria-label="Pages" style={{ ...style, paddingBottom: 0 }}>
-      <a href={href({})}>Games</a> | <a href={href({ page: "leaderboard" })}>Leaderboard</a> |{" "}
+      <a href={href({})}>Games</a> | <a href={href({ page: "leaderboard" })}>Leaderboard</a> | <a href={href({ page: "research" })}>Research</a> |{" "}
+      <a href={href({ page: "new" })}>New game</a> |{" "}
       <a href={href({ page: "replay" })}>Open a log file</a>
     </nav>
     {replay ? (
       <App source={source} />
     ) : (
-      <main style={style}>
-        <h1>SocietySim {page === "leaderboard" ? "leaderboard" : "games"}</h1>
+      <main style={style} className="info-page">
+        <h1>SocietySim {{ leaderboard: "leaderboard", research: "research", new: "new game" }[page ?? ""] ?? "games"}</h1>
         <form method="get" className="batch-source"><label>Published batch base URL <input name="base" type="url" required defaultValue={dataBase.href} /></label><button type="submit">Load batch</button></form>
         {page === "leaderboard" ? (
           <LeaderboardPage leaderboardUrl={sibling("leaderboard.json")} metricsUrl={sibling("metrics.json")} />
+        ) : page === "research" ? (
+          <ResearchPage metricsUrl={sibling("metrics.json")} />
+        ) : page === "new" ? (
+          <NewGamePage catalogUrl={sibling("models_catalog.json")} schemaUrl={sibling("devui/schema/game_setup.schema.json")} />
         ) : (
           <IndexPage source={source} href={(id) => href({ game: id })} />
         )}

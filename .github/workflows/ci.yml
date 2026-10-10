@@ -39,7 +39,6 @@ jobs:
         run: echo 'C:\Program Files\Git\bin' >> "$GITHUB_PATH"
       - name: Check which bash tests will use
         run: |
-          which -a bash
           bash --version
       - run: uv sync --frozen
       - run: uv run ruff check

@@ -125,6 +125,19 @@ def test_doctor_missing_config():
     assert res.exit_code == 1 and "not found" in res.output
 
 
+def test_doctor_survives_non_ascii_error_on_cp1252(monkeypatch):
+    class Bad(FakeModeClient):
+        async def complete(self, model, messages, response_model):
+            usage = Usage(model=model.name)
+            return CompletionResult(parsed=None, raw="", error="bad → 中", usage=usage)
+
+    monkeypatch.setattr("societysim.models.client.LiteLLMClient", lambda **kw: Bad(set()))
+    res = CliRunner(charset="cp1252").invoke(app, ["doctor", "--model", "gpt-5-nano"])
+    assert res.exit_code == 1
+    assert not isinstance(res.exception, UnicodeEncodeError)
+    assert "FAIL" in res.output
+
+
 def test_doctor_no_match(monkeypatch):
     res = _run_doctor(monkeypatch, set(), "--model", "zzz*")
     assert res.exit_code == 1

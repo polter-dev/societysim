@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -67,6 +68,9 @@ def doctor(
         for r in results:
             mark = "ok  " if r.ok else "fail"
             detail = f"{r.latency_ms} ms, ${r.cost_usd:.5f}" if r.ok else (r.error or "")[:120]
+            # Provider errors can hold characters the console can't encode (Windows cp1252).
+            enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+            detail = detail.encode(enc, "replace").decode(enc)
             typer.echo(f"    {mark} {r.mode:<12} {detail}")
     if failed:
         raise typer.Exit(1)

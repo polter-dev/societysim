@@ -109,6 +109,14 @@ def test_seer_led_elimination():
     assert (m["actor"], m["target"], m["seq"], m["score"]) == ("p0", "p5", [64, 104], 7.0)
 
 
+def test_seer_led_one_vote_is_singular():
+    g = game()
+    edit(g, 103, target="p6")  # only p3 (seq 100) still votes Finn
+    edit(g, 104, target="p5", meta=EventMeta(role="wolf"))
+    (m,) = [m for m in role_action_moments(g) if m["type"] == "seer_led_elimination"]
+    assert "(1 vote)." in m["description"]
+
+
 def test_failed_doctor_save_is_not_a_moment():
     g = game()
     edit(g, 12, meta=EventMeta(saved=False))

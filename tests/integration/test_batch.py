@@ -188,7 +188,7 @@ async def test_budget_holds_with_concurrency(tmp_path):
         cfg(n_games=8, max_concurrency=4, budget_usd=cap), PRICED, PricedFake(), runs_dir=tmp_path
     )
     assert res["status"] == "budget_stopped"
-    assert len(res["finished"]) == 1  # no estimate yet, so one probe game, then the cap bites
+    assert len(res["finished"]) == 1  # cap is 1.5x one game: one fits, a second would bust it
     assert res["spent_usd"] <= cap
 
 
@@ -519,3 +519,18 @@ def test_cli_batch_provider_down_says_which_and_how_to_resume(tmp_path, monkeypa
     assert result.exit_code == 1, result.output
     assert "provider down: qwen3-235b: " in result.output
     assert "re-run once it is back to resume: runs/cli" in result.output
+
+
+def test_cli_batch_dry_run_warns_once_per_unpriced_model(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "societysim.batch.runner.prior_seat_cost",
+        lambda spec: 0.0 if spec.name == "qwen3-235b" else 1.0,
+    )
+    path = write_config(tmp_path, n_games=3)
+    result = RUNNER.invoke(
+        app, ["batch", "--config", str(path), "--registry", str(REGISTRY), "--dry-run"]
+    )
+    assert result.exit_code == 0, result.output
+    assert result.output.count("warning: qwen3-235b is unpriced") == 1
+    assert "gemma4-26b is unpriced" not in result.output

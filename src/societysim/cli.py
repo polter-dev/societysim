@@ -209,6 +209,11 @@ def batch(
         raise typer.Exit(1) from None
 
     if dry_run:
+        from societysim.batch.runner import prior_seat_cost
+
+        for name, spec in specs.items():
+            if prior_seat_cost(spec) == 0:
+                typer.echo(f"warning: {name} is unpriced; the budget guard can't see its cost")
         rows = plan(cfg, specs)
         for row in rows:
             seats = " ".join(f"{seat}={model}/{role}" for seat, model, role in row["seats"])

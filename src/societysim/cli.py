@@ -552,6 +552,7 @@ def sync_neon(
 ) -> None:
     """Backfill BATCH_DIR into Neon, --delete games, or --prune. Needs NEON_DATABASE_URL."""
     from societysim.logging.sinks.neon import (
+        PruneBlocked,
         apply_schema,
         connect_neon,
         delete_games,
@@ -599,7 +600,11 @@ def sync_neon(
         finally:
             await conn.close()
 
-    n = asyncio.run(run())
+    try:
+        n = asyncio.run(run())
+    except PruneBlocked as e:
+        typer.echo(f"refusing to prune: {e}")
+        raise typer.Exit(1) from e
     if prune:
         for g in n:
             typer.echo(

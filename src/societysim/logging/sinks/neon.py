@@ -307,14 +307,23 @@ async def delete_games(conn: Any, game_ids: list[str]) -> dict[str, Any]:
 # Game ids in fixtures/sample_game.jsonl. Exact ids only: a real batch may start with "fixture".
 FIXTURE_GAME_IDS = frozenset({"fixture-0001"})
 
+_HAS_INSERTED_AT = """
+select exists (
+    select 1 from information_schema.columns
+    where table_schema = current_schema() and table_name = 'events'
+      and column_name = 'inserted_at'
+)
+"""
+
+
+class PruneBlocked(RuntimeError):
+    """--prune can't run safely; the message says what to do."""
+
+
 _PRUNE_CANDIDATES = """
 select g.game_id, g.batch_id, g.status,
        now() as db_now,
-       greatest(
-           g.started_at,
-           (select max((e.event -> 'meta' ->> 'ts')::timestamptz)
-            from events e where e.game_id = g.game_id)
-       ) as last_activity,
+       (select max(e.inserted_at) from events e where e.game_id = g.game_id) as last_activity,
        exists (
            select 1 from events e where e.game_id = g.game_id and e.type = 'game_end'
        ) as has_end,
@@ -335,11 +344,18 @@ async def find_prunable(
 
     Reasons: `test batch <id>` (exact batch id given by the caller), `fixture` (a game id in
     FIXTURE_GAME_IDS, exact match), and `partial`: status running or failed, no game_end event,
-    and no activity for more than `older_than_hours`. Activity is the newest event timestamp
-    (or the start time) and the age is measured against the database's now(), never this
-    machine's clock. A finished game is never partial, even if its game_end row was lost.
-    A game with no known activity time is left alone.
+    and no new event for more than `older_than_hours`. Activity is max(events.inserted_at)
+    and the age is measured against the database's now(); client clocks and the event
+    payload's own timestamps are never used. A finished game is never partial, even if its
+    game_end row was lost. A game with no events is left alone.
+
+    Raises PruneBlocked if events.inserted_at does not exist yet (migration not applied).
     """
+    if not await conn.fetchval(_HAS_INSERTED_AT):
+        raise PruneBlocked(
+            "events.inserted_at is missing, so stalled games can't be told from live ones. "
+            "Apply neon/migrations/001_events_inserted_at.sql first."
+        )
     test_batches = set(batch_ids or [])
     found = []
     for r in await conn.fetch(_PRUNE_CANDIDATES):

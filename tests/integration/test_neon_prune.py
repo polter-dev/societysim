@@ -2,12 +2,13 @@
 Fake connection only; nothing here touches a real database."""
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
 from societysim.cli import app
-from societysim.logging.sinks.neon import find_prunable, prune_games
+from societysim.logging.sinks.neon import PruneBlocked, find_prunable, prune_games
 
 NOW = datetime.now(UTC)  # stands in for the database clock; the CLI uses db_now from the query
 
@@ -37,7 +38,8 @@ GAMES = [
 
 
 class PgFake:
-    def __init__(self, games=GAMES, fail_on=None):
+    def __init__(self, games=GAMES, fail_on=None, has_inserted_at=True):
+        self.has_inserted_at = has_inserted_at
         self.games = [dict(g) for g in games]
         self.statements: list[tuple[str, tuple]] = []
         self.committed: list[tuple[str, tuple]] = []
@@ -45,9 +47,20 @@ class PgFake:
         self.fail_on = fail_on
         self.closed = False
 
+    async def fetchval(self, sql, *args):
+        assert sql.lstrip().startswith("select"), "the column check must be read-only"
+        return self.has_inserted_at
+
     async def fetch(self, sql, *args):
         assert sql.lstrip().startswith("select"), "find_prunable must be read-only"
-        return self.games
+        rows = []
+        for g in self.games:
+            g = dict(g)
+            if "events_log" in g:  # emulate: (select max(e.inserted_at) ...); meta.ts is ignored
+                times = [e["inserted_at"] for e in g.pop("events_log")]
+                g["last_activity"] = max(times, default=None)
+            rows.append(g)
+        return rows
 
     async def execute(self, sql, *args):
         self.statements.append((sql, args))
@@ -104,16 +117,58 @@ async def test_running_game_is_judged_by_database_time_not_local_time():
     db_now = datetime(2020, 1, 1, tzinfo=UTC)
     live = _game("live", has_end=False, age_h=1, status="running") | {"db_now": db_now}
     live["last_activity"] = db_now - timedelta(hours=1)
-    long_running = _game("long", has_end=False, age_h=8, status="running") | {"db_now": db_now}
-    long_running["last_activity"] = db_now - timedelta(hours=1)  # old start, recent events
-    assert await find_prunable(PgFake([live, long_running])) == []
+    assert await find_prunable(PgFake([live])) == []
 
 
-async def test_candidate_query_reads_the_database_clock_and_event_timestamps():
-    from societysim.logging.sinks.neon import _PRUNE_CANDIDATES
+async def test_long_running_game_with_old_meta_ts_but_recent_inserts_is_kept():
+    old_ts = (NOW - timedelta(hours=30)).isoformat()
+    game = _game("long", has_end=False, status="running") | {
+        "events_log": [
+            {"meta_ts": old_ts, "inserted_at": NOW - timedelta(hours=9)},
+            {"meta_ts": old_ts, "inserted_at": NOW - timedelta(minutes=2)},
+        ]
+    }
+    assert await find_prunable(PgFake([game])) == []
+    game["events_log"] = [{"meta_ts": old_ts, "inserted_at": NOW - timedelta(hours=9)}]
+    assert [g["game_id"] for g in await find_prunable(PgFake([game]))] == ["long"]
 
-    assert "now() as db_now" in _PRUNE_CANDIDATES
-    assert "max((e.event -> 'meta' ->> 'ts')::timestamptz)" in _PRUNE_CANDIDATES
+
+async def test_game_with_no_events_is_never_stale():
+    game = _game("empty", has_end=False, status="running") | {"events_log": []}
+    assert await find_prunable(PgFake([game])) == []
+
+
+async def test_candidate_query_uses_database_time_only():
+    from societysim.logging.sinks.neon import _PRUNE_CANDIDATES as sql
+
+    assert "now() as db_now" in sql
+    assert "max(e.inserted_at)" in sql
+    assert "started_at" not in sql and "'ts'" not in sql
+
+
+async def test_prune_refuses_when_inserted_at_column_is_missing():
+    conn = PgFake(has_inserted_at=False)
+    with pytest.raises(PruneBlocked, match="001_events_inserted_at"):
+        await find_prunable(conn, batch_ids=["smoke"])
+    assert conn.statements == []
+
+
+def test_prune_cli_refuses_without_migration_even_with_apply(fake_neon):
+    fake_neon.has_inserted_at = False
+    res = CliRunner().invoke(app, ["sync-neon", "--prune", "--apply", "--batch", "smoke"])
+    assert res.exit_code == 1
+    assert "refusing to prune" in res.output and "001_events_inserted_at.sql" in res.output
+    assert fake_neon.statements == [] and fake_neon.committed == [] and fake_neon.closed
+
+
+def test_migration_and_schema_add_inserted_at():
+    root = Path(__file__).resolve().parents[2]
+    ddl = (
+        "alter table events add column if not exists inserted_at timestamptz not null default now()"
+    )
+    assert ddl in (root / "neon/schema.sql").read_text(encoding="utf-8").lower()
+    migration = root / "neon/migrations/001_events_inserted_at.sql"
+    assert ddl in migration.read_text(encoding="utf-8").lower()
 
 
 async def test_finished_game_without_game_end_row_is_not_partial():

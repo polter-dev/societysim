@@ -674,6 +674,7 @@ Limits, all set by env on the server (defaults in brackets):
 | `actor` | text | Seat id or null |
 | `schema_version` | integer | |
 | `event` | jsonb | The full event, exactly the JSONL line (`schema/events.schema.json`) |
+| `inserted_at` | timestamp with time zone | Database clock at insert. Used by `sync-neon --prune` to find stalled games |
 
 `labels`, one row per line of `<game_id>.labels.jsonl`:
 

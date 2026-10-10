@@ -24,6 +24,10 @@ create table if not exists events (
     primary key (game_id, seq)
 );
 
+-- Server-side insert time (the database's own clock). `sync-neon --prune` uses it to tell a
+-- stalled game from a live one. Also shipped as neon/migrations/001_events_inserted_at.sql.
+alter table events add column if not exists inserted_at timestamptz not null default now();
+
 -- One row per line of <game_id>.labels.jsonl; idx is the line index.
 create table if not exists labels (
     game_id    text not null references games (game_id) on delete cascade,

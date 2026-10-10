@@ -97,7 +97,8 @@ fi
 cp -R "$dist/." "$stage/"
 mkdir -p "$stage/data"
 # .cache holds raw judge responses; the PNGs are for report.md, not the viewer.
-rsync -a --exclude '.cache' --exclude '*.png' "$batch/" "$stage/data/"
+# tar, not rsync: rsync is not available in the Windows bash.
+(cd "$batch" && tar --exclude '.cache' --exclude '*.png' -cf - .) | (cd "$stage/data" && tar -xf -)
 # Dev test UI at /devui/, reading the same data/; it fetches the JSON Schemas at runtime.
 mkdir -p "$stage/devui/schema"
 cp "$root/devui/index.html" "$stage/devui/"

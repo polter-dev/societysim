@@ -670,7 +670,7 @@ def test_cli_batch_provider_down_says_which_and_how_to_resume(tmp_path, monkeypa
     result = RUNNER.invoke(app, args)
     assert result.exit_code == 1, result.output
     assert "provider down: qwen3-235b: " in result.output
-    assert "re-run once it is back to resume: runs/cli" in result.output
+    assert f"re-run once it is back to resume: {Path('runs') / 'cli'}" in result.output
 
 
 def test_cli_batch_dry_run_warns_once_per_unpriced_model(tmp_path, monkeypatch):

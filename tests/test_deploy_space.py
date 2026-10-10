@@ -223,7 +223,21 @@ def test_out_keeps_static_config_already_in_dist(tmp_path):
     assert (out / "_headers").read_text() == "built"
 
 
-SECRETS = re.compile(r"b(wolf|wolves|villager|seer|doctor|winner)b")
+SECRETS = re.compile(r"\b(wolf|wolves|villager|seer|doctor|winner)\b", re.IGNORECASE)
+
+
+def _preview_text(page: str) -> str:
+    """What a chat app shows: <title> plus the description, og:* and twitter:* meta."""
+    keep = ("<title>", '<meta name="description"', '<meta property="og:', '<meta name="twitter:')
+    return " ".join(ln for ln in page.splitlines() if ln.startswith(keep))
+
+
+def test_leak_check_catches_role_words():
+    page = '<title>Day 2</title>\n<meta property="og:description" content="The wolf won">'
+    assert SECRETS.search(_preview_text(page))
+    assert SECRETS.search(_preview_text("<title>The Seer</title>"))
+    assert SECRETS.search(_preview_text('<meta name="twitter:title" content="Wolves win">'))
+    assert not SECRETS.search(_preview_text("<title>A Werewolf game</title>"))
 
 
 def test_out_writes_og_cards_without_hidden_info(tmp_path):
@@ -253,10 +267,10 @@ def test_out_writes_og_cards_without_hidden_info(tmp_path):
     assert "Day 2" in page
     # no roles, winner or highlight description in any card
     for f in og.glob("*.html"):
-        lines = f.read_text().lower().splitlines()
-        meta = " ".join(ln for ln in lines if ln.startswith("<meta p"))
+        meta = _preview_text(f.read_text())
+        assert "og:title" in meta and "<title>" in meta and "twitter:description" in meta
         assert not SECRETS.search(meta), f.name
-        assert "cleo" not in meta and "saved" not in meta
+        assert "cleo" not in meta.lower() and "saved" not in meta.lower()
 
 
 def test_viewer_html_has_site_wide_card():

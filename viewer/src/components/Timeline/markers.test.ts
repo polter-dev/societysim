@@ -38,7 +38,21 @@ describe("timeline markers", () => {
   it("shows labeled lies only to the narrator", () => {
     const narrator = buildTimelineGroups(events, labels, "narrator").flatMap((group) => group.markers);
     const villager = buildTimelineGroups(events, labels, "villager").flatMap((group) => group.markers);
-    expect(narrator.filter((marker) => marker.kind === "lie").map((marker) => marker.seq)).toEqual([19, 20]);
+    const lieMarkers = narrator.filter((marker) => marker.kind === "lie");
+    expect(lieMarkers.map(({ seq, labelType }) => [seq, labelType])).toEqual([
+      [16, "hidden_knowledge"],
+      [19, "false_role_claim"],
+      [20, "false_report"],
+      [70, "bussing"],
+      [98, "mis_elimination"],
+      [99, "mis_elimination"],
+      [101, "mis_elimination"],
+      [102, "mis_elimination"],
+    ]);
+    expect(lieMarkers.some((marker) => marker.seq === 100)).toBe(false);
+    for (const marker of lieMarkers) {
+      expect(marker.title).toContain(marker.labelType?.replaceAll("_", " "));
+    }
     expect(villager.some((marker) => marker.kind === "lie")).toBe(false);
     expect(buildTimelineGroups(events, [], "narrator").some((group) => group.markers.some((marker) => marker.kind === "lie"))).toBe(false);
   });

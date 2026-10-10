@@ -1,5 +1,5 @@
 import { deriveScene, type Mode } from "../../scene/deriveScene";
-import type { Event, Label, Phase } from "../../types/events";
+import type { Event, Label, LabelType, Phase } from "../../types/events";
 
 export type MarkerKind = "kill" | "vote" | "lie";
 
@@ -7,6 +7,7 @@ export interface TimelineMarker {
   seq: number;
   kind: MarkerKind;
   title: string;
+  labelType?: LabelType;
 }
 
 export interface TimelineGroup {
@@ -47,13 +48,13 @@ export function buildTimelineGroups(
 
   if (mode === "narrator") {
     for (const label of labels) {
-      if (label.label !== "false_role_claim" && label.label !== "false_report") continue;
       const event = bySeq.get(label.source_seq);
       if (!event || event.game_id !== label.game_id) continue;
       byKey.get(`${event.day}:${event.phase}`)?.markers.push({
         seq: event.seq,
         kind: "lie",
         title: `Lie: ${label.actor} (${label.label.replaceAll("_", " ")})`,
+        labelType: label.label,
       });
     }
   }

@@ -126,6 +126,7 @@ export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqCha
                 onClick={() => setSeq(marker.seq)}
                 title={marker.title}
                 aria-label={`${marker.title}, event ${marker.seq}`}
+                data-label-type={marker.labelType}
                 style={{ color: markerColor[marker.kind], marginLeft: 4 }}
               >
                 {marker.kind === "kill" ? "✝" : marker.kind === "vote" ? "●" : "!"}

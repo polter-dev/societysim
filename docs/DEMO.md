@@ -31,11 +31,12 @@ Six sponsor rooms on Sunday (hours 42 to 46), one 60-second pitch each. Every se
 ### Demo path
 
 1. Space, game index. Point at the model names on each game.
-2. Open the demo game. Press Space to play, then pause on the first accusation arrow.
-3. Click a wolf's seat. The inspector shows its private reasoning next to what it said in public.
-4. Jump to the labeled lie (pop-up over the table), then to the vote it moved.
-5. Leaderboard page: win rate by model. `TODO(batch)`: which rows to point at.
-6. Switch tabs to the HF Dataset page and show the dataset card and the files.
+2. Open the demo game. It opens in villager view, which hides reasoning, suspicion, lie markers and label pop-ups, so switch the View select to Narrator first (or open the game with `?mode=narrator`).
+3. Press Space to play, then pause on the first accusation arrow.
+4. Click a wolf's seat. The inspector shows its private reasoning next to what it said in public.
+5. Jump to the labeled lie (pop-up over the table), then to the vote it moved.
+6. Leaderboard page: win rate by model. `TODO(batch)`: which rows to point at.
+7. Switch tabs to the HF Dataset page and show the dataset card and the files.
 
 ### Numbers
 
@@ -84,21 +85,23 @@ The viewer replay of the AMD game from the laptop, plus the #114 results comment
 
 ### Script
 
-> Every game we run is a stream of events: speeches, accusations, night kills, votes. Neon Postgres holds all of them. Each game becomes a row in a games table with its status, and each event lands in an events table as JSONB keyed by game and sequence number. Labels sit in their own table, and a leaderboard view computes win rates in SQL. The viewer doesn't need a backend. It calls the Neon Data API directly, as a read-only anonymous role that can only select from those four objects. Because events are stored whole as JSONB, the viewer runs them through the same parser it uses for log files, and a schema change needs no migration. For a game that's still running, the viewer asks Neon for anything newer than the last sequence number every two seconds, so you can watch it live. Right now Neon holds TODO(batch) games and TODO(batch) events.
+> Every game we run is a stream of events: speeches, accusations, night kills, votes. Neon Postgres holds all of them. Each game becomes a row in a games table, marked running, finished or failed, along with its models and winner. Each event lands in an events table as JSONB keyed by game and sequence number. Labels sit in their own table, and a leaderboard view computes win rates in SQL. Because events are stored whole as JSONB, a schema change needs no migration. When a batch finishes, one command, sync-neon, backfills every game, and it's safe to re-run. A read-only anonymous role can select from those four objects and nothing else, so a browser can query them without a backend. Right now Neon holds TODO(batch) games and TODO(batch) events.
+
+`TODO(#120/#157)`: only if held PR #120 (viewer reads the Data API) and #157 (`NeonSink` attached during games) both merge before Sunday, replace the sync-neon sentence with: "The viewer calls the Neon Data API directly, and for a game that's still running it asks for anything newer than the last sequence number every two seconds, so you can watch it live." Until then the script above is the one to say.
 
 ### Demo path
 
 1. Neon console, SQL editor: `select status, count(*) from games group by status;` then `select * from leaderboard;`.
-2. Viewer built against Neon: the game index and the leaderboard, both read from the Data API.
-3. Open a finished game and scrub it.
-4. If a game is running: open it, show new events arriving every 2 s.
+2. Show `uv run societysim sync-neon runs/<batch>` and its `synced N games, N events, N labels` line (or a screenshot of it).
+3. Back in the SQL editor, pull one game's events in order: `select seq, type, actor, target from events where game_id = '<id>' order by seq limit 20;`
+4. `TODO(#120/#157)`: only if both merge, open the viewer built against Neon (index and leaderboard from the Data API), then a running game with new events arriving every 2 s.
 
 ### Status and numbers
 
 - Merged (#39): `neon/schema.sql` (`games`, `events`, `labels`, `leaderboard` view, SELECT granted to `anonymous` only), `NeonSink`, and `societysim sync-neon runs/<batch>` for backfill.
-- Open, on `hold` for Augustin: PR #120 (#40), the Neon `GameSource` with the 2-second live poll. The live part of this pitch depends on it.
+- Open, on `hold` for Augustin: PR #120 (#40), the Neon `GameSource` with the 2-second live poll. The viewer part of this pitch depends on it.
 - `TODO(#40)`: confirm a bare request with no `Authorization` header returns 200 from the Data API, and that CORS allows the Space's origin.
-- `TODO(#39)`: `NeonSink` exists, but `play` and `batch` don't attach it yet, so games reach Neon through `sync-neon` after they finish. Live spectating needs the sink wired in, or a `sync-neon` loop during a batch. Someone has to decide which before Sunday.
+- `TODO(#157)`: `NeonSink` exists, but `play` and `batch` don't attach it yet, so games reach Neon through `sync-neon` after they finish. #157 wires it in for live spectating.
 - `TODO(batch)`: game, event and label counts after the T5.2/T5.3 backfill.
 
 ### Backup if the live demo fails
@@ -134,20 +137,23 @@ Screenshots of the dashboard and the parity cell, plus `uv run python scripts/da
 
 ### Script
 
-> We built the viewer for someone who has never played Werewolf. The flow is short: pick a game from the index, watch it, click any player to see what they were thinking, and jump straight to the moments where someone lied. The table shows who is speaking, who accused whom, and how the votes are adding up. A toggle switches between the narrator's view, which shows every role, and a villager's view, which hides anything a villager couldn't know yet, so you can play along. The timeline has markers for every kill, vote and lie, and the whole thing works from the keyboard: arrows to step, Home and End to jump, Space to play. We ran axe in both views and it found no accessibility violations. Reduced-motion mode turns the animations off. All colors, type and motion come from one design token file.
+> We built the viewer for someone who has never played Werewolf. The flow is short: pick a game from the index, watch it, click any player to see what they were thinking, and jump straight to the moments where someone lied. The table shows who is speaking, who accused whom, and how the votes are adding up. A toggle switches between the narrator's view, which shows every role, and a villager's view, which hides anything a villager couldn't know yet, so you can play along. The timeline has markers for every kill, vote and lie, and the whole thing works from the keyboard: arrows to step, Home and End to jump, Space to play. Our tests run axe on the full page in both views at night, during a tie vote, on a death and at game end, and they check that the narrator view's secrets never reach the villager view. Reduced-motion mode turns the animations off.
+
+`TODO(#121)`: add "All colors, type and motion come from one design token file, and tests check their contrast." only if held PR #121 merges.
 
 ### Demo path
 
 1. Game index, then open a game.
 2. Without the mouse: Tab to the timeline, arrow through a few events, press End, then Home.
-3. Click a seat. The inspector shows private reasoning and suspicion bars.
-4. Switch the View select from Narrator to Villager. Roles disappear until they are revealed.
+3. Switch the View select to Narrator (the viewer opens in villager view, which has no reasoning, suspicion or lie markers).
+4. Click a seat. The inspector shows private reasoning and suspicion bars.
 5. Click a lie marker on the timeline. The label pop-up names the lie.
-6. `TODO(#22)`: the Figma file with the flow wireframes and tokens.
+6. Switch the View select back to Villager. Roles, reasoning and lie markers disappear until a villager could know them.
+7. `TODO(#22)`: the Figma file with the flow wireframes and tokens.
 
 ### What exists
 
-- Merged: index and leaderboard pages (#31), table with seats and day/night tint (#24), speech bubbles and chat log (#25), accusation and vote arrows with a live tally (#26), label pop-ups (#27), narrator/villager toggle (#28), inspector (#29), timeline scrubber with markers, playback and keyboard control (#30), accessibility pass with axe at 0 violations (#32).
+- Merged: index and leaderboard pages (#31), table with seats and day/night tint (#24), speech bubbles and chat log (#25), accusation and vote arrows with a live tally (#26), label pop-ups (#27), narrator/villager toggle (#28), inspector (#29), timeline scrubber with markers, playback and keyboard control (#30), accessibility pass (#32): axe runs in tests in both views with its color-contrast rule off, because jsdom has no layout; contrast was checked by hand in a browser.
 - Open, on `hold` for Augustin: PR #121 (#33) moves every design value into `viewer/src/tokens.css` and checks contrast in tests. The token line in the script depends on it.
 - Not started: #22, the Figma wireframes and tokens.
 
@@ -163,7 +169,7 @@ The local viewer, or the backup video, plus Figma screenshots.
 
 ### Demo path
 
-1. Open the demo game at night 1 to show the moonlight and candle glow.
+1. Open the demo game with `?mode=narrator` (lie labels only show in narrator view), at night 1, to show the moonlight and candle glow.
 2. Play into day 1. The light crossfades to day.
 3. Pause on a vote with arrows going both ways between two players.
 4. Jump to a death. The role card flips.
@@ -183,7 +189,7 @@ The before and after screenshots from PR #121, and the backup video.
 
 - Every `TODO(batch)` above, once T5.2 and T5.3 are labeled and reported.
 - Space and Dataset URLs (#37).
-- Neon: live sink or `sync-neon` loop, and the bare Data API request check (#39, #40).
+- Neon: whether PR #120 and #157 merge (they decide which Neon script to use), and the bare Data API request check (#40).
 - Databricks dashboard and MLflow on the live workspace (#42).
 - Viewer PRs #120 and #121, and the Figma file (#22): Augustin decides.
 - The AMD hourly rate used for imputed $/game.

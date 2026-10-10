@@ -169,9 +169,10 @@ async def classify_events(
             raise RuntimeError(f"TYPESAFE_API_KEY is not set and {path} is not cached")
         async with sem:
             data = await _post(http, build_request(stmt, names))
+        result = parse_response(stmt, data)  # a malformed response raises and is not cached
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data))
-        return parse_response(stmt, data)
+        return result
 
     try:
         return list(await asyncio.gather(*(one(s) for s in statements)))

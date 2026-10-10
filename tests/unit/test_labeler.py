@@ -189,6 +189,7 @@ def test_cli_no_jev_flag_skips_jev(tmp_path, monkeypatch, no_key):
 
     monkeypatch.setattr(jev_mod, "classify_events", boom)
     shutil.copy(FIXTURE, tmp_path / "fixture-0001.jsonl")
+    (tmp_path / "agreement.json").write_text("{}")  # stale, from an earlier Jev run
 
     result = CliRunner().invoke(app, ["label", str(tmp_path), "--no-jev"])
 
@@ -220,9 +221,16 @@ def _status_error(code: int) -> httpx.HTTPStatusError:
     return httpx.HTTPStatusError("x", request=req, response=httpx.Response(code, request=req))
 
 
+_real_classify = jev_mod.classify_events
+
+
 @pytest.mark.parametrize(
     ("error", "shown"),
-    [(_status_error(401), "HTTP 401"), (httpx.ConnectError("refused"), "ConnectError")],
+    [
+        (_status_error(401), "HTTP 401"),
+        (httpx.ConnectError("refused"), "ConnectError"),
+        (None, "malformed response, KeyError"),
+    ],
 )
 def test_cli_survives_jev_failure(tmp_path, monkeypatch, no_key, error, shown):
     monkeypatch.setenv("TYPESAFE_API_KEY", "sk-secret-do-not-print")
@@ -230,19 +238,32 @@ def test_cli_survives_jev_failure(tmp_path, monkeypatch, no_key, error, shown):
     async def failing(events, cache_dir):
         raise error
 
-    monkeypatch.setattr(jev_mod, "classify_events", failing)
+    async def malformed(events, cache_dir):
+        async def bad_post(client, body):
+            return {"model": "jev-test"}  # 200 OK, but no `answers`
+
+        monkeypatch.setattr(jev_mod, "_post", bad_post)
+        return await _real_classify(events, cache_dir=cache_dir)
+
+    monkeypatch.setattr(jev_mod, "classify_events", malformed if error is None else failing)
     shutil.copy(FIXTURE, tmp_path / "fixture-0001.jsonl")
+    (tmp_path / "agreement.json").write_text("{}")  # stale, from an earlier Jev run
 
     result = CliRunner().invoke(app, ["label", str(tmp_path)])
 
     assert result.exit_code == 0, result.output
-    assert f"Jev failed ({shown})" in result.output
+    assert f"Jev failed: {shown}" in result.output
     assert "sk-secret" not in result.output
+    assert "Traceback" not in result.output
     written = (tmp_path / "fixture-0001.labels.jsonl").read_text().splitlines()
     assert len(written) == len(PLANTED.read_text().splitlines())
     assert not (tmp_path / "agreement.json").exists()
+    assert not list((tmp_path / ".cache").rglob("*.json"))  # nothing malformed cached
 
 
-def test_cli_fails_when_automatic_labeling_fails(tmp_path, monkeypatch, no_key):
+@pytest.mark.parametrize("key", [None, "fake"])
+def test_cli_fails_when_automatic_labeling_fails(tmp_path, monkeypatch, no_key, key):
+    if key:
+        monkeypatch.setenv("TYPESAFE_API_KEY", key)
     (tmp_path / "broken.jsonl").write_text("not json\n")
     assert CliRunner().invoke(app, ["label", str(tmp_path)]).exit_code != 0

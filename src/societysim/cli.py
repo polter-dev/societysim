@@ -116,7 +116,7 @@ def batch(
 
     Stops starting games when the budget would be exceeded; Ctrl-C stops cleanly.
     """
-    from societysim.batch.runner import run_batch
+    from societysim.batch.runner import BatchMismatch, run_batch
     from societysim.config import BatchConfig, load_yaml
     from societysim.models.registry import load_registry
 
@@ -168,12 +168,18 @@ def batch(
     except KeyboardInterrupt:
         typer.echo(f"interrupted; re-run to resume: runs/{cfg.batch_id}")
         raise typer.Exit(130) from None
+    except BatchMismatch as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(1) from None
     typer.echo(Path("runs") / cfg.batch_id)
     typer.echo(
         f"{result['status']}: {len(result['finished'])} played, {len(result['skipped'])} skipped, "
         f"{len(result['not_started'])} not started; "
         f"spent ${result['spent_usd']:.4f} of ${cfg.budget_usd:.2f}"
     )
+    if result["failed"]:
+        typer.echo(f"failed games: {', '.join(result['failed'])}")
+        raise typer.Exit(1)
 
 
 @app.command()

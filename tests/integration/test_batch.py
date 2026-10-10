@@ -6,7 +6,7 @@ import pytest
 from fakes import FakeClient
 from typer.testing import CliRunner
 
-from societysim.batch.runner import run_batch
+from societysim.batch.runner import BatchMismatch, run_batch
 from societysim.cli import app
 from societysim.config import BatchConfig, ModelSpec
 from societysim.logging.events import EventType
@@ -157,6 +157,74 @@ async def test_scripted_batch_needs_no_client(tmp_path):
     assert res["status"] == "completed" and res["spent_usd"] == 0
 
 
+async def test_crashed_game_is_reported_not_lost(tmp_path):
+    class Crashy(PricedFake):
+        async def complete(self, model, messages, response_model):
+            if len(self.calls) == 0:
+                self.calls.append(None)  # first game only
+                raise RuntimeError("boom")
+            return await super().complete(model, messages, response_model)
+
+    res = await run_batch(cfg(max_concurrency=1), SPECS, Crashy(), runs_dir=tmp_path)
+    assert res["status"] == "failed"
+    assert list(res["failed"]) == ["t-g0000"]
+    assert "boom" in res["failed"]["t-g0000"]
+    assert len(res["finished"]) == 3
+    meta = json.loads((tmp_path / "t/run_meta.json").read_text())
+    assert meta["status"] == "failed" and "t-g0000" in meta["failed"]
+
+
+async def test_budget_holds_with_concurrency(tmp_path):
+    cost = (
+        await run_batch(cfg(n_games=1, batch_id="probe"), SPECS, PricedFake(), runs_dir=tmp_path)
+    )["spent_usd"]
+    cap = cost * 1.5
+    res = await run_batch(
+        cfg(n_games=8, max_concurrency=4, budget_usd=cap), SPECS, PricedFake(), runs_dir=tmp_path
+    )
+    assert res["status"] == "budget_stopped"
+    assert len(res["finished"]) == 1  # no estimate yet, so one probe game, then the cap bites
+    assert res["spent_usd"] <= cap
+
+
+async def test_interrupts_do_not_reset_spend(tmp_path):
+    cost = (
+        await run_batch(cfg(n_games=1, batch_id="probe"), SPECS, PricedFake(), runs_dir=tmp_path)
+    )["spent_usd"]
+    cap = cost * 2.2
+
+    async def interrupted_run():
+        client = PricedFake(delay=0.001)
+        task = asyncio.create_task(
+            run_batch(
+                cfg(n_games=10, max_concurrency=1, budget_usd=cap), SPECS, client, runs_dir=tmp_path
+            )
+        )
+        while len(client.calls) < 150:  # part-way through a game
+            await asyncio.sleep(0.001)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        return json.loads((tmp_path / "t/run_meta.json").read_text())["spent_usd"]
+
+    first = await interrupted_run()
+    second = await interrupted_run()
+    assert second > first  # the cut-off game's money is kept, not forgotten
+    res = await run_batch(
+        cfg(n_games=10, max_concurrency=1, budget_usd=cap), SPECS, PricedFake(), runs_dir=tmp_path
+    )
+    assert res["spent_usd"] <= cap + cost  # at most one game over: budget is checked per game start
+
+
+async def test_resume_refuses_a_different_config(tmp_path):
+    await run_batch(cfg(), SPECS, None, runs_dir=tmp_path)
+    await run_batch(cfg(n_games=6, budget_usd=1, max_concurrency=2), SPECS, None, runs_dir=tmp_path)
+    with pytest.raises(BatchMismatch):
+        await run_batch(cfg(seed=1), SPECS, None, runs_dir=tmp_path)
+    with pytest.raises(BatchMismatch):
+        await run_batch(cfg(models=["b", "a"]), SPECS, None, runs_dir=tmp_path)
+
+
 # --- CLI ---------------------------------------------------------------------------------
 
 RUNNER = CliRunner()
@@ -197,6 +265,16 @@ def test_cli_batch_keyboard_interrupt_exits_130(tmp_path, monkeypatch):
     )
     assert result.exit_code == 130
     assert "re-run to resume" in result.output
+
+
+def test_cli_batch_config_mismatch_exits_one(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    args = ["--registry", str(REGISTRY)]
+    assert (
+        RUNNER.invoke(app, ["batch", "--config", str(write_config(tmp_path)), *args]).exit_code == 0
+    )
+    other = RUNNER.invoke(app, ["batch", "--config", str(write_config(tmp_path, seed=9)), *args])
+    assert other.exit_code == 1 and "different seed" in other.output
 
 
 def test_cli_batch_unknown_model_and_missing_config(tmp_path, monkeypatch):

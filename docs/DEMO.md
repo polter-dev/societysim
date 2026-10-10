@@ -17,7 +17,7 @@ Six sponsor rooms on Sunday (hours 42 to 46), one 60-second pitch each. Every se
 
 ## Before walking in
 
-- The main site is https://society-sim.us (Cloudflare Pages; the `Deploy` workflow runs on every `viewer/` change on `main` and publishes the sample game, or the HF Dataset named by the `DEPLOY_SOURCE` repo variable or the workflow's `source` input (`hf:<owner/name>[:<batch_id>]`); for a real batch run `bash scripts/deploy-space.sh --out /tmp/site --force runs/<batch>`, then `npx wrangler login` once and `npx wrangler pages deploy /tmp/site --project-name societysim --branch main`). The HF Space and the GitHub Pages mirror are backups.
+- The main site is https://society-sim.us (Cloudflare Pages; the `Deploy` workflow runs on every `viewer/` change on `main` and publishes the sample game, or the HF Dataset named by the `DEPLOY_SOURCE` repo variable or the workflow's `source` input (`hf:<owner/name>[:<batch_id>]`); for a real batch run `bash scripts/deploy-space.sh --out /tmp/site --force runs/<batch>`, then `npx wrangler login` once and `npx wrangler pages deploy /tmp/site --project-name societysim --branch main`). The HF Space and the GitHub Pages mirror are backups. For live Neon games on the site, set the repo variables `VITE_NEON_DATA_API_URL` and `VITE_NEON_ANON_KEY` (public, read-only; steps in the README deploy section) and rerun `Deploy`; unset, the site shows static data.
 - Open the HF Space on the game index, a finished game, and the leaderboard page. `TODO(#37)`: Space URL and Dataset URL.
 - Have the backup video from #38 on the laptop, not only online.
 - Keep a local viewer running (`cd viewer && npm ci && npm run dev`) with one mixed-batch game loaded through `?log=<url>`, in case the Space or the venue wifi is down.

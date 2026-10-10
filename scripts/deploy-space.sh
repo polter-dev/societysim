@@ -19,7 +19,8 @@
 # HF_TOKEN must be set in the environment (write access to the Space). It is read by
 # huggingface_hub directly and never printed or passed on a command line.
 #
-# The site also gets devui/ (a plain test page, see devui/README.md) at /devui/.
+# The site also gets devui/ (a plain test page, see devui/README.md) at /devui/. If both Neon
+# vars are set, devui/config.json carries the URL and anon key so that page can auto-fill them.
 #
 # Test hooks: SOCIETYSIM_SKIP_VIEWER_BUILD=1 skips npm and copies SOCIETYSIM_VIEWER_DIST
 # (default viewer/dist) as is.
@@ -86,6 +87,9 @@ if [[ -n "${VITE_NEON_DATA_API_URL:-}" ]]; then
 else
   echo "data source: static data/report/index.json"
 fi
+if [[ -z "${VITE_NEON_DATA_API_URL:-}" || -z "${VITE_NEON_ANON_KEY:-}" ]]; then
+  echo "::notice::VITE_NEON_DATA_API_URL and/or VITE_NEON_ANON_KEY unset: no devui/config.json; the viewer uses static data unless the URL is set."
+fi
 
 if [[ -n "$out" ]]; then
   stage=$out
@@ -102,6 +106,11 @@ rsync -a --exclude '.cache' --exclude '*.png' "$batch/" "$stage/data/"
 mkdir -p "$stage/devui/schema"
 cp "$root/devui/index.html" "$stage/devui/"
 cp "$root"/schema/*.schema.json "$stage/devui/schema/"
+# With both Neon build vars set, the dev page pre-fills its Neon fields from devui/config.json.
+# Only the Data API URL and the public read-only anon key go in; never the database URL.
+if [[ -n "${VITE_NEON_DATA_API_URL:-}" && -n "${VITE_NEON_ANON_KEY:-}" ]]; then
+  python3 -c 'import json,os; print(json.dumps({"neon_url": os.environ["VITE_NEON_DATA_API_URL"], "neon_anon_key": os.environ["VITE_NEON_ANON_KEY"]}))' >"$stage/devui/config.json"
+fi
 cat >"$stage/README.md" <<'EOF'
 ---
 title: SocietySim

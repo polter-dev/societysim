@@ -29,7 +29,7 @@ def _batch(tmp_path: Path) -> Path:
     return batch
 
 
-def _run(tmp_path: Path, *args: str, neon: bool = False):
+def _run(tmp_path: Path, *args: str, neon: bool = False, extra: dict | None = None):
     dist = tmp_path / "dist"
     dist.mkdir(exist_ok=True)
     (dist / "index.html").write_text("<html></html>")
@@ -37,6 +37,7 @@ def _run(tmp_path: Path, *args: str, neon: bool = False):
     env.update(SOCIETYSIM_SKIP_VIEWER_BUILD="1", SOCIETYSIM_VIEWER_DIST=str(dist))
     if neon:
         env.update(VITE_NEON_DATA_API_URL="https://secret.example", VITE_NEON_ANON_KEY="k3y")
+    env.update(extra or {})
     return subprocess.run(
         ["bash", str(SCRIPT), *args], capture_output=True, text=True, env=env, cwd=ROOT
     )
@@ -122,3 +123,28 @@ def test_out_includes_devui_served_with_data(tmp_path):
         assert get(f"/data/{index[0]['file']}").strip()
     finally:
         server.shutdown()
+
+
+def test_devui_config_written_only_with_both_neon_vars(tmp_path):
+    batch = _batch(tmp_path)
+    out = tmp_path / "site"
+    r = _run(tmp_path, "--out", str(out), str(batch), neon=True)
+    assert r.returncode == 0, r.stderr
+    assert json.loads((out / "devui/config.json").read_text()) == {
+        "neon_url": "https://secret.example",
+        "neon_anon_key": "k3y",
+    }
+    assert "k3y" not in r.stdout + r.stderr
+    plain = tmp_path / "plain"
+    r = _run(tmp_path, "--out", str(plain), str(batch))
+    assert not (plain / "devui/config.json").exists()
+    assert "::notice::" in r.stdout
+
+
+def test_devui_config_skipped_when_key_missing(tmp_path):
+    batch = _batch(tmp_path)
+    out = tmp_path / "site"
+    extra = {"VITE_NEON_DATA_API_URL": "https://only-url.example"}
+    r = _run(tmp_path, "--out", str(out), str(batch), extra=extra)
+    assert r.returncode == 0, r.stderr
+    assert not (out / "devui/config.json").exists()

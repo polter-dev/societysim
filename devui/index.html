@@ -337,7 +337,12 @@ async function load() {
   } catch (e) { $("status").textContent = ""; $("out").append(el("div", { className: "bad", textContent: String(e.message) })); }
 }
 $("load").onclick = load;
-load();
+// config.json (written by scripts/deploy-space.sh when the Neon build vars are set) fills the Neon fields.
+fetch("config.json").then((r) => (r.ok ? r.json() : {})).catch(() => ({})).then((c) => {
+  if (c.neon_url && !$("neon").value) $("neon").value = c.neon_url;
+  if (c.neon_anon_key && !$("key").value) $("key").value = c.neon_anon_key;
+  load();
+});
 </script>
 </body>
 </html>

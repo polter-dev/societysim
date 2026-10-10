@@ -12,6 +12,8 @@ name: Deploy
 # runs/ is gitignored, so CI gets real batches from the HF Dataset instead.
 # Cloudflare needs the CLOUDFLARE_API_TOKEN secret and the CLOUDFLARE_ACCOUNT_ID variable;
 # without them that step is skipped. hf-space needs the HF_TOKEN secret.
+# Live Neon games: set the VITE_NEON_DATA_API_URL and VITE_NEON_ANON_KEY repo variables (README,
+# deploy section). Unset, the viewer builds in static mode and the log says so.
 
 on:
   push:
@@ -52,6 +54,10 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       GH_TOKEN: ${{ github.token }}
+      # Public, read-only: the Data API URL and the `anonymous` role's key (select-only grants,
+      # neon/schema.sql). Repo variables, not secrets. Never NEON_DATABASE_URL here.
+      VITE_NEON_DATA_API_URL: ${{ vars.VITE_NEON_DATA_API_URL }}
+      VITE_NEON_ANON_KEY: ${{ vars.VITE_NEON_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

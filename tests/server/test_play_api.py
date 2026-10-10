@@ -65,7 +65,11 @@ async def make_client(tmp_path):
         app = create_app(
             Settings(**{"runs_dir": tmp_path, "agents": scripted, "neon": False, **kw})
         )
-        client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
+        client = httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+            headers={"Origin": "https://society-sim.us"},  # a POST without one is refused
+        )
         client.manager = app.state.manager
         managers.append(client.manager)
         return client

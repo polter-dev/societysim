@@ -63,8 +63,8 @@ PASSTHROUGH=(PLAY_RATE_PER_MIN PLAY_MAX_ACTIVE_PER_IP PLAY_MAX_GAMES_PER_IP_DAY 
 # The Space repo is built from TRACKED files only (git ls-files), never a directory copy, so an
 # untracked .env, runs/ or .cache/ can't reach a public Space. Dockerfile and README sit at the
 # Space root; the rest keeps its path.
-TRACKED=(src/societysim configs/models.yaml configs/voices.yaml schema pyproject.toml uv.lock
-  LICENSE .dockerignore)
+TRACKED=(src/societysim configs/models.yaml configs/voices.yaml schema neon/schema.sql pyproject.toml
+  uv.lock LICENSE .dockerignore)
 FORBIDDEN='(^|/)(\.env[^/]*|[^/]*\.pem|[^/]*\.key|runs|\.cache)(/|$)'
 
 stage=$(mktemp -d)

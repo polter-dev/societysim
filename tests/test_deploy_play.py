@@ -114,6 +114,8 @@ def _temp_repo(tmp_path):
         "configs/voices.yaml": "{}\n",
         "configs/mixed_v1.yaml": "not in the image\n",
         "schema/a.json": "{}\n",
+        "neon/schema.sql": "create table x ();\n",
+        "neon/notes.md": "not in the image\n",
         "src/societysim/__init__.py": "",
     }.items():
         f = repo / rel
@@ -157,6 +159,7 @@ def test_stage_has_tracked_allowlist_only_never_untracked_env(tmp_path):
         "configs/models.yaml",
         "configs/voices.yaml",
         "schema/a.json",
+        "neon/schema.sql",
         "src/societysim/__init__.py",
     }
     assert dummy not in r.stdout + r.stderr
@@ -171,6 +174,27 @@ def test_stage_uses_committed_content_not_working_tree(tmp_path):
     r = _stage(repo, out)
     assert r.returncode == 0, r.stderr
     assert (out / "pyproject.toml").read_text() == "[project]\n"
+
+
+@no_windows
+def test_image_ships_the_neon_schema(tmp_path):
+    """The ledger reads neon/schema.sql at startup (#332): without it Neon "is down" and
+    every game is refused. It must be staged and copied to where SCHEMA_PATH looks."""
+    from societysim.logging.sinks.neon import SCHEMA_PATH
+
+    rel = SCHEMA_PATH.relative_to(ROOT).as_posix()
+    r = subprocess.run(
+        ["bash", str(SCRIPT), "--stage-only", str(tmp_path / "s")],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+    )
+    assert r.returncode == 0, r.stderr
+    assert rel in r.stdout.split()
+    # WORKDIR /app with src at /app/src, so the schema must land at /app/<rel>.
+    dockerfile = (ROOT / "server/Dockerfile").read_text()
+    assert re.search(rf"^COPY {re.escape(rel)} \./{re.escape(rel)}$", dockerfile, re.M)
+    assert "COPY src ./src" in dockerfile
 
 
 def test_dockerfile_cmd_target_imports_and_builds(monkeypatch):

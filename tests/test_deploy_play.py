@@ -3,6 +3,7 @@
 import os
 import re
 import shutil
+import sys
 import subprocess
 from pathlib import Path
 
@@ -10,6 +11,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/deploy-play-space.sh"
+# The staging step pipes git archive into tar; the deploy runs from macOS or Linux CI.
+no_windows = pytest.mark.skipif(sys.platform == "win32", reason="bash/tar staging")
 SECRET_VALUES = {
     "PLAY_OPENAI_API_KEY": "sk-openai-VALUE-1111",
     "PLAY_HF_TOKEN": "hf_VALUE_2222",
@@ -131,6 +134,7 @@ def _stage(repo, out):
     )
 
 
+@no_windows
 def test_stage_has_tracked_allowlist_only_never_untracked_env(tmp_path):
     repo = _temp_repo(tmp_path)
     dummy = "DUMMY-SECRET-VALUE-9999"
@@ -159,6 +163,7 @@ def test_stage_has_tracked_allowlist_only_never_untracked_env(tmp_path):
     assert not any(dummy in p.read_text() for p in out.rglob("*") if p.is_file())
 
 
+@no_windows
 def test_stage_uses_committed_content_not_working_tree(tmp_path):
     repo = _temp_repo(tmp_path)
     (repo / "pyproject.toml").write_text("UNCOMMITTED-EDIT\n")
@@ -184,6 +189,7 @@ def test_dockerfile_cmd_target_imports_and_builds(monkeypatch):
     assert factory().title
 
 
+@no_windows
 def test_stage_hard_fails_on_tracked_secret_looking_file(tmp_path):
     repo = _temp_repo(tmp_path)
     (repo / "schema/leak.pem").write_text("x")

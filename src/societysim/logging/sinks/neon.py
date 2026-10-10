@@ -6,6 +6,7 @@ pending-event buffer is bounded (oldest dropped first).
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -21,11 +22,11 @@ log = logging.getLogger(__name__)
 SCHEMA_PATH = Path(__file__).resolve().parents[4] / "neon" / "schema.sql"
 
 _INSERT_GAME = """
-insert into games (game_id, batch_id, status, models, started_at)
-values ($1, $2, 'running', $3::jsonb, $4)
+insert into games (game_id, batch_id, status, models, started_at, agents)
+values ($1, $2, 'running', $3::jsonb, $4, $5)
 on conflict (game_id) do update set
     batch_id = excluded.batch_id, status = 'running', winner = null, ended_at = null,
-    models = excluded.models, started_at = excluded.started_at
+    models = excluded.models, started_at = excluded.started_at, agents = excluded.agents
 """
 _INSERT_EVENT = """
 insert into events (game_id, seq, day, phase, type, actor, schema_version, event)
@@ -98,6 +99,7 @@ class NeonSink:
         batch_id: str,
         *,
         connect: Connect | None = None,
+        agents: str | None = None,
         batch_size: int = 25,
         max_pending: int = 2000,
         timeout: float = 10,
@@ -109,6 +111,7 @@ class NeonSink:
         self._lock = asyncio.Lock()  # one statement at a time on the connection
         self._timeout = timeout
         self.batch_id = batch_id
+        self.agents = agents  # 'scripted' | 'llm'; None when unknown
         self._connect = connect or connect_neon
         self._batch_size = batch_size
         self._max_pending = max_pending
@@ -140,6 +143,7 @@ class NeonSink:
                 self.batch_id,
                 json.dumps(run_meta.get("models")),
                 started,
+                self.agents,
             )
             # A replayed game must not keep the old run's rows (JSONL was overwritten).
             await self._t(conn.execute, _CLEAR_EVENTS, self._game_id)
@@ -232,12 +236,18 @@ async def sync_batch(batch_dir: Path, conn: Any, chunk: int = 500) -> dict[str, 
         models = [s["model"] for s in (start_meta.get("seats") or {}).values()]
         end = next((e for e in reversed(events) if e["type"] == "game_end"), None)
         started = start_meta.get("ts")
+        agents = None
+        meta_path = batch_dir / f"{path.stem}.run_meta.json"
+        if meta_path.is_file():
+            with contextlib.suppress(OSError, ValueError, AttributeError):
+                agents = json.loads(meta_path.read_text(encoding="utf-8")).get("agents")
         await conn.execute(
             _INSERT_GAME,
             gid,
             batch_dir.name,
             json.dumps(models),
             datetime.fromisoformat(started) if started else None,
+            agents,
         )
         await conn.execute(_CLEAR_EVENTS, gid)
         await conn.execute(_CLEAR_LABELS, gid)

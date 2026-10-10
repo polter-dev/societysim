@@ -36,10 +36,14 @@ create table if not exists labels (
     primary key (game_id, idx)
 );
 
+-- Agent type of the game: 'scripted' | 'llm' (run_meta.json "agents"). Null = legacy or unknown
+-- (rows written before this column, or by older code); the views keep null rows and drop 'scripted'.
+alter table games add column if not exists agents text;
+
 create index if not exists games_batch_idx on games (batch_id);
 
 -- Per model: seat-games in finished games, wins, win rate. A seat wins if its team won.
--- Pools every batch and leaves out human seats; use leaderboard_by_batch to compare fairly.
+-- Pools every batch and leaves out human seats and scripted games; use leaderboard_by_batch to compare fairly.
 create or replace view leaderboard as
 with seats as (
     select e.game_id,
@@ -54,7 +58,7 @@ results as (
                or (s.role <> 'wolf' and g.winner = 'villagers') as won
     from seats s
     join games g using (game_id)
-    where g.status = 'finished' and s.model <> 'human'
+    where g.status = 'finished' and g.agents is distinct from 'scripted' and s.model <> 'human'
 )
 select model,
        count(*) as seat_games,
@@ -77,7 +81,8 @@ select g.batch_id,
 from games g
 join events e on e.game_id = g.game_id and e.type = 'game_start'
 cross join lateral jsonb_each(e.event -> 'meta' -> 'seats') s
-where g.status = 'finished' and s.value ->> 'model' <> 'human'
+where g.status = 'finished' and g.agents is distinct from 'scripted'
+  and s.value ->> 'model' <> 'human'
 group by g.batch_id, s.value ->> 'model';
 
 -- Lies per liar model, from self_tag and jev labels (the four types metrics.py counts).
@@ -91,7 +96,8 @@ from labels l
 join games g on g.game_id = l.game_id
 join events e on e.game_id = l.game_id and e.type = 'game_start'
 cross join lateral (select value from jsonb_each(e.event -> 'meta' -> 'seats') where key = l.actor) seat
-where l.source in ('self_tag', 'jev')
+where g.agents is distinct from 'scripted'
+  and l.source in ('self_tag', 'jev')
   and l.label_type in ('false_role_claim', 'false_report', 'bussing', 'hidden_knowledge')
 group by g.batch_id, seat.value ->> 'model', l.source, l.label_type;
 

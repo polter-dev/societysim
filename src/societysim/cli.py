@@ -156,7 +156,7 @@ def play(
 
     sinks = [JsonlSink(batch_id)]
     if connect := _neon_connect(neon):
-        sinks.append(NeonSink(batch_id, connect=connect))
+        sinks.append(NeonSink(batch_id, connect=connect, agents=agents.value))
     if human_seat is not None:
         make_agent = human.with_human(make_agent, human_seat)
         sinks = [human.MarkDefaults(sink, human_seat) for sink in sinks]

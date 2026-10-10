@@ -393,7 +393,7 @@ async def run_batch(
         try:
             sinks: list[Any] = [JsonlSink(cfg.batch_id, runs_dir)]
             if neon_connect:
-                sinks.append(NeonSink(cfg.batch_id, connect=neon_connect))
+                sinks.append(NeonSink(cfg.batch_id, connect=neon_connect, agents=agents))
             game = await run_game(a.game_config(cfg.game), make_agent, sinks, a.game_id, colors)
             outcome = {"event": "finished", "winner": getattr(game.winner, "value", game.winner)}
             _tag_agents(out / f"{a.game_id}.run_meta.json", agents)

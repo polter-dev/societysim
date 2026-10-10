@@ -300,6 +300,50 @@ async def test_batch_streams_every_game_in_order(tmp_path):
     assert all(a[1] == "finished" for a in ends)
 
 
+async def test_batch_writes_agent_type(tmp_path):
+    conn = FakeConn()
+
+    async def connect():
+        return conn
+
+    cfg = BatchConfig.model_validate(
+        {"batch_id": "nb", "n_games": 1, "models": ["a"], "budget_usd": 1, "game": {}}
+    )
+    specs = {"a": ModelSpec(name="a", litellm_model="openai/a")}
+    await run_batch(cfg, specs, None, runs_dir=tmp_path, neon_connect=connect)
+    games = [a for sql, a in conn.executed if "insert into games" in sql]
+    assert [g[4] for g in games] == ["scripted"]
+
+
+async def test_sink_writes_agents_and_null_when_unknown():
+    for agents in ("llm", None):
+        conn = FakeConn()
+
+        async def connect(conn=conn):
+            return conn
+
+        sink = NeonSink("b1", connect=connect, agents=agents)
+        await sink.start_game({"game_id": "g1", "models": []})
+        game = next(a for sql, a in conn.executed if "insert into games" in sql)
+        assert game[4] == agents
+
+
+async def test_sync_batch_reads_agents_from_run_meta(tmp_path):
+    batch = _batch(tmp_path)
+    meta = batch / "fixture-0001.run_meta.json"
+
+    async def agents_written() -> str | None:
+        conn = FakeConn()
+        await sync_batch(batch, conn)
+        return next(a for sql, a in conn.executed if "insert into games" in sql)[4]
+
+    assert await agents_written() is None  # older run, no run_meta
+    meta.write_text('{"agents": "scripted"}', encoding="utf-8")
+    assert await agents_written() == "scripted"
+    meta.write_text("{bad", encoding="utf-8")
+    assert await agents_written() is None
+
+
 async def test_batch_survives_a_dead_neon(tmp_path):
     async def connect():
         raise OSError("no route")
@@ -332,6 +376,7 @@ def test_play_neon_streams_live(tmp_path, monkeypatch):
     assert _event_rows(conn) == {"selfplay_smoke-s0": [e["seq"] for e in log]}
     end = next(a for sql, a in conn.executed if sql.startswith("update games"))
     assert end == ("selfplay_smoke-s0", "finished", log[-1]["meta"]["winner"])
+    assert next(a for sql, a in conn.executed if "insert into games" in sql)[4] == "scripted"
 
 
 def test_play_neon_with_human_seat_streams_marked_events(tmp_path, monkeypatch):
@@ -403,6 +448,11 @@ def test_schema_has_views_and_grants():
     sql = (Path(__file__).resolve().parents[2] / "neon/schema.sql").read_text(encoding="utf-8")
     for v in ("leaderboard", "leaderboard_by_batch", "lies_by_model"):
         assert f"create or replace view {v} as" in sql
+    assert "alter table games add column if not exists agents text" in sql
+    for v in ("leaderboard", "leaderboard_by_batch", "lies_by_model"):
+        body = sql.split(f"view {v} as")[1].split(";")[0]
+        assert "agents is distinct from 'scripted'" in body, v
+    assert sql.index("add column if not exists agents") < sql.index("create or replace view")
     assert "grant select on leaderboard_by_batch, lies_by_model to anonymous" in sql
     assert "grant insert" not in sql and "grant all" not in sql
 
@@ -422,14 +472,26 @@ def test_real_neon_views(tmp_path):
         evs[0]["meta"]["seats"]["p6"]["model"] = "human"
         ep.write_text("\n".join(json.dumps(e) for e in evs) + "\n", encoding="utf-8")
         dirs.append(d.rename(root / bid))  # the directory name is the batch_id
+    sc_root = tmp_path / "sc"
+    sc_root.mkdir()
+    sc_id = ids[0] + "-sc"
+    sd = _batch(sc_root, sc_id).rename(sc_root / ("itb-sc-" + uuid.uuid4().hex[:6]))
+    (sd / f"{sc_id}.run_meta.json").write_text('{"agents": "scripted"}', encoding="utf-8")
     liar = _events(dirs[0] / f"{ids[0]}.jsonl")[0]["meta"]["seats"]["p5"]["model"]
 
     async def run():
         conn = await connect_neon()
         try:
             await apply_schema(conn)
-            for d in dirs:
+            for d in [*dirs, sd]:
                 await sync_batch(d, conn)
+            sc_rows = await conn.fetch(
+                "select 1 from leaderboard_by_batch where batch_id = $1", sd.name
+            )
+            sc_lies = await conn.fetch("select 1 from lies_by_model where batch_id = $1", sd.name)
+            sc_games = await conn.fetchval(
+                "select count(*) from games where batch_id = $1", sd.name
+            )
             board = await conn.fetch("select model from leaderboard")
             by_batch = await conn.fetch(
                 "select distinct batch_id from leaderboard_by_batch where batch_id = any($1)",
@@ -444,12 +506,13 @@ def test_real_neon_views(tmp_path):
                 " where batch_id = $1 and label_type = 'false_role_claim' and source = 'self_tag'",
                 batches[0],
             )
-            return board, by_batch, human, lies
+            return board, by_batch, human, lies, sc_rows, sc_lies, sc_games
         finally:
-            await conn.execute("delete from games where game_id = any($1)", ids)
+            await conn.execute("delete from games where game_id = any($1)", [*ids, sc_id])
             await conn.close()
 
-    board, by_batch, human, lies = asyncio.run(run())
+    board, by_batch, human, lies, sc_rows, sc_lies, sc_games = asyncio.run(run())
+    assert not sc_rows and not sc_lies and sc_games == 1  # replayable, off the leaderboards
     assert "human" not in {r["model"] for r in board}
     assert sorted(r["batch_id"] for r in by_batch) == sorted(batches)
     assert not human

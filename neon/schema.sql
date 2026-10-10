@@ -39,6 +39,7 @@ create table if not exists labels (
 create index if not exists games_batch_idx on games (batch_id);
 
 -- Per model: seat-games in finished games, wins, win rate. A seat wins if its team won.
+-- Pools every batch and leaves out human seats; use leaderboard_by_batch to compare fairly.
 create or replace view leaderboard as
 with seats as (
     select e.game_id,
@@ -53,7 +54,7 @@ results as (
                or (s.role <> 'wolf' and g.winner = 'villagers') as won
     from seats s
     join games g using (game_id)
-    where g.status = 'finished'
+    where g.status = 'finished' and s.model <> 'human'
 )
 select model,
        count(*) as seat_games,
@@ -62,11 +63,44 @@ select model,
 from results
 group by model;
 
+-- Same, per batch, with draws. A draw counts as not won (matches analysis/metrics.py).
+create or replace view leaderboard_by_batch as
+select g.batch_id,
+       s.value ->> 'model' as model,
+       count(*) as seat_games,
+       count(*) filter (where (s.value ->> 'role' = 'wolf' and g.winner = 'wolves')
+                           or (s.value ->> 'role' <> 'wolf' and g.winner = 'villagers')) as wins,
+       count(*) filter (where g.winner = 'draw') as draws,
+       round((count(*) filter (where (s.value ->> 'role' = 'wolf' and g.winner = 'wolves')
+                                  or (s.value ->> 'role' <> 'wolf' and g.winner = 'villagers')))::numeric
+             / count(*), 3) as win_rate
+from games g
+join events e on e.game_id = g.game_id and e.type = 'game_start'
+cross join lateral jsonb_each(e.event -> 'meta' -> 'seats') s
+where g.status = 'finished' and s.value ->> 'model' <> 'human'
+group by g.batch_id, s.value ->> 'model';
+
+-- Lies per liar model, from self_tag and jev labels (the four types metrics.py counts).
+create or replace view lies_by_model as
+select g.batch_id,
+       seat.value ->> 'model' as model,
+       l.source,
+       l.label_type,
+       count(*) as lies
+from labels l
+join games g on g.game_id = l.game_id
+join events e on e.game_id = l.game_id and e.type = 'game_start'
+cross join lateral (select value from jsonb_each(e.event -> 'meta' -> 'seats') where key = l.actor) seat
+where l.source in ('self_tag', 'jev')
+  and l.label_type in ('false_role_claim', 'false_report', 'bussing', 'hidden_knowledge')
+group by g.batch_id, seat.value ->> 'model', l.source, l.label_type;
+
 -- Read-only access for the Data API's anonymous role (viewer, #40). Never grant writes.
 do $$
 begin
     if exists (select 1 from pg_roles where rolname = 'anonymous') then
         grant usage on schema public to anonymous;
         grant select on games, events, labels, leaderboard to anonymous;
+        grant select on leaderboard_by_batch, lies_by_model to anonymous;
     end if;
 end $$;

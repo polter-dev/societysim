@@ -399,6 +399,63 @@ def test_real_neon_roundtrip(tmp_path):
     shutil.rmtree(batch)
 
 
+def test_schema_has_views_and_grants():
+    sql = (Path(__file__).resolve().parents[2] / "neon/schema.sql").read_text(encoding="utf-8")
+    for v in ("leaderboard", "leaderboard_by_batch", "lies_by_model"):
+        assert f"create or replace view {v} as" in sql
+    assert "grant select on leaderboard_by_batch, lies_by_model to anonymous" in sql
+    assert "grant insert" not in sql and "grant all" not in sql
+
+
+@pytest.mark.skipif(not os.environ.get("NEON_DATABASE_URL"), reason="NEON_DATABASE_URL not set")
+def test_real_neon_views(tmp_path):
+    ids = [f"it-{uuid.uuid4().hex[:8]}" for _ in range(2)]
+    batches = ["itb-" + uuid.uuid4().hex[:6] for _ in range(2)]
+    dirs = []
+    for i, (gid, bid) in enumerate(zip(ids, batches, strict=True)):
+        root = tmp_path / f"t{i}"
+        root.mkdir()
+        d = _batch(root, gid)
+        # p6 becomes a human seat; p5 (liar in the fixture labels) keeps its model
+        ep = d / f"{gid}.jsonl"
+        evs = _events(ep)
+        evs[0]["meta"]["seats"]["p6"]["model"] = "human"
+        ep.write_text("\n".join(json.dumps(e) for e in evs) + "\n", encoding="utf-8")
+        dirs.append(d.rename(root / bid))  # the directory name is the batch_id
+    liar = _events(dirs[0] / f"{ids[0]}.jsonl")[0]["meta"]["seats"]["p5"]["model"]
+
+    async def run():
+        conn = await connect_neon()
+        try:
+            await apply_schema(conn)
+            for d in dirs:
+                await sync_batch(d, conn)
+            board = await conn.fetch("select model from leaderboard")
+            by_batch = await conn.fetch(
+                "select distinct batch_id from leaderboard_by_batch where batch_id = any($1)",
+                batches,
+            )
+            human = await conn.fetch(
+                "select 1 from leaderboard_by_batch where batch_id = any($1) and model = 'human'",
+                batches,
+            )
+            lies = await conn.fetch(
+                "select model, lies from lies_by_model"
+                " where batch_id = $1 and label_type = 'false_role_claim' and source = 'self_tag'",
+                batches[0],
+            )
+            return board, by_batch, human, lies
+        finally:
+            await conn.execute("delete from games where game_id = any($1)", ids)
+            await conn.close()
+
+    board, by_batch, human, lies = asyncio.run(run())
+    assert "human" not in {r["model"] for r in board}
+    assert sorted(r["batch_id"] for r in by_batch) == sorted(batches)
+    assert not human
+    assert [(r["model"], r["lies"]) for r in lies] == [(liar, 1)]
+
+
 def test_abandoned_human_game_ends_failed_in_neon(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)

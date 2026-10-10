@@ -140,8 +140,8 @@ Suspicion is a list, not a dict, so the JSON schema stays closed. Gemini and sev
 
 Prompts show players as "Ava (p3)", and responses use the ids.
 Phase actions:
-- `statement`: `{text ≤80 words, accuse: [names], claim_role: null|role, seer_report: null|{target, result, night}}`
-- `vote`: `{vote: name|"abstain"}`
+- `statement`: `{text ≤80 words, accuse: [seat ids], claim_role: null|role, seer_report: null|{target, result, night}}`
+- `vote`: `{vote: seat id|"abstain"}`
 - `wolf_chat`: `{message, proposed_target}`
 - `seer` / `doctor`: `{target}`
 

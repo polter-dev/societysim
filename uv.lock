@@ -1861,6 +1861,8 @@ name = "societysim"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx" },
+    { name = "jsonschema" },
     { name = "litellm" },
     { name = "pydantic" },
     { name = "python-dotenv" },
@@ -1877,6 +1879,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "jsonschema", specifier = ">=4.26" },
     { name = "litellm", specifier = ">=1.50" },
     { name = "pydantic", specifier = ">=2.8" },
     { name = "python-dotenv", specifier = ">=1.0" },

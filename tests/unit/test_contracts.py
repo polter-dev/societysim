@@ -1,8 +1,8 @@
 import json
-import sys
 from pathlib import Path
 
 import pytest
+from fakes import FakeClient
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
@@ -16,9 +16,6 @@ from societysim.agents.schemas import (
 from societysim.config import BatchConfig, GameConfig, ModelSpec, RoleCounts, load_yaml
 from societysim.logging.events import Event, EventType, Label, LabelType
 from societysim.roles import Role, Team
-
-sys.path.insert(0, str(Path(__file__).parents[1]))  # tests/ has no package; reach fakes.py
-from fakes import FakeClient  # noqa: E402
 
 ROOT = Path(__file__).parents[2]
 SCHEMA = json.loads((ROOT / "schema/events.schema.json").read_text())

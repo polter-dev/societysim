@@ -2,7 +2,8 @@
 
 `observe(state, events, seat)` renders what one living player knows, as one string that
 `prompts.phase_prompt` inserts verbatim: the current phase, role-private knowledge, the dead
-with their revealed roles, a deterministic summary of earlier days and today's full history.
+with their revealed roles, the players to score in `suspicion` with their count, a
+deterministic summary of earlier days and today's full history.
 
 Two guards keep private information out:
 - every event passes through `visible()` before anything reads it;
@@ -70,7 +71,12 @@ def observe(state: GameState, events: Sequence[Event], seat: str) -> str:
         return player(s, state.names[s])
 
     cap = quote_chars(state.config.rules.max_statement_words)
-    head = [f"Now: {_now(state)}.", *_knowledge(state, seat, role, seen, name), *_dead(seen, name)]
+    head = [
+        f"Now: {_now(state)}.",
+        *_knowledge(state, seat, role, seen, name),
+        *_dead(seen, name),
+        _to_score(state, seat, name),
+    ]
     days = [_summary(d, [e for e in seen if e.day == d], name, cap) for d in range(1, state.day)]
     today = [line for e in seen if e.day == state.day for line in _line(e, name, cap)]
     return _fit("\n".join(head), days, today)
@@ -82,6 +88,15 @@ def _now(state: GameState) -> str:
     if state.phase is Phase.VOTE:
         return f"Day {state.day}, vote"
     return f"Day {state.day}, discussion"
+
+
+def _to_score(state: GameState, seat: str, name: Name) -> str:
+    """The suspicion list spelled out with its count (#136: models dropped players from it)."""
+    others = [name(s) for s in state.seats if s in state.alive and s != seat]
+    return (
+        f'"suspicion" needs exactly {len(others)} entries, one per living player except you, '
+        f"{name(seat)}: " + "; ".join(others) + "."
+    )
 
 
 def _knowledge(state: GameState, seat: str, role: Role, seen: list[Event], name: Name) -> list[str]:

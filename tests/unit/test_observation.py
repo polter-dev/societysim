@@ -119,6 +119,18 @@ def test_players_render_as_name_and_seat_and_dead_are_listed():
     assert "role not revealed" in observe(state, events, unrevealed.cast["villager"])
 
 
+def test_suspicion_list_names_every_other_living_player_with_count():
+    state, _ = GAME.checkpoints["vote2"]
+    seat = CAST["villager"]
+    others = [s for s in state.seats if s in state.alive and s != seat]
+    assert len(others) < len(state.seats) - 1  # some players are dead by vote2
+    line = (
+        f'"suspicion" needs exactly {len(others)} entries, one per living player except you, '
+        f"{name(seat)}: " + "; ".join(map(name, others)) + "."
+    )
+    assert f"\n{line}" in obs("vote2", "villager")
+
+
 def test_deterministic():
     again = build(True)
     for cp, (state, events) in GAME.checkpoints.items():

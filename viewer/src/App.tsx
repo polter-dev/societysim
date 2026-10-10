@@ -21,6 +21,7 @@ import { clearStepUrl, normalizeStepUrl } from './state/replayUrl';
 import { eventIdx } from './state/stepper';
 import { siblingAudioIndexUrl } from './audio/narration';
 import { useStepper } from './state/useStepper';
+import { SpotWolfPanel } from './spotwolf/SpotWolf';
 import type { Event, Label } from './types/events';
 import { IllustratedShell, IllustratedInspector } from './illustrated/IllustratedView';
 
@@ -40,6 +41,7 @@ export function Game({events, labels, idx, mode, selected, onSelect, onSeqChange
     <div className="replay-table"><LabelPopups scene={scene} labels={labels} mode={mode}><Table scene={scene} selected={selected} onSelect={onSelect}/><Arrows scene={scene}/><Speech scene={scene}/></LabelPopups></div>
     <details className="replay-chat"><summary>Discussion and vote tally</summary><Tally scene={scene}/><ChatLog scene={scene}/></details>
     <IllustratedInspector scene={scene} mode={mode} selected={selected} close={() => onSelect(null)}/>
+    <details className="replay-spotwolf"><summary>Spot the wolf</summary><SpotWolfPanel key={events[0]?.game_id} events={events} idx={idx}/></details>
     <div className="replay-controls">{step?.live && <LiveBadge newCount={step.newCount}/>}{step && <StepControls {...step}/>}{narration?.available && <NarrationControls mode={mode} on={narration.on} enabled={narration.enabled} onToggle={narration.onToggle} onCategory={narration.onCategory}/>}<Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} seq={seq} onSeek={onSeek}/></div>
   </>;
 }

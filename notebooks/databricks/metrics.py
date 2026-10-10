@@ -413,7 +413,8 @@ deception = spark.sql("""
 WITH c AS (
   SELECT source, liar_model, listener_model, sum(heard) AS heard, sum(voters) AS voters,
          sum(followed) AS followed, sum(moved) AS moved,
-         sum(baseline_rate * voters) / nullif(sum(IF(baseline_rate IS NULL, 0, voters)), 0) AS baseline_rate
+         sum(baseline_rate * voters)
+           / nullif(sum(IF(baseline_rate IS NULL, 0, voters)), 0) AS baseline_rate
   FROM deception_pairs GROUP BY source, liar_model, listener_model
 ), w AS (
   SELECT *, followed / voters AS vote_follow_rate, 1.96 AS z FROM c WHERE voters > 0

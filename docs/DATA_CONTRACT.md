@@ -79,7 +79,7 @@ data/
   <game_id>.audio/index.json   narration index (absent unless narrated)
   <game_id>.audio/<sha1>.mp3
   highlights.json              at the batch root, not in report/
-  report/index.json            the game list; the viewer starts here
+  report/index.json            the game list (legacy location; the deployed site serves it at the root, see below)
   report/leaderboard.json
   report/metrics.json
   report/report.md             human-facing, not part of the contract
@@ -89,8 +89,11 @@ data/
 The site root also has `models_catalog.json` (see [Game setup](#game-setup)), and
 `devui/schema/` holds a copy of every `schema/*.schema.json`.
 
-The viewer's default index URL is `data/report/index.json`. Every other static path is resolved
-from it.
+The viewer's default index URL is `./index.json`, at the site root. The deployed site (PR #287)
+stages `index.json`, `leaderboard.json`, `metrics.json`, `<game_id>.jsonl` and
+`<game_id>.labels.jsonl` at the root, and keeps `data/` too. `?base=<url>` points the viewer at
+another http(s) data root. Every other static path is resolved from the index. A legacy
+`report/index.json` still works: the viewer resolves its logs one level up.
 
 ## Static files
 
@@ -122,14 +125,14 @@ from it.
 
 ### Game index: `report/index.json`
 
-- Path: `<batch>/report/index.json`. Schema: `schema/index.schema.json`.
+- Path: `<batch>/report/index.json`, or `./index.json` at the deployed site root. Schema: `schema/index.schema.json`.
 - Produced by: `societysim report <batch>` (`analysis/report.py`, `build_index`).
 - Shape: a list, one entry per finished game, in file-name order. Unfinished logs are left out.
 
 | Field | Type | Notes |
 |---|---|---|
 | `game_id` | string | |
-| `file` | string | Log file name, relative to the batch dir (one level above `index.json`): resolve as `new URL("../" + file, indexUrl)` |
+| `file` | string | Log file name, relative to `index.json`'s directory in the deployed layout: resolve as `new URL(file, indexUrl)`. For a legacy `report/index.json` the log sits one level up: `new URL("../" + file, indexUrl)` |
 | `seed` | integer | Game seed |
 | `days` | integer | Last day reached |
 | `winner` | `"wolves"` \| `"villagers"` \| `"draw"` \| null | |

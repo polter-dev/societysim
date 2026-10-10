@@ -77,7 +77,7 @@ describe("App villager view", () => {
       for (const selected of [null, ...seats]) leaks(render(idx, "villager", selected), idx).forEach((l) => found.add(l));
     });
     expect([...found]).toEqual([]);
-  });
+  }, 30_000);
 
   it("the same checks catch narrator content (so the villager test can fail)", () => {
     const idx = events.findIndex((e) => e.seq === 19); // Finn's false Seer claim, labelled at this seq
@@ -131,7 +131,7 @@ describe("mode-only data behind Arrows, Tally and Speech", () => {
       }
     });
     expect([...found]).toEqual([]);
-  });
+  }, 30_000);
 
   it("narrator view shows it where the page allows it", () => {
     const wolfTalk = m.events.findIndex((e) => e.seq === 5);

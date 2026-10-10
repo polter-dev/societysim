@@ -34,13 +34,38 @@ describe("parseLog", () => {
     expect(parseLog(text).errors).toEqual([]);
   });
 
+  it("accepts a version 2 log with seats up to p8", () => {
+    const text = [line({}), line({ seq: 1, actor: "p8", target: "p0" })].join("\n");
+    const { events, errors } = parseLog(text);
+    expect(errors).toEqual([]);
+    expect(events.map((e) => e.actor)).toEqual([null, "p8"]);
+  });
+
+  it("accepts a version 3 (10-player) log with seat p9", () => {
+    const v3 = (over: Record<string, unknown>) => line({ schema_version: 3, ...over });
+    const text = [v3({}), v3({ seq: 1, actor: "p9", target: "p0" }), v3({ seq: 2, target: "p9" })];
+    const { events, errors } = parseLog(text.join("\n"));
+    expect(errors).toEqual([]);
+    expect(events.map((e) => [e.schema_version, e.actor, e.target])).toEqual([
+      [3, null, null],
+      [3, "p9", "p0"],
+      [3, null, "p9"],
+    ]);
+  });
+
+  it("rejects seat ids past p9", () => {
+    const { errors } = parseLog([line({}), line({ seq: 1, actor: "p10" })].join("\n"));
+    expect(errors.map((b) => b.line)).toEqual([2]);
+    expect(errors[0].error).toMatch(/actor/);
+  });
+
   it("reports bad lines with their 1-based line number and keeps the good ones", () => {
     const text = [
       line({}),
       "{not json",
       line({ seq: 1, actor: "Ava" }),
       line({ seq: 1, type: "lynch" }),
-      line({ seq: 1, schema_version: 3 }),
+      line({ seq: 1, schema_version: 4 }),
       "",
       line({ seq: 1, meta: null }),
       line({ seq: 1 }),

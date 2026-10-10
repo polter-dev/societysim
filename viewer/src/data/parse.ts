@@ -40,7 +40,7 @@ const EVENT_TYPES = {
   game_end: true,
 } satisfies Record<EventType, true>;
 
-const SEAT = /^p[0-8]$/;
+const SEAT = /^p[0-9]$/; // up to 10 players (schema_version 3)
 
 const isInt = (v: unknown) => Number.isInteger(v);
 const isStrOrNull = (v: unknown) => v === null || typeof v === "string";
@@ -50,7 +50,7 @@ const isSeatOrNull = (v: unknown) => v === null || (typeof v === "string" && SEA
 function invalid(v: unknown): string | null {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return "not a JSON object";
   const e = v as Record<string, unknown>;
-  if (e.schema_version !== 1 && e.schema_version !== 2)
+  if (e.schema_version !== 1 && e.schema_version !== 2 && e.schema_version !== 3)
     return `unsupported schema_version ${String(e.schema_version)}`;
   if (typeof e.game_id !== "string") return "game_id must be a string";
   for (const k of ["seq", "t", "day"]) if (!isInt(e[k])) return `${k} must be an integer`;

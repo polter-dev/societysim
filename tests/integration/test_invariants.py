@@ -7,6 +7,7 @@ leak checks can search prompts for them. The scripted observation case uses test
 
 import itertools
 import json
+import os
 import re
 from collections import Counter
 from functools import partial
@@ -71,7 +72,9 @@ def pairwise_configs() -> list[dict]:
 
 
 CONFIGS = pairwise_configs()
-SEEDS = range(5)
+# Nine pairwise configs x 27 seeds = 243 games in the default sweep.
+SEEDS = range(27)
+SLOW_SEEDS = range(27, 100)
 # (config index, seed) -> reason, for invariant failures awaiting a bug fix.
 KNOWN_FAILURES: dict[tuple[int, int], str] = {}
 
@@ -350,6 +353,16 @@ async def test_invariants_hold(spec, seed):
     game = await run_game(game_config(spec, seed), factory, [], "g")
     check_log(game)
     check_leaks(game, prompts)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not os.environ.get("SOCIETYSIM_SLOW"), reason="set SOCIETYSIM_SLOW=1")
+@pytest.mark.parametrize(
+    ("spec", "seed"),
+    [case(i, spec, seed) for (i, spec), seed in itertools.product(enumerate(CONFIGS), SLOW_SEEDS)],
+)
+async def test_invariants_hold_slow(spec, seed):
+    await test_invariants_hold(spec, seed)
 
 
 @pytest.mark.parametrize("i", range(0, len(CONFIGS), 5))

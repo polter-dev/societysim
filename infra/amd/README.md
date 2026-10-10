@@ -20,6 +20,7 @@ Re-running it is safe. Finished steps are skipped and a healthy server is reused
 The R9700 pod is gone. The AUP cloud now offers the Radeon 8060S (Strix Halo iGPU, gfx1151, 64 GB unified memory) and the 890M (4 GB, too small for the model). vLLM on ROCm is shaky on gfx1151, so for this chip `serve.sh` runs gpt-oss-20b through llama.cpp's `llama-server` (OpenAI-compatible, same port 8000, same API key). It runs at $0/h: an AI player on a laptop-class chip.
 
 1. In AUP: **Start My Server → Custom Repos → Basic GPU Environment**. Under Configuration pick **8060S, not Auto** (Auto can hand you the 890M). Set the runtime to the maximum. Launch.
+   If the launch fails with `ImagePullBackOff` (`auplc-code-gpu:latest` not found), the AUP image is broken right now: retry later or contact AUP support.
 2. Make the API key as described below if you haven't. In a Terminal (clone on the first run, then `git pull`):
 
    ```bash

@@ -60,6 +60,7 @@ AMD_START_TIMEOUT="${AMD_START_TIMEOUT:-1800}"
 AMD_STATS_INTERVAL="${AMD_STATS_INTERVAL:-60}"
 AMD_PRICE_PER_HOUR="${AMD_PRICE_PER_HOUR:-0}"
 VLLM_SRC_REF="${VLLM_SRC_REF:-v0.16.0}"
+GPU_ARCH_SET=${GPU_ARCH:+1}
 if [ -z "${GPU_ARCH:-}" ]; then
   GPU_ARCH=gfx1201
   if command -v rocminfo >/dev/null && [[ $(rocminfo 2>/dev/null || true) == *gfx1151* ]]; then
@@ -487,7 +488,9 @@ llama_ok() { # llama_ok <binary>: runs and sees a real AMD GPU (ROCm or Vulkan, 
   out=$(LD_LIBRARY_PATH="$(dirname "$bin"):${LD_LIBRARY_PATH:-}" "$bin" --list-devices 2>&1) ||
     true
   echo "$out" | tail -n 5
-  [[ ${out,,} == *rocm* || ${out,,} == *gfx1* || ${out,,} == *radeon* || ${out,,} == *amd* ]]
+  # device lines only (ROCm0: / HIP0: / Vulkan0: ...); a CPU line or llvmpipe does not count
+  echo "$out" | grep -Eiq '^\s*(rocm|hip|vulkan)[0-9]+:' &&
+    ! echo "$out" | grep -Eiq '^\s*(rocm|hip|vulkan)[0-9]+:.*llvmpipe'
 }
 
 # Unpack a release archive (.zip or .tar.gz) into <dir>; sets LLAMA_BIN, true if it sees the GPU.
@@ -570,7 +573,12 @@ install_llamacpp() {
   mkdir -p "$LLAMA_DIR"
   local order variant=$AMD_LLAMA_VARIANT m
   if [ "$variant" = auto ]; then
-    if [ "$GPU_ARCH" = gfx1151 ]; then variant=vulkan; else variant=hip; fi
+    # Vulkan on Strix Halo, and whenever the GPU is unknown (no rocminfo, no explicit GPU_ARCH)
+    if [ "$GPU_ARCH" = gfx1151 ] || { [ "$AMD_BACKEND" = llamacpp ] && [ -z "$GPU_ARCH_SET" ]; }; then
+      variant=vulkan
+    else
+      variant=hip
+    fi
   fi
   case "$variant" in
     vulkan) order="llama_vulkan_prebuilt llama_hip_prebuilt llama_vulkan_source llama_hip_source" ;;
@@ -814,9 +822,10 @@ cmd_status() {
 }
 
 cmd_stop() {
-  log "Stopping tunnel, stats logger and server"
+  log "Stopping tunnel, stats logger, download and server"
   kill_pidfile "$AMD_WORK/tunnel.pid"
   kill_pidfile "$AMD_WORK/stats.pid"
+  kill_pidfile "$AMD_WORK/download.pid"
   kill_pidfile "$AMD_WORK/server.pid"
   rm -f "$AMD_WORK/public_url"
   if [ -s "$AMD_WORK/started_at" ]; then

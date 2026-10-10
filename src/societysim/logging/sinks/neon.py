@@ -11,7 +11,7 @@ import json
 import logging
 import os
 from collections.abc import Awaitable, Callable
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -302,3 +302,68 @@ async def delete_games(conn: Any, game_ids: list[str]) -> dict[str, Any]:
         "events": n_events if deleted else 0,
         "labels": n_labels if deleted else 0,
     }
+
+
+_PRUNE_CANDIDATES = """
+select g.game_id, g.batch_id, g.status, g.started_at,
+       exists (
+           select 1 from events e where e.game_id = g.game_id and e.type = 'game_end'
+       ) as has_end,
+       (select count(*) from events e where e.game_id = g.game_id) as events,
+       (select count(*) from labels l where l.game_id = g.game_id) as labels
+from games g
+order by g.batch_id, g.game_id
+"""
+
+
+async def find_prunable(
+    conn: Any,
+    *,
+    older_than_hours: float = 6,
+    batch_ids: list[str] | None = None,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Read-only. Games that should not reach the live leaderboard, each with the reason why.
+
+    Reasons: `test batch <id>` (batch id given by the caller), `fixture` (game id starts with
+    fixture-), and `partial` (no game_end event and started more than `older_than_hours` ago;
+    younger games may still be running, and games with no start time are left alone).
+    """
+    now = now or datetime.now(UTC)
+    cutoff = now - timedelta(hours=older_than_hours)
+    test_batches = set(batch_ids or [])
+    found = []
+    for r in await conn.fetch(_PRUNE_CANDIDATES):
+        started = r["started_at"]
+        if started is not None and started.tzinfo is None:
+            started = started.replace(tzinfo=UTC)
+        if r["batch_id"] in test_batches:
+            reason = f"test batch {r['batch_id']}"
+        elif r["game_id"].startswith("fixture-"):
+            reason = "fixture"
+        elif not r["has_end"] and started is not None and started < cutoff:
+            reason = f"partial: no game_end, started {started:%Y-%m-%d %H:%M} UTC"
+        else:
+            continue
+        found.append(
+            {
+                "game_id": r["game_id"],
+                "batch_id": r["batch_id"],
+                "status": r["status"],
+                "events": r["events"],
+                "labels": r["labels"],
+                "reason": reason,
+            }
+        )
+    return found
+
+
+async def prune_games(conn: Any, game_ids: list[str]) -> None:
+    """Delete exactly these games, with their events and labels, in one transaction."""
+    ids = list(dict.fromkeys(game_ids))
+    if not ids:
+        return
+    async with conn.transaction():
+        await conn.execute("delete from events where game_id = any($1)", ids)
+        await conn.execute("delete from labels where game_id = any($1)", ids)
+        await conn.execute("delete from games where game_id = any($1)", ids)

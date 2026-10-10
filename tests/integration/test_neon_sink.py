@@ -648,7 +648,7 @@ def test_sync_neon_cli_no_args_says_what_to_pass(monkeypatch, url):
     monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
     res = CliRunner().invoke(app, ["sync-neon"])
     assert res.exit_code == 1
-    assert res.output.strip() == "give a batch dir to sync, or --delete GAME_ID"
+    assert res.output.strip() == "give a batch dir to sync, or --delete GAME_ID, or --prune"
 
 
 def test_sync_neon_cli_not_a_directory(tmp_path, monkeypatch):

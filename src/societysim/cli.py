@@ -532,22 +532,48 @@ def sync_neon(
     delete: Annotated[
         list[str] | None, typer.Option("--delete", help="Delete this game id (repeatable).")
     ] = None,
+    prune: Annotated[
+        bool,
+        typer.Option(
+            "--prune",
+            help="List partial, fixture and --batch test games. Deletes nothing without --apply.",
+        ),
+    ] = False,
+    apply: Annotated[
+        bool, typer.Option("--apply", help="With --prune: actually delete the listed games.")
+    ] = False,
+    older_than_hours: Annotated[
+        float, typer.Option("--older-than-hours", help="With --prune: partial-game age cutoff.")
+    ] = 6,
+    batch: Annotated[
+        list[str] | None,
+        typer.Option("--batch", help="With --prune: also prune this test batch id (repeatable)."),
+    ] = None,
 ) -> None:
-    """Backfill BATCH_DIR into Neon, or --delete games. Needs NEON_DATABASE_URL."""
+    """Backfill BATCH_DIR into Neon, --delete games, or --prune. Needs NEON_DATABASE_URL."""
     from societysim.logging.sinks.neon import (
         apply_schema,
         connect_neon,
         delete_games,
+        find_prunable,
+        prune_games,
         sync_batch,
     )
 
     load_dotenv()
-    if delete:
+    if prune:
+        if batch_dir is not None or delete:
+            typer.echo("--prune takes no BATCH_DIR and no --delete")
+            raise typer.Exit(1)
+    elif apply or batch:
+        typer.echo("--apply and --batch only work with --prune")
+        raise typer.Exit(1)
+    elif delete:
         if batch_dir is not None:
             typer.echo("give either BATCH_DIR or --delete, not both")
             raise typer.Exit(1)
     elif batch_dir is None:
-        typer.echo("give a batch dir to sync, or --delete GAME_ID")
+        typer.echo("give a batch dir to sync, or --delete GAME_ID, or --prune")
         raise typer.Exit(1)
     elif not batch_dir.is_dir():
         typer.echo(f"not a directory: {batch_dir}")
@@ -559,6 +585,13 @@ def sync_neon(
     async def run():
         conn = await connect_neon()
         try:
+            if prune:
+                found = await find_prunable(
+                    conn, older_than_hours=older_than_hours, batch_ids=batch
+                )
+                if apply:
+                    await prune_games(conn, [g["game_id"] for g in found])
+                return found
             if delete:
                 return await delete_games(conn, delete)
             await apply_schema(conn)
@@ -567,6 +600,18 @@ def sync_neon(
             await conn.close()
 
     n = asyncio.run(run())
+    if prune:
+        for g in n:
+            typer.echo(
+                f"{g['game_id']}  batch={g['batch_id']}  status={g['status']}  "
+                f"{g['events']} events, {g['labels']} labels  ({g['reason']})"
+            )
+        events, labels = sum(g["events"] for g in n), sum(g["labels"] for g in n)
+        verb = "deleted" if apply else "would delete"
+        typer.echo(f"{verb} {len(n)} games, {events} events, {labels} labels")
+        if not apply:
+            typer.echo("dry run: nothing was deleted. Re-run with --apply to delete.")
+        return
     if delete:
         typer.echo(f"deleted {len(n['deleted'])} games, {n['events']} events, {n['labels']} labels")
         if n["missing"]:

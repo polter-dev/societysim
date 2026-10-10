@@ -52,9 +52,21 @@ async def test_jsonl_seq_schema_and_meta(tmp_path):
     assert [json.loads(x)["seq"] for x in lines] == [0, 1, 2]
     for x in lines:
         validator.validate(json.loads(x))
-    meta = json.loads((tmp_path / "b1/run_meta.json").read_text())
+    meta = json.loads((tmp_path / "b1/g1.run_meta.json").read_text())
     assert meta["seed"] == 7 and meta["models"] == ["m"] and meta["config"] == {"k": 1}
     assert {"git_sha", "started_at"} <= meta.keys()
+
+
+async def test_two_games_one_batch_have_own_run_meta(tmp_path):
+    for gid, seed in [("ga", 1), ("gb", 2)]:
+        logger = EventLogger(gid, [JsonlSink("b", tmp_path)])
+        await logger.start_game({}, seed=seed, models=[gid])
+        logger.log(**EV)
+        await logger.end_game(None)
+        await logger.close()
+    for gid, seed in [("ga", 1), ("gb", 2)]:
+        meta = json.loads((tmp_path / f"b/{gid}.run_meta.json").read_text())
+        assert meta["seed"] == seed and meta["models"] == [gid]
 
 
 async def test_raising_sink_does_not_break_others(caplog):

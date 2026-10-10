@@ -14,10 +14,8 @@ class JsonlSink:
 
     async def start_game(self, run_meta: dict[str, Any]) -> None:
         self.dir.mkdir(parents=True, exist_ok=True)
-        # One run_meta.json per batch dir: the first game writes it, later games leave it.
-        meta = self.dir / "run_meta.json"
-        if not meta.exists():
-            meta.write_text(json.dumps(run_meta, indent=2, default=str))
+        gid = run_meta["game_id"]
+        (self.dir / f"{gid}.run_meta.json").write_text(json.dumps(run_meta, indent=2, default=str))
         self._f = (self.dir / f"{run_meta['game_id']}.jsonl").open("w")
 
     async def write(self, event: Event) -> None:

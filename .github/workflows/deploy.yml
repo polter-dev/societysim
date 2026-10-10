@@ -1,9 +1,10 @@
 name: Deploy
 
 # Stages the viewer plus one batch of games and publishes it. Manual only.
-#   gh workflow run deploy.yml -f targets=cloudflare -f batch=runs/batch-01
+#   gh workflow run deploy.yml -f targets=cloudflare
 # Targets (comma separated): cloudflare, hf-space, github-pages. Default is all three.
-# The default batch is the sample game in fixtures/, run through `societysim report`.
+# CI deploys the sample game in fixtures/ (run through `societysim report`). runs/ is
+# gitignored, so real batches are deployed locally; see the README.
 # Cloudflare needs the CLOUDFLARE_API_TOKEN secret and the CLOUDFLARE_ACCOUNT_ID variable;
 # without them that step is skipped. hf-space needs the HF_TOKEN secret.
 
@@ -14,7 +15,7 @@ on:
         description: "Comma separated: cloudflare, hf-space, github-pages"
         default: "cloudflare,hf-space,github-pages"
       batch:
-        description: "Batch dir in the repo (needs report/index.json); empty stages the sample game"
+        description: "Committed batch dir with report/index.json; leave empty for the sample game"
         required: false
       space:
         description: "HF Space id (owner/name); defaults to the HF_SPACE repo variable"
@@ -49,6 +50,10 @@ jobs:
           cache-dependency-path: viewer/package-lock.json
       - name: Pick the batch
         run: |
+          if [ -n "$BATCH" ] && [ ! -f "$BATCH/report/index.json" ]; then
+            echo "::error::$BATCH/report/index.json not found (runs/ is not in the repo; deploy real batches locally)"
+            exit 1
+          fi
           if [ -z "$BATCH" ]; then
             BATCH="$RUNNER_TEMP/sample-batch"
             mkdir -p "$BATCH"
@@ -69,11 +74,11 @@ jobs:
           rm -f "$RUNNER_TEMP/site/README.md"
           npx --yes wrangler@4 pages project create societysim --production-branch main ||
             echo "project create failed or it already exists; continuing"
-          npx --yes wrangler@4 pages deploy "$RUNNER_TEMP/site" --project-name societysim --branch main
+          npx --yes wrangler@4 pages deploy "$RUNNER_TEMP/site" --project-name societysim --branch main --commit-dirty=true
           api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/societysim/domains"
           for domain in society-sim.us www.society-sim.us; do
             code=$(curl -sS -o "$RUNNER_TEMP/domain.json" -w '%{http_code}' -X POST "$api" \
-              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H @<(printf 'Authorization: Bearer %s' "$CLOUDFLARE_API_TOKEN") \
               -H "Content-Type: application/json" \
               --data "{\"name\":\"$domain\"}")
             if [ "$code" = 200 ] || [ "$code" = 409 ] || grep -qi 'already' "$RUNNER_TEMP/domain.json"; then

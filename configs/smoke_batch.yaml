@@ -1,3 +1,4 @@
+# Real runs need --agents llm (the default is scripted): societysim batch --config <this file> --agents llm
 # Smoke test: 10 mixed games on the three cheapest Hugging Face models (by models.yaml prices).
 # Run: societysim batch --config configs/smoke_batch.yaml --agents llm
 batch_id: smoke_batch
@@ -5,7 +6,7 @@ seed: 1
 n_games: 10
 mode: mixed
 budget_usd: 1.0
-max_concurrency: 4
+max_concurrency: 8
 models:
   - gemma4-26b
   - qwen3-235b

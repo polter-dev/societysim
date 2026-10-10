@@ -1,10 +1,11 @@
+# Real runs need --agents llm (the default is scripted): societysim batch --config <this file> --agents llm
 # Per-model self-play baseline: every model plays all seats, 10 games each (9 models, 90 games).
 batch_id: selfplay_baseline
 seed: 2
 n_games: 90
 mode: selfplay
 budget_usd: 25.0
-max_concurrency: 4
+max_concurrency: 8
 models:
   - gemma4-26b
   - qwen3-235b

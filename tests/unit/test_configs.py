@@ -1,9 +1,12 @@
+import re
 from collections import Counter
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
 from societysim.batch.assign import assign_games
+from societysim.cli import app
 from societysim.config import BatchConfig, load_yaml
 from societysim.models.registry import load_registry
 
@@ -65,3 +68,27 @@ def test_mixed_v1_rotation_and_gpt_subset():
         assert 0 < appearances[m] <= cfg.model_game_limits[m] <= 10
     others = [m for m in cfg.models if m not in gpt]
     assert all(appearances[m] > 3 * max(appearances[g] for g in gpt) for m in others)
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_dry_run_estimate_under_budget(name, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)  # a stray runs/ would land here, not in the repo
+    cfg = load(name)
+    result = CliRunner().invoke(
+        app,
+        [
+            "batch",
+            "--dry-run",
+            "--config",
+            str(CONFIGS / f"{name}.yaml"),
+            "--registry",
+            str(CONFIGS / "models.yaml"),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert not (tmp_path / "runs").exists()
+    assert cfg.max_concurrency == 8
+    match = re.search(r"(\d+) games, estimated \$([\d.]+)", result.output)
+    assert match, result.output
+    assert int(match[1]) == cfg.n_games
+    assert float(match[2]) < cfg.budget_usd

@@ -1,3 +1,4 @@
+# Real runs need --agents llm (the default is scripted): societysim batch --config <this file> --agents llm
 # Main experiment: ~100 mixed games, seats rotated through all models, roles balanced by
 # batch/assign.py. GPT models sit in at most 10 games each.
 batch_id: mixed_v1
@@ -5,7 +6,7 @@ seed: 3
 n_games: 100
 mode: mixed
 budget_usd: 40.0
-max_concurrency: 4
+max_concurrency: 8
 models:
   - gemma4-26b
   - qwen3-235b

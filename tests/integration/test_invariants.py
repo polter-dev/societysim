@@ -1,9 +1,8 @@
-"""Invariant sweep: many seeded RandomAgent games, every invariant checked on every game.
+"""Pairwise rule/config sweep of seeded RandomAgent games and their invariants.
 
 No API calls. Each game runs through a probe agent that wraps RandomAgent, records every
 prompt it is shown, and stamps unique markers into private thoughts and wolf chat so the
-leak checks can search prompts for them. Kept self-contained on purpose; it can move to the
-shared test helpers later.
+leak checks can search prompts for them. The scripted observation case uses tests/helpers.py.
 """
 
 import itertools
@@ -14,11 +13,16 @@ from functools import partial
 from pathlib import Path
 
 import pytest
+from helpers import MemoryLog, build
 from jsonschema import Draft202012Validator
 
 from societysim.agents.base import Turn
+from societysim.agents.observation import observe
+from societysim.agents.prompts import player
 from societysim.agents.scripted import RandomAgent
 from societysim.config import GameConfig, RoleCounts, RuleFlags
+from societysim.engine.engine import resolve_night, start_phase
+from societysim.engine.rules import legal_targets
 from societysim.engine.state import GameState
 from societysim.logging.events import EventType
 from societysim.logging.sinks.jsonl import JsonlSink
@@ -29,14 +33,45 @@ from societysim.roles import Phase, Role
 ROOT = Path(__file__).parents[2]
 VALIDATOR = Draft202012Validator(json.loads((ROOT / "schema/events.schema.json").read_text()))
 
-# Every combination RULES.md allows through config: 7-9 players, 2 or 3 wolves,
-# abstain on/off, clean agents and agents that fail 30% of replies, and a 2-day cap so
-# some games end in a draw (random players almost never reach day 6).
-CONFIGS = [
-    dict(n_players=n, wolves=w, allow_abstain=a, invalid_rate=r, max_days=d)
-    for n, w, a, r, d in itertools.product((7, 8, 9), (2, 3), (True, False), (0.0, 0.3), (6, 2))
-]
-SEEDS = range(5)  # 48 configs x 5 seeds = 240 games
+# Each pair of settings occurs together at least once, including pairs among the new
+# flags. The full Cartesian product would be 1536 configurations.
+DIMENSIONS = {
+    "n_players": (7, 8, 9),
+    "wolves": (2, 3),
+    "allow_abstain": (True, False),
+    "invalid_rate": (0.0, 0.3),
+    "max_days": (6, 2),
+    "doctor_self_protect": (True, False),
+    "doctor_no_repeat": (True, False),
+    "reveal_role_on_death": (True, False),
+    "wolf_chat_rounds": (2, 1),
+    "discussion_rounds": (2, 1),
+}
+
+
+def pairwise_configs() -> list[dict]:
+    keys = tuple(DIMENSIONS)
+    candidates = [
+        dict(zip(keys, values, strict=True)) for values in itertools.product(*DIMENSIONS.values())
+    ]
+    coverage = [
+        {
+            (i, spec[keys[i]], j, spec[keys[j]])
+            for i, j in itertools.combinations(range(len(keys)), 2)
+        }
+        for spec in candidates
+    ]
+    uncovered = set().union(*coverage)
+    selected = []
+    while uncovered:
+        index = max(range(len(candidates)), key=lambda i: len(coverage[i] & uncovered))
+        selected.append(candidates[index])
+        uncovered -= coverage[index]
+    return selected
+
+
+CONFIGS = pairwise_configs()
+SEEDS = range(5)
 # (config index, seed) -> reason, for invariant failures awaiting a bug fix.
 KNOWN_FAILURES: dict[tuple[int, int], str] = {}
 
@@ -52,17 +87,24 @@ ACTION_EVENT = {
 DEATHS = (EventType.DEATH_REVEAL, EventType.ELIMINATION)
 
 
+def test_matrix_covers_each_pair_of_settings():
+    for left, right in itertools.combinations(DIMENSIONS, 2):
+        expected = set(itertools.product(DIMENSIONS[left], DIMENSIONS[right]))
+        actual = {(spec[left], spec[right]) for spec in CONFIGS}
+        assert actual == expected, (left, right)
+
+
 def game_config(spec: dict, seed: int) -> GameConfig:
     return GameConfig(
         n_players=spec["n_players"],
         seed=seed,
         roles=RoleCounts(wolves=spec["wolves"]),
-        rules=RuleFlags(allow_abstain=spec["allow_abstain"], max_days=spec["max_days"]),
+        rules=RuleFlags(**{key: spec[key] for key in RuleFlags.model_fields if key in spec}),
     )
 
 
 class Probe:
-    """RandomAgent that records (seat, role, prompt) and marks its private text."""
+    """RandomAgent that records prompts and marks its private text."""
 
     def __init__(self, state: GameState, seat: str, invalid_rate: float, prompts: list):
         self.inner = RandomAgent(state, seat, invalid_rate=invalid_rate)
@@ -70,7 +112,31 @@ class Probe:
 
     async def act(self, turn: Turn) -> CompletionResult:
         assert self.seat in self.state.alive, f"dead {self.seat} was asked to act"
-        self.prompts.append((self.seat, self.state.roles[self.seat], turn.prompt))
+        if turn.action == "doctor":
+            rules = self.state.config.rules
+            assert (self.seat in turn.targets) is (
+                rules.doctor_self_protect
+                and not (
+                    rules.doctor_no_repeat
+                    and self.state.last_doctor_protect_night == self.state.day - 1
+                    and self.state.last_doctor_protect == self.seat
+                )
+            )
+            previous = self.state.last_doctor_protect
+            if (
+                self.state.last_doctor_protect_night == self.state.day - 1
+                and previous in self.state.alive
+            ):
+                assert (previous in turn.targets) is (not rules.doctor_no_repeat)
+        self.prompts.append(
+            (
+                self.seat,
+                self.state.roles[self.seat],
+                turn.prompt,
+                {s: self.state.roles[s] for s in self.state.seats if s not in self.state.alive},
+                dict(self.state.names),
+            )
+        )
         result = await self.inner.act(turn)
         if result.parsed is None:
             return result
@@ -100,9 +166,16 @@ def check_log(game: Game) -> None:
     alive, day = set(st.seats), 0
     protects: list[tuple[int, str]] = []
     checks: list[tuple[int, str, str]] = []
+    phase_events = []
+    phase_alive = set(alive)
+    phase = Phase.SETUP
     for e in events:
         if e.type is EventType.PHASE_START and e.phase is Phase.NIGHT:
             day += 1
+        if e.type in (EventType.PHASE_START, EventType.GAME_END):
+            check_rounds(phase, phase_alive, phase_events, roles, rules)
+            phase, phase_alive, phase_events = e.phase, set(alive), []
+        phase_events.append(e)
         assert e.day == day, f"seq {e.seq}: day {e.day}, expected {day}"
         if e.actor:
             assert e.actor in alive, f"seq {e.seq}: dead {e.actor} acts ({e.type})"
@@ -121,10 +194,12 @@ def check_log(game: Game) -> None:
                 checks.append((e.day, e.target, e.meta.result))
             case EventType.DOCTOR_SAVE:
                 assert roles[e.actor] is Role.DOCTOR
+                assert rules.doctor_self_protect or e.target != e.actor
                 if rules.doctor_no_repeat and protects and protects[-1][0] == e.day - 1:
                     assert e.target != protects[-1][1], f"seq {e.seq}: doctor repeat"
                 protects.append((e.day, e.target))
             case EventType.DEATH_REVEAL | EventType.ELIMINATION if e.target:
+                assert e.meta.role == (roles[e.target] if rules.reveal_role_on_death else None)
                 alive.discard(e.target)
     assert alive == st.alive
 
@@ -194,14 +269,68 @@ def check_log(game: Game) -> None:
     assert game.winner == expected
 
 
+def check_rounds(phase, alive, events, roles, rules):
+    if phase is Phase.NIGHT:
+        wolves = {seat for seat in alive if roles[seat] is Role.WOLF}
+        rounds = rules.wolf_chat_rounds if len(wolves) > 1 else 1
+        for kind in (EventType.WOLF_PROPOSAL, EventType.WOLF_CHAT):
+            expected = wolves if kind is EventType.WOLF_PROPOSAL or len(wolves) > 1 else set()
+            actual = [(e.meta.round, e.actor) for e in events if e.type is kind]
+            assert Counter(actual) == Counter(
+                (rnd, seat) for rnd in range(1, rounds + 1) for seat in expected
+            )
+    elif phase is Phase.DAY:
+        actual = [(e.meta.round, e.actor) for e in events if e.type is EventType.STATEMENT]
+        assert Counter(actual) == Counter(
+            (rnd, seat) for rnd in range(1, rules.discussion_rounds + 1) for seat in alive
+        )
+
+
 def check_leaks(game: Game, prompts: list) -> None:
     chat = [e.public_text for e in game.events if e.type is EventType.WOLF_CHAT]
     assert all(t.startswith("howl-") or t == "(silent)" for t in chat)
-    for seat, role, prompt in prompts:
+    for seat, role, prompt, dead, names in prompts:
         thoughts = set(re.findall(r"thought-(p\d)-\d+", prompt))
         assert thoughts <= {seat}, f"{seat} sees private reasoning of {thoughts - {seat}}"
         if role is not Role.WOLF:
             assert "howl-" not in prompt and "(wolf channel)" not in prompt, f"{seat} sees wolves"
+        for victim, dead_role in dead.items():
+            shown = (
+                dead_role.value
+                if game.state.config.rules.reveal_role_on_death
+                else "role not revealed"
+            )
+            assert f"{player(victim, names[victim])}, {shown}" in prompt
+            if not game.state.config.rules.reveal_role_on_death:
+                label = player(victim, names[victim])
+                assert f"{label} was killed in the night ({dead_role.value})" not in prompt
+                assert f"{label} was voted out ({dead_role.value})" not in prompt
+
+
+@pytest.mark.parametrize("reveal", (True, False))
+def test_scripted_death_observation(reveal):
+    scripted = build(reveal=reveal)
+    state, events = scripted.checkpoints["vote2"]
+    for e in events:
+        if e.type in DEATHS and e.target:
+            assert e.meta.role == (state.roles[e.target] if reveal else None)
+    observation = observe(state, events, scripted.cast["villager"])
+    for victim in (scripted.cast["v_night1"], scripted.cast["v_day1"]):
+        shown = state.roles[victim].value if reveal else "role not revealed"
+        assert f"{player(victim, state.names[victim])}, {shown}" in observation
+
+
+def test_doctor_can_repeat_protect_when_enabled():
+    state = GameState(GameConfig(seed=3, rules=RuleFlags(doctor_no_repeat=False)))
+    doctor = next(s for s in state.seats if state.roles[s] is Role.DOCTOR)
+    victims = [s for s in state.seats if state.roles[s] is Role.VILLAGER][:2]
+    log = MemoryLog()
+    for victim in victims:
+        start_phase(state, log, Phase.NIGHT)
+        assert doctor in legal_targets(state, doctor, Phase.NIGHT)
+        resolve_night(state, log, victim, save=doctor, doctor=doctor)
+    saves = [e.target for e in log.events if e.type is EventType.DOCTOR_SAVE]
+    assert saves == [doctor, doctor]
 
 
 def case(i: int, spec: dict, seed: int):

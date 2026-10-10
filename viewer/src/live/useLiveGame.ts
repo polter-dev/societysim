@@ -30,19 +30,19 @@ export async function liveTick(source: GameSource, id: string, s: LiveState): Pr
 }
 
 /**
- * Polls `source` every `intervalMs` while `log.live`, updating the log through `setLog`.
- * A failed poll is retried on the next tick.
+ * Polls `source` every `intervalMs` while `log.live` (only a source's loadGame sets it), updating
+ * the log through `setLog`. A failed poll is retried on the next tick.
  */
 export function useLiveGame(
   source: GameSource | undefined,
-  gameId: string | null,
   log: LoadedGame | null,
   setLog: Dispatch<SetStateAction<LoadedGame | null>>,
   intervalMs = 2000,
 ) {
   const logRef = useRef(log);
   logRef.current = log;
-  const live = !!(source && gameId && log?.live && log.events[0]?.game_id === gameId);
+  const gameId = log?.live ? (log.events[0]?.game_id ?? null) : null;
+  const live = !!(source && gameId);
 
   useEffect(() => {
     if (!live || !source || !gameId || !logRef.current) return;

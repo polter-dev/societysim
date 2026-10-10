@@ -50,6 +50,6 @@ describe("LeaderboardTable", () => {
   it("shows n/a for missing values instead of zero", () => {
     const html = renderToStaticMarkup(createElement(LeaderboardTable, { board: { ...board, models: [row({})] } }));
     expect(html).not.toMatch(/>0%|>0\.00/);
-    expect(html.match(/n\/a/g)!.length).toBe(7);
+    expect(html.match(/n\/a/g)!.length).toBe(8);
   });
 });

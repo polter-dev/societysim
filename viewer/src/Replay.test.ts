@@ -149,3 +149,51 @@ describe("Replay narration", () => {
     expect(box.querySelector(".narration-controls")).toBeNull();
   });
 });
+
+describe("Replay live", () => {
+  const render = (evs: typeof events, extra: { live?: boolean; atEnd?: boolean } = { live: true }) =>
+    act(() =>
+      root.render(
+        createElement(Replay, { events: evs, labels: [], mode: "villager", selected: null, onSelect: () => {}, ...extra }),
+      ),
+    );
+  const badge = () => box.querySelector(".live-badge")?.textContent;
+  const beats = () => Number(label()!.split("/ ")[1]);
+  const pos = () => Number(label()!.match(/^beat (\d+)/)![1]);
+
+  it("opens at the latest beat, follows new events, and counts them once you step back", () => {
+    window.history.replaceState(null, "", "/?game=g");
+    render(events.slice(0, 12));
+    expect(badge()).toBe("● Live");
+    expect(pos()).toBe(beats());
+    expect(window.location.search).toBe("?game=g"); // no ?step= while following
+
+    render(events.slice(0, 20));
+    expect(pos()).toBe(beats()); // still at the tip
+
+    click(".step-prev");
+    const stayed = pos();
+    render(events);
+    expect(pos()).toBe(stayed);
+    const behind = beats() - stayed;
+    expect(behind).toBeGreaterThan(1);
+    expect(badge()).toBe(`● Live, ${behind} new`);
+    expect(box.querySelector(".step-live")!.textContent).toBe(`Back to live (${behind} new)`);
+
+    click(".step-live");
+    expect(pos()).toBe(beats());
+    expect(badge()).toBe("● Live");
+  });
+
+  it("a game that ended while watched opens at its end; a plain replay at its start", () => {
+    window.history.replaceState(null, "", "/?game=g");
+    render(events, { atEnd: true });
+    expect(pos()).toBe(beats());
+    expect(badge()).toBeUndefined();
+    act(() => root.unmount());
+    root = createRoot(box);
+    window.history.replaceState(null, "", "/?game=g");
+    render(events, {});
+    expect(pos()).toBe(1);
+  });
+});

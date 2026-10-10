@@ -66,6 +66,8 @@ If the API call fails, import the file by hand: Workspace > Import > File, pick 
 
 ## 7. Log the batches to MLflow
 
-Open `societysim_mlflow_batches`, attach it to Serverless compute and click Run all. The first cell installs `mlflow-skinny` into the notebook. Runs go to the experiment `/Users/<you>/societysim` (the `experiment` widget changes it), one per batch, named after the batch id. Running it again replaces each batch's run, so params like the game count stay current.
+Open `societysim_mlflow_batches`, attach it to Serverless compute and click Run all. It uses the MLflow that comes with serverless; nothing is installed. Runs go to the experiment `/Users/<you>/societysim` (the `experiment` widget changes it), one per batch, named after the batch id. Running it again replaces each batch's run, so params like the game count stay current.
 
 Metric keys are `metric/model/group`, for example `win_rate/qwen3-235b/wolf` or `detection_auc/all_models/village`. Groups follow T3.3: `all`, `wolf`, `village` and each village role. Lie metrics carry their label source (`lie_rate_jev`, `lie_share_followed_self_tag`). Lie success and persuasion are exploratory.
+
+Serverless gotcha: serverless compute runs on Spark Connect, which refuses to read `spark.mlflow.modelRegistryUri` (`CONFIG_NOT_AVAILABLE`). MLflow reads that conf the first time it builds a client, unless a registry URI is already set. So the notebook calls `mlflow.set_tracking_uri("databricks")` and `mlflow.set_registry_uri("databricks-uc")` before anything else, even though it never uses the model registry. Keep those two lines first if you add MLflow calls, and don't `%pip install` a newer MLflow over the preinstalled one.

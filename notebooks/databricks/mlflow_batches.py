@@ -14,15 +14,19 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install -q mlflow-skinny
-
-# COMMAND ----------
-
 # ruff: noqa: F821  (spark and dbutils are notebook globals)
 from collections import defaultdict
 
 import mlflow
 from pyspark.sql import functions as F
+
+# Set both URIs before any MLflow call. The first MlflowClient() (inside search_runs below)
+# resolves the registry URI, and with none set MLflow falls back to
+# spark.conf.get("spark.mlflow.modelRegistryUri"), which serverless Spark Connect refuses
+# to read (CONFIG_NOT_AVAILABLE). An explicit registry URI short-circuits that lookup.
+# We never touch the registry; this only keeps MLflow from looking for one.
+mlflow.set_tracking_uri("databricks")
+mlflow.set_registry_uri("databricks-uc")
 
 dbutils.widgets.text("catalog", "workspace")
 dbutils.widgets.text("schema", "societysim")

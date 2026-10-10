@@ -38,9 +38,10 @@ import math
 import statistics
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, Literal
 
 import matplotlib
+from pydantic import BaseModel, ConfigDict, Field
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -56,8 +57,227 @@ from societysim.analysis.metrics import (  # noqa: E402
 from societysim.analysis.metrics import (  # noqa: E402
     SOURCES as LABEL_SOURCES,
 )
+from societysim.roles import Role, Winner  # noqa: E402
 
 SCHEMA = 1
+
+
+# --- output shapes (the data contract, docs/DATA_CONTRACT.md) --------------------------------
+# These models only describe what this module writes; scripts/gen-schema.sh turns them into
+# schema/{index,leaderboard,metrics}.schema.json. The writers below build plain dicts.
+
+Seat = Annotated[str, Field(pattern=r"^p[0-8]$")]
+Group = Literal["all", "wolf", "village", "seer", "doctor", "villager"]
+LieType = Literal["false_role_claim", "false_report", "bussing", "hidden_knowledge"]
+Num = float | None
+
+
+class _Out(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class IndexSeat(_Out):
+    name: str
+    model: str
+    role: Role
+
+
+class IndexEntry(_Out):
+    """One entry of report/index.json. `file` is relative to the batch dir."""
+
+    game_id: str
+    file: str
+    seed: int
+    days: int
+    winner: Winner | None
+    seats: dict[Seat, IndexSeat]
+
+
+GameIndex = list[IndexEntry]
+
+
+class Rating(_Out):
+    mu: float
+    sigma: float
+    ordinal: float
+
+
+class SideAdvantage(_Out):
+    """The wolf-side dummy player's rating per pool; {} when no game had a winner."""
+
+    overall: Rating = None  # type: ignore[assignment]  # absent, never null
+    sided: Rating = None  # type: ignore[assignment]
+
+
+class LieRate(_Out):
+    self_tag: Num
+    jev: Num
+
+
+class BoardRow(_Out):
+    model: str
+    games: int | None
+    seats: int
+    win_rate: Num
+    win_ci: tuple[float, float] | None
+    wolf_win_rate: Num
+    village_win_rate: Num
+    openskill: Rating | None
+    detection_auc: Num
+    detection_brier: Num
+    invalid_output_rate: Num
+    cost_usd_per_game: Num
+    lie_rate: LieRate
+
+
+class Leaderboard(_Out):
+    """report/leaderboard.json."""
+
+    schema_: Literal[1] = Field(alias="schema")
+    games: int
+    label_sources: list[Literal["self_tag", "jev"]]
+    wolf_side_advantage: SideAdvantage | None
+    models: list[BoardRow]
+
+
+class LieSuccess(_Out):
+    exploratory: bool
+    comparisons: int
+    moved: int
+    voters: int
+    followed: int
+    base_voters: int
+    base_followed: int
+    base_abstained: int
+    share_moved: Num
+    share_followed: Num
+    base_rate: Num
+
+
+class Lies(_Out):
+    lies: int
+    by_type: dict[LieType, int]
+    lie_rate: Num
+    lie_success: LieSuccess
+
+
+class LiesBySource(_Out):
+    self_tag: Lies
+    jev: Lies
+
+
+class DetectionDay(_Out):
+    n: int
+    brier: Num
+    auc: Num
+
+
+class Detection(_Out):
+    n: int
+    brier: Num
+    auc: Num
+    by_day: dict[Annotated[str, Field(pattern=r"^\d+$")], DetectionDay]
+
+
+class Persuasion(_Out):
+    exploratory: bool
+    accusations: int
+    voters: int
+    hits: int
+    share: Num
+
+
+class GroupStats(_Out):
+    games: int
+    wins: int
+    draws: int
+    losses: int
+    win_rate: Num
+    win_ci: tuple[float, float] | None
+    statements: int
+    lies: LiesBySource
+    detection: Detection
+    persuasion: Persuasion
+    survival_days: Num
+    night_targeted: Num
+    voted_out: Num
+    invalid_output_rate: Num
+    tokens_per_game: Num
+    cost_usd_per_game: Num
+
+
+class OpenSkill(_Out):
+    overall: dict[str, Rating]
+    wolf: dict[str, Rating]
+    village: dict[str, Rating]
+    wolf_side: SideAdvantage
+
+
+class SummaryLies(_Out):
+    lies: int
+    statements: int
+    lie_rate: Num
+    lie_success: LieSuccess
+
+
+class TopOpenSkill(_Out):
+    model: str
+    ordinal: float
+
+
+class TopWolfWin(_Out):
+    model: str
+    win_rate: float
+    seats: int
+
+
+class TopShareMoved(_Out):
+    model: str
+    share_moved: float
+    comparisons: int
+
+
+class Summary(_Out):
+    games: int
+    unfinished_games: int
+    cost_usd: float
+    input_tokens: int
+    output_tokens: int
+    wolf_wins: int
+    village_wins: int
+    draws: int
+    wolf_win_share: Num
+    village_win_share: Num
+    lies: dict[Literal["self_tag", "jev"], SummaryLies]
+    top_openskill: TopOpenSkill | None
+    top_wolf_win: TopWolfWin | None
+    top_share_moved: dict[Literal["self_tag", "jev"], TopShareMoved | None]
+    min_comparisons: int
+
+
+class Speed(_Out):
+    calls: int
+    timed_calls: int
+    median_latency_ms: Num
+    p90_latency_ms: int | None
+    output_tokens_per_s: Num
+    tokens_per_game: Num
+    cost_usd_per_game: Num
+    self_hosted: bool
+
+
+class Metrics(_Out):
+    """report/metrics.json: analysis.metrics.compute_metrics plus summary and speed."""
+
+    games: int
+    unfinished_games: int
+    label_sources: list[Literal["self_tag", "jev"]]
+    exploratory: list[Literal["lie_success", "persuasion"]]
+    models: dict[str, dict[Group, GroupStats]]
+    by_group: dict[Group, GroupStats]
+    openskill: OpenSkill
+    summary: Summary
+    speed: dict[str, Speed]
 
 
 def _load(batch_dir: Path) -> tuple[list[tuple[Path, GameData]], int]:

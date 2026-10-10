@@ -19,8 +19,10 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Annotated
 
 import httpx
+from pydantic import BaseModel, ConfigDict, Field
 
 from societysim.analysis.labeler import read_log
 from societysim.logging.events import Event, EventType, Visibility
@@ -48,6 +50,32 @@ NARRATED = {
     EventType.NO_ELIMINATION,
     EventType.GAME_END,
 }
+
+
+Speaker = Annotated[str, Field(pattern=r"^(narrator|p[0-8])$")]
+
+
+class Clip(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    seq: int
+    speaker: Speaker
+    voice_id: str
+    text: str
+    file: str  # relative to the .audio dir
+
+
+class NarrationIndex(BaseModel):
+    """<game_id>.audio/index.json (the contract, docs/DATA_CONTRACT.md). Only describes it:
+    `narrate` builds the dict."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    game_id: str
+    model_id: str
+    output_format: str
+    voices: dict[Speaker, str]
+    clips: list[Clip]
 
 
 def seat_voice(seat: str) -> str:

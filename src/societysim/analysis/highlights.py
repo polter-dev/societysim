@@ -18,12 +18,40 @@ Ordering: score (high first), then game id, then first seq. Links are viewer que
 
 import json
 from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict
 
 from societysim.analysis.metrics import SUCCESS_TYPES, GameData, lie_success, load_batch
 from societysim.logging.events import Event, EventType
-from societysim.roles import Role
+from societysim.roles import Role, SeatId
 
 RESOLUTIONS = (EventType.ELIMINATION, EventType.NO_ELIMINATION)
+
+
+class Highlight(BaseModel):
+    """One entry of highlights.json (the contract, docs/DATA_CONTRACT.md). Only describes it:
+    `_moment` builds the dicts. `seq` is [first, last]; names and models are null when the
+    seat is unknown."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["lie_moved_vote", "wolf_survived_vote", "doctor_save", "seer_led_elimination"]
+    score: float
+    game_id: str
+    day: int
+    seq: tuple[int, int]
+    actor: SeatId | None
+    actor_name: str | None
+    actor_model: str | None
+    target: SeatId | None
+    target_name: str | None
+    target_model: str | None
+    description: str
+    link: str
+
+
+Highlights = list[Highlight]
 
 
 def _moment(g: GameData, kind: str, day: int, seqs: tuple[int, int], actor, target, score, desc):

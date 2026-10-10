@@ -1,0 +1,844 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "metrics.schema.json",
+  "x-contract-version": 1,
+  "$defs": {
+    "Detection": {
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "type": "integer"
+        },
+        "brier": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "auc": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "by_day": {
+          "patternProperties": {
+            "^\\d+$": {
+              "$ref": "#/$defs/DetectionDay"
+            }
+          },
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "n",
+        "brier",
+        "auc",
+        "by_day"
+      ],
+      "title": "Detection",
+      "type": "object"
+    },
+    "DetectionDay": {
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "type": "integer"
+        },
+        "brier": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "auc": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "n",
+        "brier",
+        "auc"
+      ],
+      "title": "DetectionDay",
+      "type": "object"
+    },
+    "GroupStats": {
+      "additionalProperties": false,
+      "properties": {
+        "games": {
+          "type": "integer"
+        },
+        "wins": {
+          "type": "integer"
+        },
+        "draws": {
+          "type": "integer"
+        },
+        "losses": {
+          "type": "integer"
+        },
+        "win_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "win_ci": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "statements": {
+          "type": "integer"
+        },
+        "lies": {
+          "$ref": "#/$defs/LiesBySource"
+        },
+        "detection": {
+          "$ref": "#/$defs/Detection"
+        },
+        "persuasion": {
+          "$ref": "#/$defs/Persuasion"
+        },
+        "survival_days": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "night_targeted": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "voted_out": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "invalid_output_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokens_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost_usd_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "games",
+        "wins",
+        "draws",
+        "losses",
+        "win_rate",
+        "win_ci",
+        "statements",
+        "lies",
+        "detection",
+        "persuasion",
+        "survival_days",
+        "night_targeted",
+        "voted_out",
+        "invalid_output_rate",
+        "tokens_per_game",
+        "cost_usd_per_game"
+      ],
+      "title": "GroupStats",
+      "type": "object"
+    },
+    "LieSuccess": {
+      "additionalProperties": false,
+      "properties": {
+        "exploratory": {
+          "type": "boolean"
+        },
+        "comparisons": {
+          "type": "integer"
+        },
+        "moved": {
+          "type": "integer"
+        },
+        "voters": {
+          "type": "integer"
+        },
+        "followed": {
+          "type": "integer"
+        },
+        "base_voters": {
+          "type": "integer"
+        },
+        "base_followed": {
+          "type": "integer"
+        },
+        "base_abstained": {
+          "type": "integer"
+        },
+        "share_moved": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "share_followed": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "base_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "exploratory",
+        "comparisons",
+        "moved",
+        "voters",
+        "followed",
+        "base_voters",
+        "base_followed",
+        "base_abstained",
+        "share_moved",
+        "share_followed",
+        "base_rate"
+      ],
+      "title": "LieSuccess",
+      "type": "object"
+    },
+    "Lies": {
+      "additionalProperties": false,
+      "properties": {
+        "lies": {
+          "type": "integer"
+        },
+        "by_type": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "propertyNames": {
+            "enum": [
+              "false_role_claim",
+              "false_report",
+              "bussing",
+              "hidden_knowledge"
+            ]
+          },
+          "type": "object"
+        },
+        "lie_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lie_success": {
+          "$ref": "#/$defs/LieSuccess"
+        }
+      },
+      "required": [
+        "lies",
+        "by_type",
+        "lie_rate",
+        "lie_success"
+      ],
+      "title": "Lies",
+      "type": "object"
+    },
+    "LiesBySource": {
+      "additionalProperties": false,
+      "properties": {
+        "self_tag": {
+          "$ref": "#/$defs/Lies"
+        },
+        "jev": {
+          "$ref": "#/$defs/Lies"
+        }
+      },
+      "required": [
+        "self_tag",
+        "jev"
+      ],
+      "title": "LiesBySource",
+      "type": "object"
+    },
+    "OpenSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "overall": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Rating"
+          },
+          "type": "object"
+        },
+        "wolf": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Rating"
+          },
+          "type": "object"
+        },
+        "village": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Rating"
+          },
+          "type": "object"
+        },
+        "wolf_side": {
+          "$ref": "#/$defs/SideAdvantage"
+        }
+      },
+      "required": [
+        "overall",
+        "wolf",
+        "village",
+        "wolf_side"
+      ],
+      "title": "OpenSkill",
+      "type": "object"
+    },
+    "Persuasion": {
+      "additionalProperties": false,
+      "properties": {
+        "exploratory": {
+          "type": "boolean"
+        },
+        "accusations": {
+          "type": "integer"
+        },
+        "voters": {
+          "type": "integer"
+        },
+        "hits": {
+          "type": "integer"
+        },
+        "share": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "exploratory",
+        "accusations",
+        "voters",
+        "hits",
+        "share"
+      ],
+      "title": "Persuasion",
+      "type": "object"
+    },
+    "Rating": {
+      "additionalProperties": false,
+      "properties": {
+        "mu": {
+          "type": "number"
+        },
+        "sigma": {
+          "type": "number"
+        },
+        "ordinal": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "mu",
+        "sigma",
+        "ordinal"
+      ],
+      "title": "Rating",
+      "type": "object"
+    },
+    "SideAdvantage": {
+      "additionalProperties": false,
+      "description": "The wolf-side dummy player's rating per pool; {} when no game had a winner.",
+      "properties": {
+        "overall": {
+          "$ref": "#/$defs/Rating"
+        },
+        "sided": {
+          "$ref": "#/$defs/Rating"
+        }
+      },
+      "title": "SideAdvantage",
+      "type": "object"
+    },
+    "Speed": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "type": "integer"
+        },
+        "timed_calls": {
+          "type": "integer"
+        },
+        "median_latency_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "p90_latency_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output_tokens_per_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokens_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost_usd_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "self_hosted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "calls",
+        "timed_calls",
+        "median_latency_ms",
+        "p90_latency_ms",
+        "output_tokens_per_s",
+        "tokens_per_game",
+        "cost_usd_per_game",
+        "self_hosted"
+      ],
+      "title": "Speed",
+      "type": "object"
+    },
+    "Summary": {
+      "additionalProperties": false,
+      "properties": {
+        "games": {
+          "type": "integer"
+        },
+        "unfinished_games": {
+          "type": "integer"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "input_tokens": {
+          "type": "integer"
+        },
+        "output_tokens": {
+          "type": "integer"
+        },
+        "wolf_wins": {
+          "type": "integer"
+        },
+        "village_wins": {
+          "type": "integer"
+        },
+        "draws": {
+          "type": "integer"
+        },
+        "wolf_win_share": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "village_win_share": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lies": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SummaryLies"
+          },
+          "propertyNames": {
+            "enum": [
+              "self_tag",
+              "jev"
+            ]
+          },
+          "type": "object"
+        },
+        "top_openskill": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TopOpenSkill"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "top_wolf_win": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TopWolfWin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "top_share_moved": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TopShareMoved"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "propertyNames": {
+            "enum": [
+              "self_tag",
+              "jev"
+            ]
+          },
+          "type": "object"
+        },
+        "min_comparisons": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "games",
+        "unfinished_games",
+        "cost_usd",
+        "input_tokens",
+        "output_tokens",
+        "wolf_wins",
+        "village_wins",
+        "draws",
+        "wolf_win_share",
+        "village_win_share",
+        "lies",
+        "top_openskill",
+        "top_wolf_win",
+        "top_share_moved",
+        "min_comparisons"
+      ],
+      "title": "Summary",
+      "type": "object"
+    },
+    "SummaryLies": {
+      "additionalProperties": false,
+      "properties": {
+        "lies": {
+          "type": "integer"
+        },
+        "statements": {
+          "type": "integer"
+        },
+        "lie_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lie_success": {
+          "$ref": "#/$defs/LieSuccess"
+        }
+      },
+      "required": [
+        "lies",
+        "statements",
+        "lie_rate",
+        "lie_success"
+      ],
+      "title": "SummaryLies",
+      "type": "object"
+    },
+    "TopOpenSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "ordinal": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "model",
+        "ordinal"
+      ],
+      "title": "TopOpenSkill",
+      "type": "object"
+    },
+    "TopShareMoved": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "share_moved": {
+          "type": "number"
+        },
+        "comparisons": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "model",
+        "share_moved",
+        "comparisons"
+      ],
+      "title": "TopShareMoved",
+      "type": "object"
+    },
+    "TopWolfWin": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "win_rate": {
+          "type": "number"
+        },
+        "seats": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "model",
+        "win_rate",
+        "seats"
+      ],
+      "title": "TopWolfWin",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "report/metrics.json: analysis.metrics.compute_metrics plus summary and speed.",
+  "properties": {
+    "games": {
+      "type": "integer"
+    },
+    "unfinished_games": {
+      "type": "integer"
+    },
+    "label_sources": {
+      "items": {
+        "enum": [
+          "self_tag",
+          "jev"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "exploratory": {
+      "items": {
+        "enum": [
+          "lie_success",
+          "persuasion"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "models": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "$ref": "#/$defs/GroupStats"
+        },
+        "propertyNames": {
+          "enum": [
+            "all",
+            "wolf",
+            "village",
+            "seer",
+            "doctor",
+            "villager"
+          ]
+        },
+        "type": "object"
+      },
+      "type": "object"
+    },
+    "by_group": {
+      "additionalProperties": {
+        "$ref": "#/$defs/GroupStats"
+      },
+      "propertyNames": {
+        "enum": [
+          "all",
+          "wolf",
+          "village",
+          "seer",
+          "doctor",
+          "villager"
+        ]
+      },
+      "type": "object"
+    },
+    "openskill": {
+      "$ref": "#/$defs/OpenSkill"
+    },
+    "summary": {
+      "$ref": "#/$defs/Summary"
+    },
+    "speed": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Speed"
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "games",
+    "unfinished_games",
+    "label_sources",
+    "exploratory",
+    "models",
+    "by_group",
+    "openskill",
+    "summary",
+    "speed"
+  ],
+  "title": "Metrics",
+  "type": "object"
+}

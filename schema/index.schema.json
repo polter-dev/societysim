@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "index.schema.json",
+  "x-contract-version": 1,
+  "$defs": {
+    "IndexEntry": {
+      "additionalProperties": false,
+      "description": "One entry of report/index.json. `file` is relative to the batch dir.",
+      "properties": {
+        "game_id": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "seed": {
+          "type": "integer"
+        },
+        "days": {
+          "type": "integer"
+        },
+        "winner": {
+          "anyOf": [
+            {
+              "enum": [
+                "wolves",
+                "villagers",
+                "draw"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seats": {
+          "patternProperties": {
+            "^p[0-8]$": {
+              "$ref": "#/$defs/IndexSeat"
+            }
+          },
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "game_id",
+        "file",
+        "seed",
+        "days",
+        "winner",
+        "seats"
+      ],
+      "title": "IndexEntry",
+      "type": "object"
+    },
+    "IndexSeat": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/Role"
+        }
+      },
+      "required": [
+        "name",
+        "model",
+        "role"
+      ],
+      "title": "IndexSeat",
+      "type": "object"
+    },
+    "Role": {
+      "enum": [
+        "wolf",
+        "seer",
+        "doctor",
+        "villager"
+      ],
+      "title": "Role",
+      "type": "string"
+    }
+  },
+  "items": {
+    "$ref": "#/$defs/IndexEntry"
+  },
+  "type": "array"
+}

@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "highlights.schema.json",
+  "x-contract-version": 1,
+  "$defs": {
+    "Highlight": {
+      "additionalProperties": false,
+      "description": "One entry of highlights.json (the contract, docs/DATA_CONTRACT.md). Only describes it:\n`_moment` builds the dicts. `seq` is [first, last]; names and models are null when the\nseat is unknown.",
+      "properties": {
+        "type": {
+          "enum": [
+            "lie_moved_vote",
+            "wolf_survived_vote",
+            "doctor_save",
+            "seer_led_elimination"
+          ],
+          "type": "string"
+        },
+        "score": {
+          "type": "number"
+        },
+        "game_id": {
+          "type": "string"
+        },
+        "day": {
+          "type": "integer"
+        },
+        "seq": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "pattern": "^p[0-8]$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actor_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actor_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "anyOf": [
+            {
+              "pattern": "^p[0-8]$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "link": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "score",
+        "game_id",
+        "day",
+        "seq",
+        "actor",
+        "actor_name",
+        "actor_model",
+        "target",
+        "target_name",
+        "target_model",
+        "description",
+        "link"
+      ],
+      "title": "Highlight",
+      "type": "object"
+    }
+  },
+  "items": {
+    "$ref": "#/$defs/Highlight"
+  },
+  "type": "array"
+}

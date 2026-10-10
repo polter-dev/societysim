@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "narration_index.schema.json",
+  "x-contract-version": 1,
+  "$defs": {
+    "Clip": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "type": "integer"
+        },
+        "speaker": {
+          "pattern": "^(narrator|p[0-8])$",
+          "type": "string"
+        },
+        "voice_id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "seq",
+        "speaker",
+        "voice_id",
+        "text",
+        "file"
+      ],
+      "title": "Clip",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "<game_id>.audio/index.json (the contract, docs/DATA_CONTRACT.md). Only describes it:\n`narrate` builds the dict.",
+  "properties": {
+    "game_id": {
+      "type": "string"
+    },
+    "model_id": {
+      "type": "string"
+    },
+    "output_format": {
+      "type": "string"
+    },
+    "voices": {
+      "patternProperties": {
+        "^(narrator|p[0-8])$": {
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "additionalProperties": false
+    },
+    "clips": {
+      "items": {
+        "$ref": "#/$defs/Clip"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "game_id",
+    "model_id",
+    "output_format",
+    "voices",
+    "clips"
+  ],
+  "title": "NarrationIndex",
+  "type": "object"
+}

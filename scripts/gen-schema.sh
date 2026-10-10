@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Regenerate schema/events.schema.json (from the Pydantic models) and
-# viewer/src/types/events.ts (from that schema). Check that they are current with:
+# Regenerate schema/events.schema.json (from the Pydantic models), viewer/src/types/events.ts
+# (from that schema) and the static viewer-data schemas (index, leaderboard, metrics,
+# highlights, narration_index; see docs/DATA_CONTRACT.md). Check that they are current with:
 #   ./scripts/gen-schema.sh && git diff --exit-code schema/ viewer/src/types/
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -36,6 +37,48 @@ for s in (schema, *schema["$defs"].values()):
             props[k].pop("default", None)
 schema = {"$schema": "https://json-schema.org/draft/2020-12/schema", **schema}
 Path("schema/events.schema.json").write_text(json.dumps(schema, indent=2) + "\n")
+
+# Static viewer data (docs/DATA_CONTRACT.md). Bump CONTRACT_VERSION on a breaking change
+# (rename, removal, type change), per AGENTS.md hard rule 3.
+from pydantic import TypeAdapter
+
+from societysim.analysis.highlights import Highlights
+from societysim.analysis.narrate import NarrationIndex
+from societysim.analysis.report import GameIndex, Leaderboard, Metrics
+
+CONTRACT_VERSION = 1
+
+
+def tighten(node):
+    # Every key is always written; the defaults only exist to make a few keys optional.
+    # Keys that must match a pattern (seat ids, day numbers) allow nothing else.
+    if isinstance(node, dict):
+        node.pop("default", None)
+        if "patternProperties" in node:
+            node.setdefault("additionalProperties", False)
+        for v in node.values():
+            tighten(v)
+    elif isinstance(node, list):
+        for v in node:
+            tighten(v)
+
+
+for name, tp in [
+    ("index", GameIndex),
+    ("leaderboard", Leaderboard),
+    ("metrics", Metrics),
+    ("highlights", Highlights),
+    ("narration_index", NarrationIndex),
+]:
+    s = TypeAdapter(tp).json_schema(by_alias=True, schema_generator=NoFieldTitles)
+    tighten(s)
+    s = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": f"{name}.schema.json",
+        "x-contract-version": CONTRACT_VERSION,
+        **s,
+    }
+    Path(f"schema/{name}.schema.json").write_text(json.dumps(s, indent=2) + "\n")
 PY
 
 mkdir -p viewer/src/types

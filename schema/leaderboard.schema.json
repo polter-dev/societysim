@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "leaderboard.schema.json",
+  "x-contract-version": 1,
+  "$defs": {
+    "BoardRow": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "games": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seats": {
+          "type": "integer"
+        },
+        "win_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "win_ci": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wolf_win_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "village_win_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "openskill": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rating"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detection_auc": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detection_brier": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "invalid_output_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost_usd_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lie_rate": {
+          "$ref": "#/$defs/LieRate"
+        }
+      },
+      "required": [
+        "model",
+        "games",
+        "seats",
+        "win_rate",
+        "win_ci",
+        "wolf_win_rate",
+        "village_win_rate",
+        "openskill",
+        "detection_auc",
+        "detection_brier",
+        "invalid_output_rate",
+        "cost_usd_per_game",
+        "lie_rate"
+      ],
+      "title": "BoardRow",
+      "type": "object"
+    },
+    "LieRate": {
+      "additionalProperties": false,
+      "properties": {
+        "self_tag": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jev": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "self_tag",
+        "jev"
+      ],
+      "title": "LieRate",
+      "type": "object"
+    },
+    "Rating": {
+      "additionalProperties": false,
+      "properties": {
+        "mu": {
+          "type": "number"
+        },
+        "sigma": {
+          "type": "number"
+        },
+        "ordinal": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "mu",
+        "sigma",
+        "ordinal"
+      ],
+      "title": "Rating",
+      "type": "object"
+    },
+    "SideAdvantage": {
+      "additionalProperties": false,
+      "description": "The wolf-side dummy player's rating per pool; {} when no game had a winner.",
+      "properties": {
+        "overall": {
+          "$ref": "#/$defs/Rating"
+        },
+        "sided": {
+          "$ref": "#/$defs/Rating"
+        }
+      },
+      "title": "SideAdvantage",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "report/leaderboard.json.",
+  "properties": {
+    "schema": {
+      "const": 1,
+      "type": "integer"
+    },
+    "games": {
+      "type": "integer"
+    },
+    "label_sources": {
+      "items": {
+        "enum": [
+          "self_tag",
+          "jev"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "wolf_side_advantage": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SideAdvantage"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "models": {
+      "items": {
+        "$ref": "#/$defs/BoardRow"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "games",
+    "label_sources",
+    "wolf_side_advantage",
+    "models"
+  ],
+  "title": "Leaderboard",
+  "type": "object"
+}

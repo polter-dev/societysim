@@ -1,0 +1,710 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "play_api.schema.json",
+  "x-contract-version": 1,
+  "x-endpoints": {
+    "POST /api/games": {
+      "request": "StartGame",
+      "response": "StartedGame"
+    },
+    "GET /api/games/{id}/me": {
+      "auth": "seat_token",
+      "response": "Me"
+    },
+    "POST /api/games/{id}/action": {
+      "auth": "seat_token",
+      "request": "ActionBody",
+      "response": "Accepted"
+    },
+    "GET /api/limits": {
+      "response": "Limits"
+    },
+    "GET /api/health": {
+      "response": "Health"
+    }
+  },
+  "$defs": {
+    "Accepted": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "const": true,
+          "default": true,
+          "title": "Accepted",
+          "type": "boolean"
+        }
+      },
+      "title": "Accepted",
+      "type": "object"
+    },
+    "ActionBody": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StatementResponse"
+        },
+        {
+          "$ref": "#/$defs/VoteResponse"
+        },
+        {
+          "$ref": "#/$defs/WolfChatResponse"
+        },
+        {
+          "$ref": "#/$defs/TargetResponse"
+        }
+      ],
+      "description": "POST /api/games/{id}/action: the response shape for `pending_action.kind`.\nStatement text and wolf chat messages: 1 to 280 characters after control characters are\nstripped. `thoughts` is not logged.",
+      "title": "ActionBody"
+    },
+    "GameSetup": {
+      "additionalProperties": false,
+      "description": "One game's settings. Every default is the Basic setup.\n\nValidate with `GameSetup.model_validate(data)`; model names are checked against\nconfigs/models.yaml unless `context={\"models\": {...}}` gives another set.",
+      "properties": {
+        "mode": {
+          "default": "basic",
+          "description": "basic allows only seed and human_seat to change.",
+          "enum": [
+            "basic",
+            "advanced"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "n_players": {
+          "default": 10,
+          "maximum": 10,
+          "minimum": 7,
+          "title": "N Players",
+          "type": "integer"
+        },
+        "n_wolves": {
+          "default": 2,
+          "description": "Must be fewer than the villager side.",
+          "minimum": 1,
+          "title": "N Wolves",
+          "type": "integer"
+        },
+        "special_roles": {
+          "$ref": "#/$defs/SpecialRoles",
+          "default": {
+            "seer": true,
+            "doctor": true
+          }
+        },
+        "seats": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SeatModel"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "One entry per seat p0..p{n_players-1}. Excludes model_pool.",
+          "title": "Seats"
+        },
+        "model_pool": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Models to fill the seats from; null means the default lineup.",
+          "title": "Model Pool"
+        },
+        "rotation": {
+          "default": "shuffle",
+          "description": "How model_pool fills the model seats: in_order repeats the pool from p0; shuffle first shuffles the pool with the seed.",
+          "enum": [
+            "in_order",
+            "shuffle"
+          ],
+          "title": "Rotation",
+          "type": "string"
+        },
+        "human_seat": {
+          "anyOf": [
+            {
+              "pattern": "^p[0-9]$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The seat a person plays, or null.",
+          "title": "Human Seat"
+        },
+        "seed": {
+          "default": 0,
+          "title": "Seed",
+          "type": "integer"
+        }
+      },
+      "title": "GameSetup",
+      "type": "object"
+    },
+    "Health": {
+      "additionalProperties": false,
+      "properties": {
+        "ok": {
+          "const": true,
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        }
+      },
+      "title": "Health",
+      "type": "object"
+    },
+    "Limits": {
+      "additionalProperties": false,
+      "properties": {
+        "play_enabled": {
+          "title": "Play Enabled",
+          "type": "boolean"
+        },
+        "remaining_today": {
+          "title": "Remaining Today",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "play_enabled",
+        "remaining_today"
+      ],
+      "title": "Limits",
+      "type": "object"
+    },
+    "Me": {
+      "additionalProperties": false,
+      "description": "GET /api/games/{id}/me: what the seat knows, nothing more.",
+      "properties": {
+        "game_id": {
+          "title": "Game Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "running",
+            "finished",
+            "forfeit",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "winner": {
+          "anyOf": [
+            {
+              "enum": [
+                "wolves",
+                "villagers",
+                "draw"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Winner"
+        },
+        "seat": {
+          "pattern": "^p[0-9]$",
+          "title": "Seat",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/Role"
+        },
+        "alive": {
+          "title": "Alive",
+          "type": "boolean"
+        },
+        "day": {
+          "title": "Day",
+          "type": "integer"
+        },
+        "phase": {
+          "$ref": "#/$defs/Phase"
+        },
+        "observation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Observation"
+        },
+        "pending_action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PendingAction"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "players": {
+          "items": {
+            "$ref": "#/$defs/Player"
+          },
+          "title": "Players",
+          "type": "array"
+        }
+      },
+      "required": [
+        "game_id",
+        "status",
+        "winner",
+        "seat",
+        "name",
+        "role",
+        "alive",
+        "day",
+        "phase",
+        "observation",
+        "pending_action",
+        "players"
+      ],
+      "title": "Me",
+      "type": "object"
+    },
+    "PendingAction": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "statement",
+            "vote",
+            "wolf_chat",
+            "lone_wolf",
+            "seer",
+            "doctor"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "targets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Targets",
+          "type": "array"
+        },
+        "others": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Others",
+          "type": "array"
+        },
+        "deadline": {
+          "title": "Deadline",
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind",
+        "targets",
+        "others",
+        "deadline"
+      ],
+      "title": "PendingAction",
+      "type": "object"
+    },
+    "Phase": {
+      "enum": [
+        "setup",
+        "night",
+        "day",
+        "vote"
+      ],
+      "title": "Phase",
+      "type": "string"
+    },
+    "Player": {
+      "additionalProperties": false,
+      "properties": {
+        "seat": {
+          "pattern": "^p[0-9]$",
+          "title": "Seat",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "alive": {
+          "title": "Alive",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "seat",
+        "name",
+        "alive"
+      ],
+      "title": "Player",
+      "type": "object"
+    },
+    "PrivateReasoning": {
+      "additionalProperties": false,
+      "properties": {
+        "thoughts": {
+          "title": "Thoughts",
+          "type": "string"
+        },
+        "suspicion": {
+          "items": {
+            "$ref": "#/$defs/SuspicionEntry"
+          },
+          "title": "Suspicion",
+          "type": "array"
+        }
+      },
+      "required": [
+        "thoughts",
+        "suspicion"
+      ],
+      "title": "PrivateReasoning",
+      "type": "object"
+    },
+    "Role": {
+      "enum": [
+        "wolf",
+        "seer",
+        "doctor",
+        "villager"
+      ],
+      "title": "Role",
+      "type": "string"
+    },
+    "SeatModel": {
+      "additionalProperties": false,
+      "properties": {
+        "seat": {
+          "pattern": "^p[0-9]$",
+          "title": "Seat",
+          "type": "string"
+        },
+        "model": {
+          "description": "A model name from models_catalog.json, or 'human'.",
+          "title": "Model",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seat",
+        "model"
+      ],
+      "title": "SeatModel",
+      "type": "object"
+    },
+    "SeerReport": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "result": {
+          "enum": [
+            "wolf",
+            "not_wolf"
+          ],
+          "title": "Result",
+          "type": "string"
+        },
+        "night": {
+          "title": "Night",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "target",
+        "result",
+        "night"
+      ],
+      "title": "SeerReport",
+      "type": "object"
+    },
+    "SpecialRoles": {
+      "additionalProperties": false,
+      "properties": {
+        "seer": {
+          "default": true,
+          "title": "Seer",
+          "type": "boolean"
+        },
+        "doctor": {
+          "default": true,
+          "title": "Doctor",
+          "type": "boolean"
+        }
+      },
+      "title": "SpecialRoles",
+      "type": "object"
+    },
+    "StartGame": {
+      "additionalProperties": false,
+      "description": "POST /api/games. The server draws the seed; human_seat defaults to p0 unless watching.",
+      "properties": {
+        "setup": {
+          "$ref": "#/$defs/GameSetup"
+        },
+        "turnstile_token": {
+          "default": "",
+          "maxLength": 2048,
+          "title": "Turnstile Token",
+          "type": "string"
+        },
+        "watch_only": {
+          "default": false,
+          "title": "Watch Only",
+          "type": "boolean"
+        }
+      },
+      "title": "StartGame",
+      "type": "object"
+    },
+    "StartedGame": {
+      "additionalProperties": false,
+      "properties": {
+        "game_id": {
+          "title": "Game Id",
+          "type": "string"
+        },
+        "seat": {
+          "anyOf": [
+            {
+              "pattern": "^p[0-9]$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Seat"
+        },
+        "seat_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Seat Token"
+        }
+      },
+      "required": [
+        "game_id",
+        "seat",
+        "seat_token"
+      ],
+      "title": "StartedGame",
+      "type": "object"
+    },
+    "StatementAction": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "accuse": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Accuse",
+          "type": "array"
+        },
+        "claim_role": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Role"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seer_report": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SeerReport"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "text",
+        "accuse",
+        "claim_role",
+        "seer_report"
+      ],
+      "title": "StatementAction",
+      "type": "object"
+    },
+    "StatementResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "private_reasoning": {
+          "$ref": "#/$defs/PrivateReasoning"
+        },
+        "action": {
+          "$ref": "#/$defs/StatementAction"
+        }
+      },
+      "required": [
+        "private_reasoning",
+        "action"
+      ],
+      "title": "StatementResponse",
+      "type": "object"
+    },
+    "SuspicionEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "player": {
+          "title": "Player",
+          "type": "string"
+        },
+        "p": {
+          "title": "P",
+          "type": "number"
+        }
+      },
+      "required": [
+        "player",
+        "p"
+      ],
+      "title": "SuspicionEntry",
+      "type": "object"
+    },
+    "TargetAction": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "title": "TargetAction",
+      "type": "object"
+    },
+    "TargetResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "private_reasoning": {
+          "$ref": "#/$defs/PrivateReasoning"
+        },
+        "action": {
+          "$ref": "#/$defs/TargetAction"
+        }
+      },
+      "required": [
+        "private_reasoning",
+        "action"
+      ],
+      "title": "TargetResponse",
+      "type": "object"
+    },
+    "VoteAction": {
+      "additionalProperties": false,
+      "properties": {
+        "vote": {
+          "title": "Vote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "vote"
+      ],
+      "title": "VoteAction",
+      "type": "object"
+    },
+    "VoteResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "private_reasoning": {
+          "$ref": "#/$defs/PrivateReasoning"
+        },
+        "action": {
+          "$ref": "#/$defs/VoteAction"
+        }
+      },
+      "required": [
+        "private_reasoning",
+        "action"
+      ],
+      "title": "VoteResponse",
+      "type": "object"
+    },
+    "WolfChatAction": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "proposed_target": {
+          "title": "Proposed Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message",
+        "proposed_target"
+      ],
+      "title": "WolfChatAction",
+      "type": "object"
+    },
+    "WolfChatResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "private_reasoning": {
+          "$ref": "#/$defs/PrivateReasoning"
+        },
+        "action": {
+          "$ref": "#/$defs/WolfChatAction"
+        }
+      },
+      "required": [
+        "private_reasoning",
+        "action"
+      ],
+      "title": "WolfChatResponse",
+      "type": "object"
+    }
+  }
+}

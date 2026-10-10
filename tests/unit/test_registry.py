@@ -98,6 +98,15 @@ def test_doctor_green_and_red(monkeypatch):
     assert "FAIL" in bad.output
 
 
+def test_ping_schema_forbids_extra_properties():
+    assert Ping.model_json_schema()["additionalProperties"] is False
+
+
+def test_doctor_missing_config():
+    res = CliRunner().invoke(app, ["doctor", "--config", "nope.yaml"])
+    assert res.exit_code == 1 and "not found" in res.output
+
+
 def test_doctor_no_match(monkeypatch):
     res = _run_doctor(monkeypatch, set(), "--model", "zzz*")
     assert res.exit_code == 1

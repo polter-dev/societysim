@@ -42,6 +42,9 @@ def doctor(
     from societysim.models.registry import load_registry, probe_model
 
     load_dotenv()
+    if not config.is_file():
+        typer.echo(f"config file not found: {config}")
+        raise typer.Exit(1)
     reg = load_registry(config)
     specs = reg.match(model)
     if not specs:

@@ -67,6 +67,8 @@ def load_registry(path: str | Path = DEFAULT_PATH) -> Registry:
 class Ping(BaseModel):
     """Tiny structured reply used by doctor."""
 
+    model_config = ConfigDict(extra="forbid")  # strict json_schema needs additionalProperties
+
     ok: bool
     word: str
 

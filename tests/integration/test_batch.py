@@ -1,11 +1,18 @@
 import asyncio
 import json
+import re
 from pathlib import Path
 
 import pytest
 from fakes import FakeClient
 from typer.testing import CliRunner
 
+from societysim.agents.schemas import (
+    StatementResponse,
+    TargetResponse,
+    VoteResponse,
+    WolfChatResponse,
+)
 from societysim.batch.runner import PROVIDER_DOWN_AFTER, BatchMismatch, run_batch
 from societysim.cli import app
 from societysim.config import BatchConfig, ModelSpec
@@ -48,7 +55,8 @@ class PricedFake(FakeClient):
 
 def cfg(**kw) -> BatchConfig:
     base = {"batch_id": "t", "n_games": 4, "models": ["a", "b"], "budget_usd": 100, "game": {}}
-    return BatchConfig.model_validate(base | kw)
+    # The plain fakes answer invalid replies, so the breaker is off unless a test sets it.
+    return BatchConfig.model_validate(base | {"max_invalid_rate": 1.0} | kw)
 
 
 def finished_logs(tmp_path: Path) -> list[Path]:
@@ -584,3 +592,90 @@ def test_cli_batch_prints_a_progress_line_per_game(tmp_path, monkeypatch):
     for n in (1, 2, 3):
         assert f"[{n}/3] cli-g000{n - 1} finished (" in out
     assert "spent $0.00 of $5.00" in out and "ETA" in out
+
+
+class HealthyFake(PricedFake):
+    """Valid replies built from the legal ids in the prompt; models in `bad` answer garbage."""
+
+    def __init__(self, bad=()):
+        super().__init__()
+        self.bad = set(bad)
+
+    async def complete(self, model, messages, response_model) -> CompletionResult:
+        if model.name in self.bad:
+            usage = Usage(model=model.name, input_tokens=100, output_tokens=20)
+            return CompletionResult(parsed=None, raw="nope", error="bad json", usage=usage)
+        lines = messages[-1]["content"].splitlines()
+        rated = next(x for x in lines if x.startswith('"suspicion" must'))
+        rated = re.findall(r"\((p\d)\)", rated)
+        legal = next((x for x in lines if x.startswith("Players you can")), None)
+        legal = re.findall(r"\((p\d)\)", legal) if legal else rated
+        who = self.rng.choice(legal)
+        action = {
+            StatementResponse: {
+                "text": "hm",
+                "accuse": [who],
+                "claim_role": None,
+                "seer_report": None,
+            },
+            VoteResponse: {"vote": who},
+            WolfChatResponse: {"message": "go", "proposed_target": who},
+            TargetResponse: {"target": who},
+        }[response_model]
+        reasoning = {"thoughts": "x", "suspicion": [{"player": p, "p": 0.5} for p in rated]}
+        self.script.append({"private_reasoning": reasoning, "action": action})
+        r = await FakeClient.complete(self, model, messages, response_model)  # no await before pop
+        return r.model_copy(update={"usage": r.usage.model_copy(update={"cost_usd": CALL_COST})})
+
+
+# --- invalid-output circuit breaker -------------------------------------------------------
+
+LIMIT = {"max_invalid_rate": 0.25}  # the default; cfg() turns the breaker off
+
+
+async def test_healthy_fake_gives_valid_games(tmp_path):
+    res = await run_batch(cfg(n_games=1, **LIMIT), SPECS, HealthyFake(), runs_dir=tmp_path)
+    assert res["status"] == "completed"
+    assert all(v["invalid"] == 0 and v["calls"] > 0 for v in res["invalid_output"].values())
+
+
+async def test_healthy_batch_does_not_trip_the_breaker(tmp_path):
+    res = await run_batch(cfg(**LIMIT), SPECS, HealthyFake(), runs_dir=tmp_path)
+    assert res["status"] == "completed" and res["invalid_stop"] is None
+    assert len(res["finished"]) == 4
+
+
+async def test_invalid_model_trips_the_breaker_and_names_it(tmp_path):
+    c = cfg(n_games=8, max_concurrency=1, **LIMIT)
+    res = await run_batch(c, SPECS, HealthyFake(bad="b"), runs_dir=tmp_path)
+    assert res["status"] == "stopped_invalid"
+    assert 1 <= len(res["finished"]) < 8 and res["not_started"]
+    assert res["invalid_stop"].startswith("b: 100.0% invalid output")
+    assert res["invalid_output"]["a"]["invalid"] == 0
+    assert res["invalid_output"]["b"]["invalid"] > 0
+    meta = json.loads((tmp_path / "t/run_meta.json").read_text())
+    assert meta["status"] == "stopped_invalid"
+    assert meta["invalid_output"] == res["invalid_output"]
+    assert meta["invalid_stop"] == res["invalid_stop"]
+
+
+async def test_breaker_waits_for_the_minimum_number_of_calls(tmp_path):
+    c = cfg(n_games=3, max_concurrency=1, min_calls_for_invalid_check=10**6, **LIMIT)
+    res = await run_batch(c, SPECS, HealthyFake(bad="b"), runs_dir=tmp_path)
+    assert res["status"] == "completed" and res["invalid_stop"] is None
+
+
+async def test_resume_rechecks_invalid_rate_and_a_higher_limit_continues(tmp_path):
+    c = cfg(n_games=8, max_concurrency=1, **LIMIT)
+    first = await run_batch(c, SPECS, HealthyFake(bad="b"), runs_dir=tmp_path)
+    assert first["status"] == "stopped_invalid"
+    client = HealthyFake()
+    again = await run_batch(c, SPECS, client, runs_dir=tmp_path)  # same limit: still tripped
+    assert again["status"] == "stopped_invalid" and client.calls == []
+    assert again["invalid_output"] == first["invalid_output"]
+    # max_invalid_rate is not in the fingerprint, so a higher limit resumes the same batch
+    done = await run_batch(
+        cfg(n_games=8, max_concurrency=1, max_invalid_rate=1.0), SPECS, client, runs_dir=tmp_path
+    )
+    assert done["status"] == "completed"
+    assert len(done["finished"]) + len(done["skipped"]) == 8

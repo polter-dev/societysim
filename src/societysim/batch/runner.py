@@ -36,7 +36,9 @@ log = logging.getLogger(__name__)
 
 _game: ContextVar[str | None] = ContextVar("batch_game", default=None)
 
-Status = Literal["running", "completed", "budget_stopped", "failed", "interrupted"]
+Status = Literal[
+    "running", "completed", "budget_stopped", "stopped_invalid", "failed", "interrupted"
+]
 
 
 # A model whose calls fail this many times in a row without getting any tokens back is taken
@@ -112,6 +114,22 @@ def game_costs(path: Path) -> Counter[str] | None:
     return costs
 
 
+def game_invalid(path: Path, models: list[str]) -> dict[str, list[int]]:
+    """Per model in a finished game log: [invalid_output events, model attempts]. `models` is the
+    game's model per seat p0..; a log that cannot be read counts as nothing."""
+    out: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+    try:
+        for line in path.read_text().splitlines():
+            e = json.loads(line)
+            if e["type"] == EventType.INVALID_OUTPUT and e.get("actor"):
+                out[models[int(e["actor"][1:])]][0] += 1
+            if usage := (e.get("meta") or {}).get("usage"):
+                out[usage["model"]][1] += usage.get("attempts", 1)
+    except (OSError, ValueError, KeyError, IndexError):
+        return {}
+    return dict(out)
+
+
 # Rough size of one seat's whole game, for cost estimates before any data exists. From T5.1 and
 # recent logs: 4 to 11 calls per seat, 1.2k to 2.4k input and 250 to 370 output tokens per call.
 # Kept on the high side (12 calls, 2k in, 400 out) so the guard errs towards stopping early.
@@ -163,9 +181,18 @@ class BatchMismatch(Exception):
 def fingerprint(cfg: BatchConfig, specs: Mapping[str, ModelSpec], agents: str) -> str:
     """Hash of what decides what a game is: config, agent type and the models' registry entries.
 
-    n_games, budget and concurrency may change between runs.
+    n_games, budget, the invalid-output limits and concurrency may change between runs.
     """
-    keep = cfg.model_dump(mode="json", exclude={"n_games", "budget_usd", "max_concurrency"})
+    keep = cfg.model_dump(
+        mode="json",
+        exclude={
+            "n_games",
+            "budget_usd",
+            "max_concurrency",
+            "max_invalid_rate",
+            "min_calls_for_invalid_check",
+        },
+    )
     keep["agents"] = agents
     keep["registry"] = {m: specs[m].model_dump(mode="json") for m in sorted(set(cfg.models))}
     return hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:16]
@@ -207,7 +234,10 @@ async def run_batch(
     prior_seat_cost for a model with no finished game yet, so fresh models run in parallel too.
     Overshoot happens only when a game costs more than its estimate: a model's first games are
     bounded by the prior, so a model far dearer than its price table can overshoot there.
-    Games already running finish. A game that
+    Games already running finish. After each finished game (and on resume, over the games
+    already on disk) every model's invalid_output rate is checked; one above
+    cfg.max_invalid_rate with at least cfg.min_calls_for_invalid_check attempts stops new games,
+    the batch ends "stopped_invalid" and "invalid_stop" names the model. A game that
     raises is recorded under "failed" and the batch ends "failed". A model that fails
     PROVIDER_DOWN_AFTER calls in a row with no tokens raises ProviderDown in its game; no new
     game starts after that, and the message is kept under "provider_down". On cancellation the
@@ -243,6 +273,20 @@ async def run_batch(
     todo = []
     seat_cost: dict[str, float] = {}  # model -> highest observed USD per seat per game
     prior_spend = 0.0
+    invalid: dict[str, list[int]] = defaultdict(lambda: [0, 0])  # model -> [invalid, attempts]
+    invalid_stop: list[str] = []  # at most one message; its presence stops new games
+
+    def count_invalid(a: Assignment) -> None:
+        for model, (bad, calls) in game_invalid(out / f"{a.game_id}.jsonl", a.models).items():
+            invalid[model][0] += bad
+            invalid[model][1] += calls
+        for model, (bad, calls) in invalid.items():
+            if calls >= cfg.min_calls_for_invalid_check and bad / calls > cfg.max_invalid_rate:
+                invalid_stop[:] = [
+                    f"{model}: {bad / calls:.1%} invalid output ({bad} of {calls} calls), "
+                    f"over the limit of {cfg.max_invalid_rate:.1%}; no new games started"
+                ]
+                return
 
     def observe(a: Assignment, costs: Mapping[str, float]) -> None:
         for model, seats in Counter(a.models).items():
@@ -256,6 +300,7 @@ async def run_batch(
         else:
             skipped.append(a.game_id)
             observe(a, costs)
+            count_invalid(a)
             prior_spend += sum(costs.values())
     # The ledger also holds money spent on games that were cut off; logs alone would miss it.
     prior_spend = max(float(old.get("spent_usd", 0.0)), prior_spend)
@@ -291,6 +336,8 @@ async def run_batch(
             "skipped": skipped,
             "failed": failed,
             "provider_down": down,
+            "invalid_output": {m: {"invalid": b, "calls": c} for m, (b, c) in invalid.items()},
+            "invalid_stop": invalid_stop[0] if invalid_stop else None,
             "not_started": [a.game_id for a in todo if a.game_id not in started_ids],
             "config": cfg.model_dump(mode="json"),
         }
@@ -311,7 +358,7 @@ async def run_batch(
         return sum(seat_cost[m] if m in seat_cost else prior_seat_cost(specs[m]) for m in a.models)
 
     def verdict(a: Assignment) -> Literal["go", "wait", "stop"]:
-        if down or spent() >= cfg.budget_usd:
+        if down or invalid_stop or spent() >= cfg.budget_usd:
             return "stop"
         if metered is None:
             return "go"  # scripted games are free
@@ -335,6 +382,9 @@ async def run_batch(
             outcome = {"event": "finished", "winner": getattr(game.winner, "value", game.winner)}
             _tag_agents(out / f"{a.game_id}.run_meta.json", agents)
             finished.append(a.game_id)
+            count_invalid(a)
+            if invalid_stop:
+                log.warning("batch %s: %s", cfg.batch_id, invalid_stop[0])
             if metered:
                 observe(a, metered.by_game[a.game_id])
         except Exception as exc:
@@ -405,4 +455,8 @@ async def run_batch(
         await asyncio.gather(*tasks, return_exceptions=True)
         save("interrupted")
         raise
-    return save("failed" if failed else "budget_stopped" if budget_hit else "completed")
+    if failed:
+        return save("failed")
+    if invalid_stop and len(started_ids) < len(todo):
+        return save("stopped_invalid")
+    return save("budget_stopped" if budget_hit else "completed")

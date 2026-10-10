@@ -109,6 +109,10 @@ class BatchConfig(_Config):
     budget_usd: float = Field(gt=0)  # hard stop for the whole batch
     max_concurrency: int = Field(4, ge=1)  # games in flight
     model_game_limits: dict[str, int] = {}  # e.g. {"gpt-5-mini": 10}: cap games per model
+    # Stop starting games once a model's invalid_output rate (over finished games) passes this,
+    # given at least min_calls_for_invalid_check calls from it. Like budget, not in the fingerprint.
+    max_invalid_rate: float = Field(0.25, ge=0, le=1)
+    min_calls_for_invalid_check: int = Field(40, ge=1)
     game: GameConfig = GameConfig()  # shared settings; models and seed are set per game
 
 

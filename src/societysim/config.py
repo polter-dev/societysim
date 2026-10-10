@@ -1,5 +1,7 @@
 """Config models, loaded from YAML. Every game rule is a flag on RuleFlags (see docs/RULES.md)."""
 
+import os
+import re
 from pathlib import Path
 from typing import Literal, Self
 
@@ -21,6 +23,8 @@ class ModelSpec(_Config):
     max_tokens: int = 1024
     reasoning_effort: str | None = None  # e.g. "minimal"; None leaves the provider default
     hf_provider: str | None = None  # pin an HF Inference Provider
+    api_base: str | None = Field(None, exclude_if=lambda value: value is None)
+    api_key_env: str | None = Field(None, exclude_if=lambda value: value is None)
     input_cost_per_mtok: float | None = None  # USD per 1M tokens; overrides LiteLLM pricing
     output_cost_per_mtok: float | None = None
     color: str | None = None  # viewer color, e.g. "#4f8ef7"
@@ -29,6 +33,17 @@ class ModelSpec(_Config):
     def provider(self) -> str:
         """LiteLLM provider prefix: "huggingface", "gemini", "openai", ..."""
         return self.litellm_model.split("/", 1)[0]
+
+    def resolved_api_base(self) -> str | None:
+        if self.api_base is None:
+            return None
+        match = re.fullmatch(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", self.api_base)
+        if match:
+            var = match.group(1)
+            if not os.environ.get(var):
+                raise ValueError(f"missing API base for {self.name}; set {var} in .env")
+            return os.environ[var]
+        return self.api_base
 
 
 class RuleFlags(_Config):

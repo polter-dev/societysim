@@ -83,7 +83,7 @@ Set these before `bash infra/amd/serve.sh`:
 | Variable | Default | Use |
 |---|---|---|
 | `AMD_BACKEND` | `auto` | `vllm` to fail instead of falling back, `llamacpp` to skip vLLM |
-| `AMD_MODEL` | `openai/gpt-oss-20b` | Another HF model for vLLM. Also add a matching `amd-*` entry with `litellm_model: llamafile/<that id>`. It has to fit in 32 GB with room for the KV cache: Qwen3-32B in BF16 (about 64 GB) does not, Qwen3-8B or an AWQ/FP8 14B does. |
+| `AMD_MODEL` | `openai/gpt-oss-20b` | Another HF model for vLLM. Also add a matching `amd-*` entry with `litellm_model: openai/<that id>` and the same `api_base` and `api_key_env` as `amd-gpt-oss-20b`. It has to fit in 32 GB with room for the KV cache: Qwen3-32B in BF16 (about 64 GB) does not, Qwen3-8B or an AWQ/FP8 14B does. |
 | `AMD_GGUF_REPO`, `AMD_GGUF_FILE` | `ggml-org/gpt-oss-20b-GGUF`, `gpt-oss-20b-MXFP4.gguf` | Model for the llama.cpp fallback |
 | `AMD_TUNNEL` | `1` | `0` for no tunnel (run the games on the box itself, see below) |
 | `AMD_WORK` | `~/amd-serve` | Venvs, weights, logs |
@@ -92,6 +92,6 @@ If vLLM failed once, later runs skip it and go straight to llama.cpp. Delete `~/
 
 To run the games on the box without the tunnel: `AMD_TUNNEL=0 bash infra/amd/serve.sh`, then in the repo run `uv sync --frozen`, put `AMD_VLLM_BASE_URL=http://127.0.0.1:8000/v1` and the key in `.env`, and use the same `doctor` and `play` commands.
 
-## Why `llamafile/` in models.yaml
+## How models.yaml reaches the server
 
-The server speaks the OpenAI API, but `ModelSpec` has no per-model `api_base`, and the `openai/` and `hosted_vllm/` routes already take their base URL from OPENAI_* and from the HF router settings. LiteLLM's `llamafile/` route is a plain OpenAI client that reads `LLAMAFILE_API_BASE` and `LLAMAFILE_API_KEY`, and `models.yaml` maps those from `AMD_VLLM_BASE_URL` and `AMD_API_KEY`. It works the same against vLLM and llama-server.
+The `amd-gpt-oss-20b` entry uses `litellm_model: openai/gpt-oss-20b` with `api_base: ${AMD_VLLM_BASE_URL}` and `api_key_env: AMD_API_KEY`. Those two fields are per model, so only the amd-* calls use the tunnel URL and key. The OpenAI models keep their default endpoint. It works the same against vLLM and llama-server.

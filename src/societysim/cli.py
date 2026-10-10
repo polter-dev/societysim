@@ -76,12 +76,16 @@ def play(
             "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
             "openai": ("OPENAI_API_KEY",),
         }
-        providers = {spec.provider for spec in specs}
-        missing = [
-            " or ".join(keys)
-            for provider, keys in provider_keys.items()
-            if provider in providers and not any(os.environ.get(key) for key in keys)
-        ]
+        missing = []
+        for spec in specs:
+            keys = (spec.api_key_env,) if spec.api_key_env else provider_keys.get(spec.provider, ())
+            if keys and not any(os.environ.get(key) for key in keys):
+                missing.append(" or ".join(keys))
+            try:
+                spec.resolved_api_base()
+            except ValueError as exc:
+                missing.append(str(exc))
+        missing = list(dict.fromkeys(missing))
         if missing:
             typer.echo(f"missing provider key: {', '.join(missing)}")
             raise typer.Exit(1)

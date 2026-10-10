@@ -60,27 +60,58 @@ def test_apply_env_routes_hf_unified_endpoint(monkeypatch):
 
 
 def test_amd_entry_routes_to_self_hosted_server(monkeypatch):
-    import os
+    from societysim.models.client import request_kwargs
 
-    import litellm
-
-    # apply_env writes os.environ directly; give it a throwaway copy.
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("LLAMAFILE_", "OPENAI_API"))}
-    monkeypatch.setattr(os, "environ", env)
-    env["AMD_VLLM_BASE_URL"] = "https://abc.trycloudflare.com/v1"
-    env["AMD_API_KEY"] = "amd-key"
+    monkeypatch.setenv("AMD_VLLM_BASE_URL", "https://abc.trycloudflare.com/v1")
+    monkeypatch.setenv("AMD_API_KEY", "amd-key")
     reg = load_registry(DEFAULT_PATH)
-    reg.apply_env()
-
     spec = reg.get("amd-gpt-oss-20b")
     assert spec.structured == "json_schema"
     assert spec.input_cost_per_mtok == spec.output_cost_per_mtok == 0
     assert reg.limits()[spec.provider].concurrency >= 1
-    model, provider, key, base = litellm.get_llm_provider(litellm_model_name(spec))
-    assert (model, provider) == ("openai/gpt-oss-20b", "llamafile")
-    assert (key, base) == ("amd-key", "https://abc.trycloudflare.com/v1")
-    # The real OpenAI models keep their own endpoint.
-    assert litellm.get_llm_provider("openai/gpt-5-nano")[3] != base
+    assert spec.provider == "openai"
+    assert request_kwargs(spec, Ping)["model"] == "openai/gpt-oss-20b"
+    assert request_kwargs(spec, Ping)["api_base"] == "https://abc.trycloudflare.com/v1"
+    assert request_kwargs(spec, Ping)["api_key"] == "amd-key"
+    assert "api_base" not in request_kwargs(reg.get("gpt-5-nano"), Ping)
+    assert "api_key" not in request_kwargs(reg.get("gpt-5-nano"), Ping)
+
+
+def test_play_missing_amd_vars_fails_fast(tmp_path, monkeypatch):
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    monkeypatch.delenv("AMD_VLLM_BASE_URL", raising=False)
+    monkeypatch.delenv("AMD_API_KEY", raising=False)
+    cfg = tmp_path / "amd.yaml"
+    cfg.write_text("n_players: 7\nmodels: [amd-gpt-oss-20b]\n")
+    res = CliRunner().invoke(app, ["play", "--config", str(cfg), "--agents", "llm"])
+    assert res.exit_code == 1
+    assert "AMD_API_KEY" in res.output
+    assert "AMD_VLLM_BASE_URL" in res.output
+
+
+def test_doctor_amd_uses_per_model_endpoint(monkeypatch):
+    from types import SimpleNamespace
+
+    import litellm
+
+    monkeypatch.setenv("AMD_VLLM_BASE_URL", "https://fake-amd.example/v1")
+    monkeypatch.setenv("AMD_API_KEY", "fake-key")
+    calls = []
+
+    async def fake_server(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"ok":true,"word":"yes"}'))],
+            usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
+        )
+
+    monkeypatch.setattr(litellm, "acompletion", fake_server)
+    res = CliRunner().invoke(app, ["doctor", "--model", "amd-gpt-oss-20b"])
+    assert res.exit_code == 0, res.output
+    assert len(calls) == 3
+    assert all(call["model"] == "openai/gpt-oss-20b" for call in calls)
+    assert all(call["api_base"] == "https://fake-amd.example/v1" for call in calls)
+    assert all(call["api_key"] == "fake-key" for call in calls)
 
 
 def test_resolve_match_and_unknown():

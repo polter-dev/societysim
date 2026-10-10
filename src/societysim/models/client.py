@@ -4,6 +4,7 @@
 """
 
 import asyncio
+import os
 import random
 import re
 import time
@@ -151,6 +152,14 @@ def request_kwargs(spec: ModelSpec, response_model: type[BaseModel]) -> dict[str
     fmt = response_format(spec, response_model)
     if fmt is not None:
         kwargs["response_format"] = fmt
+    api_base = spec.resolved_api_base()
+    if api_base is not None:
+        kwargs["api_base"] = api_base
+    if spec.api_key_env is not None:
+        api_key = os.environ.get(spec.api_key_env)
+        if not api_key:
+            raise ValueError(f"missing API key for {spec.name}; set {spec.api_key_env} in .env")
+        kwargs["api_key"] = api_key
     return kwargs
 
 
@@ -213,7 +222,7 @@ def _is_auth_error(e: Exception) -> bool:
 
 def _auth_message(spec: ModelSpec, e: Exception) -> str:
     """Names the env var to set. Never includes the provider's text, which may echo a key."""
-    var = API_KEY_ENV.get(spec.provider, f"{spec.provider.upper()}_API_KEY")
+    var = spec.api_key_env or API_KEY_ENV.get(spec.provider, f"{spec.provider.upper()}_API_KEY")
     return f"{type(e).__name__}: missing or invalid API key for {spec.name}; set {var} in .env"
 
 
@@ -251,7 +260,12 @@ class LiteLLMClient:
     ) -> CompletionResult:
         import litellm  # imported here: engine modules import Usage and must not load it
 
-        kwargs = request_kwargs(model, response_model)
+        try:
+            kwargs = request_kwargs(model, response_model)
+        except ValueError as e:
+            return CompletionResult(
+                parsed=None, raw="", error=str(e), usage=Usage(model=model.name, attempts=0)
+            )
         limiter = self._limiter(model.provider)
         usage = Usage(model=model.name, attempts=0)
         latency = 0.0

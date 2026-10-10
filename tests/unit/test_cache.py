@@ -79,6 +79,28 @@ def test_key_depends_on_model_messages_schema_only():
     assert k != cache_key(SPEC, MSGS, TargetResponse)
 
 
+def test_optional_endpoint_fields_preserve_existing_cache_key():
+    import hashlib
+    import json
+
+    old_payload = {
+        "model": SPEC.model_dump(
+            mode="json",
+            exclude={
+                "color",
+                "input_cost_per_mtok",
+                "output_cost_per_mtok",
+                "api_base",
+                "api_key_env",
+            },
+        ),
+        "messages": MSGS,
+        "schema": VoteResponse.model_json_schema(),
+    }
+    old_blob = json.dumps(old_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    assert cache_key(SPEC, MSGS, VoteResponse) == hashlib.sha256(old_blob.encode()).hexdigest()
+
+
 async def test_full_game_replays_byte_identical(tmp_path):
     config = GameConfig(seed=4, models=["m"])
     seats = [f"p{i}" for i in range(config.n_players)]

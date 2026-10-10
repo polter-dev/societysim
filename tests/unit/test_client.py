@@ -191,6 +191,35 @@ async def test_reasoning_effort_omitted_when_unset(monkeypatch, client):
     assert "reasoning_effort" not in fake.calls[0]
 
 
+async def test_per_model_endpoint_and_key_do_not_leak(monkeypatch, client):
+    monkeypatch.setenv("AMD_VLLM_BASE_URL", "https://amd.example/v1")
+    monkeypatch.setenv("AMD_API_KEY", "amd-secret")
+    fake = mock(monkeypatch, reply(json.dumps(VOTE)), reply(json.dumps(VOTE)))
+    amd = spec(api_base="${AMD_VLLM_BASE_URL}", api_key_env="AMD_API_KEY")
+    await client.complete(amd, MESSAGES, VoteResponse)
+    await client.complete(spec(), MESSAGES, VoteResponse)
+    assert fake.calls[0]["api_base"] == "https://amd.example/v1"
+    assert fake.calls[0]["api_key"] == "amd-secret"
+    assert "api_base" not in fake.calls[1]
+    assert "api_key" not in fake.calls[1]
+
+
+async def test_missing_per_model_env_returns_safe_error(monkeypatch, client):
+    monkeypatch.delenv("AMD_VLLM_BASE_URL", raising=False)
+    monkeypatch.delenv("AMD_API_KEY", raising=False)
+    model = spec(api_base="${AMD_VLLM_BASE_URL}", api_key_env="AMD_API_KEY")
+    result = await client.complete(model, MESSAGES, VoteResponse)
+    assert result.parsed is None and "AMD_VLLM_BASE_URL" in result.error
+
+
+def test_literal_api_base(monkeypatch):
+    monkeypatch.setenv("AMD_API_KEY", "fake-key")
+    kwargs = request_kwargs(
+        spec(api_base="https://local.example/v1", api_key_env="AMD_API_KEY"), VoteResponse
+    )
+    assert kwargs["api_base"] == "https://local.example/v1"
+
+
 @pytest.mark.parametrize(
     ("model", "provider", "expected"),
     [

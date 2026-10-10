@@ -101,7 +101,7 @@ else
 fi
 cp -R "$dist/." "$stage/"
 # Static host config (Cloudflare Pages). `cp -n` keeps whatever the viewer build already put in dist.
-for f in _headers _redirects 404.html; do cp -n "$root/viewer/public/$f" "$stage/$f"; done
+for f in _headers _redirects 404.html; do [[ -e "$stage/$f" ]] || cp "$root/viewer/public/$f" "$stage/$f"; done
 mkdir -p "$stage/data"
 # .cache holds raw judge responses; the PNGs are for report.md, not the viewer.
 # tar, not rsync: rsync is not available in the Windows bash.

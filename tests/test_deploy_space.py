@@ -31,10 +31,19 @@ def _batch(tmp_path: Path) -> Path:
     return batch
 
 
-def _run(tmp_path: Path, *args: str, neon: bool = False, extra: dict | None = None):
+def _run(
+    tmp_path: Path,
+    *args: str,
+    neon: bool = False,
+    extra: dict | None = None,
+    prebuilt: bool = False,
+):
     dist = tmp_path / "dist"
     dist.mkdir(exist_ok=True)
     (dist / "index.html").write_text("<html></html>")
+    if prebuilt:  # the real build copies viewer/public into dist
+        for f in ("_headers", "_redirects", "404.html"):
+            (dist / f).write_text("built")
     env = {k: v for k, v in os.environ.items() if not k.startswith(("HF_TOKEN", "VITE_NEON"))}
     env.update(SOCIETYSIM_SKIP_VIEWER_BUILD="1", SOCIETYSIM_VIEWER_DIST=str(dist))
     if neon:
@@ -199,3 +208,10 @@ def test_out_stages_data_at_site_root(tmp_path):
     assert "Access-Control-Allow-Origin: *" in headers and "application/x-ndjson" in headers
     assert (out / "_redirects").is_file()
     assert (out / "404.html").is_file()  # keeps Pages from serving the SPA for a missing file
+
+
+def test_out_keeps_static_config_already_in_dist(tmp_path):
+    out = tmp_path / "site"
+    r = _run(tmp_path, "--out", str(out), str(_batch(tmp_path)), prebuilt=True)
+    assert r.returncode == 0, r.stderr
+    assert (out / "_headers").read_text() == "built"

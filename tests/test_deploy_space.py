@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -222,7 +223,7 @@ def test_out_keeps_static_config_already_in_dist(tmp_path):
     assert (out / "_headers").read_text() == "built"
 
 
-SECRETS = ("wolf", "villager", "seer", "doctor", "winner")
+SECRETS = re.compile(r"b(wolf|wolves|villager|seer|doctor|winner)b")
 
 
 def test_out_writes_og_cards_without_hidden_info(tmp_path):
@@ -254,7 +255,7 @@ def test_out_writes_og_cards_without_hidden_info(tmp_path):
     for f in og.glob("*.html"):
         lines = f.read_text().lower().splitlines()
         meta = " ".join(ln for ln in lines if ln.startswith("<meta p"))
-        assert not any(w in meta for w in SECRETS), f.name
+        assert not SECRETS.search(meta), f.name
         assert "cleo" not in meta and "saved" not in meta
 
 

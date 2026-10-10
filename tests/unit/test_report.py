@@ -323,3 +323,49 @@ def test_headline_wolf_seats_singular(tmp_path):
     assert "over 1 wolf seat)" in text
     sm["top_wolf_win"]["seats"] = 2
     assert "over 2 wolf seats)" in "\n".join(_headline(sm, {"self_tag"}))
+
+
+def test_who_fools_whom_section_and_heatmap(tmp_path):
+    out = write_report(_batch(tmp_path))  # self_tag labels only
+    md = (out / "report.md").read_text(encoding="utf-8")
+    sec = md.split("## Who fools whom (exploratory)")[1].split("## Cost")[0]
+    st, jev = sec.split("### jev")
+    assert "| Liar \\ listener |" in st and "| No-lie baseline |" in st
+    assert "| gemini-flash | 100% (n=2) | 50% (n=2) |" in st  # deepseek, then gemini-flash-lite
+    assert "None qualifies yet." in st  # no pair has 5 votes in one game
+    assert "![Who fools whom (self_tag)](deception_self_tag.png)" in st
+    assert "No jev labels." in jev
+    assert (out / "deception_self_tag.png").read_bytes()[:4] == b"\x89PNG"
+    assert not (out / "deception_jev.png").exists()
+    dm = json.loads((out / "metrics.json").read_text())["deception_matrix"]
+    assert dm["self_tag"]["pairs"]["gemini-flash"]["deepseek-v3.1"]["voters"] == 2
+
+
+def _cell(followed: int, voters: int) -> dict:
+    return {
+        "heard": voters,
+        "comparisons": 0,
+        "moved": 0,
+        "voters": voters,
+        "followed": followed,
+        "vote_follow_rate": followed / voters,
+        "vote_follow_ci": [0.1, 0.9],
+        "belief_shift_rate": None,
+        "belief_shift_ci": None,
+    }
+
+
+def test_top_pairs_need_five_votes_and_rank_by_follow_rate():
+    from societysim.analysis.report import _deception
+
+    pairs = {
+        "a": {"x": _cell(5, 5), "y": _cell(4, 4)},  # y: 100% but only 4 votes
+        "b": {"x": _cell(3, 6), "y": _cell(6, 8)},
+    }
+    base = {"x": {k: v for k, v in _cell(1, 10).items() if "belief" not in k}}
+    dm = {"self_tag": {"pairs": pairs, "baseline": base}, "jev": {"pairs": {}, "baseline": {}}}
+    lines = _deception(dm, {"self_tag", "jev"})
+    top = [ln for ln in lines if "(10% to 90%)" in ln]
+    assert [ln.split(" | ")[:2] for ln in top] == [["| a", "x"], ["| b", "y"], ["| b", "x"]]
+    assert "10% (n=10)" in top[0]  # the listener's baseline sits beside the pair
+    assert "No lies were heard by another model." in lines

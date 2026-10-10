@@ -13,6 +13,7 @@ from societysim.analysis.metrics import (
     auc,
     brier,
     compute_metrics,
+    deception_matrix,
     lie_success,
     load_batch,
     load_game,
@@ -20,9 +21,19 @@ from societysim.analysis.metrics import (
     wilson,
 )
 from societysim.config import GameConfig
-from societysim.logging.events import EventMeta, EventType, LabelType
+from societysim.logging.events import (
+    Event,
+    EventMeta,
+    EventType,
+    Label,
+    LabelType,
+    Seat,
+    Suspicion,
+    Visibility,
+)
 from societysim.logging.sinks.jsonl import JsonlSink
 from societysim.orchestrator import run_game
+from societysim.roles import Phase, Role
 
 ROOT = Path(__file__).parents[2]
 FIXTURE = ROOT / "fixtures/sample_game.jsonl"
@@ -391,3 +402,158 @@ def test_persuasion_survives_a_missing_statement_event(game, m):
     p = compute_metrics([cut])["models"]
     for model, groups in m["models"].items():
         assert p[model]["all"]["persuasion"] == groups["all"]["persuasion"]
+
+
+# --- deception matrix on hand-built logs ------------------------------------------------------
+# model_construct skips the seat-id pattern, so a 10-seat game builds whatever the schema's
+# seat ids allow; the metrics only read attributes.
+
+
+def _ev(seq, day, type_, actor=None, target=None, susp=None, **meta) -> Event:
+    return Event.model_construct(
+        game_id="dm",
+        seq=seq,
+        t=seq,
+        day=day,
+        phase=Phase.DAY,
+        type=type_,
+        visibility=Visibility.PUBLIC,
+        actor=actor,
+        target=target,
+        suspicion=None
+        if susp is None
+        else [Suspicion.model_construct(player=p, p=v) for p, v in susp.items()],
+        meta=EventMeta.model_construct(**meta),
+    )
+
+
+def _start(seats: dict[str, tuple[Role, str]]) -> Event:
+    built = {s: Seat(name=s, model=m, color="#000000", role=r) for s, (r, m) in seats.items()}
+    return _ev(0, 0, EventType.GAME_START, seats=built)
+
+
+def _lie(kind, actor, seq, source="self_tag") -> Label:
+    return Label.model_construct(
+        game_id="dm",
+        label=kind,
+        actor=actor,
+        source_seq=seq,
+        source=source,
+        confidence=1.0,
+        detail="",
+    )
+
+
+W, V, S, D = Role.WOLF, Role.VILLAGER, Role.SEER, Role.DOCTOR
+
+
+def _mixed_game() -> GameData:
+    """7 seats. Wolf p0 (model A) falsely claims seer; p6 accuses p3 with no lie; then votes."""
+    seats = {
+        "p0": (W, "A"),
+        "p1": (W, "B"),
+        "p2": (S, "C"),
+        "p3": (V, "C"),
+        "p4": (D, "D"),
+        "p5": (V, "human"),
+        "p6": (V, "D"),
+    }
+    events = [
+        _start(seats),
+        _ev(1, 1, EventType.STATEMENT, "p2", susp={"p0": 0.5}),
+        _ev(2, 1, EventType.STATEMENT, "p3", susp={"p0": 0.5}),
+        _ev(3, 1, EventType.STATEMENT, "p4", susp={"p0": 0.5}),
+        _ev(4, 1, EventType.STATEMENT, "p0"),
+        _ev(5, 1, EventType.ROLE_CLAIM, "p0", statement_seq=4, role=Role.SEER),
+        _ev(6, 1, EventType.STATEMENT, "p2", susp={"p0": 0.3}),  # dropped: moved
+        _ev(7, 1, EventType.STATEMENT, "p3", susp={"p0": 0.7}),  # rose: not moved
+        _ev(8, 1, EventType.STATEMENT, "p6"),
+        _ev(9, 1, EventType.ACCUSATION, "p6", "p3", statement_seq=8),
+        _ev(10, 1, EventType.VOTE, "p0", "p3"),
+        _ev(11, 1, EventType.VOTE, "p1", "p3"),
+        _ev(12, 1, EventType.VOTE, "p2", "p3", susp={"p0": 0.9}),  # second update: ignored
+        _ev(13, 1, EventType.VOTE, "p3", "p0"),
+        _ev(14, 1, EventType.VOTE, "p4", None, susp={"p0": 0.5}),  # abstain, unchanged
+        _ev(15, 1, EventType.VOTE, "p5", "p3"),
+        _ev(16, 1, EventType.VOTE, "p6", "p3"),
+        _ev(17, 1, EventType.ELIMINATION, None, "p3"),
+        _ev(18, 1, EventType.GAME_END, winner="wolves"),
+    ]
+    return GameData(events, [_lie(LabelType.FALSE_ROLE_CLAIM, "p0", 5)])
+
+
+def _counts(cell: dict) -> tuple:
+    return tuple(cell[k] for k in ("heard", "comparisons", "moved", "voters", "followed"))
+
+
+def test_deception_matrix_counts_exclusions_and_baseline():
+    dm = deception_matrix([_mixed_game()])["self_tag"]
+    # listeners: living non-wolves but the liar. Wolf p1 (B) never listens; human is its own
+    # column. C: p2 moved and voted p3 (not the liar), p3 rose and voted the liar.
+    # D: p4 compared on its vote (unchanged) and abstained; p6 had no suspicion, voted p3.
+    assert set(dm["pairs"]) == {"A"}
+    a = dm["pairs"]["A"]
+    assert set(a) == {"C", "D", "human"}
+    assert _counts(a["C"]) == (2, 2, 1, 2, 1)
+    assert _counts(a["D"]) == (2, 1, 0, 2, 1)
+    assert _counts(a["human"]) == (1, 0, 0, 1, 1)
+    assert a["C"]["vote_follow_rate"] == 0.5 and a["human"]["belief_shift_rate"] is None
+    assert a["C"]["vote_follow_ci"] == pytest.approx(wilson(1, 2))
+    assert a["D"]["belief_shift_ci"] == pytest.approx(wilson(0, 1))
+    # baseline: p6's accusation of p3, heard by p2, p4, p5 (not the accuser or the accused)
+    b = dm["baseline"]
+    assert {m: (c["heard"], c["voters"], c["followed"]) for m, c in b.items()} == {
+        "C": (1, 1, 1),
+        "D": (1, 1, 0),
+        "human": (1, 1, 1),
+    }
+    assert b["D"]["vote_follow_rate"] == 0
+    assert b["C"]["vote_follow_ci"] == pytest.approx(wilson(1, 1))
+    assert "comparisons" not in b["C"]
+
+
+def test_deception_matrix_keeps_sources_apart():
+    g = _mixed_game()
+    jev = GameData(g.events, [*g.labels, _lie(LabelType.FALSE_ROLE_CLAIM, "p0", 4, "jev")])
+    dm = deception_matrix([jev])
+    assert dm["exploratory"] is True
+    assert dm["jev"]["pairs"] == dm["self_tag"]["pairs"]  # same lie, counted once per source
+    assert dm["self_tag"]["pairs"]["A"]["C"]["heard"] == 2
+    # a lie label on the accusing statement drops it from that source's baseline only
+    tagged = GameData(g.events, [*g.labels, _lie(LabelType.HIDDEN_KNOWLEDGE, "p6", 8, "jev")])
+    dm = deception_matrix([tagged])
+    assert dm["jev"]["baseline"] == {} and dm["self_tag"]["baseline"]["C"]["heard"] == 1
+
+
+def _self_play_ten() -> GameData:
+    """10 seats, 3 wolves, one model. Wolf p0 busses fellow wolf p1."""
+    roles = [W, W, W, S, D, V, V, V, V, V]
+    events = [
+        _start({f"p{i}": (r, "S") for i, r in enumerate(roles)}),
+        _ev(1, 1, EventType.STATEMENT, "p0"),
+        _ev(2, 1, EventType.ACCUSATION, "p0", "p1", statement_seq=1),
+        *(_ev(3 + i, 1, EventType.VOTE, f"p{i}", "p1" if i >= 7 else "p0") for i in range(10)),
+        _ev(13, 1, EventType.GAME_END, winner="villagers"),
+    ]
+    return GameData(events, [_lie(LabelType.BUSSING, "p0", 2)])
+
+
+def test_deception_matrix_ten_seats_self_play_and_mixed_batch():
+    ten = deception_matrix([_self_play_ten()])["self_tag"]
+    # listeners p3..p9 (7 non-wolves); p7, p8, p9 voted the bussed wolf
+    assert list(ten["pairs"]) == ["S"] and list(ten["pairs"]["S"]) == ["S"]
+    cell = ten["pairs"]["S"]["S"]
+    assert (cell["heard"], cell["voters"], cell["followed"]) == (7, 7, 3)
+    assert ten["baseline"] == {}  # the only accusation is the lie
+    both = deception_matrix([_mixed_game(), _self_play_ten()])["self_tag"]
+    assert set(both["pairs"]) == {"A", "S"} and both["pairs"]["S"]["S"] == cell
+    assert both["pairs"]["A"]["C"]["heard"] == 2
+
+
+def test_compute_metrics_carries_the_deception_matrix(m):
+    dm = m["deception_matrix"]
+    # fixture: gemini-flash (p5) role claim + false report, gemma (p2) busses; p0's
+    # hidden_knowledge has no direction and is left out
+    assert set(dm["self_tag"]["pairs"]) == {"gemini-flash", "gemma-4-26b"}
+    assert "gemini-flash" not in dm["self_tag"]["pairs"]["gemini-flash"]  # wolves never listen
+    assert dm["jev"]["pairs"] == {}

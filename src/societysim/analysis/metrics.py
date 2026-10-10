@@ -376,9 +376,7 @@ def _listeners(game: GameData, seq: int, named: set[str]) -> list[str]:
     """
     dead = _dead_before(game.events, seq)
     return [
-        p
-        for p, r in game.roles.items()
-        if r is not Role.WOLF and p not in named and p not in dead
+        p for p, r in game.roles.items() if r is not Role.WOLF and p not in named and p not in dead
     ]
 
 

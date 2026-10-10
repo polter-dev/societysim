@@ -3,6 +3,199 @@
   "$id": "metrics.schema.json",
   "x-contract-version": 1,
   "$defs": {
+    "DeceptionBaseline": {
+      "additionalProperties": false,
+      "properties": {
+        "heard": {
+          "type": "integer"
+        },
+        "voters": {
+          "type": "integer"
+        },
+        "followed": {
+          "type": "integer"
+        },
+        "vote_follow_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "vote_follow_ci": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "heard",
+        "voters",
+        "followed",
+        "vote_follow_rate",
+        "vote_follow_ci"
+      ],
+      "title": "DeceptionBaseline",
+      "type": "object"
+    },
+    "DeceptionCell": {
+      "additionalProperties": false,
+      "properties": {
+        "heard": {
+          "type": "integer"
+        },
+        "voters": {
+          "type": "integer"
+        },
+        "followed": {
+          "type": "integer"
+        },
+        "vote_follow_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "vote_follow_ci": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "comparisons": {
+          "type": "integer"
+        },
+        "moved": {
+          "type": "integer"
+        },
+        "belief_shift_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "belief_shift_ci": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "heard",
+        "voters",
+        "followed",
+        "vote_follow_rate",
+        "vote_follow_ci",
+        "comparisons",
+        "moved",
+        "belief_shift_rate",
+        "belief_shift_ci"
+      ],
+      "title": "DeceptionCell",
+      "type": "object"
+    },
+    "DeceptionMatrix": {
+      "additionalProperties": false,
+      "properties": {
+        "exploratory": {
+          "type": "boolean"
+        },
+        "self_tag": {
+          "$ref": "#/$defs/DeceptionSource"
+        },
+        "jev": {
+          "$ref": "#/$defs/DeceptionSource"
+        }
+      },
+      "required": [
+        "exploratory",
+        "self_tag",
+        "jev"
+      ],
+      "title": "DeceptionMatrix",
+      "type": "object"
+    },
+    "DeceptionSource": {
+      "additionalProperties": false,
+      "properties": {
+        "pairs": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "$ref": "#/$defs/DeceptionCell"
+            },
+            "type": "object"
+          },
+          "type": "object"
+        },
+        "baseline": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DeceptionBaseline"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "pairs",
+        "baseline"
+      ],
+      "title": "DeceptionSource",
+      "type": "object"
+    },
     "Detection": {
       "additionalProperties": false,
       "properties": {
@@ -818,6 +1011,9 @@
     "openskill": {
       "$ref": "#/$defs/OpenSkill"
     },
+    "deception_matrix": {
+      "$ref": "#/$defs/DeceptionMatrix"
+    },
     "summary": {
       "$ref": "#/$defs/Summary"
     },
@@ -836,6 +1032,7 @@
     "models",
     "by_group",
     "openskill",
+    "deception_matrix",
     "summary",
     "speed"
   ],

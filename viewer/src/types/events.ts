@@ -143,7 +143,7 @@ export interface Usage {
   cost_usd: number;
   latency_ms: number;
   attempts: number;
-  cached: boolean;
+  cached?: boolean;
 }
 /**
  * One line of <game_id>.labels.jsonl. The raw game log is never edited.

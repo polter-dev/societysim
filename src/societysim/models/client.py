@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from societysim.config import ModelSpec
 
@@ -27,7 +27,9 @@ class Usage(BaseModel):
     cost_usd: float = 0.0  # estimate; does not assume prompt caching
     latency_ms: int = 0
     attempts: int = 1
-    cached: bool = False  # served from the cassette cache (free); added in schema_version 2
+    # Served from the cassette cache (free). Added in schema_version 2, so optional in the
+    # JSON schema: v1 lines have no such key.
+    cached: bool = Field(False, json_schema_extra={"x-optional": True})
 
 
 class CompletionResult(BaseModel):

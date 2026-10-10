@@ -381,6 +381,7 @@
           "type": "integer"
         },
         "cached": {
+          "default": false,
           "type": "boolean"
         }
       },
@@ -390,8 +391,7 @@
         "output_tokens",
         "cost_usd",
         "latency_ms",
-        "attempts",
-        "cached"
+        "attempts"
       ],
       "title": "Usage",
       "type": "object"

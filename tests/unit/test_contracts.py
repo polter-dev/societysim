@@ -67,6 +67,12 @@ def test_version_1_line_without_cached_still_loads():
     del v1["meta"]["usage"]["cached"]
     event = Event.model_validate(v1)
     assert event.schema_version == 1 and event.meta.usage.cached is False
+    validator = Draft202012Validator(SCHEMA)
+    validator.validate(v1)
+    v2 = json.loads(event.model_dump_json())
+    v2["schema_version"] = 2
+    v2["meta"]["usage"]["cached"] = True
+    validator.validate(v2)
 
 
 def test_event_meta_drops_none_keys():

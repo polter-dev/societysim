@@ -26,11 +26,14 @@ schema["$defs"].update(label.pop("$defs", {}))
 schema["$defs"]["Label"] = label
 # Every field of a closed model is always written (null when empty), so mark them all
 # required and drop defaults. EventMeta is the exception: its None keys are not written.
+# Fields marked "x-optional" (added in a later schema_version) stay optional so older logs
+# still validate.
 for s in (schema, *schema["$defs"].values()):
     if "properties" in s and s.get("additionalProperties") is not True:
-        s["required"] = list(s["properties"])
-        for prop in s["properties"].values():
-            prop.pop("default", None)
+        props = s["properties"]
+        s["required"] = [k for k, v in props.items() if not v.pop("x-optional", False)]
+        for k in s["required"]:
+            props[k].pop("default", None)
 schema = {"$schema": "https://json-schema.org/draft/2020-12/schema", **schema}
 Path("schema/events.schema.json").write_text(json.dumps(schema, indent=2) + "\n")
 PY

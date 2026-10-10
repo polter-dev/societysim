@@ -12,7 +12,7 @@ Every line has all of these keys. Empty ones are `null`.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `schema_version` | `1` | |
+| `schema_version` | `2` | Readers also accept `1`: same layout, but `meta.usage` has no `cached` key. |
 | `game_id` | string | |
 | `seq` | int | 0-based line index. Unique and increasing; the viewer's scrubber keys on it. |
 | `t` | int | Engine step. 0 at `game_start`, +1 at every `phase_start`. |
@@ -59,7 +59,7 @@ Every line has all of these keys. Empty ones are `null`.
 - **Saves.** `night_kill` is who the wolves attacked. If `doctor_save` has the same target, `meta.saved` is true and nobody dies. A save that matches no kill has `meta.saved: false`.
 - **Self-tags.** A statement's structured fields become events right after it, each with `meta.statement_seq` pointing at the statement: one `accusation` per accused player (several share the same `statement_seq`), then `role_claim`, then `seer_claim`. `seer_claim.target` is the player the speaker says they checked, with `meta.result` and `meta.night`.
 - **Votes.** Votes are simultaneous, logged in seat order. `meta.tally` is always logged on `elimination` / `no_elimination` and counts only non-abstain votes (`{p2: 3, p0: 3}`).
-- **Usage.** `meta.usage = {model, input_tokens, output_tokens, cost_usd, latency_ms, attempts}` sits on the event that carries each model call's final answer: `wolf_chat` (or a lone wolf's `wolf_proposal`), `seer_check`, `doctor_save`, `statement`, `vote`. It covers every attempt of that call, so summing `cost_usd` over a log gives the game's cost. Derived events (`accusation`, `night_kill`, …) have none.
+- **Usage.** `meta.usage = {model, input_tokens, output_tokens, cost_usd, latency_ms, attempts, cached}` sits on the event that carries each model call's final answer: `wolf_chat` (or a lone wolf's `wolf_proposal`), `seer_check`, `doctor_save`, `statement`, `vote`. It covers every attempt of that call. `cached: true` means the reply was served from the cassette cache: the numbers are the original call's, but nothing was spent this time. So the game's real cost is the sum of `cost_usd` over usages with `cached` false (or missing, in version 1 logs). Derived events (`accusation`, `night_kill`, …) have none.
 - **Failures.** Each rejected reply logs `invalid_output` (`attempt` 1, then 2 after the retry). If the retry also fails, `fallback_action` is logged with the call's usage, followed by the normal action event with `meta.fallback: true`: a `vote` with no target (abstain), a random legal target at night, or the statement `"(silent)"`.
 - **Truncation.** A statement over the word cap is cut and gets `meta.truncated: true`.
 - **Suspicion.** Only on events that carry an agent reply (`wolf_chat`, `wolf_proposal` for a lone wolf, `seer_check`, `doctor_save`, `statement`, `vote`). Wolves report it too; detection metrics use non-wolf actors only.
@@ -70,7 +70,7 @@ One per line in `<game_id>.labels.jsonl`, all keys always present.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `schema_version` | `1` | |
+| `schema_version` | `2` | Readers also accept `1`: same layout, but `meta.usage` has no `cached` key. |
 | `game_id` | string | |
 | `label` | see below | |
 | `actor` | seat id | Who lied or erred. Always equals the `actor` of the `source_seq` event. |

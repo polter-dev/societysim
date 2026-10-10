@@ -281,6 +281,47 @@ async def test_bad_request_is_not_retried(monkeypatch, client):
     assert result.error and "BadRequestError" in result.error
 
 
+async def test_empty_choices_is_an_error_not_indexerror(monkeypatch, client):
+    resp = SimpleNamespace(choices=[], usage=SimpleNamespace(prompt_tokens=5, completion_tokens=0))
+    mock(monkeypatch, resp)
+    result = await client.complete(spec(), MESSAGES, VoteResponse)
+
+    assert result.parsed is None
+    assert result.error and "no choices" in result.error
+
+
+async def test_none_choices_is_an_error(monkeypatch, client):
+    mock(monkeypatch, SimpleNamespace(choices=None, usage=None))
+    result = await client.complete(spec(), MESSAGES, VoteResponse)
+
+    assert result.parsed is None and result.error
+
+
+async def test_auth_error_fails_fast_and_names_env_var(monkeypatch, client, sleeps):
+    secret = "sk-SECRET123"
+    err = litellm.exceptions.AuthenticationError(
+        f"Incorrect API key provided: {secret}", llm_provider="openai", model="gpt-x"
+    )
+    fake = mock(monkeypatch, err, reply(json.dumps(VOTE)))
+    result = await client.complete(spec(), MESSAGES, VoteResponse)
+
+    assert len(fake.calls) == 1 and result.usage.attempts == 1
+    assert sleeps.delays == []
+    assert result.parsed is None
+    assert result.error and "OPENAI_API_KEY" in result.error
+    assert secret not in result.error
+
+
+async def test_missing_credentials_error_fails_fast(monkeypatch, client, sleeps):
+    err = RuntimeError("The api_key client option must be set or GEMINI_API_KEY is unset")
+    fake = mock(monkeypatch, err)
+    gemini = spec(litellm_model="gemini/gemini-2.5-flash")
+    result = await client.complete(gemini, MESSAGES, VoteResponse)
+
+    assert len(fake.calls) == 1 and sleeps.delays == []
+    assert result.error and "GEMINI_API_KEY" in result.error
+
+
 # --- rate limits --------------------------------------------------------------------------
 
 

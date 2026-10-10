@@ -194,6 +194,24 @@ def _retryable(e: Exception) -> bool:
     return getattr(e, "status_code", None) in RETRY_STATUS
 
 
+API_KEY_ENV = {"gemini": "GEMINI_API_KEY", "huggingface": "HF_TOKEN", "openai": "OPENAI_API_KEY"}
+_MISSING_CREDS = re.compile(r"api[_ ]key|credentials|auth(?:entication|orization)? token", re.I)
+
+
+def _is_auth_error(e: Exception) -> bool:
+    import litellm
+
+    if isinstance(e, litellm.exceptions.AuthenticationError):
+        return True
+    return getattr(e, "status_code", None) is None and bool(_MISSING_CREDS.search(str(e)))
+
+
+def _auth_message(spec: ModelSpec, e: Exception) -> str:
+    """Names the env var to set. Never includes the provider's text, which may echo a key."""
+    var = API_KEY_ENV.get(spec.provider, f"{spec.provider.upper()}_API_KEY")
+    return f"{type(e).__name__}: missing or invalid API key for {spec.name}; set {var} in .env"
+
+
 class LiteLLMClient:
     """`ModelClient` over `litellm.acompletion`. Retries 429/5xx with exponential backoff
     (separate from the orchestrator's game-level retry) and never raises for a bad reply."""
@@ -245,6 +263,11 @@ class LiteLLMClient:
                 latency += self.clock() - start
             if error is None:
                 break
+            if _is_auth_error(error):  # fail fast: retrying a bad key never helps
+                usage.latency_ms = round(latency * 1000)
+                return CompletionResult(
+                    parsed=None, raw="", error=_auth_message(model, error), usage=usage
+                )
             if not _retryable(error) or attempt == self.max_retries:
                 usage.latency_ms = round(latency * 1000)
                 return CompletionResult(
@@ -258,6 +281,10 @@ class LiteLLMClient:
         usage.output_tokens = getattr(tokens, "completion_tokens", 0) or 0
         usage.cost_usd = estimate_cost(model, usage.input_tokens, usage.output_tokens)
         usage.latency_ms = round(latency * 1000)
+        if not getattr(resp, "choices", None):
+            return CompletionResult(
+                parsed=None, raw="", error="provider returned no choices", usage=usage
+            )
         raw = resp.choices[0].message.content or ""
         if not raw.strip():
             return CompletionResult(parsed=None, raw=raw, error="empty reply", usage=usage)

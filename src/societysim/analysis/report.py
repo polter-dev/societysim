@@ -60,7 +60,7 @@ from societysim.analysis.metrics import (  # noqa: E402
 from societysim.analysis.metrics import (  # noqa: E402
     SOURCES as LABEL_SOURCES,
 )
-from societysim.roles import Role, Winner  # noqa: E402
+from societysim.roles import Role, SeatId, Winner  # noqa: E402
 
 SCHEMA = 1
 
@@ -69,7 +69,7 @@ SCHEMA = 1
 # These models only describe what this module writes; scripts/gen-schema.sh turns them into
 # schema/{index,leaderboard,metrics}.schema.json. The writers below build plain dicts.
 
-Seat = Annotated[str, Field(pattern=r"^p[0-8]$")]
+Seat = SeatId
 Group = Literal["all", "wolf", "village", "seer", "doctor", "villager"]
 LieType = Literal["false_role_claim", "false_report", "bussing", "hidden_knowledge"]
 Num = float | None

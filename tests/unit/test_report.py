@@ -376,3 +376,26 @@ def test_top_pairs_need_five_votes_and_rank_by_follow_rate():
     assert top[1].endswith("| n/a (n=0) |")
     assert "No lies were heard by another model." in lines
     assert "No truthful claims were heard." in lines
+
+async def test_index_and_report_for_a_ten_player_game(tmp_path):
+    from functools import partial
+
+    from pydantic import TypeAdapter
+
+    from societysim.agents.scripted import RandomAgent
+    from societysim.analysis.labeler import label_game
+    from societysim.analysis.report import Seat
+    from societysim.config import GameConfig
+    from societysim.logging.sinks.jsonl import JsonlSink
+    from societysim.orchestrator import run_game
+
+    sink = JsonlSink("batch", runs_dir=tmp_path)
+    await run_game(GameConfig(n_players=10, seed=1), partial(RandomAgent), [sink], "g10")
+    batch = tmp_path / "batch"
+    labels = label_game(load_game(batch / "g10.jsonl").events)
+    (batch / "g10.labels.jsonl").write_text("".join(lb.model_dump_json() + "\n" for lb in labels))
+    out = write_report(batch)
+    index = json.loads((out / "index.json").read_text())
+    assert sorted(index[0]["seats"]) == [f"p{i}" for i in range(10)]
+    assert TypeAdapter(Seat).validate_python("p9") == "p9"
+    assert "Jude" in {s["name"] for s in index[0]["seats"].values()}

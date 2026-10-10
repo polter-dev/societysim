@@ -289,3 +289,32 @@ def test_bad_select_and_missing_log():
         main(["x.jsonl", "--select", "speech,votes"])
     with pytest.raises(SystemExit):
         main([])
+
+
+async def test_tenth_seat_narration(tmp_path: Path):
+    from functools import partial
+
+    from societysim.agents.scripted import RandomAgent
+    from societysim.config import GameConfig
+    from societysim.logging.sinks.jsonl import JsonlSink
+    from societysim.orchestrator import run_game
+
+    sink = JsonlSink("b", runs_dir=tmp_path)
+    await run_game(GameConfig(n_players=10, seed=1), partial(RandomAgent), [sink], "g10")
+    events = read_log(tmp_path / "b" / "g10.jsonl")
+    names = {s: seat.name for s, seat in events[0].meta.seats.items()}
+    assert "p9" in names and "Jude" in names.values()
+    lines = bank_lines()
+    assert {narrator_line(e, names) for e in events} - {None} <= lines
+    assert any("Jude, the Seer, was found dead." in t for _, t in lines)
+    clip = nar.Clip(
+        seq=0, category="speech", speaker="p9", voice="m", voice_id="v", text="t", file="f"
+    )
+    index = nar.NarrationIndex(
+        game_id="g",
+        model_id="m",
+        output_format="f",
+        voices={"p9": "m", "narrator": "v"},
+        clips=[clip],
+    )
+    assert index.voices["p9"] == "m"

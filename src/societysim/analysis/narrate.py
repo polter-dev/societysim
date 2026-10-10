@@ -29,17 +29,17 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Literal
 
 import httpx
 from dotenv import load_dotenv
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from societysim.analysis.labeler import read_log
 from societysim.config import RuleFlags, load_yaml
 from societysim.engine.state import NAMES
 from societysim.logging.events import Event, EventMeta, EventType, Visibility
-from societysim.roles import Phase, Role
+from societysim.roles import Phase, Role, SeatId
 
 ROOT = Path(__file__).resolve().parents[3]
 VOICES = ROOT / "configs/voices.yaml"
@@ -57,8 +57,8 @@ ROLE = {
     Role.VILLAGER: "a villager",
 }
 
-Speaker = Annotated[str, Field(pattern=r"^(narrator|p[0-8])$")]
-VoiceKey = Annotated[str, Field(pattern=r"^(narrator|narrator_night|p[0-8])$")]
+Speaker = Literal["narrator"] | SeatId
+VoiceKey = Literal["narrator", "narrator_night"] | SeatId
 Category = Literal["narrator", "highlight", "speech", "wolf_chat"]
 
 

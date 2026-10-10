@@ -140,3 +140,10 @@ def test_game_without_labels_deletes_stale_shards(tmp_path):
         "data/labels/fixture-0001.parquet",
         "data/jsonl/fixture-0001.labels.jsonl",
     ]
+
+
+def test_dataset_card_says_ten_seats(tmp_path):
+    FakeHub.repo, FakeHub.calls = {}, []
+    publish.publish_batch(batch(tmp_path), "org/ds", "tok", api_factory=FakeHub)
+    card = FakeHub.repo["README.md"].decode()
+    assert "`p0`...`p9`" in card and "p8`" not in card

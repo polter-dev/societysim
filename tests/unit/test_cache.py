@@ -1,10 +1,13 @@
+import json
+
 import pytest
 from fakes import FakeClient
 
 from societysim.agents.llm_agent import llm_agents
 from societysim.agents.schemas import TargetResponse, VoteResponse
 from societysim.config import GameConfig, ModelSpec
-from societysim.models.cache import CachedClient, CachedUsage, CacheMiss, cache_key
+from societysim.logging.sinks.jsonl import JsonlSink
+from societysim.models.cache import CachedClient, CacheMiss, cache_key
 from societysim.orchestrator import run_game
 
 SPEC = ModelSpec(name="m", litellm_model="openai/x")
@@ -35,7 +38,7 @@ async def test_replay_marks_usage_cached_and_keeps_numbers(tmp_path):
         SPEC, MSGS, VoteResponse
     )
     r = await CachedClient(FakeClient(), tmp_path, "replay").complete(SPEC, MSGS, VoteResponse)
-    assert isinstance(r.usage, CachedUsage) and r.usage.cached
+    assert r.usage.cached is True
     assert (r.usage.input_tokens, r.usage.output_tokens) == (100, 20)
     assert isinstance(r.parsed, VoteResponse)
 
@@ -95,3 +98,23 @@ async def test_full_game_replays_byte_identical(tmp_path):
     assert len(recorded) > 50
     assert replayed == recorded
     assert inner.calls == []
+
+
+async def test_replayed_game_logs_cached_usage_in_jsonl(tmp_path):
+    config = GameConfig(seed=4, models=["m"])
+    seats = [f"p{i}" for i in range(config.n_players)]
+    cache = tmp_path / "cache"
+
+    async def play(client, batch):
+        sink = JsonlSink(batch, tmp_path / "runs")
+        await run_game(config, llm_agents(client, {"m": SPEC}), [sink], "g")
+        lines = (tmp_path / "runs" / batch / "g.jsonl").read_text().splitlines()
+        events = [json.loads(x) for x in lines]
+        return [e["meta"]["usage"]["cached"] for e in events if "usage" in (e["meta"] or {})]
+
+    recorded = await play(CachedClient(FakeClient(players=seats, seed=1), cache, "record"), "rec")
+    replayed = await play(CachedClient(FakeClient(players=seats), cache, "replay"), "rep")
+    assert len(recorded) > 20
+    assert len(replayed) == len(recorded)
+    assert not any(recorded)
+    assert all(replayed)

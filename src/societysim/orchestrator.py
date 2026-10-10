@@ -37,7 +37,6 @@ from societysim.engine.rules import legal_targets
 from societysim.engine.state import GameState
 from societysim.logging.events import Event, EventLogger, EventSink, EventType, Suspicion
 from societysim.logging.events import Visibility as V
-from societysim.models.cache import CachedUsage
 from societysim.models.client import Usage
 from societysim.roles import Phase, Role, Winner
 
@@ -56,20 +55,14 @@ _CHOICE = {
 def _add(total: Usage | None, usage: Usage) -> Usage:
     if total is None:
         return usage
-    all_cached = (
-        isinstance(total, CachedUsage)
-        and total.cached
-        and isinstance(usage, CachedUsage)
-        and usage.cached
-    )
-    usage_type = CachedUsage if all_cached else Usage
-    return usage_type(
+    return Usage(
         model=usage.model,
         input_tokens=total.input_tokens + usage.input_tokens,
         output_tokens=total.output_tokens + usage.output_tokens,
         cost_usd=total.cost_usd + usage.cost_usd,
         latency_ms=total.latency_ms + usage.latency_ms,
         attempts=total.attempts + usage.attempts,
+        cached=total.cached and usage.cached,
     )
 
 

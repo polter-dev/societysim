@@ -10,7 +10,6 @@ from societysim.agents.prompts import player
 from societysim.config import GameConfig, ModelSpec, RoleCounts
 from societysim.engine.state import GameState
 from societysim.logging.events import EventLogger, EventType
-from societysim.models.cache import CachedUsage
 from societysim.models.client import Usage
 from societysim.orchestrator import DEFAULT_COLOR, SILENT, Game, _add, run_game
 from societysim.roles import Role
@@ -81,7 +80,7 @@ def of(game, type_, actor=None):
 
 
 def test_single_cached_attempt_keeps_cached_usage():
-    cached = CachedUsage(model="fake", input_tokens=10)
+    cached = Usage(cached=True, model="fake", input_tokens=10)
 
     total = _add(None, cached)
 
@@ -90,29 +89,28 @@ def test_single_cached_attempt_keeps_cached_usage():
 
 
 def test_cached_and_live_retry_is_not_cached():
-    cached = CachedUsage(model="fake", input_tokens=10, output_tokens=2, cost_usd=0.125)
+    cached = Usage(cached=True, model="fake", input_tokens=10, output_tokens=2, cost_usd=0.125)
     live = Usage(model="fake", input_tokens=20, output_tokens=3, cost_usd=0.25)
 
     total = _add(_add(None, cached), live)
 
     assert type(total) is Usage
-    assert getattr(total, "cached", False) is False
+    assert total.cached is False
     assert total.input_tokens == 30
     assert total.output_tokens == 5
     assert total.cost_usd == 0.375
 
 
 def test_two_cached_attempts_keep_cached_and_sum_usage():
-    first = CachedUsage(
-        model="fake", input_tokens=10, output_tokens=2, cost_usd=0.125, latency_ms=5
+    first = Usage(
+        cached=True, model="fake", input_tokens=10, output_tokens=2, cost_usd=0.125, latency_ms=5
     )
-    second = CachedUsage(
-        model="fake", input_tokens=20, output_tokens=3, cost_usd=0.25, latency_ms=7
+    second = Usage(
+        cached=True, model="fake", input_tokens=20, output_tokens=3, cost_usd=0.25, latency_ms=7
     )
 
     total = _add(_add(None, first), second)
 
-    assert isinstance(total, CachedUsage)
     assert total.cached is True
     assert total.model == "fake"
     assert total.input_tokens == 30

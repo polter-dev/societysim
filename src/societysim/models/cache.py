@@ -24,12 +24,6 @@ class CacheMiss(Exception):
     """Raised in `replay` mode when a call has no recording."""
 
 
-class CachedUsage(Usage):
-    """The original usage of a replayed call. `cached=True` lets cost reports skip it."""
-
-    cached: bool = True
-
-
 def cache_key(
     model: ModelSpec, messages: list[dict[str, Any]], response_model: type[BaseModel]
 ) -> str:
@@ -85,5 +79,5 @@ class CachedClient:
             parsed=parsed,
             raw=entry["raw"],
             error=entry["error"],
-            usage=CachedUsage(**entry["usage"]),
+            usage=Usage(**entry["usage"], cached=True),  # cost reports skip cached calls
         )

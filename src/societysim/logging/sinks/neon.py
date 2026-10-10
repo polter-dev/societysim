@@ -5,6 +5,7 @@ JSONL is the source of truth; Neon is a mirror for the viewer. Per the EventSink
 pending-event buffer is bounded (oldest dropped first).
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -76,7 +77,7 @@ async def connect_neon(dsn: str | None = None) -> Any:
     if not dsn:
         raise RuntimeError("NEON_DATABASE_URL is not set")
     # Neon's pooled endpoint is pgbouncer in transaction mode: no prepared-statement cache.
-    return await asyncpg.connect(dsn, statement_cache_size=0, timeout=10)
+    return await asyncpg.connect(dsn, statement_cache_size=0, timeout=10, command_timeout=10)
 
 
 async def apply_schema(conn: Any) -> None:
@@ -96,7 +97,9 @@ class NeonSink:
         connect: Connect | None = None,
         batch_size: int = 25,
         max_pending: int = 2000,
+        timeout: float = 10,
     ):
+        self._timeout = timeout
         self.batch_id = batch_id
         self._connect = connect or connect_neon
         self._batch_size = batch_size
@@ -106,9 +109,12 @@ class NeonSink:
         self._game_id: str | None = None
         self._ended = False
 
+    async def _t(self, fn: Any, *args: Any) -> Any:
+        return await asyncio.wait_for(fn(*args), self._timeout)
+
     async def _conn_ready(self) -> Any:
         if self._conn is None:
-            self._conn = await self._connect()
+            self._conn = await asyncio.wait_for(self._connect(), self._timeout)
         return self._conn
 
     async def start_game(self, run_meta: dict[str, Any]) -> None:
@@ -119,7 +125,8 @@ class NeonSink:
             started = run_meta.get("started_at")
             if isinstance(started, str):
                 started = datetime.fromisoformat(started)
-            await conn.execute(
+            await self._t(
+                conn.execute,
                 _INSERT_GAME,
                 self._game_id,
                 self.batch_id,
@@ -146,7 +153,7 @@ class NeonSink:
         rows = list(self._pending)
         try:
             conn = await self._conn_ready()
-            await conn.executemany(_INSERT_EVENT, rows)
+            await self._t(conn.executemany, _INSERT_EVENT, rows)
             del self._pending[: len(rows)]  # keep anything queued while we awaited
         except Exception:
             log.exception("NeonSink flush failed, will retry with the next batch")
@@ -157,7 +164,7 @@ class NeonSink:
             if self._game_id is None or self._ended:
                 return
             conn = await self._conn_ready()
-            await conn.execute(_END_GAME, self._game_id, status, winner)
+            await self._t(conn.execute, _END_GAME, self._game_id, status, winner)
             self._ended = True
         except Exception:
             log.exception("NeonSink could not set game status")
@@ -169,7 +176,7 @@ class NeonSink:
         await self._finish("failed", None)  # no-op when end_game already ran
         if self._conn is not None:
             try:
-                await self._conn.close()
+                await asyncio.wait_for(self._conn.close(), self._timeout)
             except Exception:
                 log.exception("NeonSink close failed")
             self._conn = None

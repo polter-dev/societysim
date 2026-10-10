@@ -12,7 +12,7 @@ import pytest
 from typer.testing import CliRunner
 
 from societysim.cli import app
-from societysim.logging.events import EventLogger
+from societysim.logging.events import Event, EventLogger
 from societysim.logging.sinks.neon import NeonSink, apply_schema, connect_neon, sync_batch
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
@@ -100,22 +100,68 @@ async def test_close_without_end_game_marks_failed():
     assert sum(len(r) for _, r in conn.many) == 1
 
 
+def _event(seq: int) -> Event:
+    return Event(
+        game_id="g1", seq=seq, t=seq, day=1, phase="night", type="phase_start", visibility="public"
+    )
+
+
+async def _drive(sink: NeonSink) -> None:
+    """Call every sink method directly, so only the sink's own guards can save us."""
+    await sink.start_game({"game_id": "g1", "models": ["m"], "started_at": "2026-10-10T12:00:00"})
+    for i in range(4):
+        await sink.write(_event(i))
+    await sink.end_game("g1", "wolves")
+    await sink.close()
+
+
 async def test_sink_errors_are_swallowed():
     conn = FakeConn(fail=True)
 
     async def connect():
         return conn
 
-    await _play(NeonSink("b1", connect=connect, batch_size=2))  # must not raise
+    await _drive(NeonSink("b1", connect=connect, batch_size=2))  # must not raise
 
 
 async def test_connect_failure_is_swallowed():
     async def connect():
         raise OSError("no route")
 
-    sink = NeonSink("b1", connect=connect, batch_size=1)
-    await _play(sink)
-    await sink.close()
+    await _drive(NeonSink("b1", connect=connect, batch_size=1))
+
+
+class HangConn(FakeConn):
+    def __init__(self):
+        super().__init__()
+        self.never = asyncio.Event()
+
+    async def execute(self, sql, *args):
+        await self.never.wait()
+
+    async def executemany(self, sql, rows):
+        await self.never.wait()
+
+    async def close(self):
+        await self.never.wait()
+
+
+async def test_hung_connection_cannot_block_the_game():
+    conn = HangConn()
+
+    async def connect():
+        return conn
+
+    sink = NeonSink("b1", connect=connect, batch_size=2, timeout=0.05)
+    await asyncio.wait_for(_drive(sink), 3)
+
+
+async def test_hung_connect_cannot_block_the_game():
+    async def connect():
+        await asyncio.Event().wait()
+
+    sink = NeonSink("b1", connect=connect, batch_size=1, timeout=0.05)
+    await asyncio.wait_for(_drive(sink), 3)
 
 
 async def test_pending_buffer_is_bounded():

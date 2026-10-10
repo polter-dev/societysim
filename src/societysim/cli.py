@@ -46,6 +46,7 @@ def doctor(
         typer.echo(f"config file not found: {config}")
         raise typer.Exit(1)
     reg = load_registry(config)
+    reg.apply_env()
     specs = reg.match(model)
     if not specs:
         typer.echo(f"no model matches {model!r}")

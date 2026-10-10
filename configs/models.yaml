@@ -12,12 +12,19 @@ providers:
   gemini: {concurrency: 2, rpm: 10}
   huggingface: {concurrency: 8, rpm: 120}
   openai: {concurrency: 8, rpm: 300}
+  hosted_vllm: {concurrency: 8, rpm: 120} # HF unified endpoint, see env below
+
+# DeepInfra rejects LiteLLM's huggingface/deepinfra/... route, so those models go through the
+# HF unified endpoint as `hosted_vllm/<hf_id>:deepinfra`; LiteLLM reads these variables.
+env:
+  HOSTED_VLLM_API_BASE: https://router.huggingface.co/v1
+env_from:
+  HOSTED_VLLM_API_KEY: HF_TOKEN
 
 models:
   # --- Hugging Face Inference Providers ---
   - name: qwen3-235b
-    litellm_model: huggingface/Qwen/Qwen3-235B-A22B-Instruct-2507
-    hf_provider: deepinfra
+    litellm_model: hosted_vllm/Qwen/Qwen3-235B-A22B-Instruct-2507:deepinfra
     structured: json_object
     temperature: 0.7
     max_tokens: 1024
@@ -33,8 +40,7 @@ models:
     output_cost_per_mtok: 0.85
     color: "#9b6bf2"
   - name: gemma4-26b
-    litellm_model: huggingface/google/gemma-4-26B-A4B-it
-    hf_provider: deepinfra
+    litellm_model: hosted_vllm/google/gemma-4-26B-A4B-it:deepinfra
     structured: json_object
     max_tokens: 1024
     input_cost_per_mtok: 0.07
@@ -50,8 +56,7 @@ models:
     output_cost_per_mtok: 0.75
     color: "#e8833a"
   - name: deepseek-v3.1
-    litellm_model: huggingface/deepseek-ai/DeepSeek-V3.1
-    hf_provider: deepinfra
+    litellm_model: hosted_vllm/deepseek-ai/DeepSeek-V3.1:deepinfra
     structured: json_object
     max_tokens: 1024
     input_cost_per_mtok: 0.25

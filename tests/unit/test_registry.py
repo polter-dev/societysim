@@ -36,8 +36,26 @@ def test_every_model_provider_has_a_limit():
 
 
 def test_hf_pin_applies_to_model_string():
-    spec = load_registry(DEFAULT_PATH).get("qwen3-235b")
-    assert litellm_model_name(spec).startswith("huggingface/deepinfra/Qwen/")
+    spec = load_registry(DEFAULT_PATH).get("llama4-maverick")
+    assert litellm_model_name(spec).startswith("huggingface/novita/meta-llama/")
+
+
+def test_apply_env_routes_hf_unified_endpoint(monkeypatch):
+    for k in ("HOSTED_VLLM_API_BASE", "HOSTED_VLLM_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("HF_TOKEN", "tok")
+    reg = load_registry(DEFAULT_PATH)
+    reg.apply_env()
+    import os
+
+    assert os.environ["HOSTED_VLLM_API_BASE"] == "https://router.huggingface.co/v1"
+    assert os.environ["HOSTED_VLLM_API_KEY"] == "tok"
+    for name in ("qwen3-235b", "deepseek-v3.1", "gemma4-26b"):
+        spec = reg.get(name)
+        assert spec.litellm_model.startswith("hosted_vllm/")
+        assert spec.litellm_model.endswith(":deepinfra")
+        assert litellm_model_name(spec) == spec.litellm_model
+        assert spec.input_cost_per_mtok is not None
 
 
 def test_resolve_match_and_unknown():

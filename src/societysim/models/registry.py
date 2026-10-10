@@ -1,6 +1,7 @@
 """Model registry: loads configs/models.yaml and resolves model names. Also the doctor probe."""
 
 import fnmatch
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -29,6 +30,10 @@ class Registry(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     providers: dict[str, ProviderLimitConfig] = {}
+    # Process env LiteLLM reads for providers needing a custom endpoint. `env` sets literals
+    # (kept if already set); `env_from` copies another variable, e.g. HF_TOKEN -> an API key.
+    env: dict[str, str] = {}
+    env_from: dict[str, str] = {}
     models: list[ModelSpec]
 
     @model_validator(mode="after")
@@ -51,6 +56,14 @@ class Registry(BaseModel):
     def match(self, pattern: str = "*") -> list[ModelSpec]:
         """Models whose name matches a shell-style glob, in file order."""
         return [m for m in self.models if fnmatch.fnmatchcase(m.name, pattern)]
+
+    def apply_env(self) -> None:
+        """Export `env` and `env_from` to os.environ. Call after load_dotenv(), before any call."""
+        for k, v in self.env.items():
+            os.environ.setdefault(k, v)
+        for k, src in self.env_from.items():
+            if src in os.environ:
+                os.environ.setdefault(k, os.environ[src])
 
     def limits(self) -> dict[str, ProviderLimit]:
         """For `LiteLLMClient(limits=...)`."""

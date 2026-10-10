@@ -563,15 +563,24 @@ Limits, all set by env on the server (defaults in brackets):
 - `PLAY_MAX_GAME_MINUTES` [45]: a longer game is ended (`status: "failed"`).
 - `PLAY_DAILY_BUDGET_USD` [2.00]: model spend per UTC day, booked per call in Neon
   (`visitor_spend`, not readable through the Data API). A game starts only if what is left
-  covers its estimate (the batch runner's price prior). If the cap is reached mid-game, the
-  remaining AI turns are played by scripted agents and the game finishes. `remaining_today` in
+  covers its estimate (the batch runner's price prior). Each model call first holds its worst
+  case (a token per prompt byte plus 2000, and the full output cap, at the model's price) and
+  runs only if that fits; the hold then settles to the real cost. So spend never passes the
+  cap. When a call doesn't fit, that AI turn is played by a scripted agent and the game
+  finishes. A failed call's error is stored, sent to Neon and put in the retry prompt only as a
+  category (`provider_error`, `timeout`, `invalid_output`), never the provider's text. `remaining_today` in
   `/api/limits` is how many default games that leaves.
 - `PLAY_ALLOWED_MODELS` [qwen3-235b, llama4-maverick, gemma4-26b, gpt-oss-120b, deepseek-v3.1,
   gemini-flash-lite, gpt-5-nano]: Basic mode uses the default lineup minus anything not allowed.
   `PLAY_MAX_TOKENS` [2048] caps each call.
 - `PLAY_ENABLED=0` closes play at once (`/api/limits` says `play_enabled: false`).
 - `PLAY_TRUSTED_PROXIES` [none]: CIDRs whose `X-Forwarded-For` / `CF-Connecting-IP` are
-  believed. Otherwise the socket peer is the client.
+  believed; `X-Forwarded-For` is read right to left, skipping trusted hops. Otherwise the
+  socket peer is the client. On HF Spaces (`SPACE_ID` set) the server refuses to start
+  without it, because every request arrives from HF's proxy, which reaches the container from a
+  private address and appends the visitor's IP to `X-Forwarded-For`. Set
+  `PLAY_TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`. If Cloudflare proxies the
+  Space's hostname, add Cloudflare's published ranges too.
 - CORS allows only `https://society-sim.us`, `https://www.society-sim.us`,
   `https://societysim.pages.dev`, `https://$SPACE_HOST`, and `http://localhost:5173` in dev
   mode, without credentials.

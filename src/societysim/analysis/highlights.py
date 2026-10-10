@@ -164,8 +164,8 @@ def find_highlights(games: list[GameData]) -> list[dict]:
     return sorted(moments, key=lambda m: (-m["score"], m["game_id"], m["seq"][0], m["type"]))
 
 
-def write_highlights(batch_dir: Path, top: int = 10) -> list[dict]:
-    """Top moments of a batch, also written to <batch_dir>/highlights.json."""
+def write_highlights(batch_dir: Path, top: int = 10, out: Path | None = None) -> list[dict]:
+    """Top moments of a batch, also written to `out` (default <batch_dir>/highlights.json)."""
     moments = find_highlights(load_batch(batch_dir))[:top]
-    (batch_dir / "highlights.json").write_text(json.dumps(moments, indent=2) + "\n")
+    (out or batch_dir / "highlights.json").write_text(json.dumps(moments, indent=2) + "\n")
     return moments

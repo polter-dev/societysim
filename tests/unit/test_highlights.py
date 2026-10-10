@@ -127,3 +127,11 @@ def test_cli_writes_highlights_json(tmp_path):
     assert "lie_moved_vote" in res.output and "?game=fixture-0001&seq=70" in res.output
     data = json.loads((tmp_path / "highlights.json").read_text())
     assert [m["type"] for m in data] == ["lie_moved_vote", "doctor_save"]
+
+
+def test_cli_out_writes_elsewhere(tmp_path):
+    out = tmp_path / "h.json"
+    res = CliRunner().invoke(app, ["highlights", str(FIXTURE.parent), "--out", str(out)])
+    assert res.exit_code == 0, res.output
+    assert len(json.loads(out.read_text())) == 6
+    assert not (FIXTURE.parent / "highlights.json").exists()

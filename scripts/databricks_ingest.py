@@ -102,10 +102,28 @@ def ddl(table: str) -> str:
     return ", ".join(f"{c} {t}" for c, t in SCHEMAS[table].items())
 
 
-def find_logs(runs: Path) -> list[Path]:
-    """Finished game logs under `runs`; one without game_end yet (still running) is skipped."""
+def is_scripted(log: Path) -> bool:
+    """True when the game's run_meta.json says random agents played it (untagged = kept)."""
+    try:
+        meta = json.loads(log.with_suffix(".run_meta.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(meta, dict) and meta.get("agents") == "scripted"
+
+
+def find_logs(runs: Path, include_scripted: bool = False) -> list[Path]:
+    """Finished game logs under `runs`; one without game_end yet (still running) is skipped.
+
+    Scripted (random-agent) games carry real model names, so they are skipped unless asked for.
+    """
     logs = sorted(p for p in runs.rglob("*.jsonl") if not p.name.endswith(".labels.jsonl"))
-    return [p for p in logs if GAME_END.search(p.read_text(encoding="utf-8"))]
+    done = [p for p in logs if GAME_END.search(p.read_text(encoding="utf-8"))]
+    if include_scripted:
+        return done
+    kept = [p for p in done if not is_scripted(p)]
+    if len(kept) < len(done):
+        print(f"skipped {len(done) - len(kept)} scripted game(s); --include-scripted keeps them")
+    return kept
 
 
 def headline(summary: dict) -> dict[str, float | None]:
@@ -358,6 +376,9 @@ def main(argv: list[str] | None = None) -> int:
     src.add_argument("--runs", type=Path, help="directory of game logs (searched recursively)")
     src.add_argument("--dashboard", action="store_true", help="import/update the AI/BI dashboard")
     ap.add_argument("--out", type=Path, default=ROOT / ".cache" / "databricks")
+    ap.add_argument(
+        "--include-scripted", action="store_true", help="also ingest scripted (random-agent) games"
+    )
     ap.add_argument("--dry-run", action="store_true", help="write local files only")
     ap.add_argument("--catalog", default="workspace")
     ap.add_argument("--schema", default="societysim")
@@ -369,9 +390,11 @@ def main(argv: list[str] | None = None) -> int:
         n = len(json.loads(serialized)["datasets"])
         print(f"dashboard {DASHBOARD.name}: {n} datasets on {a.catalog}.{a.schema}")
     else:
-        logs = [FIXTURE] if a.fixture else find_logs(a.runs)
+        logs = [FIXTURE] if a.fixture else find_logs(a.runs, a.include_scripted)
         if not logs:
-            print(f"no finished game logs under {a.runs}", file=sys.stderr)
+            print(
+                f"no finished game logs under {a.runs} (scripted games skipped?)", file=sys.stderr
+            )
             return 1
         games = [(load_game(p), p.parent.name) for p in logs]
         files = write_local(games, a.out)

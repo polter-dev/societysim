@@ -42,6 +42,7 @@ def test_scripted_play_is_reproducible_and_writes_metadata(tmp_path, monkeypatch
     first_bytes = log.read_bytes()
     assert first_bytes
     assert json.loads(meta.read_text())["game_id"] == "selfplay_smoke-s0"
+    assert json.loads(meta.read_text())["agents"] == "scripted"
 
     second = RUNNER.invoke(app, args)
     assert second.exit_code == 0, second.output
@@ -151,7 +152,9 @@ def test_human_seat_plays_against_llms_and_is_logged_as_human(tmp_path, monkeypa
     seats = evs[0]["meta"]["seats"]
     assert seats["p3"]["model"] == "human"
     assert {s["model"] for k, s in seats.items() if k != "p3"} == {"gemma4-26b"}
-    assert json.loads(log.with_suffix(".run_meta.json").read_text())["models"][3] == "human"
+    meta = json.loads(log.with_suffix(".run_meta.json").read_text())
+    assert meta["models"][3] == "human"
+    assert meta["agents"] == "llm"
     mine = [e for e in evs if e.get("actor") == "p3" and e.get("suspicion")]
     assert mine
     assert all(e["meta"]["suspicion_default"] is True for e in mine)

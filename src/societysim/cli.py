@@ -167,6 +167,9 @@ def play(
     except (EOFError, KeyboardInterrupt):
         typer.echo(f"\ngame abandoned; partial log: {Path('runs') / batch_id / f'{game_id}.jsonl'}")
         raise typer.Exit(130) from None
+    from societysim.batch.runner import _tag_agents
+
+    _tag_agents(Path("runs") / batch_id / f"{game_id}.run_meta.json", agents.value)
     typer.echo(Path("runs") / batch_id / f"{game_id}.jsonl")
     typer.echo(f"winner: {game.winner}")
 

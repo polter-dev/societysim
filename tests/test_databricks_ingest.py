@@ -123,6 +123,33 @@ def test_runs_dir_finds_game_logs(tmp_path):
     assert len((tmp_path / "o" / "labels.jsonl").read_text().splitlines()) == 8
 
 
+def test_scripted_games_are_skipped_unless_included(tmp_path, capsys):
+    batch = tmp_path / "b1"
+    batch.mkdir()
+    for name, tag in [("scripted", "scripted"), ("llm", "llm"), ("untagged", None)]:
+        shutil.copy(FIXTURE, batch / f"{name}.jsonl")
+        if tag:
+            (batch / f"{name}.run_meta.json").write_text(json.dumps({"agents": tag}))
+    (batch / "untagged.run_meta.json").write_text(json.dumps({"game_id": "x"}))
+    names = lambda logs: sorted(p.stem for p in logs)  # noqa: E731
+    assert names(ingest.find_logs(tmp_path)) == ["llm", "untagged"]
+    assert "skipped 1 scripted" in capsys.readouterr().out
+    assert names(ingest.find_logs(tmp_path, include_scripted=True)) == [
+        "llm",
+        "scripted",
+        "untagged",
+    ]
+
+
+def test_all_scripted_runs_dir_exits_one(tmp_path, capsys):
+    shutil.copy(FIXTURE, tmp_path / "g.jsonl")
+    (tmp_path / "g.run_meta.json").write_text(json.dumps({"agents": "scripted"}))
+    args = ["--runs", str(tmp_path), "--dry-run", "--out", str(tmp_path / "o")]
+    assert ingest.main(args) == 1
+    assert "scripted" in capsys.readouterr().err
+    assert ingest.main([*args, "--include-scripted"]) == 0
+
+
 def mock_databricks(fail: str | None = None):
     """A fake workspace: one warehouse; statements go PENDING once, then SUCCEEDED."""
     log: list[httpx.Request] = []

@@ -11,7 +11,7 @@ import { Tally } from "./components/Tally/Tally";
 import Timeline from "./components/Timeline/Timeline";
 import { fetchLabels, siblingLabelsUrl } from "./data/labels";
 import { parseLog, type ParsedLog } from "./data/parse";
-import { fetchLog } from "./data/source";
+import { fetchLog, type GameSource } from "./data/source";
 import { deriveScene, type Mode } from "./scene/deriveScene";
 import type { Event, Label } from "./types/events";
 
@@ -60,7 +60,8 @@ export function Game({ events, labels, idx, mode, selected, onSelect, onSeqChang
   );
 }
 
-export default function App() {
+/** `source` serves `?game=<id>` links from the index page; `?log=<url>` and file upload need none. */
+export default function App({ source }: { source?: GameSource } = {}) {
   const [log, setLog] = useState<ParsedLog | null>(null);
   const [labels, setLabels] = useState<Label[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -76,12 +77,18 @@ export default function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+    const game = params.get("game");
+    if (game && source) {
+      source.loadGame(game).then(show, (err: Error) => setLoadError(err.message));
+      source.loadLabels?.(game).then((l) => setLabels(l as Label[]));
+      return;
+    }
     const url = params.get("log");
     if (url) fetchLog(url).then(show, (err: Error) => setLoadError(err.message));
     const labelsUrl = params.get("labels") ?? (url && siblingLabelsUrl(url));
     // data/labels.ts types schema_version as number; the generated Label narrows it to 1 | 2.
     if (labelsUrl) fetchLabels(labelsUrl).then((l) => setLabels(l as Label[]));
-  }, []);
+  }, [source]);
 
   useEffect(() => {
     const syncMode = () => setMode(modeFromSearch(window.location.search));

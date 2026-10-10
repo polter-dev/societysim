@@ -1,8 +1,13 @@
 import type { Event } from "../types/events";
+import type { Label } from "./labels";
 import { parseLog, type ParsedLog } from "./parse";
 
+/** What the index page shows before a game is opened. Never roles; the page hides winner by default. */
 export interface GameSummary {
   id: string;
+  days?: number;
+  winner?: string | null;
+  models?: string[];
 }
 
 /** Where games come from: static files now, Neon later (T6.2). */
@@ -11,6 +16,8 @@ export interface GameSource {
   loadGame(id: string): Promise<ParsedLog>;
   /** Events with seq > afterSeq. Static games are finished, so this only matters for live sources. */
   pollEvents(gameId: string, afterSeq: number): Promise<Event[]>;
+  /** The game's lie labels; [] when it has none. */
+  loadLabels?(id: string): Promise<Label[]>;
 }
 
 /** Fetch and parse one .jsonl log by URL. */

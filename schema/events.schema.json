@@ -1,0 +1,579 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "EventMeta": {
+      "additionalProperties": true,
+      "description": "Known meta keys. All optional; which ones appear depends on the event type\n(see docs/LOG_SCHEMA.md). Unknown keys are allowed. None values are not written.",
+      "properties": {
+        "ts": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "seed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "seats": {
+          "anyOf": [
+            {
+              "patternProperties": {
+                "^p[0-8]$": {
+                  "$ref": "#/$defs/Seat"
+                }
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Usage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "round": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "statement_seq": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "role": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Role"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "result": {
+          "anyOf": [
+            {
+              "enum": [
+                "wolf",
+                "not_wolf"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "night": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "saved": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "method": {
+          "anyOf": [
+            {
+              "enum": [
+                "consensus",
+                "plurality",
+                "tiebreak"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tally": {
+          "anyOf": [
+            {
+              "patternProperties": {
+                "^p[0-8]$": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "winner": {
+          "anyOf": [
+            {
+              "enum": [
+                "wolves",
+                "villagers",
+                "draw"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "roles": {
+          "anyOf": [
+            {
+              "patternProperties": {
+                "^p[0-8]$": {
+                  "$ref": "#/$defs/Role"
+                }
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "truncated": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "fallback": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "attempt": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "raw": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "EventMeta",
+      "type": "object"
+    },
+    "EventType": {
+      "enum": [
+        "game_start",
+        "phase_start",
+        "wolf_chat",
+        "wolf_proposal",
+        "night_kill",
+        "doctor_save",
+        "seer_check",
+        "death_reveal",
+        "statement",
+        "accusation",
+        "role_claim",
+        "seer_claim",
+        "vote",
+        "elimination",
+        "no_elimination",
+        "invalid_output",
+        "fallback_action",
+        "game_end"
+      ],
+      "title": "EventType",
+      "type": "string"
+    },
+    "Phase": {
+      "enum": [
+        "setup",
+        "night",
+        "day",
+        "vote"
+      ],
+      "title": "Phase",
+      "type": "string"
+    },
+    "Role": {
+      "enum": [
+        "wolf",
+        "seer",
+        "doctor",
+        "villager"
+      ],
+      "title": "Role",
+      "type": "string"
+    },
+    "Seat": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/Role"
+        }
+      },
+      "required": [
+        "name",
+        "model",
+        "color",
+        "role"
+      ],
+      "title": "Seat",
+      "type": "object"
+    },
+    "Suspicion": {
+      "additionalProperties": false,
+      "properties": {
+        "player": {
+          "pattern": "^p[0-8]$",
+          "type": "string"
+        },
+        "p": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "player",
+        "p"
+      ],
+      "title": "Suspicion",
+      "type": "object"
+    },
+    "Usage": {
+      "additionalProperties": false,
+      "description": "Logged as `meta.usage` on every LLM-backed event. Covers all attempts of one call.",
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "input_tokens": {
+          "type": "integer"
+        },
+        "output_tokens": {
+          "type": "integer"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "latency_ms": {
+          "type": "integer"
+        },
+        "attempts": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "model",
+        "input_tokens",
+        "output_tokens",
+        "cost_usd",
+        "latency_ms",
+        "attempts"
+      ],
+      "title": "Usage",
+      "type": "object"
+    },
+    "Visibility": {
+      "description": "Which players could see this event during the game.",
+      "enum": [
+        "public",
+        "wolves",
+        "seer",
+        "doctor",
+        "narrator"
+      ],
+      "title": "Visibility",
+      "type": "string"
+    },
+    "LabelType": {
+      "enum": [
+        "false_role_claim",
+        "false_report",
+        "bussing",
+        "hidden_knowledge",
+        "mis_elimination"
+      ],
+      "title": "LabelType",
+      "type": "string"
+    },
+    "Label": {
+      "additionalProperties": false,
+      "description": "One line of <game_id>.labels.jsonl. The raw game log is never edited.",
+      "properties": {
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "game_id": {
+          "type": "string"
+        },
+        "label": {
+          "$ref": "#/$defs/LabelType"
+        },
+        "actor": {
+          "pattern": "^p[0-8]$",
+          "type": "string"
+        },
+        "source_seq": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "enum": [
+            "self_tag",
+            "jev",
+            "engine"
+          ],
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "detail": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "game_id",
+        "label",
+        "actor",
+        "source_seq",
+        "source",
+        "confidence",
+        "detail"
+      ],
+      "title": "Label",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One line of <game_id>.jsonl.",
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "game_id": {
+      "type": "string"
+    },
+    "seq": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "t": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "day": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "phase": {
+      "$ref": "#/$defs/Phase"
+    },
+    "type": {
+      "$ref": "#/$defs/EventType"
+    },
+    "visibility": {
+      "$ref": "#/$defs/Visibility"
+    },
+    "actor": {
+      "anyOf": [
+        {
+          "pattern": "^p[0-8]$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "target": {
+      "anyOf": [
+        {
+          "pattern": "^p[0-8]$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "public_text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "private_reasoning": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "suspicion": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/Suspicion"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "meta": {
+      "$ref": "#/$defs/EventMeta"
+    }
+  },
+  "required": [
+    "schema_version",
+    "game_id",
+    "seq",
+    "t",
+    "day",
+    "phase",
+    "type",
+    "visibility",
+    "actor",
+    "target",
+    "public_text",
+    "private_reasoning",
+    "suspicion",
+    "meta"
+  ],
+  "title": "Event",
+  "type": "object"
+}

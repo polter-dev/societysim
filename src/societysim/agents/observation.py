@@ -91,11 +91,13 @@ def _now(state: GameState) -> str:
 
 
 def _to_score(state: GameState, seat: str, name: Name) -> str:
-    """The suspicion list spelled out with its count (#136: models dropped players from it)."""
-    others = [name(s) for s in state.seats if s in state.alive and s != seat]
+    """The suspicion list spelled out with its count (#136) as bare seat ids (#149: models copied
+    "Name (pX)" into "player")."""
+    others = [s for s in state.seats if s in state.alive and s != seat]
     return (
-        f'"suspicion" needs exactly {len(others)} entries, one per living player except you, '
-        f"{name(seat)}: " + "; ".join(others) + "."
+        f'"suspicion" needs exactly {len(others)} entries, one per living player except you '
+        f"({seat}): {', '.join(others)}. "
+        f'Each "player" must be the bare seat id, like "{others[0]}".'
     )
 
 

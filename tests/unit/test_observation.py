@@ -113,22 +113,23 @@ def test_players_render_as_name_and_seat_and_dead_are_listed():
     text = obs("vote2", "villager")
     assert f"Dead: {name(CAST['v_night1'])}, villager; {name(CAST['v_day1'])}, villager." in text
     unquoted = re.sub(r'"[^"]*"', "", text)  # statements quote canary markers like START-p0
+    unquoted = re.sub(r"^.*needs exactly.*$", "", unquoted, flags=re.M)  # bare ids by design (#149)
     assert not re.search(r"(?<!\()\bp[0-8]\b(?!\))", unquoted)  # seats only as "Name (p3)"
     unrevealed = GAMES[False]
     state, events = unrevealed.checkpoints["vote2"]
     assert "role not revealed" in observe(state, events, unrevealed.cast["villager"])
 
 
-def test_suspicion_list_names_every_other_living_player_with_count():
+def test_suspicion_list_gives_bare_ids_of_every_other_living_player_with_count():
     state, _ = GAME.checkpoints["vote2"]
     seat = CAST["villager"]
     others = [s for s in state.seats if s in state.alive and s != seat]
     assert len(others) < len(state.seats) - 1  # some players are dead by vote2
-    line = (
-        f'"suspicion" needs exactly {len(others)} entries, one per living player except you, '
-        f"{name(seat)}: " + "; ".join(map(name, others)) + "."
-    )
-    assert f"\n{line}" in obs("vote2", "villager")
+    line = next(x for x in obs("vote2", "villager").splitlines() if "needs exactly" in x)
+    assert line.startswith(f'"suspicion" needs exactly {len(others)} entries,')
+    assert f"except you ({seat}): {', '.join(others)}." in line
+    assert 'must be the bare seat id, like "' in line
+    assert not any(name(s) in line for s in state.seats)  # no "Name (pX)": gemma copied it
 
 
 def test_deterministic():

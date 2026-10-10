@@ -115,8 +115,9 @@ create index if not exists visitor_spend_day_idx on visitor_spend (day);
 alter table visitor_spend enable row level security;
 
 -- What the Data API's anonymous role reads instead of events (#323), with the same columns. A
--- game that is over (finished or failed) reads in full. While a game runs: only its public
--- events, with private_reasoning and suspicion set to null, so the live site can't spoil roles.
+-- finished game reads in full. Any other (running, or failed, which batch resume reruns with the
+-- same game_id and seed, so the same roles): only its public events, with private_reasoning and
+-- suspicion set to null, so the live site can't spoil roles.
 -- The view runs with its owner's (the writer's) rights; security_barrier stops a caller's
 -- filters from being evaluated on hidden rows first.
 create or replace view events_public with (security_barrier) as
@@ -127,16 +128,17 @@ select e.game_id,
        e.type,
        e.actor,
        e.schema_version,
-       case when g.status = 'running'
-            then e.event || jsonb_build_object('private_reasoning', null, 'suspicion', null)
-            else e.event end as event
+       case when g.status = 'finished'
+            then e.event
+            else e.event || jsonb_build_object('private_reasoning', null, 'suspicion', null) end
+           as event
 from events e
 join games g on g.game_id = e.game_id
-where g.status <> 'running' or e.event ->> 'visibility' = 'public';
+where g.status = 'finished' or e.event ->> 'visibility' = 'public';
 
 -- Read-only access for the Data API's anonymous role (viewer, #40). Never grant writes.
--- No direct select on events (#323): anonymous reads events_public. Labels are written only
--- after a game is over (sync_game sets the status first), so labels stay granted.
+-- No direct select on events (#323): anonymous reads events_public. Labels are never written
+-- while a game runs (only sync_game writes them, after setting the status), so they stay granted.
 do $$
 begin
     if exists (select 1 from pg_roles where rolname = 'anonymous') then

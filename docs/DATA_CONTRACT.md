@@ -698,10 +698,11 @@ Limits, all set by env on the server (defaults in brackets):
 ### Views
 
 `events_public`: what `anonymous` reads instead of `events`, with the same columns (#323). A
-game that is over (`status` `finished` or `failed`) reads in full. While a game is `running`,
-only its events with `visibility = 'public'`, with `private_reasoning` and `suspicion` set to
-null inside `event`, so `seq` has gaps and there is no `game_start` until the game ends. The
-other columns are as in `events`.
+`finished` game reads in full. A `running` or `failed` game gives only its events with
+`visibility = 'public'`, with `private_reasoning` and `suspicion` set to null inside `event`, so
+`seq` has gaps and there is no `game_start`. Failed counts as unfinished because batch resume
+reruns a failed game with the same `game_id` and seed, so the same roles. The other columns are
+as in `events`.
 
 <!-- neon:events_public -->
 | Column | Type | Notes |

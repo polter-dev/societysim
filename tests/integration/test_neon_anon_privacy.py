@@ -136,9 +136,11 @@ async def test_anonymous_cannot_select_events(db):
         await _as_anon(db, "select event from events limit 1")
 
 
-async def test_running_game_reads_public_events_without_private_fields(db):
-    rows = await _as_anon(db, "select * from events_public where game_id = 'g-run' order by seq")
-    full = _fixture_events("g-run")
+# A failed game counts as not over: batch resume reruns the same game_id and seed (same roles).
+@pytest.mark.parametrize("gid", ["g-run", "g-fail"])
+async def test_unfinished_game_reads_public_events_without_private_fields(db, gid):
+    rows = await _as_anon(db, "select * from events_public where game_id = $1 order by seq", gid)
+    full = _fixture_events(gid)
     public = [e for e in full if e["visibility"] == "public"]
     assert [r["seq"] for r in rows] == [e["seq"] for e in public]
     for row, original in zip(rows, public, strict=True):
@@ -148,19 +150,19 @@ async def test_running_game_reads_public_events_without_private_fields(db):
     # Filters on the hidden rows' columns find nothing.
     hidden = await _as_anon(
         db,
-        "select seq from events_public where game_id = 'g-run'"
+        "select seq from events_public where game_id = $1"
         " and (event ->> 'visibility' <> 'public' or event ->> 'private_reasoning' is not null"
         " or type = 'game_start')",
+        gid,
     )
     assert hidden == []
 
 
-@pytest.mark.parametrize("gid", ["g-done", "g-fail"])
-async def test_game_that_is_over_reads_in_full(db, gid):
+async def test_finished_game_reads_in_full(db):
     rows = await _as_anon(
-        db, "select event from events_public where game_id = $1 order by seq", gid
+        db, "select event from events_public where game_id = 'g-done' order by seq"
     )
-    assert [_event(r) for r in rows] == _fixture_events(gid)
+    assert [_event(r) for r in rows] == _fixture_events("g-done")
 
 
 async def test_status_change_reveals_the_rest(db):

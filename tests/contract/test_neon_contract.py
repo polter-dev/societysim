@@ -80,7 +80,7 @@ def test_events_public_hides_running_games():
     """Static check of #323; tests/integration/test_neon_anon_privacy.py runs it on Postgres."""
     view = re.search(r"create or replace view events_public (.*?);\n", SQL, re.S)[1]
     assert view.startswith("with (security_barrier) as")
-    assert "where g.status <> 'running' or e.event ->> 'visibility' = 'public'" in view
+    assert "where g.status = 'finished' or e.event ->> 'visibility' = 'public'" in view
     assert "jsonb_build_object('private_reasoning', null, 'suspicion', null)" in view
     assert sql_view_columns("events_public") == [c for c, _ in sql_table_columns("events")]
 

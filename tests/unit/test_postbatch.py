@@ -28,7 +28,7 @@ def calls(monkeypatch):
         return subprocess.CompletedProcess(cmd, 0)
 
     monkeypatch.setattr(postbatch.subprocess, "run", fake_run)
-    monkeypatch.setattr(postbatch, "demo_block", lambda b, top: "For DEMO.md")
+    monkeypatch.setattr(postbatch, "demo_block", lambda *a: "For DEMO.md")
     return seen
 
 
@@ -91,6 +91,7 @@ def test_real_pipeline_on_scripted_batch(tmp_path, capsys):
     assert "games played: 1, unfinished: 0" in out
     assert "top models by OpenSkill ordinal" in out
     assert "lie success (self_tag)" in out
+    assert "lie success (jev): Jev skipped (run with --jev)" in out
     assert "societysim publish" in out and "databricks_ingest.py --runs runs/" in out
     assert not (batch / "agreement.json").exists()  # no Jev
 
@@ -100,3 +101,9 @@ def test_pick_highlight_prefers_lie_moved_vote():
     assert postbatch.pick_highlight(ms) == ms[1]
     assert postbatch.pick_highlight(ms[:1]) == ms[0]
     assert postbatch.pick_highlight([]) is None
+
+
+def test_demo_block_runs_jev_line_when_jev_ran(tmp_path):
+    batch = _batch(tmp_path)
+    postbatch.main([str(batch)])
+    assert "Jev skipped" not in postbatch.demo_block(batch, None, jev=True)

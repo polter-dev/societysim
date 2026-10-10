@@ -40,7 +40,7 @@ def _pct(x: float | None) -> str:
     return "n/a" if x is None else f"{x:.1%}"
 
 
-def demo_block(batch: Path, top: dict | None) -> str:
+def demo_block(batch: Path, top: dict | None, jev: bool = True) -> str:
     meta = _read(batch / "run_meta.json")
     rep = batch / "report"
     metrics, board = _read(rep / "metrics.json"), _read(rep / "leaderboard.json")
@@ -61,6 +61,9 @@ def demo_block(batch: Path, top: dict | None) -> str:
         lines.append("    none (no rated models)")
     lies = metrics["by_group"]["all"]["lies"]
     for source, d in lies.items():
+        if source == "jev" and not jev:
+            lines.append("  lie success (jev): Jev skipped (run with --jev)")
+            continue
         ls = d["lie_success"]
         lines.append(
             f"  lie success ({source}): {d['lies']} lies, voters followed "
@@ -120,7 +123,7 @@ def main(argv: list[str] | None = None) -> None:
         )
     else:
         print("\n== narrate: skipped, no highlights")
-    print("\n" + demo_block(batch, top) + "\n\n" + next_steps(batch))
+    print("\n" + demo_block(batch, top, a.jev) + "\n\n" + next_steps(batch))
 
 
 if __name__ == "__main__":

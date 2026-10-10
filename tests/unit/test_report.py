@@ -303,3 +303,23 @@ def test_lie_rate_chart_and_stable_keys(tmp_path):
     assert m["models"] == base["models"] and m["by_group"] == base["by_group"]
     board = json.loads((out / "leaderboard.json").read_text())
     assert "summary" not in board and "speed" not in board
+
+
+def test_headline_pluralises():
+    from societysim.analysis.report import _n
+
+    assert _n(1, "wolf seat") == "1 wolf seat"
+    assert _n(0, "wolf seat") == "0 wolf seats"
+    assert _n(2, "wolf seat") == "2 wolf seats"
+
+
+def test_headline_wolf_seats_singular(tmp_path):
+    _, m = _report(tmp_path)
+    sm = copy.deepcopy(m["summary"])
+    sm["top_wolf_win"] = {"model": "x", "win_rate": 1.0, "seats": 1}
+    from societysim.analysis.report import _headline
+
+    text = "\n".join(_headline(sm, {"self_tag"}))
+    assert "over 1 wolf seat)" in text
+    sm["top_wolf_win"]["seats"] = 2
+    assert "over 2 wolf seats)" in "\n".join(_headline(sm, {"self_tag"}))

@@ -252,6 +252,10 @@ def _table(head: list[str], rows: list[list[str]]) -> list[str]:
     return lines + [""]
 
 
+def _n(n: int, word: str) -> str:
+    return f"{n} {word}" + ("" if n == 1 else "s")
+
+
 def _headline(sm: dict, present: set[str]) -> list[str]:
     lines = ["## Headline", ""]
     lines.append(f"- Games: {sm['games']} finished, {sm['unfinished_games']} unfinished.")
@@ -271,18 +275,18 @@ def _headline(sm: dict, present: set[str]) -> list[str]:
         li = sm["lies"][src]
         ls = li["lie_success"]
         lines.append(
-            f"- Lies ({src}): {li['lies']} in {li['statements']} statements "
+            f"- Lies ({src}): {_n(li['lies'], 'lie')} in {_n(li['statements'], 'statement')} "
             f"({_pct(li['lie_rate'])}). Lies swayed {_pct(ls['share_moved'])} of the "
-            f"{ls['comparisons']} suspicions they targeted; {_pct(ls['share_followed'])} of "
-            f"{ls['voters']} votes followed the lie, against a no-lie base rate of "
-            f"{_pct(ls['base_rate'])} ({ls['base_voters']} votes)."
+            f"{_n(ls['comparisons'], 'suspicion')} they targeted; {_pct(ls['share_followed'])} of "
+            f"{_n(ls['voters'], 'vote')} followed the lie, against a no-lie base rate of "
+            f"{_pct(ls['base_rate'])} ({_n(ls['base_voters'], 'vote')})."
         )
     if t := sm["top_openskill"]:
         lines.append(f"- Top OpenSkill: {t['model']} (ordinal {_num(t['ordinal'])}).")
     if t := sm["top_wolf_win"]:
         lines.append(
             f"- Top wolf win rate: {t['model']} "
-            f"({_pct(t['win_rate'])} over {t['seats']} wolf seats)."
+            f"({_pct(t['win_rate'])} over {_n(t['seats'], 'wolf seat')})."
         )
     for src in LABEL_SOURCES:
         if src not in present:
@@ -291,7 +295,7 @@ def _headline(sm: dict, present: set[str]) -> list[str]:
         lines.append(
             f"- Highest lie success ({src}, at least {sm['min_comparisons']} comparisons): "
             + (
-                f"{t['model']} ({_pct(t['share_moved'])} of {t['comparisons']})."
+                f"{t['model']} ({_pct(t['share_moved'])} of {_n(t['comparisons'], 'comparison')})."
                 if t
                 else "none qualifies."
             )

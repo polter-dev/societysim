@@ -258,8 +258,6 @@ class GameManager:
             log.warning("game %s hit the time limit; ended", session.game_id)
             session.status = "failed"
         except Forfeit:
-            # ponytail: calls already running beside the visitor's turn (gather) finish
-            # unobserved; they are seconds long next to the 90 s turn timeout.
             session.status = "forfeit"
         except asyncio.CancelledError:  # server shutdown
             session.status = "failed"

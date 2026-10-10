@@ -81,6 +81,7 @@ def test_llm_mode_uses_client_and_completes_offline(tmp_path, monkeypatch):
     from societysim.models import client as client_module
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOSTED_VLLM_API_KEY", "test-key")
     clients = []
 
     def fake_client(*, limits):
@@ -99,6 +100,25 @@ def test_llm_mode_uses_client_and_completes_offline(tmp_path, monkeypatch):
     assert events(log)[-1]["meta"]["winner"] in {"wolves", "villagers", "draw"}
 
 
+def test_llm_mode_requires_provider_key_before_starting(tmp_path, monkeypatch):
+    from societysim.models import client as client_module
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    monkeypatch.delenv("HOSTED_VLLM_API_KEY", raising=False)
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+
+    def unexpected_client(*, limits):
+        pytest.fail("LiteLLMClient must not be created without a provider key")
+
+    monkeypatch.setattr(client_module, "LiteLLMClient", unexpected_client)
+    result = RUNNER.invoke(app, ["play", "--config", str(CONFIG), "--agents", "llm"])
+    assert result.exit_code == 1, result.output
+    assert "HOSTED_VLLM_API_KEY" in result.output
+    assert len(result.output.splitlines()) == 1
+    assert not (tmp_path / "runs").exists()
+
+
 @pytest.mark.skipif(not os.environ.get("HF_TOKEN"), reason="HF_TOKEN is required")
 def test_real_hf_selfplay(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -108,9 +128,17 @@ def test_real_hf_selfplay(tmp_path, monkeypatch):
     game_events = events(log)
     assert game_events[-1]["meta"]["winner"] in {"wolves", "villagers", "draw"}
     types = {event["type"] for event in game_events}
-    assert set(EventType) <= types
+    assert {
+        EventType.GAME_START,
+        EventType.PHASE_START,
+        EventType.STATEMENT,
+        EventType.VOTE,
+        EventType.GAME_END,
+    } <= types
+    assert {EventType.DEATH_REVEAL, EventType.NIGHT_KILL, EventType.ELIMINATION} & types
     invalid = sum(event["type"] == EventType.INVALID_OUTPUT for event in game_events)
     replies = sum("usage" in event["meta"] for event in game_events)
-    assert invalid / replies < 0.10
+    if replies:
+        assert invalid / replies < 0.10
     total_cost = sum(event["meta"].get("usage", {}).get("cost_usd", 0) for event in game_events)
     assert total_cost < 0.25

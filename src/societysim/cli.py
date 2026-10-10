@@ -70,6 +70,22 @@ def play(
     if agents is AgentMode.SCRIPTED:
         make_agent = RandomAgent
     else:
+        provider_keys = {
+            "huggingface": ("HF_TOKEN", "HUGGINGFACE_API_KEY"),
+            "hosted_vllm": ("HOSTED_VLLM_API_KEY",),
+            "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+            "openai": ("OPENAI_API_KEY",),
+        }
+        providers = {spec.provider for spec in specs}
+        missing = [
+            " or ".join(keys)
+            for provider, keys in provider_keys.items()
+            if provider in providers and not any(os.environ.get(key) for key in keys)
+        ]
+        if missing:
+            typer.echo(f"missing provider key: {', '.join(missing)}")
+            raise typer.Exit(1)
+
         from societysim.models.client import LiteLLMClient
 
         client = LiteLLMClient(limits=reg.limits())

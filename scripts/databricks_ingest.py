@@ -1,14 +1,21 @@
-"""Load game logs into Databricks Delta tables: games, events, labels.
+"""Load game logs into Databricks Delta tables: games, events, labels, batch_metrics.
 
     uv run python scripts/databricks_ingest.py --fixture            # fixtures/sample_game.jsonl
-    uv run python scripts/databricks_ingest.py --runs runs/<batch>  # every game log under a dir
+    uv run python scripts/databricks_ingest.py --runs runs/<batch>  # finished games under a dir
+    uv run python scripts/databricks_ingest.py --dashboard          # import/update the dashboard
 
-Always writes games.jsonl, events.jsonl, labels.jsonl and metrics.json (the T3.3 metrics on the
-same games, as `societysim report` computes them) to --out. With DATABRICKS_HOST and
+Always writes games.jsonl, events.jsonl, labels.jsonl, batch_metrics.jsonl (the headline T3.3
+metrics of each batch, long format, for the MLflow notebook) and metrics.json (the T3.3 metrics
+on all the games, as `societysim report` computes them) to --out. A log without a game_end event
+(a batch still running) is skipped. With DATABRICKS_HOST and
 DATABRICKS_TOKEN set (and no --dry-run) it also creates the schema and volume, uploads those
 files through the Files REST API and creates one Delta table per file with read_files through
 the SQL Statement API. Free Edition is serverless only, so a SQL warehouse runs the statements:
 DATABRICKS_WAREHOUSE_ID, or the workspace's first warehouse.
+
+--dashboard creates or updates notebooks/databricks/societysim.lvdash.json (matched by display
+name) through the Lakeview REST API and publishes it. Its datasets read the tables above and the
+metric tables notebooks/databricks/metrics.py saves, so run that notebook first.
 
 Rows are newline-delimited JSON, not Parquet: pyarrow is not a dependency here.
 """
@@ -16,6 +23,7 @@ Rows are newline-delimited JSON, not Parquet: pyarrow is not a dependency here.
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -27,6 +35,9 @@ from societysim.logging.events import EventType
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "fixtures" / "sample_game.jsonl"
+DASHBOARD = ROOT / "notebooks" / "databricks" / "societysim.lvdash.json"
+DASHBOARD_NAME = "societysim"
+GAME_END = re.compile(r'"type":\s*"game_end"')
 
 # Column -> Spark type. Explicit, so a column that happens to be all null still gets its type.
 SCHEMAS: dict[str, dict[str, str]] = {
@@ -77,6 +88,13 @@ SCHEMAS: dict[str, dict[str, str]] = {
         "confidence": "DOUBLE",
         "detail": "STRING",
     },
+    "batch_metrics": {
+        "batch_id": "STRING",
+        "model": "STRING",  # "*" is every model together (T3.3's by_group)
+        "grp": "STRING",
+        "metric": "STRING",
+        "value": "DOUBLE",
+    },
 }
 
 
@@ -85,8 +103,48 @@ def ddl(table: str) -> str:
 
 
 def find_logs(runs: Path) -> list[Path]:
+    """Finished game logs under `runs`; one without game_end yet (still running) is skipped."""
     logs = sorted(p for p in runs.rglob("*.jsonl") if not p.name.endswith(".labels.jsonl"))
-    return [p for p in logs if p.stat().st_size]
+    return [p for p in logs if GAME_END.search(p.read_text(encoding="utf-8"))]
+
+
+def headline(summary: dict) -> dict[str, float | None]:
+    """The leaderboard numbers of one T3.3 summary (one model, one group), flat."""
+    out = {
+        "games": summary["games"],
+        "win_rate": summary["win_rate"],
+        "detection_auc": summary["detection"]["auc"],
+        "detection_brier": summary["detection"]["brier"],
+        "persuasion_share": summary["persuasion"]["share"],
+        "invalid_output_rate": summary["invalid_output_rate"],
+        "cost_usd_per_game": summary["cost_usd_per_game"],
+    }
+    for src, lies in summary["lies"].items():
+        ls = lies["lie_success"]
+        out |= {
+            f"lie_rate_{src}": lies["lie_rate"],
+            f"lie_share_moved_{src}": ls["share_moved"],
+            f"lie_share_followed_{src}": ls["share_followed"],
+            f"lie_base_rate_{src}": ls["base_rate"],
+        }
+    return out
+
+
+def batch_metric_rows(games: list[tuple[GameData, str]]) -> list[dict]:
+    """compute_metrics on each batch -> (batch_id, model, grp, metric, value) rows."""
+    batches: dict[str, list[GameData]] = {}
+    for g, batch_id in games:
+        batches.setdefault(batch_id, []).append(g)
+    rows = []
+    for batch_id, gs in batches.items():
+        m = compute_metrics(gs)
+        for model, groups in [*m["models"].items(), ("*", m["by_group"])]:
+            for grp, summary in groups.items():
+                rows += [
+                    {"batch_id": batch_id, "model": model, "grp": grp, "metric": k, "value": v}
+                    for k, v in headline(summary).items()
+                ]
+    return rows
 
 
 def build_rows(games: list[tuple[GameData, str]]) -> dict[str, list[dict]]:
@@ -156,6 +214,7 @@ def build_rows(games: list[tuple[GameData, str]]) -> dict[str, list[dict]]:
                     "detail": lb.detail,
                 }
             )
+    out["batch_metrics"] = batch_metric_rows(games)
     return out
 
 
@@ -248,11 +307,56 @@ def upload(
     return statements
 
 
+def dashboard_json(catalog: str, schema: str) -> str:
+    """The checked-in dashboard, pointed at `catalog`.`schema`."""
+    text = DASHBOARD.read_text(encoding="utf-8")
+    json.loads(text)  # fail here, not in the workspace, on a broken file
+    return text.replace("workspace.societysim.", f"{catalog}.{schema}.")
+
+
+def find_dashboard(client: httpx.Client, name: str) -> str | None:
+    params: dict = {"page_size": 100}
+    while True:
+        r = client.get("/api/2.0/lakeview/dashboards", params=params)
+        r.raise_for_status()
+        body = r.json()
+        for d in body.get("dashboards") or []:
+            if d.get("display_name") == name:
+                return d["dashboard_id"]
+        if not body.get("next_page_token"):
+            return None
+        params["page_token"] = body["next_page_token"]
+
+
+def deploy_dashboard(
+    client: httpx.Client, serialized: str, warehouse_id: str | None = None, name=DASHBOARD_NAME
+) -> str:
+    """Update the dashboard called `name` (or create it in the caller's home), publish it."""
+    wid = warehouse_id or first_warehouse(client)
+    payload = {"display_name": name, "warehouse_id": wid, "serialized_dashboard": serialized}
+    if did := find_dashboard(client, name):
+        r = client.patch(f"/api/2.0/lakeview/dashboards/{did}", json=payload)
+    else:
+        me = client.get("/api/2.0/preview/scim/v2/Me")
+        me.raise_for_status()
+        payload["parent_path"] = f"/Users/{me.json()['userName']}"
+        r = client.post("/api/2.0/lakeview/dashboards", json=payload)
+    r.raise_for_status()
+    did = r.json()["dashboard_id"]
+    r = client.post(
+        f"/api/2.0/lakeview/dashboards/{did}/published",
+        json={"warehouse_id": wid, "embed_credentials": True},
+    )
+    r.raise_for_status()
+    return did
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--fixture", action="store_true", help="ingest fixtures/sample_game.jsonl")
     src.add_argument("--runs", type=Path, help="directory of game logs (searched recursively)")
+    src.add_argument("--dashboard", action="store_true", help="import/update the AI/BI dashboard")
     ap.add_argument("--out", type=Path, default=ROOT / ".cache" / "databricks")
     ap.add_argument("--dry-run", action="store_true", help="write local files only")
     ap.add_argument("--catalog", default="workspace")
@@ -260,26 +364,34 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--volume", default="raw")
     a = ap.parse_args(argv)
 
-    logs = [FIXTURE] if a.fixture else find_logs(a.runs)
-    if not logs:
-        print(f"no game logs under {a.runs}", file=sys.stderr)
-        return 1
-    games = [(load_game(p), p.parent.name) for p in logs]
-    files = write_local(games, a.out)
-    n = {f.stem: len(f.read_text().splitlines()) for f in files if f.suffix == ".jsonl"}
-    print(f"wrote {n} rows to {a.out}")
+    if a.dashboard:
+        serialized = dashboard_json(a.catalog, a.schema)
+        n = len(json.loads(serialized)["datasets"])
+        print(f"dashboard {DASHBOARD.name}: {n} datasets on {a.catalog}.{a.schema}")
+    else:
+        logs = [FIXTURE] if a.fixture else find_logs(a.runs)
+        if not logs:
+            print(f"no finished game logs under {a.runs}", file=sys.stderr)
+            return 1
+        games = [(load_game(p), p.parent.name) for p in logs]
+        files = write_local(games, a.out)
+        n = {f.stem: len(f.read_text().splitlines()) for f in files if f.suffix == ".jsonl"}
+        print(f"wrote {n} rows to {a.out}")
 
     host, token = os.environ.get("DATABRICKS_HOST"), os.environ.get("DATABRICKS_TOKEN")
     if a.dry_run or not (host and token):
         why = "--dry-run" if a.dry_run else "DATABRICKS_HOST / DATABRICKS_TOKEN not set"
         print(f"dry run ({why}): nothing uploaded")
         return 0
-    base = host if host.startswith("http") else f"https://{host}"
+    base = (host if host.startswith("http") else f"https://{host}").rstrip("/")
     headers = {"Authorization": f"Bearer {token}"}
-    with httpx.Client(base_url=base.rstrip("/"), headers=headers, timeout=120) as client:
-        upload(
-            client, files, a.catalog, a.schema, a.volume, os.environ.get("DATABRICKS_WAREHOUSE_ID")
-        )
+    wid = os.environ.get("DATABRICKS_WAREHOUSE_ID")
+    with httpx.Client(base_url=base, headers=headers, timeout=120) as client:
+        if a.dashboard:
+            did = deploy_dashboard(client, serialized, wid)
+            print(f"published {base}/dashboardsv3/{did}/published")
+            return 0
+        upload(client, files, a.catalog, a.schema, a.volume, wid)
     print(f"created {', '.join(f'{a.catalog}.{a.schema}.{t}' for t in SCHEMAS)}")
     return 0
 

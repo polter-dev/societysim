@@ -384,3 +384,53 @@ print(f"{checks} checks, {len(bad)} mismatches")
 for b in bad:
     print(b)
 assert not bad, "Spark metrics differ from metrics.json"
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Save the metric tables
+# MAGIC The AI/BI dashboard (`societysim.lvdash.json`) reads these, so they are only written once
+# MAGIC the check above passes. The dashboard test checks its queries against these columns.
+
+# COMMAND ----------
+
+METRIC_COLUMNS = {
+    "metrics_win_rates": ["model", "grp", "games", "wins", "draws", "losses", "win_rate"],
+    "metrics_lies": [
+        "model",
+        "grp",
+        "source",
+        "statements",
+        "lies",
+        "false_role_claim",
+        "false_report",
+        "bussing",
+        "hidden_knowledge",
+        "comparisons",
+        "moved",
+        "voters",
+        "followed",
+        "base_voters",
+        "base_followed",
+        "lie_rate",
+        "share_moved",
+        "share_followed",
+        "base_rate",
+    ],
+    "metrics_detection": ["model", "grp", "n", "brier", "auc"],
+    "metrics_persuasion": ["model", "grp", "accusations", "voters", "hits", "share"],
+}
+frames = {
+    "metrics_win_rates": win_rates,
+    "metrics_lies": lies,
+    "metrics_detection": detection,
+    "metrics_persuasion": persuasion,
+}
+for name, df in frames.items():
+    (
+        df.select(*METRIC_COLUMNS[name])
+        .write.mode("overwrite")
+        .option("overwriteSchema", "true")
+        .saveAsTable(f"{CATALOG}.{SCHEMA}.{name}")
+    )
+print("saved", ", ".join(f"{CATALOG}.{SCHEMA}.{t}" for t in frames))

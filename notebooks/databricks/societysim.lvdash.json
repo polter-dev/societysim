@@ -1,0 +1,551 @@
+{
+  "datasets": [
+    {
+      "name": "win_rates",
+      "displayName": "Win rate by model and role",
+      "queryLines": [
+        "SELECT model, grp AS role, games, wins, win_rate\n",
+        "FROM workspace.societysim.metrics_win_rates\n",
+        "WHERE model <> '*' AND grp <> 'all'"
+      ]
+    },
+    {
+      "name": "lies",
+      "displayName": "Lies and lie success",
+      "queryLines": [
+        "SELECT model, source, lies, lie_rate, share_moved, share_followed, base_rate\n",
+        "FROM workspace.societysim.metrics_lies\n",
+        "WHERE grp = 'all' AND model <> '*'"
+      ]
+    },
+    {
+      "name": "detection",
+      "displayName": "Detection (village seats)",
+      "queryLines": [
+        "SELECT model, n, brier, auc\n",
+        "FROM workspace.societysim.metrics_detection\n",
+        "WHERE grp = 'village' AND model <> '*'"
+      ]
+    },
+    {
+      "name": "persuasion",
+      "displayName": "Persuasion",
+      "queryLines": [
+        "SELECT model, accusations, voters, hits, share\n",
+        "FROM workspace.societysim.metrics_persuasion\n",
+        "WHERE grp = 'all' AND model <> '*'"
+      ]
+    },
+    {
+      "name": "games_over_time",
+      "displayName": "Games over time",
+      "queryLines": [
+        "SELECT date_trunc('HOUR', to_timestamp(started_at)) AS hour, winner, count(*) AS games\n",
+        "FROM workspace.societysim.games\n",
+        "GROUP BY ALL"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "overview",
+      "displayName": "Overview",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layout": [
+        {
+          "widget": {
+            "name": "intro",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# societysim: LLM Werewolf\n",
+                "Per-model metrics from the T3.3 port in `metrics.py`, over every ingested game. Lie success and persuasion are exploratory: correlation, not cause."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "win_rate_by_role",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "win_rates",
+                  "fields": [
+                    {
+                      "name": "model",
+                      "expression": "`model`"
+                    },
+                    {
+                      "name": "win_rate",
+                      "expression": "`win_rate`"
+                    },
+                    {
+                      "name": "role",
+                      "expression": "`role`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "model",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Model"
+                },
+                "y": {
+                  "fieldName": "win_rate",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Win rate",
+                  "format": {
+                    "type": "number-percent"
+                  }
+                },
+                "color": {
+                  "fieldName": "role",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Role"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Win rate by model and role"
+              },
+              "mark": {
+                "layout": "group"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "lie_success",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "lies",
+                  "fields": [
+                    {
+                      "name": "model",
+                      "expression": "`model`"
+                    },
+                    {
+                      "name": "share_followed",
+                      "expression": "`share_followed`"
+                    },
+                    {
+                      "name": "source",
+                      "expression": "`source`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "model",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Model"
+                },
+                "y": {
+                  "fieldName": "share_followed",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Followed the lie",
+                  "format": {
+                    "type": "number-percent"
+                  }
+                },
+                "color": {
+                  "fieldName": "source",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Label source"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Lie success: share of voters who voted the lie's way"
+              },
+              "mark": {
+                "layout": "group"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 3,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "lies_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "lies",
+                  "fields": [
+                    {
+                      "name": "model",
+                      "expression": "`model`"
+                    },
+                    {
+                      "name": "source",
+                      "expression": "`source`"
+                    },
+                    {
+                      "name": "lies",
+                      "expression": "`lies`"
+                    },
+                    {
+                      "name": "lie_rate",
+                      "expression": "`lie_rate`"
+                    },
+                    {
+                      "name": "share_moved",
+                      "expression": "`share_moved`"
+                    },
+                    {
+                      "name": "share_followed",
+                      "expression": "`share_followed`"
+                    },
+                    {
+                      "name": "base_rate",
+                      "expression": "`base_rate`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "model",
+                    "displayName": "Model",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "source",
+                    "displayName": "Source",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "lies",
+                    "displayName": "Lies",
+                    "type": "number",
+                    "displayAs": "number"
+                  },
+                  {
+                    "fieldName": "lie_rate",
+                    "displayName": "Lie rate",
+                    "type": "number",
+                    "displayAs": "number"
+                  },
+                  {
+                    "fieldName": "share_moved",
+                    "displayName": "Suspicion moved",
+                    "type": "number",
+                    "displayAs": "number"
+                  },
+                  {
+                    "fieldName": "share_followed",
+                    "displayName": "Voted the lie's way",
+                    "type": "number",
+                    "displayAs": "number"
+                  },
+                  {
+                    "fieldName": "base_rate",
+                    "displayName": "Base rate",
+                    "type": "number",
+                    "displayAs": "number"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Lies by model (all seats)"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 9,
+            "width": 3,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "detection_auc",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "detection",
+                  "fields": [
+                    {
+                      "name": "model",
+                      "expression": "`model`"
+                    },
+                    {
+                      "name": "auc",
+                      "expression": "`auc`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "model",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Model"
+                },
+                "y": {
+                  "fieldName": "auc",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "AUC"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Detection: AUC of village suspicion (0.5 = chance)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 16,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "detection_brier",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "detection",
+                  "fields": [
+                    {
+                      "name": "model",
+                      "expression": "`model`"
+                    },
+                    {
+                      "name": "brier",
+                      "expression": "`brier`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "model",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Model"
+                },
+                "y": {
+                  "fieldName": "brier",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Brier"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Detection: Brier score (lower is better)"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 16,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "persuasion_share",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "persuasion",
+                  "fields": [
+                    {
+                      "name": "model",
+                      "expression": "`model`"
+                    },
+                    {
+                      "name": "share",
+                      "expression": "`share`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "model",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Model"
+                },
+                "y": {
+                  "fieldName": "share",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Share",
+                  "format": {
+                    "type": "number-percent"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Persuasion: share of that day's other votes cast for someone they accused"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 22,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "games_over_time",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "games_over_time",
+                  "fields": [
+                    {
+                      "name": "hour",
+                      "expression": "`hour`"
+                    },
+                    {
+                      "name": "games",
+                      "expression": "`games`"
+                    },
+                    {
+                      "name": "winner",
+                      "expression": "`winner`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "hour",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "displayName": "Started"
+                },
+                "y": {
+                  "fieldName": "games",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Games"
+                },
+                "color": {
+                  "fieldName": "winner",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Winner"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Games over time, by winner"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 28,
+            "width": 6,
+            "height": 6
+          }
+        }
+      ]
+    }
+  ]
+}

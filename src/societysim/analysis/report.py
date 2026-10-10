@@ -34,6 +34,9 @@ index.json: a list of {game_id, file, seed, days, winner, seats: {seat: {name, m
 """
 
 import json
+import math
+import statistics
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -43,13 +46,15 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 from societysim.analysis.metrics import (  # noqa: E402
-    SOURCES as LABEL_SOURCES,
-)
-from societysim.analysis.metrics import (  # noqa: E402
+    HUMAN,
+    LIE_TYPES,
     WOLF_SIDE,
     GameData,
     compute_metrics,
     load_finished,
+)
+from societysim.analysis.metrics import (  # noqa: E402
+    SOURCES as LABEL_SOURCES,
 )
 
 SCHEMA = 1
@@ -138,17 +143,270 @@ def build_leaderboard(
     }
 
 
+MIN_COMPARISONS = 5  # fewer lie-success comparisons than this is too thin to rank a model on
+
+
+def build_summary(metrics: dict, games: list[GameData]) -> dict:
+    """The headline numbers: batch-wide totals and the top model on a few measures."""
+    allg = metrics["by_group"]["all"]
+    wins: dict[str | None, int] = defaultdict(int)
+    for g in games:
+        wins[g.winner] += 1
+    n = len(games)
+    usages = [e.meta.usage for g in games for e in g.events if e.meta.usage]
+    ratings = metrics["openskill"]["overall"]
+    best = max(ratings.items(), key=lambda kv: kv[1]["ordinal"], default=None)
+    wolf_rows = [
+        (m, g["wolf"]) for m, g in metrics["models"].items() if g.get("wolf", {}).get("games")
+    ]
+    wolf_best = max(wolf_rows, key=lambda kv: kv[1]["win_rate"], default=None)
+    lies, moved = {}, {}
+    for src in LABEL_SOURCES:
+        lies[src] = {
+            "lies": allg["lies"][src]["lies"],
+            "statements": allg["statements"],
+            "lie_rate": allg["lies"][src]["lie_rate"],
+            "lie_success": allg["lies"][src]["lie_success"],
+        }
+        cands = [
+            (m, g["all"]["lies"][src]["lie_success"])
+            for m, g in metrics["models"].items()
+            if g["all"]["lies"][src]["lie_success"]["comparisons"] >= MIN_COMPARISONS
+        ]
+        top = max(cands, key=lambda kv: kv[1]["share_moved"], default=None)
+        moved[src] = (
+            {
+                "model": top[0],
+                "share_moved": top[1]["share_moved"],
+                "comparisons": top[1]["comparisons"],
+            }
+            if top
+            else None
+        )
+    return {
+        "games": n,
+        "unfinished_games": metrics["unfinished_games"],
+        "cost_usd": sum(u.cost_usd for u in usages),
+        "input_tokens": sum(u.input_tokens for u in usages),
+        "output_tokens": sum(u.output_tokens for u in usages),
+        "wolf_wins": wins["wolves"],
+        "village_wins": wins["villagers"],
+        "draws": wins["draw"],
+        "wolf_win_share": wins["wolves"] / n if n else None,
+        "village_win_share": wins["villagers"] / n if n else None,
+        "lies": lies,
+        "top_openskill": {"model": best[0], "ordinal": best[1]["ordinal"]} if best else None,
+        "top_wolf_win": (
+            {
+                "model": wolf_best[0],
+                "win_rate": wolf_best[1]["win_rate"],
+                "seats": wolf_best[1]["games"],
+            }
+            if wolf_best
+            else None
+        ),
+        "top_share_moved": moved,
+        "min_comparisons": MIN_COMPARISONS,
+    }
+
+
+def build_speed(metrics: dict, games: list[GameData]) -> dict[str, dict]:
+    """Per model: calls, latency and throughput. Cached calls and zero latency are left out."""
+    lat: dict[str, list[int]] = defaultdict(list)
+    out_tok: dict[str, int] = defaultdict(int)
+    calls: dict[str, int] = defaultdict(int)
+    cost: dict[str, float] = defaultdict(float)
+    for g in games:
+        models = g.models
+        for e in g.events:
+            u = e.meta.usage
+            m = models.get(e.actor) if e.actor else None
+            if not u or not m or m == HUMAN:
+                continue
+            calls[m] += 1
+            cost[m] += u.cost_usd
+            if not u.cached and u.latency_ms > 0:
+                lat[m].append(u.latency_ms)
+                out_tok[m] += u.output_tokens
+    res = {}
+    for m, groups in metrics["models"].items():
+        a = groups["all"]
+        ls = sorted(lat[m])
+        total_ms = sum(ls)
+        res[m] = {
+            "calls": calls[m],
+            "timed_calls": len(ls),
+            "median_latency_ms": statistics.median(ls) if ls else None,
+            "p90_latency_ms": ls[max(math.ceil(0.9 * len(ls)) - 1, 0)] if ls else None,
+            "output_tokens_per_s": out_tok[m] / (total_ms / 1000) if total_ms else None,
+            "tokens_per_game": a["tokens_per_game"],
+            "cost_usd_per_game": a["cost_usd_per_game"],
+            "self_hosted": calls[m] > 0 and cost[m] == 0,
+        }
+    return res
+
+
 def _table(head: list[str], rows: list[list[str]]) -> list[str]:
     lines = ["| " + " | ".join(head) + " |", "|" + "|".join("---" for _ in head) + "|"]
     lines += ["| " + " | ".join(r) + " |" for r in rows]
     return lines + [""]
 
 
-def render_markdown(metrics: dict, board: dict, present: set[str] | None = None) -> str:
+def _headline(sm: dict, present: set[str]) -> list[str]:
+    lines = ["## Headline", ""]
+    lines.append(f"- Games: {sm['games']} finished, {sm['unfinished_games']} unfinished.")
+    lines.append(
+        f"- Spend: ${sm['cost_usd']:.2f}; tokens: {sm['input_tokens'] + sm['output_tokens']:,} "
+        f"({sm['input_tokens']:,} in, {sm['output_tokens']:,} out)."
+    )
+    lines.append(
+        f"- Wins: wolves {sm['wolf_wins']} ({_pct(sm['wolf_win_share'])}), villagers "
+        f"{sm['village_wins']} ({_pct(sm['village_win_share'])})"
+        + (f", draws {sm['draws']}." if sm["draws"] else ".")
+    )
+    for src in LABEL_SOURCES:
+        if src not in present:
+            lines.append(f"- Lies ({src}): no labels.")
+            continue
+        li = sm["lies"][src]
+        ls = li["lie_success"]
+        lines.append(
+            f"- Lies ({src}): {li['lies']} in {li['statements']} statements "
+            f"({_pct(li['lie_rate'])}). Lies swayed {_pct(ls['share_moved'])} of the "
+            f"{ls['comparisons']} suspicions they targeted; {_pct(ls['share_followed'])} of "
+            f"{ls['voters']} votes followed the lie, against a no-lie base rate of "
+            f"{_pct(ls['base_rate'])} ({ls['base_voters']} votes)."
+        )
+    if t := sm["top_openskill"]:
+        lines.append(f"- Top OpenSkill: {t['model']} (ordinal {_num(t['ordinal'])}).")
+    if t := sm["top_wolf_win"]:
+        lines.append(
+            f"- Top wolf win rate: {t['model']} "
+            f"({_pct(t['win_rate'])} over {t['seats']} wolf seats)."
+        )
+    for src in LABEL_SOURCES:
+        if src not in present:
+            continue
+        t = sm["top_share_moved"][src]
+        lines.append(
+            f"- Highest lie success ({src}, at least {sm['min_comparisons']} comparisons): "
+            + (
+                f"{t['model']} ({_pct(t['share_moved'])} of {t['comparisons']})."
+                if t
+                else "none qualifies."
+            )
+        )
+    return lines + [""]
+
+
+def _results(metrics: dict, board: dict, present: set[str]) -> list[str]:
+    def rate(m: str, src: str) -> str:
+        if src not in present:
+            return "n/a"
+        return _pct(metrics["models"][m]["all"]["lies"][src]["lie_rate"])
+
+    def moved(m: str, src: str) -> str:
+        if src not in present:
+            return "n/a"
+        ls = metrics["models"][m]["all"]["lies"][src]["lie_success"]
+        return f"{_pct(ls['share_moved'])} (n={ls['comparisons']})"
+
+    rows = []
+    for r in board["models"]:
+        m, ci = r["model"], r["win_ci"]
+        rows.append(
+            [
+                m,
+                "n/a" if r["games"] is None else str(r["games"]),
+                _pct(r["win_rate"]) + (f" ({_pct(ci[0])} to {_pct(ci[1])})" if ci else ""),
+                _num(r["openskill"]["ordinal"]) if r["openskill"] else "n/a",
+                f"{rate(m, 'self_tag')} / {rate(m, 'jev')}",
+                f"{moved(m, 'self_tag')} / {moved(m, 'jev')}",
+                _num(r["detection_auc"]),
+            ]
+        )
+    head = [
+        "Model",
+        "Games",
+        "Win rate (95% CI)",
+        "OpenSkill ordinal",
+        "Lie rate (self_tag / jev)",
+        "Lie success, moved (self_tag / jev)",
+        "Detection AUC",
+    ]
+    return [
+        "## Results",
+        "",
+        "Win rate is per seat. Lie columns show self_tag / jev.",
+        "",
+        *_table(head, rows),
+    ]
+
+
+def _lie_types(metrics: dict, present: set[str]) -> list[str]:
+    types = [t.value for t in LIE_TYPES]
+    rows = []
+    for m, groups in metrics["models"].items():
+        row = [m]
+        for src in LABEL_SOURCES:
+            by_type = groups["all"]["lies"][src]["by_type"]
+            row += [str(by_type.get(t, 0)) if src in present else "n/a" for t in types]
+        rows.append(row)
+    head = ["Model"] + [f"{t} ({src})" for src in LABEL_SOURCES for t in types]
+    return ["### Lie types", "", "Lie counts by kind, per label source.", "", *_table(head, rows)]
+
+
+def _speed(speed: dict) -> list[str]:
+    def secs(x):
+        return "n/a" if x is None else f"{x / 1000:.1f} s"
+
+    rows = []
+    for m, s in speed.items():
+        cost, tps, tpg = s["cost_usd_per_game"], s["output_tokens_per_s"], s["tokens_per_game"]
+        usd = "0 (self-hosted)" if s["self_hosted"] else "n/a" if cost is None else f"{cost:.4f}"
+        rows.append(
+            [
+                m,
+                str(s["calls"]),
+                secs(s["median_latency_ms"]),
+                secs(s["p90_latency_ms"]),
+                "n/a" if tps is None else f"{tps:.0f}",
+                "n/a" if tpg is None else f"{tpg:,.0f}",
+                usd,
+            ]
+        )
+    head = [
+        "Model",
+        "Calls",
+        "Median latency",
+        "p90 latency",
+        "Output tok/s",
+        "Tokens per game",
+        "USD per game",
+    ]
+    return [
+        "## Speed",
+        "",
+        "Latency is per call; tok/s is total output tokens over total latency. Cached calls and "
+        "calls with zero latency are left out of both.",
+        "",
+        *_table(head, rows),
+    ]
+
+
+def render_markdown(
+    metrics: dict,
+    board: dict,
+    present: set[str] | None = None,
+    summary: dict | None = None,
+    speed: dict | None = None,
+) -> str:
     present = set(LABEL_SOURCES) if present is None else present
     lines = [
         "# Batch report",
         "",
+        *(_headline(summary, present) if summary else []),
+        *_results(metrics, board, present),
         f"{board['games']} games. Win rate is per seat: each seat a model fills counts once, "
         "and a model can fill several seats in one game. Win rates carry a Wilson 95% interval; "
         "small batches are noisy.",
@@ -160,7 +418,8 @@ def render_markdown(metrics: dict, board: dict, present: set[str] | None = None)
     ]
     if metrics.get("unfinished_games"):
         n = metrics["unfinished_games"]
-        lines[2:2] = [f"{n} unfinished games (no game_end) were skipped.", ""]
+        at = lines.index("## Leaderboard")
+        lines[at:at] = [f"{n} unfinished games (no game_end) were skipped.", ""]
     side = board.get("wolf_side_advantage")
     if side:
         o = side["overall"]
@@ -259,6 +518,7 @@ def render_markdown(metrics: dict, board: dict, present: set[str] | None = None)
                 ]
             )
     lines += _table(head, rows)
+    lines += _lie_types(metrics, present)
     lines += [
         "### Persuasion (exploratory)",
         "",
@@ -285,6 +545,8 @@ def render_markdown(metrics: dict, board: dict, present: set[str] | None = None)
             for r in board["models"]
         ],
     )
+    if speed:
+        lines += _speed(speed)
     lines += [
         "## Charts",
         "",
@@ -293,6 +555,8 @@ def render_markdown(metrics: dict, board: dict, present: set[str] | None = None)
         "![Detection AUC](detection_auc.png)",
         "",
         "![OpenSkill](openskill.png)",
+        "",
+        "![Lie rate](lie_rate.png)",
         "",
         "## leaderboard.json shape",
         "",
@@ -354,7 +618,14 @@ def write_charts(board: dict, out: Path) -> list[str]:
         {"ordinal": [r["openskill"]["ordinal"] if r["openskill"] else None for r in rows]},
         names,
     )
-    return ["win_rate.png", "detection_auc.png", "openskill.png"]
+    _bar(
+        out / "lie_rate.png",
+        "Lie rate",
+        "lies per statement",
+        {src: [r["lie_rate"][src] for r in rows] for src in LABEL_SOURCES},
+        names,
+    )
+    return ["win_rate.png", "detection_auc.png", "openskill.png", "lie_rate.png"]
 
 
 def write_report(batch_dir: Path) -> Path:
@@ -373,8 +644,11 @@ def write_report(batch_dir: Path) -> Path:
     def dump(name: str, obj) -> None:
         (out / name).write_text(json.dumps(obj, indent=2) + "\n", encoding="utf-8")
 
-    dump("metrics.json", metrics)
+    summary, speed = build_summary(metrics, data), build_speed(metrics, data)
+    dump("metrics.json", {**metrics, "summary": summary, "speed": speed})
     dump("leaderboard.json", board)
     dump("index.json", build_index(games))
-    (out / "report.md").write_text(render_markdown(metrics, board, present), encoding="utf-8")
+    (out / "report.md").write_text(
+        render_markdown(metrics, board, present, summary, speed), encoding="utf-8"
+    )
     return out

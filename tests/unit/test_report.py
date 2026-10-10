@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 from societysim.analysis.metrics import compute_metrics, load_game
 from societysim.analysis.report import (
     build_leaderboard,
+    build_summary,
     model_game_counts,
     render_markdown,
     write_report,
@@ -200,3 +201,105 @@ def test_label_report_highlights_succeed_on_mixed_batch(tmp_path):
     for cmd in (["label", "--no-jev"], ["report"], ["highlights"]):
         res = r.invoke(app, [cmd[0], str(batch), *cmd[1:]])
         assert res.exit_code == 0, (cmd, res.output)
+
+
+def _report(tmp_path: Path, batch: Path | None = None):
+    out = write_report(batch or _batch(tmp_path))
+    return out, json.loads((out / "metrics.json").read_text())
+
+
+def test_headline_numbers(tmp_path):
+    out, m = _report(tmp_path)
+    sm = m["summary"]
+    us = [
+        e["meta"]["usage"]
+        for e in map(json.loads, (FIX / "sample_game.jsonl").read_text().splitlines())
+        if e["meta"].get("usage")
+    ]
+    assert sm["games"] == 1 and sm["unfinished_games"] == 0
+    assert sm["cost_usd"] == pytest.approx(sum(u["cost_usd"] for u in us))
+    assert sm["output_tokens"] == sum(u["output_tokens"] for u in us)
+    assert sm["wolf_wins"] + sm["village_wins"] + sm["draws"] == 1
+    allg = m["by_group"]["all"]["lies"]["self_tag"]["lie_success"]
+    assert sm["lies"]["self_tag"]["lie_success"] == allg
+    assert sm["top_openskill"]["model"] in m["models"]
+    md = (out / "report.md").read_text(encoding="utf-8")
+    assert md.index("## Headline") < md.index("## Results") < md.index("## Leaderboard")
+    assert "Top OpenSkill" in md and "Lies (self_tag)" in md
+
+
+def test_highest_lie_success_needs_five_comparisons(tmp_path):
+    games = [load_game(FIX / "sample_game.jsonl")]
+    metrics = compute_metrics(games)
+    for src in ("self_tag", "jev"):
+        for g in metrics["models"].values():
+            g["all"]["lies"][src]["lie_success"]["comparisons"] = 4
+            g["all"]["lies"][src]["lie_success"]["share_moved"] = 1.0
+    top = build_summary(metrics, games)["top_share_moved"]
+    assert top == {"self_tag": None, "jev": None}
+    name = next(iter(metrics["models"]))
+    metrics["models"][name]["all"]["lies"]["jev"]["lie_success"]["comparisons"] = 5
+    top = build_summary(metrics, games)["top_share_moved"]
+    assert top["jev"]["model"] == name and top["self_tag"] is None
+
+
+def test_results_table_columns(tmp_path):
+    out, _ = _report(tmp_path)
+    md = (out / "report.md").read_text(encoding="utf-8")
+    assert (
+        "| Model | Games | Win rate (95% CI) | OpenSkill ordinal | Lie rate (self_tag / jev) "
+        "| Lie success, moved (self_tag / jev) | Detection AUC |" in md
+    )
+    row = next(ln for ln in md.splitlines() if ln.startswith("| gemma-4-26b | 1 |"))
+    assert " to " in row and "n/a" in row and "(n=" in row
+    assert "### Lie types" in md and "false_role_claim (self_tag)" in md
+
+
+def _speed_batch(tmp_path: Path) -> Path:
+    """Fixture with gemma-4-26b renamed amd-gemma (free), one cached and one zero-latency call."""
+    batch = _batch(tmp_path)
+    log = batch / "sample_game.jsonl"
+    events = [json.loads(ln) for ln in log.read_text(encoding="utf-8").splitlines()]
+    seats = events[0]["meta"]["seats"]
+    amd = {s for s, v in seats.items() if v["model"] == "gemma-4-26b"}
+    for v in seats.values():
+        if v["model"] == "gemma-4-26b":
+            v["model"] = "amd-gemma"
+    n = 0
+    for e in events:
+        u = e["meta"].get("usage")
+        if u and e["actor"] in amd:
+            u.update(cost_usd=0.0, latency_ms=1000, output_tokens=100)
+            if n == 0:
+                u.update(cached=True, latency_ms=99999)
+            elif n == 1:
+                u.update(latency_ms=0, output_tokens=99999)
+            n += 1
+    assert n >= 3
+    log.write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+    return batch
+
+
+def test_speed_skips_cached_and_zero_latency(tmp_path):
+    out, m = _report(tmp_path, _speed_batch(tmp_path))
+    s = m["speed"]["amd-gemma"]
+    assert s["calls"] >= 3 and s["timed_calls"] == s["calls"] - 2
+    assert s["median_latency_ms"] == 1000 and s["p90_latency_ms"] == 1000
+    assert s["output_tokens_per_s"] == pytest.approx(100.0)
+    md = (out / "report.md").read_text(encoding="utf-8")
+    assert "## Speed" in md
+    speed = md.split("## Speed")[1].split("## Charts")[0]
+    row = next(ln for ln in speed.splitlines() if ln.startswith("| amd-gemma |"))
+    assert row.endswith("| 0 (self-hosted) |")
+    assert speed.count("self-hosted") == 1
+
+
+def test_lie_rate_chart_and_stable_keys(tmp_path):
+    out, m = _report(tmp_path)
+    assert (out / "lie_rate.png").read_bytes()[:4] == b"\x89PNG"
+    assert "![Lie rate](lie_rate.png)" in (out / "report.md").read_text(encoding="utf-8")
+    base = json.loads(json.dumps(compute_metrics([load_game(FIX / "sample_game.jsonl")])))
+    assert set(m) - set(base) == {"summary", "speed"}
+    assert m["models"] == base["models"] and m["by_group"] == base["by_group"]
+    board = json.loads((out / "leaderboard.json").read_text())
+    assert "summary" not in board and "speed" not in board

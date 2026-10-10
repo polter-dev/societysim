@@ -33,9 +33,9 @@ def version() -> None:
 
 def _require_served(specs) -> None:
     """Exit before game 1 if a self-hosted server doesn't list the model id we would send."""
-    from societysim.models.registry import check_served_model
+    from societysim.models.registry import check_served_models
 
-    errors = [e for s in specs if (e := check_served_model(s))]
+    errors = [e for e in check_served_models(specs).values() if e]
     for e in errors:
         typer.echo(e)
     if errors:
@@ -231,7 +231,12 @@ def doctor(
     or if its configured `structured` mode fails.
     """
     from societysim.models.client import LiteLLMClient
-    from societysim.models.registry import check_served_model, load_registry, probe_model
+    from societysim.models.registry import (
+        check_served_models,
+        load_registry,
+        probe_model,
+        served_key,
+    )
 
     load_dotenv()
     if not config.is_file():
@@ -247,10 +252,11 @@ def doctor(
 
     failed = False
     reachable = []
+    served = check_served_models(specs)
     for spec in specs:
-        if error := check_served_model(spec):
+        if error := served[served_key(spec)]:
             failed = True
-            typer.echo(f"{spec.name}: FAIL {error}")
+            typer.echo(f"FAIL {error}")  # the error already names the model
         else:
             reachable.append(spec)
     specs = reachable

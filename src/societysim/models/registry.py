@@ -106,7 +106,21 @@ def check_served_model(spec: ModelSpec) -> str | None:
     )
 
 
-# --- doctor ---------------------------------------------------------------------------------
+def check_served_models(specs) -> dict[tuple[str | None, str], str | None]:
+    """check_served_model once per distinct (api_base, litellm_model). Keyed by served_key(spec)."""
+    results: dict[tuple[str | None, str], str | None] = {}
+    for spec in specs:
+        key = served_key(spec)
+        if key not in results:
+            results[key] = check_served_model(spec)
+    return results
+
+
+def served_key(spec: ModelSpec) -> tuple[str | None, str]:
+    return (spec.api_base, spec.litellm_model)
+
+
+# --- doctor --------------------------------------------------------------------------------
 
 
 class Ping(BaseModel):

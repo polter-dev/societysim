@@ -383,3 +383,19 @@ def test_cli_batch_unknown_model_and_missing_config(tmp_path, monkeypatch):
     assert bad.exit_code == 1 and "unknown model 'nope'" in bad.output
     gone = RUNNER.invoke(app, ["batch", "--config", str(tmp_path / "x.yaml")])
     assert gone.exit_code == 1 and "config file not found" in gone.output
+
+
+async def test_calls_per_game_cap_and_resume(tmp_path):
+    one_game = {"max_concurrency": 1, "models": ["a"], "mode": "selfplay"}
+    client = PricedFake(delay=0.001)
+    await run_batch(
+        cfg(n_games=1, max_calls_per_game=1, **one_game), SPECS, client, runs_dir=tmp_path
+    )
+    assert client.peak["openai"] == 1
+    # The cap is not part of the fingerprint: changing it resumes the same batch.
+    client = PricedFake(delay=0.001)
+    res = await run_batch(
+        cfg(n_games=2, max_calls_per_game=7, **one_game), SPECS, client, runs_dir=tmp_path
+    )
+    assert res["skipped"] == ["t-g0000"] and len(res["finished"]) == 1
+    assert client.peak["openai"] > 1

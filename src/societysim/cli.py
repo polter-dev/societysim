@@ -50,6 +50,10 @@ def play(
     batch_id: Annotated[
         str | None, typer.Option("--batch-id", help="Output directory name; default: config stem.")
     ] = None,
+    max_calls: Annotated[
+        int,
+        typer.Option("--max-calls", min=1, help="Model calls in flight; 1 asks one at a time."),
+    ] = 4,
 ) -> None:
     """Play one game and write its event log and run metadata."""
     from societysim.agents.llm_agent import llm_agents
@@ -114,6 +118,7 @@ def play(
             [JsonlSink(batch_id)],
             game_id,
             colors={s.name: s.color for s in specs},
+            max_calls=max_calls,
         )
     )
     typer.echo(Path("runs") / batch_id / f"{game_id}.jsonl")

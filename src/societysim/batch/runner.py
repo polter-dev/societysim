@@ -136,9 +136,10 @@ class BatchMismatch(Exception):
 def fingerprint(cfg: BatchConfig, specs: Mapping[str, ModelSpec], agents: str) -> str:
     """Hash of what decides what a game is: config, agent type and the models' registry entries.
 
-    n_games, budget and concurrency may change between runs.
+    n_games, budget and concurrency (games and calls per game) may change between runs.
     """
-    keep = cfg.model_dump(mode="json", exclude={"n_games", "budget_usd", "max_concurrency"})
+    volatile = {"n_games", "budget_usd", "max_concurrency", "max_calls_per_game"}
+    keep = cfg.model_dump(mode="json", exclude=volatile)
     keep["agents"] = agents
     keep["registry"] = {m: specs[m].model_dump(mode="json") for m in sorted(set(cfg.models))}
     return hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:16]
@@ -291,7 +292,14 @@ async def run_batch(
         _game.set(a.game_id)
         try:
             sinks = [JsonlSink(cfg.batch_id, runs_dir)]
-            await run_game(a.game_config(cfg.game), make_agent, sinks, a.game_id, colors)
+            await run_game(
+                a.game_config(cfg.game),
+                make_agent,
+                sinks,
+                a.game_id,
+                colors,
+                max_calls=cfg.max_calls_per_game,
+            )
             _tag_agents(out / f"{a.game_id}.run_meta.json", agents)
             finished.append(a.game_id)
             if metered:

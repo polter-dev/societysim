@@ -108,6 +108,7 @@ class BatchConfig(_Config):
     mode: Literal["selfplay", "mixed"] = "mixed"
     budget_usd: float = Field(gt=0)  # hard stop for the whole batch
     max_concurrency: int = Field(4, ge=1)  # games in flight
+    max_calls_per_game: int = Field(4, ge=1)  # model calls in flight per game; 1 = one at a time
     model_game_limits: dict[str, int] = {}  # e.g. {"gpt-5-mini": 10}: cap games per model
     game: GameConfig = GameConfig()  # shared settings; models and seed are set per game
 

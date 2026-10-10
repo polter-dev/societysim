@@ -9,6 +9,12 @@ All randomness (fallbacks, the wolf tie-break) is drawn from `state.rng` in a fi
 so a seed replays the same game: during the parallel night calls only the wolf channel
 draws (its own fallbacks, in turn order); Seer and Doctor fallbacks and the tie-break are
 drawn after the calls finish. Vote fallbacks abstain and draw nothing.
+
+Concurrency: only the RULES.md "all at once" decisions run in parallel: the night (wolf
+channel, Seer, Doctor) and the day vote. Wolf chat and statements stay sequential, since
+each speaker sees the earlier messages. Every prompt is built before its call starts and
+every result is logged in a fixed order, so the log does not depend on timing.
+`max_calls` caps one game's model calls in flight; 1 asks one player at a time.
 """
 
 import asyncio
@@ -41,6 +47,7 @@ from societysim.models.client import Usage
 from societysim.roles import Phase, Role, Winner
 
 SILENT = "(silent)"
+MAX_CALLS = 4  # default cap on one game's model calls in flight
 DEFAULT_COLOR = "#888888"
 # Where each action keeps its choice; statements have none.
 _CHOICE = {
@@ -100,8 +107,12 @@ class Game:
         make_agent: AgentFactory,
         logger: EventLogger,
         colors: Mapping[str, str | None] | None = None,
+        max_calls: int = MAX_CALLS,
     ):
+        if max_calls < 1:
+            raise ValueError(f"max_calls must be at least 1, got {max_calls}")
         self.state = GameState(config)
+        self.calls = asyncio.Semaphore(max_calls)
         self.agents = {seat: make_agent(self.state, seat) for seat in self.state.seats}
         self.logger = logger
         self.colors = colors or {}  # model name -> viewer color (None falls back)
@@ -280,7 +291,8 @@ class Game:
         usage: Usage | None = None
         failures: list[tuple[str, str]] = []
         for _ in range(2):
-            result = await self.agents[seat].act(turn)
+            async with self.calls:
+                result = await self.agents[seat].act(turn)
             usage = _add(usage, result.usage)
             if result.parsed is None:
                 error = result.error or "reply could not be parsed"
@@ -380,11 +392,13 @@ async def run_game(
     sinks: Sequence[EventSink],
     game_id: str,
     colors: Mapping[str, str | None] | None = None,
+    max_calls: int = MAX_CALLS,
 ) -> Game:
-    """Play one game to the end. Pass fresh sinks per game; returns the finished Game."""
+    """Play one game to the end. Pass fresh sinks per game; returns the finished Game.
+    `max_calls` caps the game's model calls in flight (1: one player at a time)."""
     logger = EventLogger(game_id, sinks)
     try:
-        game = Game(config, make_agent, logger, colors)
+        game = Game(config, make_agent, logger, colors, max_calls)
         await logger.start_game(config.model_dump(mode="json"), config.seed, config.seat_models())
         await logger.end_game(await game.run())
     finally:

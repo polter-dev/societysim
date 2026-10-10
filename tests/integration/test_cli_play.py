@@ -43,9 +43,10 @@ def test_scripted_play_is_reproducible_and_writes_metadata(tmp_path, monkeypatch
     assert first_bytes
     assert json.loads(meta.read_text())["game_id"] == "selfplay_smoke-s0"
 
-    second = RUNNER.invoke(app, args)
+    second = RUNNER.invoke(app, [*args, "--max-calls", "1"])  # one call at a time: same log
     assert second.exit_code == 0, second.output
     assert log.read_bytes() == first_bytes
+    assert RUNNER.invoke(app, [*args, "--max-calls", "0"]).exit_code != 0
 
 
 def test_seed_override_changes_game_id(tmp_path, monkeypatch):

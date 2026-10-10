@@ -27,7 +27,7 @@ The viewer types should match these schemas. They can be generated the same way 
 
 ## Versioning
 
-- Events and labels carry `schema_version` on every line (1 or 2 today; the reader accepts both).
+- Events and labels carry `schema_version` on every line (1, 2 or 3 today; the reader accepts all three. 3 allows seat `p9` for 10-player games).
 - Static JSON files: one version for all of them, the **contract version** above. Each generated
   schema carries it as `"x-contract-version"`. `leaderboard.json` also carries it in-file as
   `schema`, which always equals the contract version (currently 1). The other files have no in-file version field: `index.json` and
@@ -44,7 +44,7 @@ The viewer types should match these schemas. They can be generated the same way 
 
 ## Conventions
 
-- `actor`, `target`, seat keys and `speaker` are seat ids `p0`..`p8`, never names.
+- `actor`, `target`, seat keys and `speaker` are seat ids `p0`..`p9`, never names.
 - Rates and shares are fractions 0..1, not percentages. Money is USD. Latency is milliseconds.
 - `null` means "no data" (for example a wolf win rate for a model that never played wolf). It
   never means 0.
@@ -94,7 +94,7 @@ from it.
 - Path: `<batch>/<game_id>.jsonl`. The file stem is the game id.
 - Produced by: `societysim batch` or `societysim play` (the orchestrator through `EventLogger`).
 - Shape: one event per line, `schema/events.schema.json` (the `Event` model in
-  `logging/events.py`). `schema_version` is 1 or 2. Lines are in `seq` order from 0.
+  `logging/events.py`). `schema_version` is 1, 2 or 3. Lines are in `seq` order from 0.
 - The raw log is never edited (hard rule 5).
 
 ```json
@@ -107,7 +107,7 @@ from it.
   by `.labels.jsonl`). Missing file means no labels, not an error.
 - Produced by: `societysim label <batch>` (`--no-jev` for self-tag and engine labels only).
 - Shape: one label per line, `$defs.Label` in `schema/events.schema.json`:
-  `schema_version` (1|2), `game_id`, `label` (`false_role_claim` | `false_report` | `bussing` |
+  `schema_version` (1|2|3), `game_id`, `label` (`false_role_claim` | `false_report` | `bussing` |
   `hidden_knowledge` | `mis_elimination`), `actor` (seat id), `source_seq` (seq of the labelled
   event), `source` (`self_tag` | `jev` | `engine`), `confidence` (0..1), `detail` (string).
 

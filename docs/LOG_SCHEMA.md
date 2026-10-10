@@ -12,7 +12,7 @@ Every line has all of these keys. Empty ones are `null`.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `schema_version` | `2` | Readers also accept `1`: same layout, but `meta.usage` has no `cached` key. |
+| `schema_version` | `3` | Readers also accept `1` and `2`. Version 2 allows seats `p0`…`p8` only; version 1 also has no `meta.usage.cached` key. |
 | `game_id` | string | |
 | `seq` | int | 0-based line index. Unique and increasing; the viewer's scrubber keys on it. |
 | `t` | int | Engine step. 0 at `game_start`, +1 at every `phase_start`. |
@@ -27,7 +27,7 @@ Every line has all of these keys. Empty ones are `null`.
 | `suspicion` | list or null | `[{player, p}]`: the actor's P(wolf) for every other living player, at the time of this event. |
 | `meta` | object | Type-specific keys, below. Keys with no value are left out. |
 
-`actor` and `target` are always seat ids, `p0`…`p8`. Names, models, colors and roles live in `game_start.meta.seats`, so nothing ever parses a name. Wall-clock time is `meta.ts` (ISO 8601, UTC), not `t`. Runs that must be byte-identical (scripted agents) may leave `ts` out.
+`actor` and `target` are always seat ids, `p0`…`p9` (7 to 10 players). Names, models, colors and roles live in `game_start.meta.seats`, so nothing ever parses a name. Wall-clock time is `meta.ts` (ISO 8601, UTC), not `t`. Runs that must be byte-identical (scripted agents) may leave `ts` out.
 
 ### Event types
 
@@ -70,7 +70,7 @@ One per line in `<game_id>.labels.jsonl`, all keys always present.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `schema_version` | `2` | Readers also accept `1`: same layout, but `meta.usage` has no `cached` key. |
+| `schema_version` | `3` | Readers also accept `1` and `2`. Version 2 allows seats `p0`…`p8` only; version 1 also has no `meta.usage.cached` key. |
 | `game_id` | string | |
 | `label` | see below | |
 | `actor` | seat id | Who lied or erred. Always equals the `actor` of the `source_seq` event. |

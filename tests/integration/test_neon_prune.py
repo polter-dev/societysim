@@ -1,6 +1,7 @@
 """sync-neon --prune: dry run by default, transactional delete of only the matched games.
 Fake connection only; nothing here touches a real database."""
 
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -218,6 +219,17 @@ async def test_sink_and_batch_start_never_run_migration_sql():
     assert sent  # it did write
     migrations = [sql.strip() for _, sql in list_migrations()]
     assert not [s for s in sent if "alter table" in s.lower() or s.strip() in migrations]
+
+
+def test_migration_view_matches_schema_view():
+    root = Path(__file__).resolve().parents[2]
+    pat = r"create or replace view events_public .*?;\n"
+    schema = re.search(pat, (root / "neon/schema.sql").read_text(encoding="utf-8"), re.S)[0]
+    migration = re.search(
+        pat, (root / "neon/migrations/001_events_inserted_at.sql").read_text(encoding="utf-8"), re.S
+    )[0]
+    assert migration == schema
+    assert "e.inserted_at\nfrom events e" in schema  # appended last, so create or replace is valid
 
 
 def test_migration_adds_inserted_at():

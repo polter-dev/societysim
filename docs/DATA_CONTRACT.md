@@ -723,6 +723,7 @@ as in `events`.
 | `actor` | text | |
 | `schema_version` | integer | |
 | `event` | jsonb | The JSONL line; redacted as above until the game finishes |
+| `inserted_at` | timestamp with time zone | Database clock at insert, as in `events`. A timestamp of a row the view already shows, not game information |
 
 `labels_public`: what `anonymous` reads instead of `labels`, with the same columns (#323). Only
 `finished` games' labels; a `running` or `failed` game has none here, since labels name roles

@@ -63,13 +63,9 @@ def _players(players: dict[str, str]) -> str:
 
 
 def _rules(rules: RuleFlags, roles: RoleCounts) -> str:
-    doctor = (
-        "The Doctor may protect themself"
-        if rules.doctor_self_protect
-        else ("The Doctor may not protect themself")
-    )
+    doctor = "The Doctor may " + ("" if rules.doctor_self_protect else "not ") + "protect themself"
     if rules.doctor_no_repeat:
-        doctor += ", but not the same player two nights in a row"
+        doctor += ", and may not protect the same player two nights in a row"
     lines = [
         f"- Roles: {roles.wolves} Werewolves, {roles.seers} Seer, {roles.doctors} Doctor, "
         f"{roles.villagers} Villagers.",

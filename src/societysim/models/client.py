@@ -194,7 +194,12 @@ def _retryable(e: Exception) -> bool:
     return getattr(e, "status_code", None) in RETRY_STATUS
 
 
-API_KEY_ENV = {"gemini": "GEMINI_API_KEY", "huggingface": "HF_TOKEN", "openai": "OPENAI_API_KEY"}
+API_KEY_ENV = {
+    "gemini": "GEMINI_API_KEY",
+    "huggingface": "HF_TOKEN",
+    "hosted_vllm": "HF_TOKEN",  # DeepInfra; Registry.apply_env sets HOSTED_VLLM_API_KEY from it
+    "openai": "OPENAI_API_KEY",
+}
 _MISSING_CREDS = re.compile(r"api[_ ]key|credentials|auth(?:entication|orization)? token", re.I)
 
 

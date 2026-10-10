@@ -320,6 +320,18 @@ async def test_missing_credentials_error_fails_fast(monkeypatch, client, sleeps)
 
     assert len(fake.calls) == 1 and sleeps.delays == []
     assert result.error and "GEMINI_API_KEY" in result.error
+    assert "client option must be set" not in result.error
+
+
+async def test_hosted_vllm_auth_error_names_hf_token(monkeypatch, client):
+    err = litellm.exceptions.AuthenticationError("bad key", llm_provider="hosted_vllm", model="m")
+    mock(monkeypatch, err)
+    result = await client.complete(
+        spec(litellm_model="hosted_vllm/some/model"), MESSAGES, VoteResponse
+    )
+
+    assert result.error and "HF_TOKEN" in result.error
+    assert "HOSTED_VLLM_API_KEY" not in result.error
 
 
 # --- rate limits --------------------------------------------------------------------------

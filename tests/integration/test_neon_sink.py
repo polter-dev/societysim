@@ -328,6 +328,35 @@ def test_play_neon_streams_live(tmp_path, monkeypatch):
     assert end == ("selfplay_smoke-s0", "finished", log[-1]["meta"]["winner"])
 
 
+def test_play_neon_with_human_seat_streams_marked_events(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    conn = FakeConn()
+
+    async def connect():
+        return conn
+
+    def answer(question):  # scripted stdin: first option, nothing optional
+        if question.startswith(("statement", "message")):
+            return "Hello."
+        if question.startswith(("vote", "target", "kill")):
+            return question.rsplit("(", 1)[1].split()[0].rstrip("):")
+        return ""
+
+    monkeypatch.setattr("societysim.logging.sinks.neon.connect_neon", connect)
+    monkeypatch.setattr("builtins.input", answer)
+    args = ["play", "--config", str(CONFIG), "--neon", "--human-seat", "p3"]
+    res = CliRunner().invoke(app, args)
+    assert res.exit_code == 0, res.output
+    log = _events(tmp_path / "runs/selfplay_smoke/selfplay_smoke-s0.jsonl")
+    assert _event_rows(conn) == {"selfplay_smoke-s0": [e["seq"] for e in log]}
+    rows = [json.loads(r[7]) for _, batch in conn.many for r in batch]
+    marked = [e["seq"] for e in rows if e["meta"].get("suspicion_default")]
+    assert marked
+    assert marked == [e["seq"] for e in log if e["meta"].get("suspicion_default")]
+    assert rows[0]["meta"]["seats"]["p3"]["model"] == "human"
+
+
 def test_play_without_neon_url_still_plays(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)

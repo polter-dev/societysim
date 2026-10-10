@@ -21,6 +21,7 @@ file it produces against those schemas, and checks the Neon tables and views bel
 | `BySide` (`Leaderboard.tsx`) | `openskill` in `schema/metrics.schema.json` |
 | narration index (not typed yet) | `schema/narration_index.schema.json` |
 | highlights (not typed yet) | `schema/highlights.schema.json` |
+| settings screen (not built yet) | `schema/game_setup.schema.json` and `models_catalog.json`, see [Game setup](#game-setup) |
 
 The viewer types should match these schemas. They can be generated the same way `events.ts` is
 (`json-schema-to-typescript`).
@@ -61,6 +62,7 @@ uv run societysim label runs/<batch_id> [--no-jev]          # <game_id>.labels.j
 uv run societysim report runs/<batch_id>                    # report/
 uv run societysim highlights runs/<batch_id>                # highlights.json
 uv run python -m societysim.analysis.narrate runs/<batch_id>/<game_id>.jsonl  # <game_id>.audio/ (free from the phrase bank)
+uv run societysim catalog --out <dir>                       # models_catalog.json (deploy-space.sh runs this)
 scripts/deploy-space.sh runs/<batch_id> <owner/space>       # deploy viewer + data/
 scripts/deploy-space.sh --out <dir> runs/<batch_id>         # same layout, staged locally
 ```
@@ -83,6 +85,9 @@ data/
   report/report.md             human-facing, not part of the contract
   run_meta.json, <game_id>.run_meta.json, agreement.json   not part of the contract
 ```
+
+The site root also has `models_catalog.json` (see [Game setup](#game-setup)), and
+`devui/schema/` holds a copy of every `schema/*.schema.json`.
 
 The viewer's default index URL is `data/report/index.json`. Every other static path is resolved
 from it.
@@ -334,6 +339,100 @@ files.
   spend, config, agent type). Not viewer-facing. If a viewer PR starts reading it, that PR adds
   it here with a schema.
 - `agreement.json` (self-tag vs Jev agreement), `report/report.md`, the report PNGs and `.cache/`.
+
+## Game setup
+
+The settings screen has two modes. Both produce one **setup JSON**, a `GameSetup`
+(`src/societysim/setup.py`, schema `schema/game_setup.schema.json`). There is no game server
+yet: the UI shows or downloads the JSON, and someone runs it with
+`uv run societysim play --setup <file.json>`. A future server endpoint would accept the same JSON
+unchanged. `play --setup` reads YAML too.
+
+### Basic
+
+`{"mode": "basic"}` is the default game: 10 seats, 2 wolves, 1 seer, 1 doctor, 6 villagers.
+Models come from `default_lineup` in `models_catalog.json`, shuffled with the seed and repeated
+to fill the seats. In Basic only `seed` and `human_seat` can change; setting any other field to
+something other than its default is an error ("n_wolves is fixed in basic mode; use mode
+'advanced'"). With a human seat it is 2 wolves among 1 human and 9 models.
+
+```json
+{"mode": "basic", "seed": 7, "human_seat": "p0"}
+```
+
+`uv run societysim play --preset basic [--human-seat p0] [--seed 7]` runs the same thing.
+
+### Advanced
+
+Every field is optional; a missing field keeps its Basic default.
+
+| Field | Type | Limits and notes |
+|---|---|---|
+| `mode` | `"basic"` \| `"advanced"` | Default `"basic"` |
+| `n_players` | integer | 7..10, default 10. The engine and RULES.md allow 7..10 today |
+| `n_wolves` | integer | ≥ 1, and fewer than the villager side: at most `(n_players - 1) // 2` (3 for 7 or 8 players, 4 for 9 or 10) |
+| `special_roles` | `{seer: bool, doctor: bool}` | Default both true. The rest of the seats are villagers |
+| `seats` | list of `{seat, model}` or null | One entry per seat `p0..p{n_players-1}`, each once, any order. `model` is a catalog `name` or `"human"` (at most one). Can't be combined with `model_pool` |
+| `model_pool` | list of model names or null | At least 1, no `"human"`. Null means `default_lineup`. Fills every seat but the human's |
+| `rotation` | `"in_order"` \| `"shuffle"` | How `model_pool` fills the seats: `in_order` repeats the pool from p0, skipping the human seat; `shuffle` (default) shuffles the pool with the seed first. Ignored with `seats` |
+| `human_seat` | seat id or null | A seat below `n_players`. With `seats`, put `"human"` on that seat instead (or on both) |
+| `seed` | integer | Default 0. Same setup and seed, same game |
+
+Model names must exist in `configs/models.yaml`. Unknown fields are rejected. Rule flags (days,
+discussion rounds and so on) are not part of the setup; they keep their defaults.
+
+```json
+{"mode": "advanced", "n_players": 8, "n_wolves": 3,
+ "special_roles": {"seer": true, "doctor": false},
+ "model_pool": ["qwen3-235b", "gemma4-26b", "deepseek-v3.1"], "rotation": "in_order",
+ "human_seat": "p5", "seed": 42}
+```
+
+```json
+{"mode": "advanced", "n_players": 7,
+ "seats": [{"seat": "p0", "model": "qwen3-235b"}, {"seat": "p1", "model": "human"},
+           {"seat": "p2", "model": "gemma4-26b"}, {"seat": "p3", "model": "gpt-oss-120b"},
+           {"seat": "p4", "model": "qwen3-235b"}, {"seat": "p5", "model": "gemini-flash"},
+           {"seat": "p6", "model": "deepseek-v3.1"}]}
+```
+
+An invalid setup makes `play` print one `invalid setup: <field>: <reason>` line per error and
+exit 1 before anything runs. The UI should check what the JSON Schema can express (types,
+ranges, seat id pattern, unknown keys) and the cross-field rules above (wolves vs villagers,
+seats cover every seat once, one human, `seats` xor `model_pool`, basic fields fixed).
+
+### Models catalog: `models_catalog.json`
+
+- Path: the site root (next to `index.html`), staged by `scripts/deploy-space.sh` (also with
+  `--out`). Produced by `uv run societysim catalog --out <dir> [--check]`.
+- Use it to build the model dropdowns. Grey out entries with `available: false` and show
+  `unavailable_reason`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `human` | `"human"` | The model value for a human seat |
+| `default_lineup` | list of model names | What Basic plays |
+| `models` | list, in `models.yaml` order | One entry per model, below |
+| `models[].name` | string | The value `seats` and `model_pool` take |
+| `models[].display_name` | string | Upstream model id, e.g. `Qwen3-235B-A22B-Instruct-2507` |
+| `models[].provider` | `"huggingface"` \| `"google"` \| `"openai"` \| `"amd"` \| `"other"` | Who serves it |
+| `models[].sponsor` | `"huggingface"` \| `"amd"` \| null | Sponsor track tag |
+| `models[].price_tier` | `"free"` \| `"low"` \| `"medium"` \| `"high"` \| `"unknown"` | USD for 1M input + 1M output tokens: free = priced at 0, low < $1.50, medium < $3, high ≥ $3, unknown = no price |
+| `models[].structured` | `"json_schema"` \| `"json_object"` \| `"none"` | Structured output mode |
+| `models[].structured_ok` | boolean | False when `structured` is `"none"` |
+| `models[].color` | string \| null | Viewer color |
+| `models[].available` | boolean | False for a self-hosted model whose base URL isn't set where the catalog was built, or (with `--check`) whose server doesn't serve it |
+| `models[].unavailable_reason` | string \| null | Short reason; never holds a URL |
+
+Availability is a snapshot from the machine that built the catalog, not live.
+
+```json
+{"human": "human", "default_lineup": ["qwen3-235b", "llama4-maverick", "gemma4-26b"],
+ "models": [{"name": "amd-gpt-oss-20b", "display_name": "gpt-oss-20b", "provider": "amd",
+   "sponsor": "amd", "price_tier": "free", "structured": "json_schema", "structured_ok": true,
+   "color": "#ed1c24", "available": false,
+   "unavailable_reason": "missing API base for amd-gpt-oss-20b; set AMD_VLLM_BASE_URL in .env"}]}
+```
 
 ## Neon Data API
 

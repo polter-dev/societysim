@@ -173,9 +173,12 @@ def setup_errors(exc: ValidationError) -> list[str]:
 
 def setup_json_schema() -> dict:
     """schema/game_setup.schema.json (written by scripts/gen-schema.sh)."""
+    from societysim.analysis.report import SCHEMA as CONTRACT_VERSION
+
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "game_setup.schema.json",
+        "x-contract-version": CONTRACT_VERSION,
         **GameSetup.model_json_schema(),
     }
 

@@ -221,3 +221,18 @@ def test_catalog_marks_unpriced_and_unstructured_models():
     spec = ModelSpec(name="x", litellm_model="openai/not-a-real-model", structured="none")
     entry = build_catalog([spec]).models[0]
     assert (entry.price_tier, entry.structured_ok, entry.provider) == ("unknown", False, "openai")
+
+
+def test_data_contract_examples_are_valid_setups():
+    from jsonschema import Draft202012Validator
+
+    doc = (ROOT / "docs/DATA_CONTRACT.md").read_text(encoding="utf-8")
+    section = doc.split("## Game setup\n", 1)[1].split("### Models catalog", 1)[0]
+    examples = [json.loads(b.split("```", 1)[0]) for b in section.split("```json\n")[1:]]
+    assert len(examples) == 3
+    validator = Draft202012Validator(setup_json_schema())
+    for example in examples:
+        assert not list(validator.iter_errors(example))
+        GameSetup.model_validate(example).game_config()
+    assert "schema/game_setup.schema.json" in doc
+    assert f"Contract version: {setup_json_schema()['x-contract-version']}\n" in doc

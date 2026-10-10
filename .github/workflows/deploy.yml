@@ -118,6 +118,9 @@ jobs:
           bash scripts/deploy-space.sh --out "$RUNNER_TEMP/site" "$BATCH"
           # Pages has no use for the HF Space front matter.
           rm -f "$RUNNER_TEMP/site/README.md"
+          for f in index.json leaderboard.json metrics.json _headers 404.html; do
+            test -s "$RUNNER_TEMP/site/$f" || { echo "::error::staged site has no $f at its root"; exit 1; }
+          done
           npx --yes wrangler@4 pages project create societysim --production-branch main ||
             echo "project create failed or it already exists; continuing"
           npx --yes wrangler@4 pages deploy "$RUNNER_TEMP/site" --project-name societysim --branch main --commit-dirty=true

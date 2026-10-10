@@ -1,0 +1,3 @@
+# Intentionally no catch-all "/* /index.html 200": a missing .json/.jsonl must 404, not
+# return the SPA. The viewer routes with query strings (?page=...), so it needs no fallback.
+# Pages serves 404.html (next to this file) for anything that does not exist.

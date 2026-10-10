@@ -100,10 +100,21 @@ else
   trap 'rm -rf "$stage"' EXIT
 fi
 cp -R "$dist/." "$stage/"
+# Static host config (Cloudflare Pages). `cp -n` keeps whatever the viewer build already put in dist.
+for f in _headers _redirects 404.html; do cp -n "$root/viewer/public/$f" "$stage/$f"; done
 mkdir -p "$stage/data"
 # .cache holds raw judge responses; the PNGs are for report.md, not the viewer.
 # tar, not rsync: rsync is not available in the Windows bash.
 (cd "$batch" && tar --exclude '.cache' --exclude '*.png' -cf - .) | (cd "$stage/data" && tar -xf -)
+# The same files at the site root (docs/DATA_CONTRACT.md): index.json, leaderboard.json and
+# metrics.json from report/, plus the logs, labels, highlights and audio next to them. The
+# integrated UI loads ./index.json; "../<file>" in it clamps to the root.
+(cd "$batch" && tar --exclude '.cache' --exclude '*.png' --exclude './report' -cf - .) | (cd "$stage" && tar -xf -)
+cp "$batch"/report/{index,leaderboard,metrics}.json "$stage/"
+for f in index.json leaderboard.json metrics.json; do
+  [[ -s "$stage/$f" ]] || { echo "error: staged site has no $f at its root" >&2; exit 1; }
+done
+ls "$stage"/*.jsonl >/dev/null 2>&1 || { echo "error: staged site has no game .jsonl at its root" >&2; exit 1; }
 # The settings screen's model list (docs/DATA_CONTRACT.md, "Game setup"). Availability is
 # whatever this machine sees (environment and .env), e.g. AMD only while its pod URL is set.
 uv run --frozen --project "$root" societysim catalog --out "$stage" --registry "$root/configs/models.yaml" >/dev/null

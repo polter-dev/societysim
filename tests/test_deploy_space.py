@@ -180,3 +180,22 @@ def test_devui_config_carries_auth_url(tmp_path):
         "neon_url": "https://db.example/rest/v1",
         "auth_url": "https://auth.example/neondb/auth",
     }
+
+
+def test_out_stages_data_at_site_root(tmp_path):
+    batch = _batch(tmp_path)
+    out = tmp_path / "site"
+    r = _run(tmp_path, "--out", str(out), str(batch))
+    assert r.returncode == 0, r.stderr
+    index = json.loads((out / "index.json").read_text())
+    for name in ("leaderboard", "metrics"):
+        json.loads((out / f"{name}.json").read_text())
+    for entry in index:
+        log = out / entry["file"]
+        assert log.is_file() and log.with_suffix(".labels.jsonl").is_file()
+    assert not (out / "report").exists() and not list(out.rglob("*.png"))
+    assert (out / "data/report/index.json").exists()  # existing viewer path still works
+    headers = (out / "_headers").read_text()
+    assert "Access-Control-Allow-Origin: *" in headers and "application/x-ndjson" in headers
+    assert (out / "_redirects").is_file()
+    assert (out / "404.html").is_file()  # keeps Pages from serving the SPA for a missing file

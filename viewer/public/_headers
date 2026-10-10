@@ -1,0 +1,7 @@
+# Cloudflare Pages: data files are readable from local UIs and other origins.
+/*.json
+  Access-Control-Allow-Origin: *
+  Content-Type: application/json
+/*.jsonl
+  Access-Control-Allow-Origin: *
+  Content-Type: application/x-ndjson

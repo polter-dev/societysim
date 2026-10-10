@@ -85,7 +85,8 @@ healthy() { curl -sf -m 5 "$LOCAL/health" >/dev/null 2>&1; }
 spawn() { # spawn <pidfile> <logfile> cmd...
   local pidfile=$1 logfile=$2
   shift 2
-  setsid nohup "$@" >"$logfile" 2>&1 </dev/null &
+  if command -v setsid >/dev/null; then set -- setsid "$@"; fi
+  nohup "$@" >"$logfile" 2>&1 </dev/null &
   echo $! >"$pidfile"
 }
 
@@ -117,19 +118,28 @@ assert torch.cuda.is_available()
 p = torch.cuda.get_device_properties(0)
 print(f"GPU:      {p.name}, {p.total_memory / 2**30:.0f} GiB, {getattr(p, 'gcnArchName', '?')}")
 EOF
-  if command -v rocminfo >/dev/null && ! rocminfo 2>/dev/null | grep -q "$GPU_ARCH"; then
+  if command -v rocminfo >/dev/null && [[ $(rocminfo 2>/dev/null || true) != *"$GPU_ARCH"* ]]; then
     warn "rocminfo does not list $GPU_ARCH; set GPU_ARCH if this is a different GPU"
   fi
 }
 
+# Use AMD_API_KEY if set, else the saved key, else a new one. KEY_CHANGED=1 means a running
+# server has an old key and must restart.
+KEY_CHANGED=0
 api_key() {
-  if [ -z "${AMD_API_KEY:-}" ]; then
-    if [ -s "$AMD_WORK/api_key" ]; then
-      AMD_API_KEY=$(cat "$AMD_WORK/api_key")
-    else
+  local saved
+  saved=$(cat "$AMD_WORK/api_key" 2>/dev/null || true)
+  if [ -z "${AMD_API_KEY:-}" ] && [ -n "$saved" ]; then
+    AMD_API_KEY=$saved
+  else
+    if [ -z "${AMD_API_KEY:-}" ]; then
       AMD_API_KEY="amd-$("$SYS_PY" -c 'import secrets; print(secrets.token_urlsafe(24))')"
+      log "Generated a new API key"
+    fi
+    if [ "$AMD_API_KEY" != "$saved" ]; then
       (umask 077 && echo "$AMD_API_KEY" >"$AMD_WORK/api_key")
-      log "Generated an API key and saved it to $AMD_WORK/api_key"
+      echo "saved the API key to $AMD_WORK/api_key"
+      KEY_CHANGED=1
     fi
   fi
   export AMD_API_KEY
@@ -358,14 +368,14 @@ start_vllm() { # start_vllm xgrammar|outlines
     so=(--guided-decoding-backend "$1")
   fi
   log "Starting vLLM: $AMD_MODEL on $LOCAL, structured-output backend $1"
-  # The key goes in VLLM_API_KEY (same as --api-key) so it does not show up in `ps`.
   # shellcheck disable=SC1091
   (
     source "$VLLM_VENV/serve.env"
-    VLLM_API_KEY="$AMD_API_KEY" spawn "$AMD_WORK/server.pid" "$LOGS/server.log" \
+    spawn "$AMD_WORK/server.pid" "$LOGS/server.log" \
       "$VLLM_VENV/bin/vllm" serve "$AMD_MODEL" --served-model-name "$AMD_MODEL" \
-      --host 127.0.0.1 --port "$AMD_PORT" --max-model-len "$AMD_MAX_MODEL_LEN" \
-      --gpu-memory-utilization "$AMD_GPU_MEM_UTIL" --max-num-seqs 16 "${so[@]}"
+      --host 127.0.0.1 --port "$AMD_PORT" --api-key "$AMD_API_KEY" \
+      --max-model-len "$AMD_MAX_MODEL_LEN" --gpu-memory-utilization "$AMD_GPU_MEM_UTIL" \
+      --max-num-seqs 16 "${so[@]}"
   )
   echo "vllm $1" >"$AMD_WORK/backend"
   wait_healthy "$AMD_WORK/server.pid" "$LOGS/server.log"
@@ -377,7 +387,11 @@ smoke() {
   local code
   code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 -X POST -H 'Content-Type: application/json' \
     -d '{}' "$LOCAL/v1/chat/completions")
-  [ "$code" = 401 ] || warn "a request without the API key got HTTP $code, expected 401"
+  if [ "$code" != 401 ]; then
+    [ "$AMD_TUNNEL" = 1 ] &&
+      die "a request without the API key got HTTP $code, not 401. Not opening a public tunnel."
+    warn "a request without the API key got HTTP $code, expected 401"
+  fi
   "$SYS_PY" - "$LOCAL" "$AMD_API_KEY" "$AMD_MODEL" <<'EOF'
 import json, sys, time, urllib.request
 base, key, model = sys.argv[1:4]
@@ -445,7 +459,7 @@ llama_ok() { # llama_ok <binary>: runs and sees a ROCm GPU
   out=$(LD_LIBRARY_PATH="$(dirname "$bin"):${LD_LIBRARY_PATH:-}" "$bin" --list-devices 2>&1) ||
     true
   echo "$out" | tail -n 5
-  echo "$out" | grep -qiE 'rocm|hip|gfx12'
+  [[ ${out,,} == *rocm* || ${out,,} == *gfx12* ]]
 }
 
 llama_prebuilt() {
@@ -510,19 +524,20 @@ install_llamacpp() {
 serve_llamacpp() {
   install_llamacpp || return 1
   log "Downloading $AMD_GGUF_REPO/$AMD_GGUF_FILE"
-  local gguf extra=()
+  local gguf help extra=()
   gguf=$("$VENV/bin/python" -c 'import sys; from huggingface_hub import hf_hub_download as d
 print(d(sys.argv[1], sys.argv[2]))' "$AMD_GGUF_REPO" "$AMD_GGUF_FILE") || return 1
   echo "$gguf"
+  LD_LIBRARY_PATH="${LLAMA_BIN%/*}:${LD_LIBRARY_PATH:-}"
+  export LD_LIBRARY_PATH
+  help=$("$LLAMA_BIN" --help 2>&1 || true)
   # gpt-oss: keep reasoning short so the JSON answer fits in max_tokens.
-  if "$LLAMA_BIN" --help 2>&1 | grep -q -- --chat-template-kwargs; then
+  if [[ $help == *--chat-template-kwargs* ]]; then
     extra=(--chat-template-kwargs '{"reasoning_effort": "low"}')
   fi
   log "Starting llama-server on $LOCAL (4 parallel slots of $AMD_MAX_MODEL_LEN tokens)"
-  LLAMA_ARG_API_KEY="$AMD_API_KEY" \
-    LD_LIBRARY_PATH="$(dirname "$LLAMA_BIN"):${LD_LIBRARY_PATH:-}" \
-    spawn "$AMD_WORK/server.pid" "$LOGS/server.log" "$LLAMA_BIN" -m "$gguf" \
-    --host 127.0.0.1 --port "$AMD_PORT" --alias "$AMD_MODEL" -ngl 999 \
+  spawn "$AMD_WORK/server.pid" "$LOGS/server.log" "$LLAMA_BIN" -m "$gguf" \
+    --host 127.0.0.1 --port "$AMD_PORT" --api-key "$AMD_API_KEY" --alias "$AMD_MODEL" -ngl 999 \
     -c $((AMD_MAX_MODEL_LEN * 4)) --parallel 4 --jinja --metrics "${extra[@]}"
   echo "llama.cpp" >"$AMD_WORK/backend"
   wait_healthy "$AMD_WORK/server.pid" "$LOGS/server.log" || return 1
@@ -539,7 +554,7 @@ stats_loop() { # runs detached via `serve.sh _stats`; appends one sample per int
   re+='|predicted_tokens_seconds|requests_processing|requests_deferred|n_decode_total))'
   while true; do
     {
-      echo "=== $(date -Is) backend=$(cat "$AMD_WORK/backend" 2>/dev/null)"
+      echo "=== $(date '+%Y-%m-%dT%H:%M:%S%z') backend=$(cat "$AMD_WORK/backend" 2>/dev/null)"
       curl -s -m 5 -H "Authorization: Bearer $AMD_API_KEY" "$LOCAL/metrics" | grep -E "$re" || true
       if command -v rocm-smi >/dev/null; then
         rocm-smi --showuse --showmemuse --showpower 2>/dev/null | grep -E '^(GPU|card)' || true
@@ -618,7 +633,7 @@ cmd_up() {
   preflight
   api_key
   base_venv
-  if alive "$AMD_WORK/server.pid" && healthy; then
+  if [ "$KEY_CHANGED" = 0 ] && alive "$AMD_WORK/server.pid" && healthy; then
     log "Server already running ($(cat "$AMD_WORK/backend")); reusing it"
   else
     kill_pidfile "$AMD_WORK/server.pid"

@@ -88,8 +88,10 @@ def game_costs(path: Path) -> Counter[str] | None:
     return costs
 
 
-# Rough size of one seat's whole game, for dry-run cost estimates before any data exists.
-PRIOR_CALLS_PER_SEAT = 25
+# Rough size of one seat's whole game, for cost estimates before any data exists. From T5.1 and
+# recent logs: 4 to 11 calls per seat, 1.2k to 2.4k input and 250 to 370 output tokens per call.
+# Kept on the high side (12 calls, 2k in, 400 out) so the guard errs towards stopping early.
+PRIOR_CALLS_PER_SEAT = 12
 PRIOR_INPUT_TOKENS = 2000
 PRIOR_OUTPUT_TOKENS = 400
 
@@ -176,10 +178,10 @@ async def run_batch(
     model call, including games that never finished, and carries over to a resume. A new game
     starts only if spend so far, plus what each in-flight game is still expected to spend,
     plus the new game's estimate stays within cfg.budget_usd. A game is estimated as the sum
-    over its seats of the highest per-seat cost seen so far for that seat's model. A game with a
-    model that has no finished game yet has no estimate, so it runs alone and nothing starts
-    beside it. Overshoot therefore happens only when a game costs more than its estimate (a
-    model's first game is unbounded; later ones are bounded by the dearest game seen).
+    over its seats of the highest per-seat cost seen so far for that seat's model, or
+    prior_seat_cost for a model with no finished game yet, so fresh models run in parallel too.
+    Overshoot happens only when a game costs more than its estimate: a model's first games are
+    bounded by the prior, so a model far dearer than its price table can overshoot there.
     Games already running finish. A game that
     raises is recorded under "failed" and the batch ends "failed". On cancellation the running
     games are cancelled, run_meta.json gets status "interrupted" and CancelledError is
@@ -262,13 +264,11 @@ async def run_batch(
     make_agent: AgentFactory = llm_agents(metered, specs) if metered else RandomAgent
     colors = {name: s.color for name, s in specs.items()}
 
-    reserved: dict[str, float | None] = {}  # in-flight game -> estimated USD (None: unknown)
+    reserved: dict[str, float] = {}  # in-flight game -> estimated USD
 
-    def estimate(a: Assignment) -> float | None:
-        """Sum of each seat's model's observed per-seat cost; None if a model has no data."""
-        if any(m not in seat_cost for m in a.models):
-            return None
-        return sum(seat_cost[m] for m in a.models)
+    def estimate(a: Assignment) -> float:
+        """Sum of each seat's observed per-seat cost, or the prior for a model with no data."""
+        return sum(seat_cost[m] if m in seat_cost else prior_seat_cost(specs[m]) for m in a.models)
 
     def verdict(a: Assignment) -> Literal["go", "wait", "stop"]:
         if spent() >= cfg.budget_usd:
@@ -276,15 +276,8 @@ async def run_batch(
         if metered is None:
             return "go"  # scripted games are free
         est = estimate(a)
-        if est is None or None in reserved.values():
-            # Unpriced game: run it alone, and let nothing start next to one.
-            return "wait" if in_flight else "go"
         # An in-flight game only still needs what it has not spent yet.
-        left = sum(
-            max(e - sum(metered.by_game[g].values()), 0.0)
-            for g, e in reserved.items()
-            if e is not None
-        )
+        left = sum(max(e - sum(metered.by_game[g].values()), 0.0) for g, e in reserved.items())
         if spent() + left + est <= cfg.budget_usd:
             return "go"
         return "wait" if in_flight else "stop"  # running games may free budget by finishing

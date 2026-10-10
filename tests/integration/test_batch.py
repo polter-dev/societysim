@@ -18,6 +18,11 @@ SPECS = {
     "b": ModelSpec(name="b", litellm_model="gemini/b"),
 }
 CALL_COST = 0.001
+# Prior per seat = 12 calls * 2000 tokens * $1/Mtok = $0.024, so a 7-seat game is about $0.17.
+PRICED = {
+    n: ModelSpec(name=n, litellm_model=f"{p}/{n}", input_cost_per_mtok=1, output_cost_per_mtok=0)
+    for n, p in [("a", "openai"), ("b", "gemini"), ("c", "openai"), ("d", "gemini")]
+}
 
 
 class PricedFake(FakeClient):
@@ -176,11 +181,11 @@ async def test_crashed_game_is_reported_not_lost(tmp_path):
 
 async def test_budget_holds_with_concurrency(tmp_path):
     cost = (
-        await run_batch(cfg(n_games=1, batch_id="probe"), SPECS, PricedFake(), runs_dir=tmp_path)
+        await run_batch(cfg(n_games=1, batch_id="probe"), PRICED, PricedFake(), runs_dir=tmp_path)
     )["spent_usd"]
     cap = cost * 1.5
     res = await run_batch(
-        cfg(n_games=8, max_concurrency=4, budget_usd=cap), SPECS, PricedFake(), runs_dir=tmp_path
+        cfg(n_games=8, max_concurrency=4, budget_usd=cap), PRICED, PricedFake(), runs_dir=tmp_path
     )
     assert res["status"] == "budget_stopped"
     assert len(res["finished"]) == 1  # no estimate yet, so one probe game, then the cap bites
@@ -233,18 +238,19 @@ async def test_budget_with_100x_price_spread_and_concurrency(tmp_path):
     selfplay = {"mode": "selfplay", "n_games": 8, "max_concurrency": 4}
     probe = await run_batch(
         cfg(n_games=1, mode="selfplay", batch_id="probe", models=["a"]),
-        SPECS,
+        PRICED,
         SpreadFake(),
         runs_dir=tmp_path,
     )
     cheap = probe["spent_usd"]
     cap = cheap * 6
-    res = await run_batch(cfg(budget_usd=cap, **selfplay), SPECS, SpreadFake(), runs_dir=tmp_path)
+    res = await run_batch(cfg(budget_usd=cap, **selfplay), PRICED, SpreadFake(), runs_dir=tmp_path)
     assert res["status"] == "budget_stopped"
-    # g0 (a) runs alone, then g1 (b) runs alone with no estimate and alone blows the cap. The
-    # remaining bound: a model's first game can cost more than the cap; nothing else is
-    # allowed beside it, so overshoot is that one game (about 100 cheap games), not 4x it.
-    assert len(res["finished"]) == 2
+    # Fresh models are estimated from the prior, so the first games start together; b's game
+    # costs 100x its prior, which alone blows the cap. Overshoot is that one game (about 100
+    # cheap games); once its cost is seen, no further game starts.
+    assert len(res["finished"]) < 8
+    assert res["not_started"]
     assert res["spent_usd"] <= cap + cheap * 130
 
 
@@ -383,3 +389,34 @@ def test_cli_batch_unknown_model_and_missing_config(tmp_path, monkeypatch):
     assert bad.exit_code == 1 and "unknown model 'nope'" in bad.output
     gone = RUNNER.invoke(app, ["batch", "--config", str(tmp_path / "x.yaml")])
     assert gone.exit_code == 1 and "config file not found" in gone.output
+
+
+async def test_fresh_models_start_in_parallel_from_the_prior(tmp_path):
+    client = PricedFake(delay=0.001)
+    res = await run_batch(
+        cfg(n_games=4, max_concurrency=4, mode="selfplay", models=["a", "b", "c", "d"]),
+        PRICED,
+        client,
+        runs_dir=tmp_path,
+    )
+    assert res["status"] == "completed"
+    assert max(client.peak.values()) > 7  # several fresh-model games ran at once
+
+
+async def test_prior_over_budget_still_stops_new_games(tmp_path):
+    client = PricedFake()
+    res = await run_batch(
+        cfg(
+            n_games=4,
+            max_concurrency=4,
+            mode="selfplay",
+            models=["a", "b", "c", "d"],
+            budget_usd=0.25,
+        ),
+        PRICED,
+        client,
+        runs_dir=tmp_path,
+    )
+    assert res["status"] == "budget_stopped"
+    assert 1 <= len(res["finished"]) < 4
+    assert res["not_started"]

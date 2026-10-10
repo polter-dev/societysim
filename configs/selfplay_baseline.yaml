@@ -1,0 +1,19 @@
+# Per-model self-play baseline: every model plays all seats, 10 games each (9 models, 90 games).
+batch_id: selfplay_baseline
+seed: 2
+n_games: 90
+mode: selfplay
+budget_usd: 25.0
+max_concurrency: 4
+models:
+  - gemma4-26b
+  - qwen3-235b
+  - llama4-maverick
+  - gpt-oss-120b
+  - deepseek-v3.1
+  - gemini-flash-lite
+  - gemini-flash
+  - gpt-5-nano
+  - gpt-5-mini
+game:
+  n_players: 7

@@ -1,0 +1,23 @@
+# Main experiment: ~100 mixed games, seats rotated through all models, roles balanced by
+# batch/assign.py. GPT models sit in at most 10 games each.
+batch_id: mixed_v1
+seed: 3
+n_games: 100
+mode: mixed
+budget_usd: 40.0
+max_concurrency: 4
+models:
+  - gemma4-26b
+  - qwen3-235b
+  - llama4-maverick
+  - gpt-oss-120b
+  - deepseek-v3.1
+  - gemini-flash-lite
+  - gemini-flash
+  - gpt-5-nano
+  - gpt-5-mini
+model_game_limits:
+  gpt-5-nano: 10
+  gpt-5-mini: 10
+game:
+  n_players: 7

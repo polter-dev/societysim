@@ -1,0 +1,14 @@
+# Smoke test: 10 mixed games on the three cheapest Hugging Face models (by models.yaml prices).
+# Run: societysim batch --config configs/smoke_batch.yaml --agents llm
+batch_id: smoke_batch
+seed: 1
+n_games: 10
+mode: mixed
+budget_usd: 1.0
+max_concurrency: 4
+models:
+  - gemma4-26b
+  - qwen3-235b
+  - deepseek-v3.1
+game:
+  n_players: 7

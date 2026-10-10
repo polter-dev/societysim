@@ -214,17 +214,54 @@ def test_sync_neon_cli_needs_url(tmp_path, monkeypatch):
     assert "NEON_DATABASE_URL" in res.output
 
 
-async def test_slow_game_flushes_each_event_once_due():
+async def test_lone_event_lands_while_the_game_is_idle():
     conn = FakeConn()
 
     async def connect():
         return conn
 
-    sink = NeonSink("b1", connect=connect, batch_size=25, flush_after=0)
+    sink = NeonSink("b1", connect=connect, batch_size=25, flush_after=0.05)
     await sink.start_game({"game_id": "g1", "models": []})
-    for i in range(3):
+    await sink.write(_event(0))
+    assert conn.many == []  # below batch_size, nothing sent yet
+    await asyncio.sleep(0.3)  # no further events: only the timer can send it
+    assert [r[1] for _, rows in conn.many for r in rows] == [0]
+    await sink.write(_event(1))
+    await sink.close()  # flushes the rest and stops the timer
+    assert [r[1] for _, rows in conn.many for r in rows] == [0, 1]
+    n_calls = len(conn.many) + len(conn.executed)
+    await asyncio.sleep(0.2)
+    assert len(conn.many) + len(conn.executed) == n_calls  # nothing runs after close
+    assert sink._timer is None
+    await sink.write(_event(2))  # a late write must not restart the timer
+    assert sink._timer is None
+
+
+async def test_timer_and_writes_never_overlap_on_the_connection():
+    class OneAtATime(FakeConn):
+        busy = False
+        overlapped = False  # an assert here would be swallowed by the sink
+
+        async def executemany(self, sql, rows):
+            self.overlapped |= self.busy
+            self.busy = True
+            await asyncio.sleep(0.02)
+            self.busy = False
+            await super().executemany(sql, rows)
+
+    conn = OneAtATime()
+
+    async def connect():
+        return conn
+
+    sink = NeonSink("b1", connect=connect, batch_size=2, flush_after=0.01)
+    await sink.start_game({"game_id": "g1", "models": []})
+    for i in range(20):
         await sink.write(_event(i))
-        assert sum(len(r) for _, r in conn.many) == i + 1  # visible before the next event
+        await asyncio.sleep(0.005)
+    await sink.close()
+    assert sorted(r[1] for _, rows in conn.many for r in rows) == list(range(20))
+    assert not conn.overlapped
 
 
 def _event_rows(conn: FakeConn) -> dict[str, list[int]]:

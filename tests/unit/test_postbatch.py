@@ -65,6 +65,13 @@ def test_running_refuses_unless_force(tmp_path, calls, monkeypatch):
     assert _steps(calls)[0] == "label"
 
 
+def test_stopped_invalid_warns_and_still_runs_the_steps(tmp_path, calls, monkeypatch, capsys):
+    _fake_read(monkeypatch, "stopped_invalid")
+    postbatch.main([str(_batch(tmp_path, "stopped_invalid"))])
+    assert "warning: batch status is stopped_invalid" in capsys.readouterr().out
+    assert _steps(calls) == ["label", "report", "highlights"]
+
+
 def test_failing_step_stops(tmp_path, monkeypatch):
     seen = []
 

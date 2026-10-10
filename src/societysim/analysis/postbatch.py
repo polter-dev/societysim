@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 CLI = [sys.executable, "-m", "societysim.cli"]
-WARN_STATUSES = ("failed", "budget_stopped", "interrupted")
+WARN_STATUSES = ("failed", "budget_stopped", "stopped_invalid", "interrupted")
 
 
 def run_step(name: str, cmd: list[str]) -> None:

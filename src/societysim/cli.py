@@ -184,7 +184,9 @@ def _hm(seconds: float, *, eta: bool = False) -> str:
 def _progress_line(e: dict) -> str:
     money = f"spent ${e['spent']:.2f} of ${e['budget']:.2f}"
     if e["event"] == "stopped":
-        why = "provider down" if e["reason"] == "provider_down" else "budget"
+        why = {"provider_down": "provider down", "invalid_output": "invalid output"}.get(
+            e["reason"], "budget"
+        )
         return f"{why}: no new games ({money}); waiting for {e['running']} running"
     if e["event"] == "failed":
         end = f"failed: {str(e['reason'])[:80]}"
@@ -304,6 +306,13 @@ def batch(
             out = Path("runs") / cfg.batch_id
             typer.echo(f"no new games started; re-run once it is back to resume: {out}")
         raise typer.Exit(1)
+    if result["status"] == "stopped_invalid":
+        typer.echo(f"stopped for invalid output: {result['invalid_stop']}")
+        typer.echo(
+            f"to continue, raise max_invalid_rate (now {cfg.max_invalid_rate:.1%}) in the "
+            f"batch config and re-run to resume: {Path('runs') / cfg.batch_id}"
+        )
+        raise typer.Exit(2)
 
 
 @app.command()

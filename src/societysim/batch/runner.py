@@ -436,9 +436,13 @@ async def run_batch(
                 budget_hit = True
                 progress(
                     "stopped",
-                    reason="provider_down" if down else "budget",
+                    reason="provider_down"
+                    if down
+                    else "invalid_output"
+                    if invalid_stop
+                    else "budget",
                     running=in_flight,
-                    detail=down[0] if down else "",
+                    detail=down[0] if down else invalid_stop[0] if invalid_stop else "",
                 )
                 break
             in_flight += 1

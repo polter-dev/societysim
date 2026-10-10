@@ -679,3 +679,27 @@ async def test_resume_rechecks_invalid_rate_and_a_higher_limit_continues(tmp_pat
     )
     assert done["status"] == "completed"
     assert len(done["finished"]) + len(done["skipped"]) == 8
+
+
+def _breaker_cli(tmp_path, monkeypatch, **kw):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOSTED_VLLM_API_KEY", "test-key")
+    from societysim.models import client as client_module
+
+    monkeypatch.setattr(
+        client_module, "LiteLLMClient", lambda *, limits: HealthyFake(bad=["qwen3-235b"])
+    )
+    path = write_config(tmp_path, n_games=6, max_concurrency=1, max_invalid_rate=0.25, **kw)
+    args = ["batch", "--config", str(path), "--registry", str(REGISTRY), "--agents", "llm"]
+    return RUNNER.invoke(app, args)
+
+
+def test_cli_batch_invalid_stop_names_model_and_exits_2(tmp_path, monkeypatch):
+    result = _breaker_cli(tmp_path, monkeypatch)
+    assert result.exit_code == 2, result.output
+    assert "invalid output: no new games" in result.output  # progress line, not "budget:"
+    assert "budget: no new games" not in result.output
+    assert "stopped for invalid output: qwen3-235b: " in result.output
+    assert "raise max_invalid_rate (now 25.0%)" in result.output
+    meta = json.loads((tmp_path / "runs/cli/run_meta.json").read_text())
+    assert meta["status"] == "stopped_invalid"

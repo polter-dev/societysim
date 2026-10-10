@@ -279,3 +279,43 @@ def test_torn_last_line_is_ignored_but_a_bad_middle_line_raises(tmp_path, capsys
     bad.write_text("\n".join([lines[0], '{"game_id": "fixt', *lines[1:]]) + "\n")
     with pytest.raises(ValueError):
         read_log(bad)
+
+
+def _count_calls(monkeypatch):
+    calls = []
+
+    async def fake_classify(events, cache_dir):
+        calls.append(events[0].game_id)
+        return [_result(claim_role="seer")]
+
+    monkeypatch.setattr(jev_mod, "classify_events", fake_classify)
+    return calls
+
+
+def test_cli_label_skips_jev_for_scripted_games(tmp_path, monkeypatch, no_key):
+    monkeypatch.setenv("TYPESAFE_API_KEY", "fake")
+    calls = _count_calls(monkeypatch)
+    shutil.copy(FIXTURE, tmp_path / "fixture-0001.jsonl")
+    (tmp_path / "fixture-0001.run_meta.json").write_text('{"agents": "scripted"}')
+
+    result = CliRunner().invoke(app, ["label", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert calls == []
+    assert "Jev skipped for 1 scripted games" in result.output
+    assert "sending" not in result.output
+    assert (tmp_path / "fixture-0001.labels.jsonl").exists()
+
+
+def test_cli_label_llm_game_still_uses_jev_and_prints_count(tmp_path, monkeypatch, no_key):
+    monkeypatch.setenv("TYPESAFE_API_KEY", "fake")
+    calls = _count_calls(monkeypatch)
+    shutil.copy(FIXTURE, tmp_path / "fixture-0001.jsonl")
+    (tmp_path / "fixture-0001.run_meta.json").write_text('{"agents": "llm"}')
+
+    result = CliRunner().invoke(app, ["label", str(tmp_path)])
+
+    n = sum(e.type is EventType.STATEMENT for e in _events())
+    assert calls == ["fixture-0001"]
+    assert f"Jev: sending up to {n} statements" in result.output
+    assert "scripted" not in result.output

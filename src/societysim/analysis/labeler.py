@@ -272,6 +272,19 @@ def read_log(path: Path) -> list[Event]:
     return events
 
 
+def _scripted(log: Path) -> bool:
+    """True if the game's run_meta.json is tagged agents=scripted (older logs have no tag)."""
+    try:
+        meta = json.loads(log.with_name(f"{log.stem}.run_meta.json").read_text())
+    except (OSError, ValueError):
+        return False
+    return isinstance(meta, dict) and meta.get("agents") == "scripted"
+
+
+def _n_statements(events: list[Event]) -> int:
+    return sum(e.type is EventType.STATEMENT for e in events)
+
+
 def label_batch(
     batch_dir: Path, jev_for: Callable[[list[Event]], Jev] | None = None
 ) -> dict[str, dict] | None:
@@ -283,14 +296,24 @@ def label_batch(
     """
     totals: dict[str, Counter] = {}
     logs = sorted(p for p in batch_dir.glob("*.jsonl") if not p.name.endswith(".labels.jsonl"))
-    games = 0
+    loaded = []
     for path in logs:
         events = read_log(path)
         if not events:
             print(f"warning: {path.name} is empty, skipped")
             continue
+        loaded.append((path, events, jev_for is not None and not _scripted(path)))
+    if jev_for:
+        skipped = sum(1 for _, _, use in loaded if not use)
+        if skipped:
+            print(f"Jev skipped for {skipped} scripted games")
+        n = sum(_n_statements(ev) for _, ev, use in loaded if use)
+        if n:
+            print(f"Jev: sending up to {n} statements (cached ones make no call)")
+    games = 0
+    for path, events, use_jev in loaded:
         games += 1
-        jev = jev_for(events) if jev_for else None
+        jev = jev_for(events) if use_jev else None
         labels = label_game(events, jev)
         out = path.with_name(f"{events[0].game_id}.labels.jsonl")
         out.write_text("".join(lb.model_dump_json() + "\n" for lb in labels))

@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react";
+import { useEffect, useRef, type KeyboardEvent } from "react";
 import type { Event } from "../../types/events";
 import type { Mode, Scene } from "../../scene/deriveScene";
 
@@ -31,6 +31,11 @@ export function inspect(scene: Scene, seat: string) {
 
 /** Components only render: all derivation is in inspect() and deriveScene(). */
 export function Inspector({ scene, mode, selected, onSelect }: InspectorProps) {
+  const ref = useRef<HTMLElement>(null);
+  // Focus follows the selection, so arrow keys move focus too, not only the pressed state.
+  useEffect(() => {
+    ref.current?.querySelector<HTMLElement>('[aria-pressed="true"]')?.focus();
+  }, [selected]);
   const living = scene.players.filter((p) => p.alive);
   const player = scene.players.find((p) => p.id === selected);
   if (!player) return null;
@@ -48,7 +53,8 @@ export function Inspector({ scene, mode, selected, onSelect }: InspectorProps) {
   };
 
   return (
-    <aside className="inspector" aria-label={`Inspector: ${player.name}`} onKeyDown={onKeyDown}>
+    // A region, not an aside: a complementary landmark can't sit inside <main>.
+    <section ref={ref} className="inspector" aria-label={`Inspector: ${player.name}`} onKeyDown={onKeyDown}>
       <header>
         <h2>{player.name}</h2>
         <button type="button" onClick={() => onSelect(null)} aria-label="Close inspector">
@@ -58,7 +64,7 @@ export function Inspector({ scene, mode, selected, onSelect }: InspectorProps) {
       <ul aria-label="Players">
         {scene.players.map((p) => (
           <li key={p.id}>
-            <button type="button" aria-pressed={p.id === selected} disabled={!p.alive} autoFocus={p.id === selected} onClick={() => onSelect(p.id)}>
+            <button type="button" aria-pressed={p.id === selected} disabled={!p.alive} onClick={() => onSelect(p.id)}>
               {p.name}
             </button>
           </li>
@@ -99,6 +105,6 @@ export function Inspector({ scene, mode, selected, onSelect }: InspectorProps) {
           </section>
         </>
       )}
-    </aside>
+    </section>
   );
 }

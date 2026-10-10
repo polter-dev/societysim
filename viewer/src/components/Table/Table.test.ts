@@ -19,7 +19,8 @@ const seats = (html: string) =>
       .slice(1)
       .map((li) => [li.match(/data-seat="(p\d)"/)![1], li]),
   );
-const card = (li: string) => li.match(/data-role-card="[^"]*"[^>]*>(.*?)<\/div>/)![1];
+// The role card is the last span in the seat button, before the optional "dead" line.
+const card = (li: string) => li.match(/data-role-card="[^"]*"[^>]*>(.*?)<\/span>(?:<span[^>]*>dead<\/span>)?<\/button>/)![1];
 
 describe("Table on the fixture", () => {
   it("shows every seat with name, model and model color", () => {
@@ -63,6 +64,13 @@ describe("Table on the fixture", () => {
     const s = seats(render(117, "villager"));
     expect(card(s.p2)).toBe("Wolf");
     expect(card(s.p5)).toBe("Wolf");
+  });
+
+  it("each seat is a button, pressed when it is the selected seat", () => {
+    const html = renderToStaticMarkup(createElement(Table, { scene: deriveScene(events, 14, "villager"), selected: "p3" }));
+    const s = seats(html);
+    expect(s.p3).toContain('<button type="button" aria-pressed="true"');
+    expect(s.p0).toContain('<button type="button" aria-pressed="false"');
   });
 
   it("tint follows the phase", () => {

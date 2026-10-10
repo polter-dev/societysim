@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { Event } from "../../types/events";
 import type { Scene } from "../../scene/deriveScene";
 import { seatPosition } from "../Table/Table";
@@ -39,7 +39,13 @@ export function currentStatement(scene: Scene): Event | null {
 export function Speech({ scene }: { scene: Scene }) {
   const e = currentStatement(scene);
   const i = scene.players.findIndex((p) => p.id === e?.actor);
-  if (!e || i < 0) return null;
+  // The live region stays mounted while empty; screen readers miss regions that appear with their content.
+  const live = (bubble?: ReactNode) => (
+    <div aria-live="polite" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+      {bubble}
+    </div>
+  );
+  if (!e || i < 0) return live();
   const p = scene.players[i];
   const seat = seatPosition(i, scene.players.length);
   // Halfway to the center keeps the bubble on the felt, clear of the seat cards.
@@ -61,11 +67,9 @@ export function Speech({ scene }: { scene: Scene }) {
     boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
     pointerEvents: "auto",
   };
-  return (
-    <div aria-live="polite" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-      <p data-speaker={p.id} data-seq={e.seq} style={style}>
-        <strong>{p.name}:</strong> <SpeechText e={e} />
-      </p>
-    </div>
+  return live(
+    <p data-speaker={p.id} data-seq={e.seq} style={style}>
+      <strong>{p.name}:</strong> <SpeechText e={e} />
+    </p>,
   );
 }

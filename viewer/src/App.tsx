@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Arrows } from "./components/Arrows/Arrows";
 import { ChatLog } from "./components/ChatLog/ChatLog";
 import { Inspector } from "./components/Inspector/Inspector";
@@ -28,10 +28,10 @@ export interface GameProps {
 /** The composed game view. All state comes from the one scene; components only render. */
 export function Game({ events, labels, idx, mode, selected, onSelect, onSeqChange }: GameProps) {
   const scene = deriveScene(events, idx, mode);
-  // Table seats aren't buttons yet (#32); a click anywhere inside a seat card selects it.
-  const clickSeat = (e: MouseEvent) => {
-    const seat = (e.target as Element).closest("[data-seat]")?.getAttribute("data-seat");
-    if (seat) onSelect(seat);
+  // Closing the Inspector unmounts the focused element; send focus back to the seat it was opened for.
+  const select = (seat: string | null) => {
+    if (seat === null && selected) document.querySelector<HTMLElement>(`[data-seat="${selected}"] button`)?.focus();
+    onSelect(seat);
   };
 
   return (
@@ -42,9 +42,9 @@ export function Game({ events, labels, idx, mode, selected, onSelect, onSeqChang
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
         {/* One square box: Table sets the size, the overlays fill it and share seatPosition coordinates. */}
-        <div onClick={clickSeat} style={{ flex: "1 1 400px", maxWidth: 640 }}>
+        <div style={{ flex: "1 1 400px", maxWidth: 640 }}>
           <LabelPopups scene={scene} labels={labels} mode={mode}>
-            <Table scene={scene} />
+            <Table scene={scene} selected={selected} onSelect={select} />
             <Arrows scene={scene} />
             <Speech scene={scene} />
           </LabelPopups>
@@ -54,7 +54,7 @@ export function Game({ events, labels, idx, mode, selected, onSelect, onSeqChang
           <ChatLog scene={scene} />
         </div>
       </div>
-      <Inspector scene={scene} mode={mode} selected={selected} onSelect={onSelect} />
+      <Inspector scene={scene} mode={mode} selected={selected} onSelect={select} />
       <Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} />
     </>
   );
@@ -109,7 +109,7 @@ export default function App() {
     <main style={{ fontFamily: "system-ui, sans-serif", padding: 16, maxWidth: 1100 }}>
       <h1>SocietySim viewer</h1>
       <p>
-        <input type="file" accept=".jsonl" onChange={(e) => onFile(e.target.files?.[0])} /> or
+        <input type="file" accept=".jsonl" aria-label="Open a game log (.jsonl)" onChange={(e) => onFile(e.target.files?.[0])} /> or
         open with <code>?log=&lt;url&gt;</code>
         {log && (
           <>

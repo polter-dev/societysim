@@ -32,59 +32,90 @@ const SR_ONLY: CSSProperties = {
 
 const roleLabel = (role: string) => role[0].toUpperCase() + role.slice(1);
 
-function Seat({ p, i, n }: { p: PlayerView; i: number; n: number }) {
+interface SeatProps {
+  p: PlayerView;
+  i: number;
+  n: number;
+  selected: boolean;
+  onSelect?: (seat: string) => void;
+}
+
+function Seat({ p, i, n, selected, onSelect }: SeatProps) {
   const { x, y } = seatPosition(i, n);
-  const style: CSSProperties = {
+  const place: CSSProperties = {
     position: "absolute",
     left: `${x}%`,
     top: `${y}%`,
     transform: "translate(-50%, -50%)",
     width: "8.5em",
+  };
+  const card: CSSProperties = {
+    display: "block",
+    width: "100%",
     padding: "0.4em",
     borderRadius: 8,
     border: `3px solid ${p.color}`,
-    background: "inherit",
+    boxShadow: selected ? "0 0 0 3px currentColor" : undefined,
+    background: "transparent",
+    color: "inherit",
+    font: "inherit",
     textAlign: "center",
     lineHeight: 1.25,
-    opacity: p.alive ? 1 : 0.55,
+    cursor: "pointer",
+    // 0.7 keeps dead seats' text above WCAG AA contrast on both tints.
+    opacity: p.alive ? 1 : 0.7,
     filter: p.alive ? undefined : "grayscale(1)",
   };
+  // A button may only hold phrasing content, so the card's lines are block spans.
+  // Its accessible name is this text, so it can never say more than the card shows.
   return (
-    <li data-seat={p.id} data-alive={p.alive} data-revealed={p.revealed} style={style}>
-      <strong>{p.name}</strong>
-      <div style={{ fontSize: "0.8em" }}>
-        <span aria-hidden style={{ color: p.color }}>
-          ●
-        </span>{" "}
-        {p.model}
-      </div>
-      <div
-        data-role-card
-        style={{
-          marginTop: 4,
-          fontSize: "0.85em",
-          fontWeight: p.revealed ? 700 : 400,
-          border: "1px solid currentColor",
-          borderRadius: 4,
-        }}
-      >
-        {/* role is null whenever this mode may not know it; never guess. */}
-        {p.role ? (
-          roleLabel(p.role)
-        ) : (
-          <>
-            <span aria-hidden>?</span>
-            <span style={SR_ONLY}>role unknown</span>
-          </>
-        )}
-      </div>
-      {!p.alive && <div style={{ fontSize: "0.75em" }}>dead</div>}
+    <li data-seat={p.id} data-alive={p.alive} data-revealed={p.revealed} style={place}>
+      <button type="button" aria-pressed={selected} onClick={() => onSelect?.(p.id)} style={card}>
+        <strong style={{ display: "block" }}>{p.name}</strong>
+        <span style={{ display: "block", fontSize: "0.8em" }}>
+          <span aria-hidden style={{ color: p.color }}>
+            ●
+          </span>{" "}
+          {p.model}
+        </span>
+        <span
+          data-role-card
+          style={{
+            display: "block",
+            marginTop: 4,
+            fontSize: "0.85em",
+            fontWeight: p.revealed ? 700 : 400,
+            border: "1px solid currentColor",
+            borderRadius: 4,
+          }}
+        >
+          {/* role is null whenever this mode may not know it; never guess. */}
+          {p.role ? (
+            roleLabel(p.role)
+          ) : (
+            <>
+              <span aria-hidden>?</span>
+              <span style={SR_ONLY}>role unknown</span>
+            </>
+          )}
+        </span>
+        {!p.alive && <span style={{ display: "block", fontSize: "0.75em" }}>dead</span>}
+      </button>
     </li>
   );
 }
 
 /** The round table. Renders `scene` only; all game state comes from deriveScene. */
-export function Table({ scene }: { scene: Scene }) {
+export function Table({
+  scene,
+  selected = null,
+  onSelect,
+}: {
+  scene: Scene;
+  /** The seat open in the Inspector, shown pressed. */
+  selected?: string | null;
+  onSelect?: (seat: string) => void;
+}) {
   const tint = tintFor(scene.phase);
   const { felt, ...colors } = TINTS[tint];
   return (
@@ -99,7 +130,7 @@ export function Table({ scene }: { scene: Scene }) {
       />
       <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {scene.players.map((p, i) => (
-          <Seat key={p.id} p={p} i={i} n={scene.players.length} />
+          <Seat key={p.id} p={p} i={i} n={scene.players.length} selected={p.id === selected} onSelect={onSelect} />
         ))}
       </ul>
     </section>

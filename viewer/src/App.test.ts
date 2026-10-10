@@ -74,6 +74,19 @@ describe("App villager view", () => {
       expect(found.some((f) => f.startsWith(kind))).toBe(true);
   });
 
+  it("aria-labels and titles name no role before any role is public", () => {
+    // Screen readers read these out, so they count as rendered. The secrets scan above covers them too.
+    const ariaText = (html: string) => [...html.matchAll(/(?:aria-label|title)="([^"]*)"/g)].map((m) => m[1]).join("\n");
+    const roleWord = /\b(seer|doctor|wolf|wolves|villager)\b/i;
+    const firstReveal = events.findIndex((_, idx) => revealedAt(idx).size > 0);
+    expect(firstReveal).toBeGreaterThan(0);
+    for (let idx = 0; idx < firstReveal; idx++) {
+      for (const selected of [null, ...seats]) expect(ariaText(render(idx, "villager", selected))).not.toMatch(roleWord);
+    }
+    // The narrator view does put role words there, so this check can fail.
+    expect(ariaText(render(events.findIndex((e) => e.seq === 19), "narrator", "p5"))).toMatch(roleWord);
+  });
+
   it("renders every part of the composed view", () => {
     const idx = events.findIndex((e) => e.seq === 54); // the day 1 tie
     const html = render(idx, "villager", "p0");

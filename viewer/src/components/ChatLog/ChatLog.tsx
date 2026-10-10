@@ -30,11 +30,12 @@ export function ChatLog({ scene }: { scene: Scene }) {
   const byId = new Map(scene.players.map((p) => [p.id, p]));
 
   return (
-    <section ref={ref} aria-label="Chat log" style={{ maxHeight: "70vh", overflowY: "auto", padding: "0 0.5em" }}>
+    // tabIndex: a scrolling region must take focus so keyboard users can scroll it.
+    <section ref={ref} aria-label="Chat log" tabIndex={0} style={{ maxHeight: "70vh", overflowY: "auto", padding: "0 0.5em" }}>
       {groups.length === 0 && <p>No one has spoken yet.</p>}
       {groups.map((g) => (
         <section key={g.key} aria-label={g.title}>
-          <h3 style={{ position: "sticky", top: 0, margin: 0, padding: "0.25em 0", background: "inherit", fontSize: "0.9em" }}>
+          <h3 style={{ position: "sticky", top: 0, margin: 0, padding: "0.25em 0", background: "Canvas", fontSize: "0.9em", zIndex: 1 }}>
             {g.title}
           </h3>
           <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>

@@ -7,7 +7,8 @@ export function Tally({ scene }: { scene: Scene }) {
   );
   const name = (id: string) => scene.players.find((p) => p.id === id)?.name ?? id;
 
-  if (!result) return <section aria-label="Vote tally"><h2>Vote tally</h2><p>Votes pending reveal.</p></section>;
+  // Both states share one live section, so the reveal is announced when it replaces "pending".
+  if (!result) return <section aria-label="Vote tally" aria-live="polite"><h2>Vote tally</h2><p>Votes pending reveal.</p></section>;
 
   const abstains = scene.votes.filter((vote) => vote.target === null);
   const allAbstain = result.type === "no_elimination" && Object.values(scene.tally).every((n) => n === 0);
@@ -25,9 +26,9 @@ export function Tally({ scene }: { scene: Scene }) {
       {abstains.some((vote) => vote.fallback) && (
         <p>Forced abstain: {abstains.filter((vote) => vote.fallback).map((vote) => name(vote.actor)).join(", ")}</p>
       )}
-      {tie && <p role="status">Tie. No elimination.</p>}
-      {allAbstain && <p role="status">All abstained. No elimination.</p>}
-      {result.type === "elimination" && <p role="status">{name(result.target ?? "")} eliminated.</p>}
+      {tie && <p>Tie. No elimination.</p>}
+      {allAbstain && <p>All abstained. No elimination.</p>}
+      {result.type === "elimination" && <p>{name(result.target ?? "")} eliminated.</p>}
     </section>
   );
 }

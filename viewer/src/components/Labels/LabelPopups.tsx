@@ -45,47 +45,46 @@ export function LabelPopups({
   return (
     <div style={{ position: "relative", width: "100%", maxWidth: 640 }}>
       {children}
-      {shown.length > 0 && (
-        <div aria-live="polite" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-          {shown.map((l, k) => {
-            const i = scene.players.findIndex((p) => p.id === l.actor);
-            const { x, y } = i < 0 ? { x: 50, y: 50 } : seatPosition(i, n);
-            // Pop toward the table center so it stays inside the box; stack same-seat popups.
-            const style: CSSProperties = {
-              position: "absolute",
-              left: `${x}%`,
-              top: `${y}%`,
-              transform: `translate(-50%, ${y < 50 ? "35%" : "-135%"}) translateY(${k * 8}px)`,
-              width: "15em",
-              padding: "0.5em 0.7em",
-              borderRadius: 8,
-              background: "#fffbe6",
-              color: "#1c1c1c",
-              border: "2px solid #c2410c",
-              boxShadow: "0 2px 8px rgba(0,0,0,.35)",
-              fontSize: "0.8em",
-              lineHeight: 1.3,
-              pointerEvents: "auto",
-            };
-            return (
-              <aside
-                key={`${l.label}-${l.source}-${l.actor}-${k}`}
-                role="note"
-                data-label-for={l.actor}
-                data-label-type={l.label}
-                data-label-source={l.source}
-                style={style}
-              >
-                <strong>{pretty(l.label)}</strong> · {l.actor}
-                <div>
-                  {pretty(l.source)} · {Math.round(l.confidence * 100)}% confidence
-                </div>
-                <div>{l.detail}</div>
-              </aside>
-            );
-          })}
-        </div>
-      )}
+      {/* Always mounted, even empty: screen readers miss live regions that appear with their content. */}
+      <div aria-live="polite" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+        {shown.map((l, k) => {
+          const i = scene.players.findIndex((p) => p.id === l.actor);
+          const { x, y } = i < 0 ? { x: 50, y: 50 } : seatPosition(i, n);
+          // Pop toward the table center so it stays inside the box; stack same-seat popups.
+          const style: CSSProperties = {
+            position: "absolute",
+            left: `${x}%`,
+            top: `${y}%`,
+            transform: `translate(-50%, ${y < 50 ? "35%" : "-135%"}) translateY(${k * 8}px)`,
+            width: "15em",
+            padding: "0.5em 0.7em",
+            borderRadius: 8,
+            background: "#fffbe6",
+            color: "#1c1c1c",
+            border: "2px solid #c2410c",
+            boxShadow: "0 2px 8px rgba(0,0,0,.35)",
+            fontSize: "0.8em",
+            lineHeight: 1.3,
+            pointerEvents: "auto",
+          };
+          return (
+            <aside
+              key={`${l.label}-${l.source}-${l.actor}-${k}`}
+              role="note"
+              data-label-for={l.actor}
+              data-label-type={l.label}
+              data-label-source={l.source}
+              style={style}
+            >
+              <strong>{pretty(l.label)}</strong> · {l.actor}
+              <div>
+                {pretty(l.source)} · {Math.round(l.confidence * 100)}% confidence
+              </div>
+              <div>{l.detail}</div>
+            </aside>
+          );
+        })}
+      </div>
     </div>
   );
 }

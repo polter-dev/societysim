@@ -27,11 +27,18 @@ describe("Speech bubble on the fixture", () => {
   });
 
   it("is empty outside discussion and never shows wolf chat", () => {
-    expect(render(43, "narrator")).toBe(""); // vote phase_start clears the speaker
+    const empty = '<div aria-live="polite" style="position:absolute;inset:0;pointer-events:none"></div>';
+    expect(render(43, "narrator")).toBe(empty); // vote phase_start clears the speaker
     for (const idx of [2, 4, 6, 8]) {
-      expect(render(idx, "narrator")).toBe(""); // wolf_chat is not a statement
-      expect(render(idx, "villager")).toBe("");
+      expect(render(idx, "narrator")).toBe(empty); // wolf_chat is not a statement
+      expect(render(idx, "villager")).toBe(empty);
     }
+  });
+
+  it("keeps the same live region mounted with and without a bubble", () => {
+    const region = (html: string) => html.slice(0, html.indexOf(">") + 1);
+    expect(region(render(15, "villager"))).toBe(region(render(43, "villager")));
+    expect(region(render(15, "villager"))).toContain('aria-live="polite"');
   });
 
   it("never shows private reasoning", () => {

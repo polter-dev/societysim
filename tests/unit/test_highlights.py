@@ -29,6 +29,20 @@ def edit(g: GameData, seq: int, **update) -> None:
     g.events[seq] = g.events[seq].model_copy(update=update)
 
 
+def renumbered(g: GameData) -> GameData:
+    """Same game with seq = 2 * position + 1: starts at 1, has gaps, never equals the position."""
+
+    def f(q):
+        return None if q is None else 2 * q + 1
+
+    events = []
+    for e in g.events:
+        meta = e.meta.model_copy(update={"statement_seq": f(e.meta.statement_seq)})
+        events.append(e.model_copy(update={"seq": f(e.seq), "meta": meta}))
+    labels = [lb.model_copy(update={"source_seq": f(lb.source_seq)}) for lb in g.labels]
+    return GameData(events, labels)
+
+
 def kinds(moments):
     return [(m["type"], m["actor"], m["seq"][0]) for m in moments]
 
@@ -54,6 +68,21 @@ def test_fixture_moments_and_order():
     )
     assert "2/4 village voters followed" in top["description"]
     assert top["link"] == "?game=fixture-0001&seq=70&mode=narrator"
+
+
+def test_highlights_use_seq_as_an_id_not_a_list_position():
+    g = game()
+    shifted = renumbered(g)
+    assert shifted.events[5].seq != 5
+    want = find_highlights([g])
+    got = find_highlights([shifted])  # used to raise IndexError, or read the wrong events
+    assert len(got) == len(want) == 6
+    for w, m in zip(want, got, strict=True):
+        assert m["seq"] == [2 * q + 1 for q in w["seq"]]
+        assert m["link"] == f"?game=fixture-0001&seq={m['seq'][0]}&mode=narrator"
+        assert {k: v for k, v in m.items() if k not in ("seq", "link")} == {
+            k: v for k, v in w.items() if k not in ("seq", "link")
+        }
 
 
 def test_lie_without_followers_is_not_a_moment():

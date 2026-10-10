@@ -92,6 +92,7 @@ def _name(g: GameData, seat: str | None, role: str = "") -> str:
 
 def lie_moments(g: GameData) -> list[dict]:
     out: dict[tuple, dict] = {}
+    by_seq = g.by_seq
     for lb in g.labels:
         if lb.source not in ("self_tag", "jev") or lb.label not in SUCCESS_TYPES:
             continue
@@ -101,7 +102,7 @@ def lie_moments(g: GameData) -> list[dict]:
         r = lie_success(g, lb)
         expected = r["base_followed"] / r["base_voters"] * r["voters"] if r["base_voters"] else 0
         score = r["followed"] + r["moved"] - expected
-        src = g.events[lb.source_seq]
+        src = by_seq[lb.source_seq]
         end = _day_end(g, src.day)
         if not r["followed"] or score <= 0 or end is None:
             continue
@@ -125,11 +126,11 @@ def lie_moments(g: GameData) -> list[dict]:
 
 
 def wolf_survival_moments(g: GameData) -> list[dict]:
-    roles, out = g.roles, []
+    roles, out, by_seq = g.roles, [], g.by_seq
     first_lie: dict[tuple[str, int], int] = {}
     for lb in g.labels:
         if lb.source in ("self_tag", "jev") and roles.get(lb.actor) is Role.WOLF:
-            k = (lb.actor, g.events[lb.source_seq].day)
+            k = (lb.actor, by_seq[lb.source_seq].day)
             first_lie[k] = min(first_lie.get(k, lb.source_seq), lb.source_seq)
     for (wolf, day), seq in sorted(first_lie.items()):
         end = _day_end(g, day)
@@ -161,8 +162,8 @@ def role_action_moments(g: GameData) -> list[dict]:
             elim = next(
                 (
                     x
-                    for x in g.events[e.seq :]
-                    if x.type is EventType.ELIMINATION and x.target == e.target
+                    for x in g.events
+                    if x.seq > e.seq and x.type is EventType.ELIMINATION and x.target == e.target
                 ),
                 None,
             )

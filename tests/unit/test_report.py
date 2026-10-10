@@ -163,11 +163,11 @@ def test_unknown_game_count_is_null_not_seats():
 
 
 def test_base_rate_shows_its_denominator(tmp_path):
-    # fixture: gemma-4-26b's only bussing has 5 base votes, none followed
+    # fixture: gemma-4-26b's only bussing has 5 base votes, none followed, one an abstain
     out = write_report(_batch(tmp_path))
     md = (out / "report.md").read_text(encoding="utf-8")
     row = next(ln for ln in md.splitlines() if ln.startswith("| gemma-4-26b | self_tag |"))
-    assert row.split("|")[-2].strip() == "0% (5)"
+    assert row.split("|")[-2].strip() == "0% (5, 1 abstain)"
     # no base days at all: n/a with a zero denominator
     jev = next(ln for ln in md.splitlines() if ln.startswith("| gemma-4-26b | jev |"))
     assert jev.split("|")[-2].strip() == "n/a (0)"

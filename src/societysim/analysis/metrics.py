@@ -44,7 +44,15 @@ SUCCESS_TYPES = (LabelType.FALSE_ROLE_CLAIM, LabelType.FALSE_REPORT, LabelType.B
 EXPLORATORY = ("lie_success", "persuasion")
 SIDES = ("wolf", "village")
 SOURCES = ("self_tag", "jev")
-LS_KEYS = ("comparisons", "moved", "voters", "followed", "base_voters", "base_followed")
+LS_KEYS = (
+    "comparisons",
+    "moved",
+    "voters",
+    "followed",
+    "base_voters",
+    "base_followed",
+    "base_abstained",
+)
 WOLF_SIDE = "wolf_side"
 
 
@@ -164,7 +172,7 @@ def _dead_before(events: list[Event], seq: int) -> set[str]:
     return {e.target for e in events[:seq] if e.type in deaths and e.target}
 
 
-def lie_success(game: GameData, label: Label) -> dict:
+def lie_success(game: GameData, label: Label, seen_base: set | None = None) -> dict:
     """Did other living non-wolves' suspicion move the liar's way between the lie and their vote?
 
     Subject: the liar (false_role_claim / false_report: success = suspicion dropped) or the
@@ -177,7 +185,10 @@ def lie_success(game: GameData, label: Label) -> dict:
 
     Base rate: the same vote rule, same voters (non-wolves other than the liar), on the game's
     other vote days that have no label of this type from this actor and source and where
-    every player the rule names is still alive.
+    every player the rule names is still alive. A base vote is counted once per (liar, lie type,
+    source, day, voter): pass the same `seen_base` set for every label of a game and later labels
+    of the same liar, type and source skip the votes an earlier one already counted. Abstains are
+    in the base and never follow; `base_abstained` says how many.
     """
     if label.label not in SUCCESS_TYPES:
         raise ValueError(f"no lie success for {label.label}")
@@ -233,8 +244,14 @@ def lie_success(game: GameData, label: Label) -> dict:
             continue
         for v in votes:
             if v.day == day and v.actor not in wolves and v.actor != liar:
+                key = (liar, label.label, label.source, day, v.actor)
+                if seen_base is not None:
+                    if key in seen_base:
+                        continue
+                    seen_base.add(key)
                 out["base_voters"] += 1
                 out["base_followed"] += follows(v.target)
+                out["base_abstained"] += v.target is None
     return out
 
 
@@ -290,13 +307,14 @@ def game_rows(game: GameData) -> dict[str, Row]:
         rows[actor].pers_voters += len(others)
         rows[actor].pers_hits += sum(v.target in targets for v in others)
 
+    seen_base: set = set()
     for lb in game.labels:
         if lb.source not in SOURCES or lb.label not in LIE_TYPES:
             continue
         row = rows[lb.actor]
         row.lies[(lb.source, lb.label.value)] += 1
         if lb.label in SUCCESS_TYPES:
-            for k, n in lie_success(game, lb).items():
+            for k, n in lie_success(game, lb, seen_base).items():
                 row.lie_success[(lb.source, k)] += n
     return rows
 

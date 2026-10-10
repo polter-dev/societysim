@@ -236,7 +236,8 @@ def render_markdown(metrics: dict, board: dict, present: set[str] | None = None)
         "Exploratory: this reads correlation, not cause. 'Moved' is the share of observer "
         "suspicions that shifted the way the liar wanted. 'Voted as lie implied' is read against "
         "the base rate of the same vote when no lie was told. Counts in brackets are the "
-        "denominators; a base rate on a handful of votes means little.",
+        "denominators; a base rate on a handful of votes means little. Abstains count in the base "
+        "and never follow the lie; where the base has any, the bracket shows how many.",
         "",
     ]
     head = ["Model", "Source", "Moved", "Voted as lie implied", "No-lie base rate"]
@@ -244,13 +245,15 @@ def render_markdown(metrics: dict, board: dict, present: set[str] | None = None)
     for m in metrics["models"]:
         for s in LABEL_SOURCES:
             ls = metrics["models"][m]["all"]["lies"][s]["lie_success"]
+            abst = ls["base_abstained"]
+            base_n = f"{ls['base_voters']}, {abst} abstain" if abst else f"{ls['base_voters']}"
             rows.append(
                 [
                     m,
                     s,
                     f"{_pct(ls['share_moved'])} ({ls['comparisons']})",
                     f"{_pct(ls['share_followed'])} ({ls['voters']})",
-                    f"{_pct(ls['base_rate'])} ({ls['base_voters']})",
+                    f"{_pct(ls['base_rate'])} ({base_n})",
                 ]
             )
     lines += _table(head, rows)

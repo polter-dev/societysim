@@ -123,6 +123,7 @@ def test_lie_success_false_role_claim(game):
         "followed": 4,
         "base_voters": 4,
         "base_followed": 2,
+        "base_abstained": 0,
     }
 
 
@@ -134,7 +135,44 @@ def test_base_rate_zero_when_the_only_base_day_is_all_abstains(game):
         for e in game.events
     ]
     r = lie_success(GameData(events, game.labels), _label(game, LabelType.FALSE_ROLE_CLAIM))
-    assert (r["base_voters"], r["base_followed"]) == (4, 0)
+    assert (r["base_voters"], r["base_followed"], r["base_abstained"]) == (4, 0, 4)
+
+
+def _second_role_claim(game):
+    # a second false_role_claim by the same liar (p5) on day 1, a later statement
+    first = _label(game, LabelType.FALSE_ROLE_CLAIM)
+    return first, first.model_copy(update={"source_seq": first.source_seq + 1})
+
+
+def test_base_voters_are_counted_once_per_liar_type_source_day_voter(game):
+    first, second = _second_role_claim(game)
+    two = GameData(game.events, [first, second])
+    seen: set = set()
+    a, b = lie_success(two, first, seen), lie_success(two, second, seen)
+    assert a["base_voters"] == 4 and b["base_voters"] == 0
+    # without the shared set each label counts the same four voters again
+    assert lie_success(two, second)["base_voters"] == 4
+
+
+def test_two_labels_of_one_type_do_not_double_the_base(game):
+    first, second = _second_role_claim(game)
+    one = compute_metrics([GameData(game.events, [first])])
+    two = compute_metrics([GameData(game.events, [first, second])])
+
+    def base(m):
+        ls = _self(m["models"]["gemini-flash"]["all"])["lie_success"]
+        return ls["base_voters"], ls["base_followed"]
+
+    assert base(one) == base(two) == (4, 2)
+
+
+def test_other_lie_types_and_sources_keep_their_own_base(game):
+    first, _ = _second_role_claim(game)
+    other_source = first.model_copy(update={"source": "jev"})
+    both = GameData(game.events, [first, other_source])
+    seen: set = set()
+    a, b = lie_success(both, first, seen), lie_success(both, other_source, seen)
+    assert a["base_voters"] == b["base_voters"] == 4
 
 
 def test_lie_success_false_report_follows_reported_target(game):
@@ -148,6 +186,7 @@ def test_lie_success_false_report_follows_reported_target(game):
         "followed": 1,
         "base_voters": 0,
         "base_followed": 0,
+        "base_abstained": 0,
     }
 
 
@@ -163,6 +202,7 @@ def test_lie_success_bussing(game):
         "followed": 2,
         "base_voters": 5,
         "base_followed": 0,
+        "base_abstained": 1,
     }
 
 

@@ -155,3 +155,18 @@ def test_devui_config_skipped_when_key_missing(tmp_path):
     r = _run(tmp_path, "--out", str(out), str(batch), extra=extra)
     assert r.returncode == 0, r.stderr
     assert not (out / "devui/config.json").exists()
+
+
+def test_devui_config_carries_auth_url(tmp_path):
+    batch = _batch(tmp_path)
+    out = tmp_path / "site"
+    extra = {
+        "VITE_NEON_DATA_API_URL": "https://db.example/rest/v1",
+        "VITE_NEON_AUTH_URL": "https://auth.example/neondb/auth",
+    }
+    r = _run(tmp_path, "--out", str(out), str(batch), extra=extra)
+    assert r.returncode == 0, r.stderr
+    assert json.loads((out / "devui/config.json").read_text()) == {
+        "neon_url": "https://db.example/rest/v1",
+        "auth_url": "https://auth.example/neondb/auth",
+    }

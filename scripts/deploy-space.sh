@@ -13,14 +13,15 @@
 #
 # --out writes the staged site (viewer build plus data/) to <dir> and stops: no upload, no
 # HF_TOKEN, no space id. <dir> must be empty or missing unless --force. Preview it with
-# `python -m http.server -d <dir> 8000`. The build reads VITE_NEON_DATA_API_URL and
-# VITE_NEON_ANON_KEY from the environment; the output says which data source it uses.
+# `python -m http.server -d <dir> 8000`. The build reads VITE_NEON_DATA_API_URL,
+# VITE_NEON_AUTH_URL and VITE_NEON_ANON_KEY (optional, expires) from the environment; the output says which data source it uses.
 #
 # HF_TOKEN must be set in the environment (write access to the Space). It is read by
 # huggingface_hub directly and never printed or passed on a command line.
 #
-# The site also gets devui/ (a plain test page, see devui/README.md) at /devui/. If both Neon
-# vars are set, devui/config.json carries the URL and anon key so that page can auto-fill them.
+# The site also gets devui/ (a plain test page, see devui/README.md) at /devui/. If the Neon
+# URL and the auth URL (or an anon key) are set, devui/config.json carries them so that page can
+# auto-fill its fields.
 #
 # Test hooks: SOCIETYSIM_SKIP_VIEWER_BUILD=1 skips npm and copies SOCIETYSIM_VIEWER_DIST
 # (default viewer/dist) as is.
@@ -87,8 +88,8 @@ if [[ -n "${VITE_NEON_DATA_API_URL:-}" ]]; then
 else
   echo "data source: static data/report/index.json"
 fi
-if [[ -z "${VITE_NEON_DATA_API_URL:-}" || -z "${VITE_NEON_ANON_KEY:-}" ]]; then
-  echo "::notice::VITE_NEON_DATA_API_URL and/or VITE_NEON_ANON_KEY unset: no devui/config.json; the viewer uses static data unless the URL is set."
+if [[ -z "${VITE_NEON_DATA_API_URL:-}" || ( -z "${VITE_NEON_AUTH_URL:-}" && -z "${VITE_NEON_ANON_KEY:-}" ) ]]; then
+  echo "::notice::VITE_NEON_DATA_API_URL and/or VITE_NEON_AUTH_URL unset: no devui/config.json; the viewer uses static data unless the URL is set."
 fi
 
 if [[ -n "$out" ]]; then
@@ -107,10 +108,10 @@ mkdir -p "$stage/data"
 mkdir -p "$stage/devui/schema"
 cp "$root/devui/index.html" "$stage/devui/"
 cp "$root"/schema/*.schema.json "$stage/devui/schema/"
-# With both Neon build vars set, the dev page pre-fills its Neon fields from devui/config.json.
-# Only the Data API URL and the public read-only anon key go in; never the database URL.
-if [[ -n "${VITE_NEON_DATA_API_URL:-}" && -n "${VITE_NEON_ANON_KEY:-}" ]]; then
-  python3 -c 'import json,os; print(json.dumps({"neon_url": os.environ["VITE_NEON_DATA_API_URL"], "neon_anon_key": os.environ["VITE_NEON_ANON_KEY"]}))' >"$stage/devui/config.json"
+# With the Neon URL and the auth URL (or an anon key) set, the dev page pre-fills its Neon fields
+# from devui/config.json. Only public values go in; never the database URL.
+if [[ -n "${VITE_NEON_DATA_API_URL:-}" && ( -n "${VITE_NEON_AUTH_URL:-}" || -n "${VITE_NEON_ANON_KEY:-}" ) ]]; then
+  python3 -c 'import json,os; e=os.environ; print(json.dumps({k: e[v] for k, v in (("neon_url", "VITE_NEON_DATA_API_URL"), ("auth_url", "VITE_NEON_AUTH_URL"), ("neon_anon_key", "VITE_NEON_ANON_KEY")) if e.get(v)}))' >"$stage/devui/config.json"
 fi
 cat >"$stage/README.md" <<'EOF'
 ---

@@ -34,9 +34,10 @@
   <br>
   <label><input type="radio" name="mode" value="neon"> Neon Data API</label>
   <label>url <input type="text" id="neon" placeholder="https://.../rest/v1"></label>
-  <label>anon key (optional) <input type="password" id="key" autocomplete="off"></label>
+  <label>auth url <input type="text" id="auth" placeholder="https://.../neondb/auth"></label>
+  <label>token override (optional) <input type="password" id="key" autocomplete="off"></label>
   <button id="load">Load</button>
-  <div class="muted">URL params: ?base=, ?schemas=, ?neon=, ?key=. Keys are never stored.</div>
+  <div class="muted">URL params: ?base=, ?schemas=, ?neon=, ?auth=, ?key=. Keys are never stored.</div>
 </fieldset>
 
 <div id="status" class="muted"></div>
@@ -52,6 +53,7 @@ const qs = new URLSearchParams(location.search);
 if (qs.get("base")) $("base").value = qs.get("base");
 if (qs.get("schemas")) $("schemas").value = qs.get("schemas");
 if (qs.get("neon")) { $("neon").value = qs.get("neon"); document.querySelector("input[value=neon]").checked = true; }
+if (qs.get("auth")) $("auth").value = qs.get("auth");
 if (qs.get("key")) $("key").value = qs.get("key");
 
 function el(tag, props, ...kids) {
@@ -299,11 +301,29 @@ async function openGame(entry, base) {
 }
 
 // ---- Neon mode
+// Anonymous JWT from Neon Auth: GET <auth>/token/anonymous -> {token, expires_at}. Cached in memory,
+// refreshed 60 s before expiry, or on a 400/401. The token is never logged or stored.
+let anon = null;
+async function anonToken(force) {
+  const auth = $("auth").value.replace(/\/+$/, "");
+  if (!auth) return null;
+  if (!force && anon && anon.auth === auth && Date.parse(anon.exp) - 60000 > Date.now()) return anon.token;
+  const r = await fetch(`${auth}/token/anonymous`);
+  if (!r.ok) throw new Error(`anonymous token: HTTP ${r.status}`);
+  const j = await r.json();
+  anon = { auth, token: j.token, exp: j.expires_at };
+  return anon.token;
+}
+async function neonFetch(url, force) {
+  const tok = $("key").value || (await anonToken(force));
+  const r = await fetch(url, { headers: tok ? { Authorization: `Bearer ${tok}` } : {} });
+  if ((r.status === 400 || r.status === 401) && !force && !$("key").value && $("auth").value) return neonFetch(url, true);
+  return r;
+}
 async function loadNeon() {
   const base = $("neon").value.replace(/\/+$/, "");
-  const headers = $("key").value ? { Authorization: `Bearer ${$("key").value}` } : {};
   const q = async (name, query) => {
-    const r = await fetch(`${base}/${name}?${query}`, { headers });
+    const r = await neonFetch(`${base}/${name}?${query}`);
     if (!r.ok) throw new Error(`${name}: HTTP ${r.status}`);
     const rows = await r.json();
     section(`${name} (${rows.length})`, rows.length ? table(rows) : el("div", { className: "muted", textContent: "no rows" }));
@@ -340,6 +360,7 @@ $("load").onclick = load;
 // config.json (written by scripts/deploy-space.sh when the Neon build vars are set) fills the Neon fields.
 fetch("config.json").then((r) => (r.ok ? r.json() : {})).catch(() => ({})).then((c) => {
   if (c.neon_url && !$("neon").value) $("neon").value = c.neon_url;
+  if (c.auth_url && !$("auth").value) $("auth").value = c.auth_url;
   if (c.neon_anon_key && !$("key").value) $("key").value = c.neon_anon_key;
   load();
 });

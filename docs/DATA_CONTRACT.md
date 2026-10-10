@@ -290,9 +290,14 @@ files.
 
 ## Neon Data API
 
-- Base URL: `VITE_NEON_DATA_API_URL` (PostgREST). Requests without an `Authorization` header
-  run as the read-only `anonymous` role; `VITE_NEON_ANON_KEY`, if set, is sent as
-  `Authorization: Bearer <key>`.
+- Base URL: `VITE_NEON_DATA_API_URL` (PostgREST). Every request needs a JWT; without an
+  `Authorization` header the API answers 400.
+- Auth: `GET <VITE_NEON_AUTH_URL>/token/anonymous` returns `{"token": "<jwt>", "expires_at": "<ISO 8601>"}`
+  for the read-only `anonymous` role. It is valid about 1 h. Send it as `Authorization: Bearer <token>`.
+  Cache it and fetch a new one shortly before `expires_at`, or after a 400 or 401 (retry once). Never
+  log it. `VITE_NEON_ANON_KEY` (a pinned JWT) is optional and not recommended: it expires.
+- Env vars (public repo variables): `VITE_NEON_DATA_API_URL`, `VITE_NEON_AUTH_URL`, optional
+  `VITE_NEON_ANON_KEY`. Never `NEON_DATABASE_URL`.
 - Grants to `anonymous` (`neon/schema.sql`): `usage` on schema `public`; `select` on `games`,
   `events`, `labels`, `leaderboard`, `leaderboard_by_batch`, `lies_by_model`. No writes.
 - Produced by: `NeonSink` during `societysim batch --neon` / `play --neon` (live, game by

@@ -93,3 +93,9 @@ def test_live_columns_match_doc():
         live.setdefault(r["table_name"], []).append((r["column_name"], r["data_type"]))
     for name in (*TABLES, *VIEWS):
         assert live.get(name) == doc_columns(name), name
+
+
+def test_doc_describes_anonymous_token_flow():
+    assert "/token/anonymous" in DOC
+    assert "VITE_NEON_AUTH_URL" in DOC
+    assert "expires_at" in DOC

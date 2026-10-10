@@ -118,4 +118,4 @@ class BatchConfig(_Config):
 
 def load_yaml[T: BaseModel](path: str | Path, model: type[T]) -> T:
     """Load a YAML file into any config model, e.g. load_yaml("configs/x.yaml", BatchConfig)."""
-    return model.model_validate(yaml.safe_load(Path(path).read_text()) or {})
+    return model.model_validate(yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {})

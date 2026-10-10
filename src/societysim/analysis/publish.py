@@ -26,7 +26,7 @@ LICENSE = "cc-by-4.0"
 def _read_labels(path: Path) -> list[Label]:
     if not path.is_file():
         return []
-    return [Label.model_validate_json(line) for line in path.read_text().splitlines() if line]
+    return [Label.model_validate_json(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
 
 
 def _events_table(events) -> pa.Table:

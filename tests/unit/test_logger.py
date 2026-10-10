@@ -1,4 +1,5 @@
 import asyncio
+import io
 import json
 import logging
 from pathlib import Path
@@ -110,3 +111,70 @@ async def test_zero_sinks_lifecycle():
     assert logger.log(**EV).seq == 0
     await logger.end_game(None)
     await logger.close()
+
+
+TEXT = "p3 is a non‑committal wolf \U0001f43a, trust me — café"
+SAY = dict(t=1, day=1, phase="day", type="statement", visibility="public", actor="p3")
+
+
+def _cp1252_default(monkeypatch):
+    """Make every pathlib open without an explicit encoding use cp1252, as on Windows."""
+    real = io.text_encoding
+    monkeypatch.setattr(io, "text_encoding", lambda enc, *a: "cp1252" if enc is None else real(enc))
+
+
+async def test_jsonl_round_trips_non_ascii_under_cp1252_default(tmp_path, monkeypatch):
+    _cp1252_default(monkeypatch)
+    try:  # the simulation bites: an unencoded write of this text fails like on Windows
+        (tmp_path / "probe.txt").write_text(TEXT)
+        raise AssertionError("cp1252 default not in effect")
+    except UnicodeEncodeError:
+        pass
+    sink = JsonlSink("b1", tmp_path)
+    logger = EventLogger("g1", [sink])
+    await logger.start_game({"note": TEXT}, seed=1, models=["m"])
+    logger.log(**EV)
+    logger.log(**SAY, public_text=TEXT, private_reasoning=TEXT)
+    logger.log(**SAY, public_text="plain")
+    await logger.end_game(None)
+    await logger.close()
+
+    raw = (tmp_path / "b1/g1.jsonl").read_bytes()
+    assert b"\r\n" not in raw
+    assert TEXT.encode("utf-8") in raw  # raw UTF-8, not \u escapes: what the viewer reads
+    lines = [json.loads(x) for x in raw.decode("utf-8").splitlines()]
+    assert [x["seq"] for x in lines] == [0, 1, 2]
+    assert lines[1]["public_text"] == TEXT and lines[1]["private_reasoning"] == TEXT
+    for x in lines:
+        Draft202012Validator(SCHEMA).validate(x)
+    meta = json.loads((tmp_path / "b1/g1.run_meta.json").read_text(encoding="utf-8"))
+    assert meta["config"] == {"note": TEXT} and meta["write_errors"] == 0
+    assert sink.write_errors == 0
+
+
+async def test_jsonl_failed_write_is_logged_and_counted(tmp_path, caplog):
+    sink = JsonlSink("b1", tmp_path)
+    logger = EventLogger("g1", [sink])
+    await logger.start_game({}, seed=1, models=["m"])
+    logger.log(**EV)
+    while sink._f is None:  # let the worker open the file
+        await asyncio.sleep(0)
+    real_write = sink._f.write
+
+    def flaky(s):
+        if '"seq":1,' in s:
+            raise UnicodeEncodeError("charmap", "‑", 0, 1, "character maps to <undefined>")
+        return real_write(s)
+
+    sink._f.write = flaky
+    with caplog.at_level(logging.ERROR):
+        logger.log(**SAY, public_text=TEXT)
+        logger.log(**SAY, public_text="after")
+        await logger.end_game(None)
+        await logger.close()
+    assert "seq 1" in caplog.text and "NOT written" in caplog.text
+    assert sink.write_errors == 1
+    meta = json.loads((tmp_path / "b1/g1.run_meta.json").read_text(encoding="utf-8"))
+    assert meta["write_errors"] == 1 and meta["seed"] == 1
+    lines = (tmp_path / "b1/g1.jsonl").read_text(encoding="utf-8").splitlines()
+    assert [json.loads(x)["seq"] for x in lines] == [0, 2]  # the hole is visible, not hidden

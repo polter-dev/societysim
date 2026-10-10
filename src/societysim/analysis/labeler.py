@@ -260,7 +260,7 @@ def format_table(table: dict[str, dict]) -> str:
 def read_log(path: Path) -> list[Event]:
     """Parse a game log. An unparseable final line (a hard kill mid-write) is dropped with a
     warning; a bad line anywhere else raises."""
-    lines = [line for line in path.read_text().splitlines() if line]
+    lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line]
     events = []
     for i, line in enumerate(lines):
         try:
@@ -275,7 +275,7 @@ def read_log(path: Path) -> list[Event]:
 def _scripted(log: Path) -> bool:
     """True if the game's run_meta.json is tagged agents=scripted (older logs have no tag)."""
     try:
-        meta = json.loads(log.with_name(f"{log.stem}.run_meta.json").read_text())
+        meta = json.loads(log.with_name(f"{log.stem}.run_meta.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
     return isinstance(meta, dict) and meta.get("agents") == "scripted"
@@ -316,13 +316,13 @@ def label_batch(
         jev = jev_for(events) if use_jev else None
         labels = label_game(events, jev)
         out = path.with_name(f"{events[0].game_id}.labels.jsonl")
-        out.write_text("".join(lb.model_dump_json() + "\n" for lb in labels))
+        out.write_text("".join(lb.model_dump_json() + "\n" for lb in labels), encoding="utf-8")
         for name, c in (agreement(events, labels, jev) if jev is not None else {}).items():
             totals.setdefault(name, Counter()).update(c)
     print(f"labelled {games} games in {batch_dir}")
     if jev_for is None:
         return None
     table = _table(totals)
-    (batch_dir / "agreement.json").write_text(json.dumps(table, indent=2) + "\n")
+    (batch_dir / "agreement.json").write_text(json.dumps(table, indent=2) + "\n", encoding="utf-8")
     print(format_table(table))
     return table

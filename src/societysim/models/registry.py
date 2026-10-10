@@ -75,7 +75,7 @@ class Registry(BaseModel):
 
 
 def load_registry(path: str | Path = DEFAULT_PATH) -> Registry:
-    return Registry.model_validate(yaml.safe_load(Path(path).read_text()) or {})
+    return Registry.model_validate(yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {})
 
 
 # --- served-model preflight -----------------------------------------------------------------

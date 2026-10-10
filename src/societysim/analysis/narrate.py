@@ -151,7 +151,7 @@ def narrate(
         | {s: seat_voice(s) for s in sorted({c["speaker"] for c in clips} - {"narrator"})},
         "clips": clips,
     }
-    (out / "index.json").write_text(json.dumps(index, indent=2) + "\n")
+    (out / "index.json").write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
     return index
 
 

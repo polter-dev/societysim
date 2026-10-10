@@ -140,7 +140,7 @@ async def _post(client: httpx.AsyncClient, body: dict[str, Any], tries: int = 4)
 
 async def classify_game(log_path: Path, **kwargs: Any) -> list[JevResult]:
     """Classify every statement in a game log file. See `classify_events`."""
-    lines = log_path.read_text().splitlines()
+    lines = log_path.read_text(encoding="utf-8").splitlines()
     return await classify_events([Event.model_validate_json(x) for x in lines if x], **kwargs)
 
 
@@ -164,14 +164,14 @@ async def classify_events(
     async def one(stmt: Event) -> JevResult:
         path = cache_dir / stmt.game_id / f"{stmt.seq}.json"
         if path.exists():
-            return parse_response(stmt, json.loads(path.read_text()))
+            return parse_response(stmt, json.loads(path.read_text(encoding="utf-8")))
         if client is None and not key:
             raise RuntimeError(f"TYPESAFE_API_KEY is not set and {path} is not cached")
         async with sem:
             data = await _post(http, build_request(stmt, names))
         result = parse_response(stmt, data)  # a malformed response raises and is not cached
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data))
+        path.write_text(json.dumps(data), encoding="utf-8")
         return result
 
     try:

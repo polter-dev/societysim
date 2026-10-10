@@ -61,6 +61,7 @@ uv run societysim report runs/<batch_id>                    # report/
 uv run societysim highlights runs/<batch_id>                # highlights.json
 uv run python -m societysim.analysis.narrate runs/<batch_id>/<game_id>.jsonl  # <game_id>.audio/ (paid, ElevenLabs)
 scripts/deploy-space.sh runs/<batch_id> <owner/space>       # deploy viewer + data/
+scripts/deploy-space.sh --out <dir> runs/<batch_id>         # same layout, staged locally
 ```
 
 ## Deployed layout

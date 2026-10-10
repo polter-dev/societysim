@@ -31,6 +31,9 @@ leaderboard.json (read by the viewer, T4.9 and T6.2):
     }
 
 index.json: a list of {game_id, file, seed, days, winner, seats: {seat: {name, model, role}}}.
+
+The contract for these files (and the models below that generate schema/*.schema.json) is
+docs/DATA_CONTRACT.md.
 """
 
 import json

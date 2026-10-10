@@ -3,6 +3,7 @@
 import asyncio
 import os
 import sys
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
@@ -10,6 +11,11 @@ import typer
 from dotenv import load_dotenv
 
 app = typer.Typer(no_args_is_help=True, help="societysim: LLM Werewolf research harness")
+
+
+class AgentMode(StrEnum):
+    SCRIPTED = "scripted"
+    LLM = "llm"
 
 
 @app.callback()
@@ -23,6 +29,63 @@ def version() -> None:
     from societysim import __version__
 
     typer.echo(__version__)
+
+
+@app.command()
+def play(
+    config: Annotated[Path, typer.Option("--config", help="Game config YAML file.")],
+    agents: Annotated[AgentMode, typer.Option("--agents", help="Agent type.")] = AgentMode.SCRIPTED,
+    seed: Annotated[int | None, typer.Option("--seed", help="Override the config seed.")] = None,
+    batch_id: Annotated[
+        str | None, typer.Option("--batch-id", help="Output directory name; default: config stem.")
+    ] = None,
+) -> None:
+    """Play one game and write its event log and run metadata."""
+    from societysim.agents.llm_agent import llm_agents
+    from societysim.agents.scripted import RandomAgent
+    from societysim.config import GameConfig, load_yaml
+    from societysim.logging.sinks.jsonl import JsonlSink
+    from societysim.models.registry import load_registry
+    from societysim.orchestrator import run_game
+
+    if not config.is_file():
+        typer.echo(f"config file not found: {config}")
+        raise typer.Exit(1)
+    cfg = load_yaml(config, GameConfig)
+    if seed is not None:
+        cfg = cfg.model_copy(update={"seed": seed})
+    batch_id = batch_id if batch_id is not None else config.stem
+    game_id = f"{batch_id}-s{cfg.seed}"
+
+    load_dotenv()
+    registry_path = Path(__file__).resolve().parents[2] / "configs/models.yaml"
+    reg = load_registry(registry_path)
+    reg.apply_env()
+    try:
+        specs = reg.resolve(cfg.seat_models())
+    except KeyError as exc:
+        typer.echo(exc.args[0])
+        raise typer.Exit(1) from None
+
+    if agents is AgentMode.SCRIPTED:
+        make_agent = RandomAgent
+    else:
+        from societysim.models.client import LiteLLMClient
+
+        client = LiteLLMClient(limits=reg.limits())
+        make_agent = llm_agents(client, {s.name: s for s in specs})
+
+    game = asyncio.run(
+        run_game(
+            cfg,
+            make_agent,
+            [JsonlSink(batch_id)],
+            game_id,
+            colors={s.name: s.color for s in specs},
+        )
+    )
+    typer.echo(Path("runs") / batch_id / f"{game_id}.jsonl")
+    typer.echo(f"winner: {game.winner}")
 
 
 @app.command()

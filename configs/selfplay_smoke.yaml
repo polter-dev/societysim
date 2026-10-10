@@ -1,0 +1,10 @@
+n_players: 7
+seed: 0
+models:
+  - gemma4-26b
+  - gemma4-26b
+  - gemma4-26b
+  - gemma4-26b
+  - gemma4-26b
+  - gemma4-26b
+  - gemma4-26b

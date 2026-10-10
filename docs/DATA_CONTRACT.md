@@ -492,7 +492,7 @@ to them). All bodies are JSON and closed: an unknown key is a 422. Every error i
 | `POST /api/games` | none (Turnstile token in the body) | `StartGame` | `StartedGame` |
 | `GET /api/games/{id}/me` | seat token | | `Me` |
 | `POST /api/games/{id}/action` | seat token | `ActionBody` | `{"accepted": true}` |
-| `GET /api/limits` | none | | `{"play_enabled": bool, "remaining_today": int}` |
+| `GET /api/limits` | none | | `{"play_enabled": bool, "remaining_today": int, "client_ip_hint": str}` |
 | `GET /api/health` | none | | `{"ok": true}` |
 
 ### Starting a game
@@ -622,10 +622,15 @@ Limits, all set by env on the server (defaults in brackets):
   without it, because every request arrives from HF's proxy, which reaches the container from a
   private address and appends the visitor's IP to `X-Forwarded-For`. Set
   `PLAY_TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`. If Cloudflare proxies the
-  Space's hostname, add Cloudflare's published ranges too.
+  Space's hostname, add Cloudflare's published ranges too. `client_ip_hint` in `/api/limits`
+  is the IP the limits key on, masked (`104.53.x.x`, `2001:0db8:x::`), so a deploy can check
+  it is the caller's and not the proxy's (`10.x.x`).
 - CORS allows only `https://society-sim.us`, `https://www.society-sim.us`,
   `https://societysim.pages.dev`, `https://$SPACE_HOST`, and `http://localhost:5173` in dev
-  mode, without credentials.
+  mode, without credentials. HF's proxy answers preflights itself and allows any origin, so
+  two checks don't rely on CORS: every POST must carry one of those origins in `Origin` (else
+  403 `forbidden`, also when it is missing), and a Turnstile token counts only if siteverify
+  says it was solved on one of their hostnames (else 403 `bot_check_failed`).
 - The server will not start without `TURNSTILE_SECRET_KEY` and `NEON_DATABASE_URL` unless
   `PLAY_DEV_MODE=1` (local development only, which also skips Turnstile when its key is unset).
 

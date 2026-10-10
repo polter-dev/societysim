@@ -20,6 +20,24 @@ jobs:
       - run: uv run ruff format --check
       - run: uv run pytest
 
+  # Windows catches cp1252 and path bugs. Not set as required in the repo ruleset
+  # (required checks are python, review-gate, viewer); promote it once it's been
+  # green on main for a few days. Do not set PYTHONUTF8 / PYTHONIOENCODING here:
+  # we want the real Windows default encoding.
+  python-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check
+      - run: uv run pytest
+
   viewer:
     runs-on: ubuntu-latest
     steps:

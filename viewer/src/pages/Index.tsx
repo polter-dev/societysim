@@ -26,10 +26,11 @@ export function GameList({ games, href, showWinners = false }: ListProps) {
           <tr key={g.id}>
             <th scope="row">
               <a href={href(g.id)}>{g.id}</a>
+              {g.live && <span className="live-badge"> ● Live</span>}
             </th>
             <td>{g.models?.join(", ") ?? "?"}</td>
             <td>{g.days ?? "?"}</td>
-            <td>{showWinners ? (g.winner ?? "none") : "hidden"}</td>
+            <td>{g.live ? "playing" : showWinners ? (g.winner ?? "none") : "hidden"}</td>
           </tr>
         ))}
       </tbody>

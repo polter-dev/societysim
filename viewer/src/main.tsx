@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { neonSource, withFallback } from "./data/neonSource";
 import { DEFAULT_INDEX_URL, indexSource, publishedBase } from "./data/staticSource";
 import IndexPage from "./pages/Index";
 import LeaderboardPage from "./pages/Leaderboard";
@@ -18,7 +19,15 @@ let dataBase: URL;
 try { dataBase = publishedBase(location.search, location.href); }
 catch (err) { baseError = err instanceof Error ? err.message : String(err); dataBase = new URL('./', location.href); }
 const indexUrl = new URL(indexParam ?? DEFAULT_INDEX_URL, dataBase).href;
-const source = indexSource(indexUrl);
+const staticGames = indexSource(indexUrl);
+// Neon (index, leaderboard, live games) when the build has both Neon URLs and the URL doesn't
+// pick a static batch with ?base= or ?index=. Neon errors fall back to the static files.
+const { VITE_NEON_DATA_API_URL, VITE_NEON_AUTH_URL } = import.meta.env;
+const neon =
+  VITE_NEON_DATA_API_URL && VITE_NEON_AUTH_URL && !indexParam && !params.get("base")
+    ? withFallback(neonSource(), staticGames)
+    : null;
+const source = neon ?? staticGames;
 const href = (extra: Record<string, string>) =>
   "?" + new URLSearchParams({ ...(params.get("base") ? { base: params.get("base")! } : {}), ...(indexParam ? { index: indexParam } : {}), ...extra });
 const sibling = (name: string) => new URL(name, new URL(indexUrl, location.href)).href;
@@ -42,11 +51,12 @@ createRoot(document.getElementById("root")!).render(
         <h1>SocietySim {{ leaderboard: "leaderboard", research: "research", new: "new game" }[page ?? ""] ?? "games"}</h1>
         <form method="get" className="batch-source"><label>Published batch base URL <input name="base" type="url" required defaultValue={dataBase.href} /></label><button type="submit">Load batch</button></form>
         {page === "leaderboard" ? (
-          <LeaderboardPage leaderboardUrl={sibling("leaderboard.json")} metricsUrl={sibling("metrics.json")} />
+          <LeaderboardPage leaderboardUrl={sibling("leaderboard.json")} metricsUrl={sibling("metrics.json")} loadBoard={neon?.loadBoard} />
         ) : page === "research" ? (
           <ResearchPage metricsUrl={sibling("metrics.json")} />
         ) : page === "new" ? (
           <NewGamePage catalogUrl={sibling("models_catalog.json")} schemaUrl={sibling("devui/schema/game_setup.schema.json")} />
+
         ) : (
           <IndexPage source={source} href={(id) => href({ game: id })} />
         )}

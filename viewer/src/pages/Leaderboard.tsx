@@ -10,7 +10,10 @@ export interface Rating {
 
 export interface BoardRow {
   model: string;
-  games: number;
+  /** Distinct games; null from Neon, whose view counts seats only. */
+  games: number | null;
+  /** Seats filled, summed over games. */
+  seats?: number;
   win_rate: number | null;
   win_ci: [number, number] | null;
   wolf_win_rate: number | null;
@@ -45,8 +48,10 @@ export function LeaderboardTable({ board, bySide = {} }: { board: Board; bySide?
   return (
     <>
       <p>
-        {board.games} games. Ranked by OpenSkill ordinal (mu minus three sigma). Win rates carry a Wilson 95% interval;
-        small batches are noisy.
+        {board.games} games.{" "}
+        {board.models.some((r) => r.openskill)
+          ? "Ranked by OpenSkill ordinal (mu minus three sigma). Win rates carry a Wilson 95% interval; small batches are noisy."
+          : "Ranked by win rate over all finished games; small samples are noisy."}
         {side && ` Wolf-side advantage: mu ${num(side.mu)} (0 means the sides are even).`}
       </p>
       <table>
@@ -56,6 +61,7 @@ export function LeaderboardTable({ board, bySide = {} }: { board: Board; bySide?
             <th scope="col">Rank</th>
             <th scope="col">Model</th>
             <th scope="col">Games</th>
+            <th scope="col">Seats</th>
             <th scope="col">Win rate (95% CI)</th>
             <th scope="col">Wolf win</th>
             <th scope="col">Village win</th>
@@ -70,7 +76,8 @@ export function LeaderboardTable({ board, bySide = {} }: { board: Board; bySide?
             <tr key={r.model}>
               <td>{i + 1}</td>
               <th scope="row">{r.model}</th>
-              <td>{r.games}</td>
+              <td>{r.games ?? "n/a"}</td>
+              <td>{r.seats ?? "n/a"}</td>
               <td>
                 {pct(r.win_rate)}
                 {r.win_ci && ` (${pct(r.win_ci[0])} to ${pct(r.win_ci[1])})`}
@@ -89,19 +96,34 @@ export function LeaderboardTable({ board, bySide = {} }: { board: Board; bySide?
   );
 }
 
-/** Loads leaderboard.json, plus metrics.json for OpenSkill by side when it is there. */
-export default function LeaderboardPage({ leaderboardUrl, metricsUrl }: { leaderboardUrl: string; metricsUrl: string }) {
+/**
+ * Loads leaderboard.json, plus metrics.json for OpenSkill by side when it is there.
+ * `loadBoard` (the Neon leaderboard view) is tried first; the static files are the fallback.
+ */
+export default function LeaderboardPage({
+  leaderboardUrl,
+  metricsUrl,
+  loadBoard,
+}: {
+  leaderboardUrl: string;
+  metricsUrl: string;
+  loadBoard?: () => Promise<Board>;
+}) {
   const [board, setBoard] = useState<Board | null>(null);
   const [bySide, setBySide] = useState<BySide>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchJson<Board>(leaderboardUrl).then(setBoard, (err: Error) => setError(err.message));
-    fetchJson<{ openskill?: BySide }>(metricsUrl).then(
-      (m) => setBySide(m.openskill ?? {}),
-      () => {}, // optional: the by-side columns show n/a
-    );
-  }, [leaderboardUrl, metricsUrl]);
+    const fromFiles = () => {
+      fetchJson<Board>(leaderboardUrl).then(setBoard, (err: Error) => setError(err.message));
+      fetchJson<{ openskill?: BySide }>(metricsUrl).then(
+        (m) => setBySide(m.openskill ?? {}),
+        () => {}, // optional: the by-side columns show n/a
+      );
+    };
+    if (loadBoard) loadBoard().then(setBoard, fromFiles);
+    else fromFiles();
+  }, [leaderboardUrl, metricsUrl, loadBoard]);
 
   if (error) return <p role="alert">Could not load the leaderboard: {error}</p>;
   if (!board) return <p>Loading leaderboard...</p>;

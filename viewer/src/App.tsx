@@ -12,8 +12,10 @@ import { Table } from './components/Table/Table';
 import { Tally } from './components/Tally/Tally';
 import Timeline from './components/Timeline/Timeline';
 import { fetchLabels, siblingLabelsUrl } from './data/labels';
-import { parseLog, type ParsedLog } from './data/parse';
-import { fetchLog, type GameSource } from './data/source';
+import { parseLog } from './data/parse';
+import { fetchLog, type GameSource, type LoadedGame } from './data/source';
+import { LiveBadge } from './components/LiveBadge/LiveBadge';
+import { useLiveGame } from './live/useLiveGame';
 import { deriveScene, type Mode } from './scene/deriveScene';
 import { clearStepUrl, normalizeStepUrl } from './state/replayUrl';
 import { eventIdx } from './state/stepper';
@@ -38,13 +40,14 @@ export function Game({events, labels, idx, mode, selected, onSelect, onSeqChange
     <div className="replay-table"><LabelPopups scene={scene} labels={labels} mode={mode}><Table scene={scene} selected={selected} onSelect={onSelect}/><Arrows scene={scene}/><Speech scene={scene}/></LabelPopups></div>
     <details className="replay-chat"><summary>Discussion and vote tally</summary><Tally scene={scene}/><ChatLog scene={scene}/></details>
     <IllustratedInspector scene={scene} mode={mode} selected={selected} close={() => onSelect(null)}/>
-    <div className="replay-controls">{step && <StepControls {...step}/>}{narration?.available && <NarrationControls mode={mode} on={narration.on} enabled={narration.enabled} onToggle={narration.onToggle} onCategory={narration.onCategory}/>}<Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} seq={seq} onSeek={onSeek}/></div>
+    <div className="replay-controls">{step?.live && <LiveBadge newCount={step.newCount}/>}{step && <StepControls {...step}/>}{narration?.available && <NarrationControls mode={mode} on={narration.on} enabled={narration.enabled} onToggle={narration.onToggle} onCategory={narration.onCategory}/>}<Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} seq={seq} onSeek={onSeek}/></div>
   </>;
 }
 /** Owns step state (?step=, arrow keys) and narration for one loaded game; deriveScene stays the source of the scene. */
-export function Replay({events, labels, mode, selected, onSelect, audioUrl = null}: Omit<GameProps, 'idx'> & {audioUrl?: string | null}) {
-  useState(() => normalizeStepUrl(events[0].seq)); // before useStepper reads the URL: ?seq= highlight links become ?step=
-  const st = useStepper(events);
+export function Replay({events, labels, mode, selected, onSelect, audioUrl = null, live = false, atEnd = false}: Omit<GameProps, 'idx'> & {audioUrl?: string | null; live?: boolean; atEnd?: boolean}) {
+  // before useStepper reads the URL: ?seq= highlight links become ?step=. A watched-live game opens at its latest beat.
+  useState(() => {if(!(live || atEnd) || new URLSearchParams(window.location.search).has('seq')) normalizeStepUrl(events[0].seq);});
+  const st = useStepper(events, live); // live: polled events append; a stepped-back reader stays put
   const beat = st.state.beats[st.state.pos];
   const n = useNarration(audioUrl, beat ? {first: beat.firstSeq, last: beat.lastSeq} : null, mode);
   const idx = eventIdx(st.state);
@@ -54,7 +57,7 @@ export function Replay({events, labels, mode, selected, onSelect, audioUrl = nul
     onSeek={seq => st.dispatch({type: 'goto', seq})} narration={{available: n.available, on: n.on, enabled: n.enabled, onToggle: n.setOn, onCategory: n.setCategory}}/>;
 }
 export default function App({source}: {source?: GameSource} = {}) {
- const [log, setLog] = useState<ParsedLog | null>(null);
+ const [log, setLog] = useState<LoadedGame | null>(null);
  const [labels, setLabels] = useState<Label[]>([]);
  const [loadError, setLoadError] = useState<string | null>(null);
  const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -62,7 +65,7 @@ export default function App({source}: {source?: GameSource} = {}) {
  const [mode, setMode] = useState<Mode>(() => modeFromSearch(window.location.search));
  const [selected, setSelected] = useState<string | null>(null);
  const loadVersion = useRef(0);
- const show = (parsed: ParsedLog, audio: string | null = null) => {setLog(parsed);setAudioUrl(audio);setLoadId(n => n + 1);setSelected(null);setLoadError(null);};
+ const show = (parsed: LoadedGame, audio: string | null = null) => {setLog(parsed);setAudioUrl(audio);setLoadId(n => n + 1);setSelected(null);setLoadError(null);};
  useEffect(() => {
    let active = true;
    const version = ++loadVersion.current;
@@ -78,6 +81,7 @@ export default function App({source}: {source?: GameSource} = {}) {
    return () => {active = false;};
  }, [source]);
  useEffect(() => {const sync = () => setMode(modeFromSearch(window.location.search));window.addEventListener('popstate',sync);return () => window.removeEventListener('popstate',sync);},[]);
+ useLiveGame(source, log, setLog);
  const changeMode = (next: Mode) => {window.history.replaceState(window.history.state,'',urlWithMode(window.location.href,next));setMode(next);};
  const onFile = async (file?: File) => {if(!file) return;const version = ++loadVersion.current;try {setLabels([]);const parsed = parseLog(await file.text());if(loadVersion.current === version) {clearStepUrl();show(parsed);}} catch(err) {setLoadError(err instanceof Error ? err.message : String(err));}};
  const events = log?.events ?? [];
@@ -86,5 +90,5 @@ export default function App({source}: {source?: GameSource} = {}) {
  {loadError && <p role="alert">Could not load log: {loadError}</p>}
  {log && log.errors.length > 0 && <details open><summary role="alert">{log.errors.length} bad line(s) skipped</summary><ul>{log.errors.map(b => <li key={b.line}>line {b.line}: {b.error}</li>)}</ul></details>}
  {!log && <p>Open a recorded game log or choose a game from Games.</p>}{log && !events.length && <p role="status">This file has no valid game events.</p>}</div>
- {events.length > 0 && <Replay key={loadId} events={events} labels={gameLabels} mode={mode} selected={selected} onSelect={setSelected} audioUrl={audioUrl}/>}</main>;
+ {events.length > 0 && <Replay key={`${loadId}${log?.partial ? 'p' : ''}`} live={!!log?.live} atEnd={!!log?.watchedLive} events={events} labels={gameLabels} mode={mode} selected={selected} onSelect={setSelected} audioUrl={audioUrl}/>}</main>;
 }

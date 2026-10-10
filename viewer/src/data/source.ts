@@ -8,14 +8,30 @@ export interface GameSummary {
   days?: number;
   winner?: string | null;
   models?: string[];
+  /** Still being played (Neon `games.status = 'running'`). */
+  live?: boolean;
 }
 
-/** Where games come from: static files now, Neon later (T6.2). */
+/**
+ * A loaded game. `live`: still running; the events are public only and more will come.
+ * `partial`: the rows hold public events only (a running game, or a visitor game that never
+ * finished), so the seat list was rebuilt without names or roles.
+ */
+export interface LoadedGame extends ParsedLog {
+  live?: boolean;
+  partial?: boolean;
+  /** Swapped in by the live poll when the game ended: the replay opens at the end, not the start. */
+  watchedLive?: boolean;
+}
+
+/** Where games come from: static files or Neon (data/neonSource.ts). */
 export interface GameSource {
   listGames(): Promise<GameSummary[]>;
-  loadGame(id: string): Promise<ParsedLog>;
+  loadGame(id: string): Promise<LoadedGame>;
   /** Events with seq > afterSeq. Static games are finished, so this only matters for live sources. */
   pollEvents(gameId: string, afterSeq: number): Promise<Event[]>;
+  /** `running`, `finished` or `failed`; live sources only. */
+  gameStatus?(id: string): Promise<string | null>;
   /** The game's lie labels; [] when it has none. */
   loadLabels?(id: string): Promise<Label[]>;
   /** URL of the game's `<game_id>.audio/index.json`, or null when the source has no narration. */

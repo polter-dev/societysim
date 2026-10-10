@@ -1,0 +1,71 @@
+import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import type { GameSource, LoadedGame } from "../data/source";
+
+/** Ticks to wait after the end for the full log to land (a visitor game is backfilled after game_end). */
+export const FINISH_TRIES = 5;
+
+export interface LiveState {
+  log: LoadedGame;
+  /** Ticks spent waiting for the full log since the game ended. */
+  endTries: number;
+}
+
+/**
+ * One poll of a live game. New public events are appended. Once the game has ended (a game_end
+ * arrived, or the status left `running`), the full log is loaded and replaces the public one.
+ * A game whose full log never shows up (a forfeited visitor game) stops being live after
+ * FINISH_TRIES ticks and keeps its public events.
+ */
+export async function liveTick(source: GameSource, id: string, s: LiveState): Promise<LiveState> {
+  const last = s.log.events.at(-1)?.seq ?? -1;
+  const more = (await source.pollEvents(id, last)).filter((e) => e.seq > last);
+  const log = more.length ? { ...s.log, events: [...s.log.events, ...more] } : s.log;
+  let ended = s.endTries > 0 || more.some((e) => e.type === "game_end");
+  if (!ended && !more.length && source.gameStatus) ended = (await source.gameStatus(id)) !== "running";
+  if (!ended) return { log, endTries: 0 };
+  const full = await source.loadGame(id);
+  if (!full.live && !full.partial) return { log: { ...full, watchedLive: true }, endTries: 0 };
+  const endTries = s.endTries + 1;
+  return { log: endTries >= FINISH_TRIES ? { ...log, live: false } : log, endTries };
+}
+
+/**
+ * Polls `source` every `intervalMs` while `log.live`, updating the log through `setLog`.
+ * A failed poll is retried on the next tick.
+ */
+export function useLiveGame(
+  source: GameSource | undefined,
+  gameId: string | null,
+  log: LoadedGame | null,
+  setLog: Dispatch<SetStateAction<LoadedGame | null>>,
+  intervalMs = 2000,
+) {
+  const logRef = useRef(log);
+  logRef.current = log;
+  const live = !!(source && gameId && log?.live && log.events[0]?.game_id === gameId);
+
+  useEffect(() => {
+    if (!live || !source || !gameId || !logRef.current) return;
+    // The effect owns the log from here until the game is no longer live.
+    let s: LiveState = { log: logRef.current, endTries: 0 };
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = async () => {
+      try {
+        const next = await liveTick(source, gameId, s);
+        if (stopped) return;
+        if (next.log !== s.log) setLog(next.log);
+        s = next;
+        if (!next.log.live) return;
+      } catch {
+        // network or auth hiccup: try again next tick
+      }
+      if (!stopped) timer = setTimeout(tick, intervalMs);
+    };
+    timer = setTimeout(tick, intervalMs);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [live, source, gameId, setLog, intervalMs]);
+}

@@ -72,6 +72,16 @@ def test_out_stages_site(tmp_path):
     assert "?game=g&seq=3&mode=narrator" in r.stdout
 
 
+def test_out_stages_models_catalog_and_setup_schema(tmp_path):
+    out = tmp_path / "site"
+    r = _run(tmp_path, "--out", str(out), str(_batch(tmp_path)))
+    assert r.returncode == 0, r.stderr
+    cat = json.loads((out / "models_catalog.json").read_text())
+    assert cat["default_lineup"] and cat["models"]
+    assert all("api_base" not in m for m in cat["models"])
+    assert (out / "devui/schema/game_setup.schema.json").is_file()
+
+
 def test_out_refuses_non_empty_dir_without_force(tmp_path):
     batch = _batch(tmp_path)
     out = tmp_path / "site"

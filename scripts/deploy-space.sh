@@ -19,7 +19,7 @@
 # HF_TOKEN must be set in the environment (write access to the Space). It is read by
 # huggingface_hub directly and never printed or passed on a command line.
 #
-# The site also gets devui/ (a plain test page, see devui/README.md) at /devui/. If the Neon
+# The site also gets models_catalog.json at its root (`societysim catalog`) and devui/ (a plain test page, see devui/README.md) at /devui/. If the Neon
 # URL and the auth URL (or an anon key) are set, devui/config.json carries them so that page can
 # auto-fill its fields.
 #
@@ -104,6 +104,9 @@ mkdir -p "$stage/data"
 # .cache holds raw judge responses; the PNGs are for report.md, not the viewer.
 # tar, not rsync: rsync is not available in the Windows bash.
 (cd "$batch" && tar --exclude '.cache' --exclude '*.png' -cf - .) | (cd "$stage/data" && tar -xf -)
+# The settings screen's model list (docs/DATA_CONTRACT.md, "Game setup"). Availability is
+# whatever this machine sees (environment and .env), e.g. AMD only while its pod URL is set.
+uv run --frozen --project "$root" societysim catalog --out "$stage" --registry "$root/configs/models.yaml" >/dev/null
 # Dev test UI at /devui/, reading the same data/; it fetches the JSON Schemas at runtime.
 mkdir -p "$stage/devui/schema"
 cp "$root/devui/index.html" "$stage/devui/"

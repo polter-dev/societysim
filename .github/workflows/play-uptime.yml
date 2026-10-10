@@ -1,0 +1,36 @@
+name: Play uptime
+
+# Every 15 minutes: GET /api/limits on the play Space; post to Discord if it is down.
+# Needs the repo variable VITE_PLAY_API_URL (already used by the viewer build) and the repo
+# secret PLAY_ALERT_WEBHOOK_URL. Without either it does nothing.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      PLAY_URL: ${{ vars.VITE_PLAY_API_URL }}
+      WEBHOOK: ${{ secrets.PLAY_ALERT_WEBHOOK_URL }}
+    steps:
+      - name: Check /api/limits
+        run: |
+          if [ -z "$PLAY_URL" ]; then
+            echo "::notice::Set the VITE_PLAY_API_URL repo variable to check the play Space."
+            exit 0
+          fi
+          if curl -fsS --max-time 20 --retry 2 --retry-delay 10 "${PLAY_URL%/}/api/limits" >/dev/null; then
+            exit 0
+          fi
+          echo "::error::Play Space is down: GET /api/limits failed"
+          if [ -n "$WEBHOOK" ]; then
+            curl -fsS --max-time 20 -H 'Content-Type: application/json' \
+              -d '{"content":"[societysim play] Space is down: GET /api/limits failed (uptime check)"}' \
+              "$WEBHOOK" >/dev/null || echo "::warning::Discord post failed"
+          fi
+          exit 1

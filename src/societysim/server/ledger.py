@@ -48,6 +48,7 @@ class Ledger:
         self._day = _today()
         self.spent_nanos = 0  # booked plus reserved, today
         self.games: dict[str, float] = {}  # game_id -> USD booked today
+        self.on_spend: Any = None  # async (spent_usd, budget_usd), called after each booking
 
     def _roll(self) -> None:
         if (today := _today()) != self._day:
@@ -120,6 +121,9 @@ class Ledger:
 
     async def _book(self, game_id: str, usd: float) -> None:
         self.games[game_id] = self.games.get(game_id, 0.0) + usd
+        if self.on_spend is not None:
+            with contextlib.suppress(Exception):  # an alert must never break a game
+                await self.on_spend(self.spent_nanos / 1e9, self.budget_nanos / 1e9)
         if not self.persistent or usd <= 0:
             return
         try:

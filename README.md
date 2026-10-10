@@ -138,6 +138,8 @@ Space variables the script sets: `PLAY_TRUSTED_PROXIES` (HF's private proxy rang
 
 Kill switch: set the Space variable `PLAY_ENABLED=0` (Space settings, Variables, then restart). New games get a `play_disabled` error; the rest of the site keeps working.
 
+Alerts: set `PLAY_ALERT_WEBHOOK_URL` (a Discord webhook URL) as a Space secret, and as a repo secret so the deploy script copies it. The server posts when daily spend passes 50% and 90% of the cap, when it starts with the kill switch on (or the switch flips while it runs), and when it fails to start. The `Play uptime` workflow checks `/api/limits` every 15 minutes and posts to the same webhook if the Space is down; it reads the `VITE_PLAY_API_URL` repo variable. With no webhook set, nothing is posted.
+
 ## Models
 
 The lineup is in [configs/models.yaml](configs/models.yaml). All calls go through LiteLLM.

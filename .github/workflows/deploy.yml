@@ -177,6 +177,7 @@ jobs:
       PLAY_GEMINI_API_KEY: ${{ secrets.PLAY_GEMINI_API_KEY }}
       NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
       TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+      PLAY_ALERT_WEBHOOK_URL: ${{ secrets.PLAY_ALERT_WEBHOOK_URL }}
       PLAY_DAILY_BUDGET_USD: ${{ vars.PLAY_DAILY_BUDGET_USD }}
       PLAY_ENABLED: ${{ vars.PLAY_ENABLED }}
     steps:

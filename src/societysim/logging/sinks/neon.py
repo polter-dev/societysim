@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from societysim.logging.events import Event
+from societysim.logging.textio import read_text_lenient
 
 log = logging.getLogger(__name__)
 
@@ -215,7 +216,7 @@ class NeonSink:
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    lines = path.read_text(encoding="utf-8").splitlines()
+    lines = read_text_lenient(path).splitlines()
     return [json.loads(line) for line in lines if line.strip()]
 
 
@@ -240,7 +241,7 @@ async def sync_batch(batch_dir: Path, conn: Any, chunk: int = 500) -> dict[str, 
         meta_path = batch_dir / f"{path.stem}.run_meta.json"
         if meta_path.is_file():
             with contextlib.suppress(OSError, ValueError, AttributeError):
-                agents = json.loads(meta_path.read_text(encoding="utf-8")).get("agents")
+                agents = json.loads(read_text_lenient(meta_path)).get("agents")
         await conn.execute(
             _INSERT_GAME,
             gid,

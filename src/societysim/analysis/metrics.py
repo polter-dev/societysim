@@ -31,6 +31,7 @@ from openskill.models import PlackettLuce
 
 from societysim.analysis.labeler import read_log
 from societysim.logging.events import Event, EventType, Label, LabelType
+from societysim.logging.textio import read_text_lenient
 from societysim.roles import Role
 
 LIE_TYPES = (
@@ -90,7 +91,7 @@ def load_game(path: Path) -> GameData:
     events = read_log(path)
     lpath = path.with_name(f"{path.stem}.labels.jsonl")
     labels = (
-        [Label.model_validate_json(x) for x in lpath.read_text(encoding="utf-8").splitlines() if x]
+        [Label.model_validate_json(x) for x in read_text_lenient(lpath).splitlines() if x]
         if lpath.exists()
         else []
     )

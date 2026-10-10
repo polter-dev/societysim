@@ -198,6 +198,30 @@ async def test_lost_event_writes_are_counted_in_batch_meta(tmp_path, monkeypatch
     assert game["write_errors"] == 1 and game["agents"] == "scripted"
     assert "t-g0001: 1 events missing" in caplog.text
 
+    monkeypatch.setattr(runner.JsonlSink, "write", real_write)
+    res = await run_batch(cfg(n_games=2), SPECS, None, runs_dir=tmp_path)
+    assert res["write_errors"] == {"t-g0001": 1}  # a finished game keeps its count on resume
+    (tmp_path / "t/t-g0001.jsonl").unlink()
+    res = await run_batch(cfg(n_games=2), SPECS, None, runs_dir=tmp_path)
+    assert res["finished"] == ["t-g0001"] and res["write_errors"] == {}  # replayed: fresh log
+
+
+async def test_resume_skips_a_finished_cp1252_log(tmp_path):
+    # Before T230 Windows wrote logs in cp1252 with \r\n; resume must not replay (and overwrite)
+    # such a finished, paid-for game.
+    await run_batch(cfg(n_games=2), SPECS, None, runs_dir=tmp_path)
+    log = tmp_path / "t/t-g0000.jsonl"
+    events = [json.loads(x) for x in log.read_text(encoding="utf-8").splitlines()]
+    say = next(e for e in events if e["type"] == "statement")
+    say["public_text"] = "it’s p3 — trust me"
+    text = "".join(json.dumps(e, ensure_ascii=False) + "\r\n" for e in events)
+    log.write_bytes(text.encode("cp1252"))
+    old_bytes = log.read_bytes()
+    res = await run_batch(cfg(n_games=2), SPECS, None, runs_dir=tmp_path)
+    assert res["skipped"] == ["t-g0000", "t-g0001"] and res["finished"] == []
+    assert log.read_bytes() == old_bytes
+    assert runner.game_costs(log) is not None
+
 
 async def test_crashed_game_is_reported_not_lost(tmp_path):
     class Crashy(PricedFake):

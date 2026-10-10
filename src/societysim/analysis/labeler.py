@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from societysim.analysis.jev import JevResult
 from societysim.logging.events import Event, EventType, Label, LabelType
+from societysim.logging.textio import read_text_lenient
 from societysim.roles import Role, SeatId, SeerResult
 
 
@@ -260,7 +261,7 @@ def format_table(table: dict[str, dict]) -> str:
 def read_log(path: Path) -> list[Event]:
     """Parse a game log. An unparseable final line (a hard kill mid-write) is dropped with a
     warning; a bad line anywhere else raises."""
-    lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line]
+    lines = [line for line in read_text_lenient(path).splitlines() if line]
     events = []
     for i, line in enumerate(lines):
         try:
@@ -275,7 +276,7 @@ def read_log(path: Path) -> list[Event]:
 def _scripted(log: Path) -> bool:
     """True if the game's run_meta.json is tagged agents=scripted (older logs have no tag)."""
     try:
-        meta = json.loads(log.with_name(f"{log.stem}.run_meta.json").read_text(encoding="utf-8"))
+        meta = json.loads(read_text_lenient(log.with_name(f"{log.stem}.run_meta.json")))
     except (OSError, ValueError):
         return False
     return isinstance(meta, dict) and meta.get("agents") == "scripted"

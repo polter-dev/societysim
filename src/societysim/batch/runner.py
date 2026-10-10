@@ -29,6 +29,7 @@ from societysim.config import BatchConfig, ModelSpec
 from societysim.logging.events import EventType
 from societysim.logging.sinks.jsonl import JsonlSink
 from societysim.logging.sinks.neon import Connect, NeonSink
+from societysim.logging.textio import read_text_lenient
 from societysim.models.client import CompletionResult, ModelClient
 from societysim.orchestrator import run_game
 
@@ -100,7 +101,7 @@ class MeteredClient:
 def game_costs(path: Path) -> Counter[str] | None:
     """USD per model in a finished game log, or None if the game did not finish."""
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        lines = read_text_lenient(path).splitlines()
         if not lines or json.loads(lines[-1])["type"] != EventType.GAME_END:
             return None
         events = [json.loads(line) for line in lines]
@@ -119,7 +120,7 @@ def game_invalid(path: Path, models: list[str]) -> dict[str, list[int]]:
     game's model per seat p0..; a log that cannot be read counts as nothing."""
     out: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     try:
-        for line in path.read_text(encoding="utf-8").splitlines():
+        for line in read_text_lenient(path).splitlines():
             e = json.loads(line)
             if e["type"] == EventType.INVALID_OUTPUT and e.get("actor"):
                 out[models[int(e["actor"][1:])]][0] += 1
@@ -181,7 +182,7 @@ def _replace(src: Path, dst: Path) -> None:
 
 def _tag_agents(path: Path, agents: str) -> None:
     """Record the agent type in a game's run_meta.json, next to its finished JSONL."""
-    meta = json.loads(path.read_text(encoding="utf-8"))
+    meta = json.loads(read_text_lenient(path))
     meta["agents"] = agents
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(meta, indent=2), encoding="utf-8")
@@ -220,7 +221,7 @@ def _read_meta(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     try:
-        meta = json.loads(path.read_text(encoding="utf-8"))
+        meta = json.loads(read_text_lenient(path))
     except (OSError, ValueError):
         meta = None
     if not isinstance(meta, dict):
@@ -330,8 +331,11 @@ async def run_batch(
 
     finished: list[str] = []
     failed: dict[str, str] = {}
-    # game_id -> events its JSONL sink could not write (holes in the log); kept across resumes
-    write_errors: dict[str, int] = dict(old.get("write_errors") or {})
+    # game_id -> events its JSONL sink could not write (holes in the log). On resume only the
+    # finished games keep theirs; a game played again starts from a fresh log.
+    write_errors: dict[str, int] = {
+        g: n for g, n in (old.get("write_errors") or {}).items() if g in skipped
+    }
     down: list[str] = []  # ProviderDown messages; any one stops new games
     started_ids: list[str] = []
     in_flight = 0

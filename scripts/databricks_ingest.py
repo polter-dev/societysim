@@ -40,6 +40,7 @@ import httpx
 
 from societysim.analysis.metrics import GameData, compute_metrics, load_game
 from societysim.logging.events import EventType
+from societysim.logging.textio import read_text_lenient
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "fixtures" / "sample_game.jsonl"
@@ -115,7 +116,7 @@ def ddl(table: str) -> str:
 def is_scripted(log: Path) -> bool:
     """True when the game's run_meta.json says random agents played it (untagged = kept)."""
     try:
-        meta = json.loads(log.with_suffix(".run_meta.json").read_text(encoding="utf-8"))
+        meta = json.loads(read_text_lenient(log.with_suffix(".run_meta.json")))
     except (OSError, ValueError):
         return False
     return isinstance(meta, dict) and meta.get("agents") == "scripted"
@@ -127,7 +128,7 @@ def find_logs(runs: Path, include_scripted: bool = False) -> list[Path]:
     Scripted (random-agent) games carry real model names, so they are skipped unless asked for.
     """
     logs = sorted(p for p in runs.rglob("*.jsonl") if not p.name.endswith(".labels.jsonl"))
-    done = [p for p in logs if GAME_END.search(p.read_text(encoding="utf-8"))]
+    done = [p for p in logs if GAME_END.search(read_text_lenient(p))]
     if include_scripted:
         return done
     kept = [p for p in done if not is_scripted(p)]

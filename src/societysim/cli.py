@@ -298,6 +298,11 @@ def batch(
         f"{len(result['not_started'])} not started; "
         f"spent ${result['spent_usd']:.4f} of ${cfg.budget_usd:.2f}"
     )
+    if lost := result["write_errors"]:
+        typer.echo(
+            f"write errors: {sum(lost.values())} events missing from {len(lost)} game logs "
+            f"({', '.join(lost)}); see run_meta.json"
+        )
     if result["failed"]:
         typer.echo(f"failed games: {', '.join(result['failed'])}")
         for msg in result["provider_down"]:

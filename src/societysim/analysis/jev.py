@@ -24,6 +24,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict
 
 from societysim.logging.events import Event, EventType
+from societysim.logging.textio import read_text_lenient
 from societysim.roles import Role, SeatId, SeerResult
 
 API_URL = "https://api.typesafe.ai/v1/systemone"
@@ -140,7 +141,7 @@ async def _post(client: httpx.AsyncClient, body: dict[str, Any], tries: int = 4)
 
 async def classify_game(log_path: Path, **kwargs: Any) -> list[JevResult]:
     """Classify every statement in a game log file. See `classify_events`."""
-    lines = log_path.read_text(encoding="utf-8").splitlines()
+    lines = read_text_lenient(log_path).splitlines()
     return await classify_events([Event.model_validate_json(x) for x in lines if x], **kwargs)
 
 

@@ -19,6 +19,7 @@ import pyarrow.parquet as pq
 
 from societysim.analysis.labeler import read_log
 from societysim.logging.events import Label
+from societysim.logging.textio import read_text_lenient
 
 LICENSE = "cc-by-4.0"
 
@@ -27,9 +28,7 @@ def _read_labels(path: Path) -> list[Label]:
     if not path.is_file():
         return []
     return [
-        Label.model_validate_json(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line
+        Label.model_validate_json(line) for line in read_text_lenient(path).splitlines() if line
     ]
 
 
@@ -126,9 +125,12 @@ def build_staging(batch_dir: Path, out: Path) -> dict[str, int]:
         labels = _read_labels(labels_path)
         for seat in (events[0].meta.seats or {}).values():
             models.add(seat.model)
-        (out / "data" / "jsonl" / f"{gid}.jsonl").write_bytes(path.read_bytes())
-        if labels_path.is_file():
-            (out / "data" / "jsonl" / f"{gid}.labels.jsonl").write_bytes(labels_path.read_bytes())
+        # the published copies are always UTF-8, even of a pre-T230 cp1252 log
+        for src, name in ((path, f"{gid}.jsonl"), (labels_path, f"{gid}.labels.jsonl")):
+            if src.is_file():
+                (out / "data" / "jsonl" / name).write_text(
+                    read_text_lenient(src), encoding="utf-8", newline=""
+                )
         pq.write_table(_events_table(events), out / "data" / "events" / f"{gid}.parquet")
         if labels:
             pq.write_table(_labels_table(labels), out / "data" / "labels" / f"{gid}.parquet")

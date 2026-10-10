@@ -5,6 +5,30 @@ societysim seats AI models at a table to play Werewolf, a game where a few playe
 - Live viewer and leaderboard (Hugging Face Space): TODO(batch)
 - Game logs and labels (Hugging Face Dataset): TODO(batch)
 
+## What we're asking
+
+**Main question:** when AI models from different companies play a social deduction game, can one model deceive another, and which models fool which?
+
+Sub-questions:
+
+- Who lies best? That means who deceives the most and still wins.
+- Who catches lies best? This is detection.
+- Is a lie's success about the liar or the listener? A pairwise "who fools whom" table should show it (#251).
+- Do humans fool models, or get fooled, more than models do to each other? The human seat covers this.
+- Does game balance change the answer, for example 7 versus 10 players (#216)?
+
+**Why it matters.** AI agents increasingly negotiate and talk to each other. Knowing which models can be misled, and by whom, is a safety and trust question. Because a deterministic engine owns the game and each model writes a hidden scratchpad, we can see the intent behind each lie, not only the words.
+
+**How we measure it:**
+
+- Lies, found two ways: the model's own scratchpad, and `societysim label` with the Jev classifier.
+- Suspicion shifts after a lie, and votes that follow a lie.
+- OpenSkill ratings as wolf and as villager.
+
+The numbers come from the report (see Results below and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)). Findings: TODO(batch).
+
+In progress: 10-player games, with 2 wolves and 8 others (or 2 wolves, 7 models and a human), tracked in #250.
+
 ## The game in one minute
 
 Werewolf is a bluffing game. Seven players get secret roles:

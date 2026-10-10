@@ -42,6 +42,38 @@ def _require_served(specs) -> None:
         raise typer.Exit(1)
 
 
+NeonFlag = Annotated[
+    bool,
+    typer.Option("--neon", help="Also stream events to Neon live (needs NEON_DATABASE_URL)."),
+]
+
+
+def _neon_connect(neon: bool):
+    """With --neon, create the Neon tables and return the connect function for NeonSink.
+
+    Any Neon problem (no NEON_DATABASE_URL, unreachable) is a warning: the run goes on without it.
+    """
+    if not neon:
+        return None
+    from societysim.logging.sinks import neon as neon_sink
+
+    async def setup():
+        conn = await neon_sink.connect_neon()
+        try:
+            await neon_sink.apply_schema(conn)
+        finally:
+            await conn.close()
+
+    try:
+        asyncio.run(setup())
+    except Exception as exc:  # the message may hold the DSN, so print only the type
+        typer.echo(
+            f"warning: Neon unavailable ({type(exc).__name__}); not streaming live", err=True
+        )
+        return None
+    return neon_sink.connect_neon
+
+
 @app.command()
 def play(
     config: Annotated[Path, typer.Option("--config", help="Game config YAML file.")],
@@ -50,12 +82,14 @@ def play(
     batch_id: Annotated[
         str | None, typer.Option("--batch-id", help="Output directory name; default: config stem.")
     ] = None,
+    neon: NeonFlag = False,
 ) -> None:
     """Play one game and write its event log and run metadata."""
     from societysim.agents.llm_agent import llm_agents
     from societysim.agents.scripted import RandomAgent
     from societysim.config import GameConfig, load_yaml
     from societysim.logging.sinks.jsonl import JsonlSink
+    from societysim.logging.sinks.neon import NeonSink
     from societysim.models.registry import load_registry
     from societysim.orchestrator import run_game
 
@@ -107,11 +141,14 @@ def play(
         client = LiteLLMClient(limits=reg.limits())
         make_agent = llm_agents(client, {s.name: s for s in specs})
 
+    sinks = [JsonlSink(batch_id)]
+    if connect := _neon_connect(neon):
+        sinks.append(NeonSink(batch_id, connect=connect))
     game = asyncio.run(
         run_game(
             cfg,
             make_agent,
-            [JsonlSink(batch_id)],
+            sinks,
             game_id,
             colors={s.name: s.color for s in specs},
         )
@@ -130,6 +167,7 @@ def batch(
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Print the game plan and cost estimate; run nothing.")
     ] = False,
+    neon: NeonFlag = False,
 ) -> None:
     """Play a batch of games in parallel into runs/<batch_id>/. Re-run to resume.
 
@@ -196,6 +234,7 @@ def batch(
                 specs,
                 client,
                 provider_concurrency={p: c.concurrency for p, c in reg.providers.items()},
+                neon_connect=_neon_connect(neon),
             )
         )
     except KeyboardInterrupt:

@@ -26,6 +26,7 @@ from societysim.batch.assign import Assignment, assign_games
 from societysim.config import BatchConfig, ModelSpec
 from societysim.logging.events import EventType
 from societysim.logging.sinks.jsonl import JsonlSink
+from societysim.logging.sinks.neon import Connect, NeonSink
 from societysim.models.client import CompletionResult, ModelClient
 from societysim.orchestrator import run_game
 
@@ -167,6 +168,7 @@ async def run_batch(
     *,
     provider_concurrency: Mapping[str, int] | None = None,
     runs_dir: str | Path = "runs",
+    neon_connect: Connect | None = None,
 ) -> dict[str, Any]:
     """Play every unfinished game of the batch; return the summary also written to run_meta.json.
 
@@ -182,7 +184,8 @@ async def run_batch(
     raises is recorded under "failed" and the batch ends "failed". On cancellation the running
     games are cancelled, run_meta.json gets status "interrupted" and CancelledError is
     re-raised; re-running resumes. Resuming into a batch_id made from a different config
-    raises BatchMismatch.
+    raises BatchMismatch. With neon_connect, every game also streams to Neon (NeonSink) while
+    it runs; Neon errors are logged and never stop a game.
     """
     out = Path(runs_dir) / cfg.batch_id
     out.mkdir(parents=True, exist_ok=True)
@@ -290,7 +293,9 @@ async def run_batch(
         nonlocal in_flight
         _game.set(a.game_id)
         try:
-            sinks = [JsonlSink(cfg.batch_id, runs_dir)]
+            sinks: list[Any] = [JsonlSink(cfg.batch_id, runs_dir)]
+            if neon_connect:
+                sinks.append(NeonSink(cfg.batch_id, connect=neon_connect))
             await run_game(a.game_config(cfg.game), make_agent, sinks, a.game_id, colors)
             _tag_agents(out / f"{a.game_id}.run_meta.json", agents)
             finished.append(a.game_id)

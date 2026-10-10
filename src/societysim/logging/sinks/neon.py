@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from pathlib import Path
@@ -87,7 +88,9 @@ async def apply_schema(conn: Any) -> None:
 class NeonSink:
     """EventSink writing to Neon. One instance per game; `batch_id` comes from the caller.
 
-    Events are buffered and inserted `batch_size` at a time (and on end_game / close).
+    Events are buffered and inserted `batch_size` at a time, or as soon as `flush_after`
+    seconds have passed since the last insert (so a slow LLM game shows up live), and on
+    end_game / close.
     """
 
     def __init__(
@@ -98,7 +101,10 @@ class NeonSink:
         batch_size: int = 25,
         max_pending: int = 2000,
         timeout: float = 10,
+        flush_after: float = 1.0,
     ):
+        self._flush_after = flush_after
+        self._last_flush = time.monotonic()
         self._timeout = timeout
         self.batch_id = batch_id
         self._connect = connect or connect_neon
@@ -142,7 +148,8 @@ class NeonSink:
             if len(self._pending) > self._max_pending:
                 del self._pending[: len(self._pending) - self._max_pending]
                 log.warning("NeonSink buffer full, dropped oldest events")
-            if len(self._pending) >= self._batch_size:
+            due = time.monotonic() - self._last_flush >= self._flush_after
+            if len(self._pending) >= self._batch_size or due:
                 await self._flush()
         except Exception:
             log.exception("NeonSink.write failed")
@@ -151,6 +158,7 @@ class NeonSink:
         if not self._pending:
             return
         rows = list(self._pending)
+        self._last_flush = time.monotonic()
         try:
             conn = await self._conn_ready()
             await self._t(conn.executemany, _INSERT_EVENT, rows)

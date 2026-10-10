@@ -11,7 +11,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from societysim.batch.runner import run_batch
 from societysim.cli import app
+from societysim.config import BatchConfig, ModelSpec
 from societysim.logging.events import Event, EventLogger
 from societysim.logging.sinks.neon import NeonSink, apply_schema, connect_neon, sync_batch
 
@@ -210,6 +212,93 @@ def test_sync_neon_cli_needs_url(tmp_path, monkeypatch):
     res = CliRunner().invoke(app, ["sync-neon", str(tmp_path)])
     assert res.exit_code == 1
     assert "NEON_DATABASE_URL" in res.output
+
+
+async def test_slow_game_flushes_each_event_once_due():
+    conn = FakeConn()
+
+    async def connect():
+        return conn
+
+    sink = NeonSink("b1", connect=connect, batch_size=25, flush_after=0)
+    await sink.start_game({"game_id": "g1", "models": []})
+    for i in range(3):
+        await sink.write(_event(i))
+        assert sum(len(r) for _, r in conn.many) == i + 1  # visible before the next event
+
+
+def _event_rows(conn: FakeConn) -> dict[str, list[int]]:
+    seqs: dict[str, list[int]] = {}
+    for sql, rows in conn.many:
+        if "into events" in sql:
+            for r in rows:
+                seqs.setdefault(r[0], []).append(r[1])
+    return seqs
+
+
+async def test_batch_streams_every_game_in_order(tmp_path):
+    conn = FakeConn()
+
+    async def connect():
+        return conn
+
+    cfg = BatchConfig.model_validate(
+        {"batch_id": "nb", "n_games": 2, "models": ["a"], "budget_usd": 1, "game": {}}
+    )
+    specs = {"a": ModelSpec(name="a", litellm_model="openai/a")}
+    res = await run_batch(cfg, specs, None, runs_dir=tmp_path, neon_connect=connect)
+    assert res["status"] == "completed"
+    seqs = _event_rows(conn)
+    assert set(seqs) == set(res["finished"])
+    for gid, got in seqs.items():
+        assert got == list(range(len(_events(tmp_path / "nb" / f"{gid}.jsonl"))))
+    ends = [a for sql, a in conn.executed if sql.startswith("update games")]
+    assert sorted(a[0] for a in ends) == sorted(res["finished"])
+    assert all(a[1] == "finished" for a in ends)
+
+
+async def test_batch_survives_a_dead_neon(tmp_path):
+    async def connect():
+        raise OSError("no route")
+
+    cfg = BatchConfig.model_validate(
+        {"batch_id": "nb", "n_games": 2, "models": ["a"], "budget_usd": 1, "game": {}}
+    )
+    specs = {"a": ModelSpec(name="a", litellm_model="openai/a")}
+    res = await run_batch(cfg, specs, None, runs_dir=tmp_path, neon_connect=connect)
+    assert res["status"] == "completed"
+    assert len(res["finished"]) == 2
+
+
+CONFIG = Path(__file__).resolve().parents[2] / "configs/selfplay_smoke.yaml"
+
+
+def test_play_neon_streams_live(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    conn = FakeConn()
+
+    async def connect():
+        return conn
+
+    monkeypatch.setattr("societysim.logging.sinks.neon.connect_neon", connect)
+    res = CliRunner().invoke(app, ["play", "--config", str(CONFIG), "--neon"])
+    assert res.exit_code == 0, res.output
+    assert "create table if not exists games" in conn.executed[0][0]  # schema first
+    log = _events(tmp_path / "runs/selfplay_smoke/selfplay_smoke-s0.jsonl")
+    assert _event_rows(conn) == {"selfplay_smoke-s0": [e["seq"] for e in log]}
+    end = next(a for sql, a in conn.executed if sql.startswith("update games"))
+    assert end == ("selfplay_smoke-s0", "finished", log[-1]["meta"]["winner"])
+
+
+def test_play_without_neon_url_still_plays(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    monkeypatch.delenv("NEON_DATABASE_URL", raising=False)
+    res = CliRunner().invoke(app, ["play", "--config", str(CONFIG), "--neon"])
+    assert res.exit_code == 0, res.output
+    assert "warning: Neon unavailable (RuntimeError)" in res.output
+    assert (tmp_path / "runs/selfplay_smoke/selfplay_smoke-s0.jsonl").is_file()
 
 
 @pytest.mark.skipif(not os.environ.get("NEON_DATABASE_URL"), reason="NEON_DATABASE_URL not set")

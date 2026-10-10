@@ -23,6 +23,7 @@
       "response": "Health"
     }
   },
+  "x-error": "Error",
   "$defs": {
     "Accepted": {
       "additionalProperties": false,
@@ -54,6 +55,42 @@
       ],
       "description": "POST /api/games/{id}/action: the response shape for `pending_action.kind`.\nStatement text and wolf chat messages: 1 to 280 characters after control characters are\nstripped. `thoughts` is not logged.",
       "title": "ActionBody"
+    },
+    "Error": {
+      "additionalProperties": false,
+      "description": "Every error response: a fixed code, and a message safe to show the visitor.",
+      "properties": {
+        "error": {
+          "enum": [
+            "rate_limited",
+            "too_many_games_today",
+            "active_game_exists",
+            "at_capacity",
+            "bot_check_failed",
+            "forbidden",
+            "budget_exhausted",
+            "play_disabled",
+            "invalid_request",
+            "not_your_turn",
+            "game_not_found",
+            "unauthorized",
+            "payload_too_large",
+            "internal_error"
+          ],
+          "title": "Error",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "error",
+        "message"
+      ],
+      "title": "Error",
+      "type": "object"
     },
     "GameSetup": {
       "additionalProperties": false,

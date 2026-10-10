@@ -4,6 +4,12 @@ A game runs like `societysim play --agents llm --neon`: the same Game and sinks,
 runs/visitor/ with run_meta `agents: llm` and the visitor's seat as model `human`, so it
 stays out of the rankings (#172). The seed is always drawn by the server: a seed the visitor
 picks would let them replay a known role deal.
+
+Limits (#281): every model call is metered in the Ledger, and once today's budget is spent
+the remaining AI turns go to scripted agents. A game runs at most PLAY_MAX_GAME_MINUTES.
+When a game ends, however it ends, model calls still running are cancelled and booked.
+Neon gets only public events, without reasoning or suspicion, while the game runs; the full
+log is backfilled once it has reached game_end.
 """
 
 import asyncio
@@ -27,12 +33,16 @@ from societysim.agents import human
 from societysim.agents.base import Agent, AgentFactory
 from societysim.agents.prompts import RESPONSE_MODELS
 from societysim.agents.schemas import TargetResponse
+from societysim.agents.scripted import RandomAgent
 from societysim.config import GameConfig
 from societysim.engine.state import GameState
 from societysim.logging.events import EventLogger
 from societysim.logging.sinks.jsonl import JsonlSink
+from societysim.models.client import CompletionResult
 from societysim.orchestrator import Game
+from societysim.server import admission
 from societysim.server.ledger import Ledger
+from societysim.server.security import PlayConfig
 from societysim.server.web_agent import Forfeit, NotYourTurn, WebHumanAgent
 from societysim.setup import REGISTRY, GameSetup, setup_errors
 
@@ -52,9 +62,10 @@ class Settings:
     batch_id: str = "visitor"  # logs go to runs_dir/batch_id/
     turn_timeout: float = 90
     max_timeouts: int = 3  # timeouts in a row that forfeit the game
-    play_enabled: bool = True
+    play_enabled: bool = field(default_factory=lambda: os.environ.get("PLAY_ENABLED") != "0")
     neon: bool = field(default_factory=lambda: bool(os.environ.get("NEON_DATABASE_URL")))
     agents: AgentsFor | None = None  # None: LLM agents from configs/models.yaml
+    play: PlayConfig = field(default_factory=PlayConfig.from_env)  # limits (#281)
 
 
 @cache
@@ -73,11 +84,51 @@ def _client():
     return LiteLLMClient(limits=_registry().limits())  # one client, so rate limits are shared
 
 
-def llm_agents_for(cfg: GameConfig) -> tuple[AgentFactory, Mapping[str, str | None]]:
+def llm_agents_for(
+    cfg: GameConfig, max_tokens: int | None = None
+) -> tuple[AgentFactory, Mapping[str, str | None]]:
     from societysim.agents.llm_agent import llm_agents
 
     specs = _registry().resolve([m for m in cfg.seat_models() if m != human.MODEL])
+    if max_tokens is not None:
+        specs = [s.model_copy(update={"max_tokens": min(s.max_tokens, max_tokens)}) for s in specs]
     return llm_agents(_client(), {s.name: s for s in specs}), {s.name: s.color for s in specs}
+
+
+class MeteredAgent:
+    """Books each model call in the ledger: its estimated cost is reserved first, then
+    settled to the real cost, or kept if the call never returns. Once today's budget is
+    spent, a scripted agent answers instead, so the game finishes without more spend."""
+
+    def __init__(
+        self,
+        inner: Agent,
+        fallback: Agent,
+        ledger: Ledger,
+        game_id: str,
+        per_call: float,
+        calls: set[asyncio.Task],
+    ):
+        self.inner, self.fallback, self.ledger = inner, fallback, ledger
+        self.game_id, self.per_call, self.calls = game_id, per_call, calls
+
+    async def act(self, turn: Any) -> CompletionResult:
+        if self.ledger.remaining_usd() <= 0:
+            return await self.fallback.act(turn)
+        self.ledger.reserve(self.per_call)
+        call = asyncio.ensure_future(self._call(turn))
+        self.calls.add(call)
+        call.add_done_callback(self.calls.discard)
+        return await call  # cancelling the game cancels the call too
+
+    async def _call(self, turn: Any) -> CompletionResult:
+        cost = None
+        try:
+            result = await self.inner.act(turn)
+            cost = result.usage.cost_usd
+            return result
+        finally:  # also when cancelled: then the reservation is what gets booked
+            await self.ledger.settle(self.game_id, self.per_call, cost)
 
 
 def hash_token(token: str) -> bytes:
@@ -101,6 +152,8 @@ class Session:
     status: Status = "running"
     ended_at: float | None = None
     task: asyncio.Task | None = None
+    client: str = "unknown"  # the starting client's IP, for per-client limits
+    calls: set[asyncio.Task] = field(default_factory=set)  # model calls in flight
 
     def authorized(self, token: str) -> bool:
         return self.token_hash is not None and hmac.compare_digest(
@@ -113,6 +166,16 @@ class GameManager:
         self.settings, self.ledger = settings, ledger
         self.games: dict[str, Session] = {}
         self.neon_connect: Any = None  # set by prepare_neon() when Neon is reachable
+        self._started: tuple[str, dict[str, int]] = ("", {})  # (UTC day, client -> games)
+
+    def _started_counts(self) -> dict[str, int]:
+        today = time.strftime("%Y-%m-%d", time.gmtime())
+        if self._started[0] != today:
+            self._started = (today, {})
+        return self._started[1]
+
+    def started_today(self, client: str) -> int:
+        return self._started_counts().get(client, 0)
 
     async def prepare_neon(self) -> None:
         """Create the Neon tables once; any problem means games run without live streaming."""
@@ -129,7 +192,9 @@ class GameManager:
             return
         self.neon_connect = neon.connect_neon
 
-    def start(self, setup: GameSetup, watch_only: bool) -> tuple[Session, str | None]:
+    def start(
+        self, setup: GameSetup, watch_only: bool, client: str = "unknown"
+    ) -> tuple[Session, str | None]:
         """Start a game in the background. Returns the session and the visitor's seat token
         (None when watching). Raises ValueError for a setup this server can't run."""
         self._prune()
@@ -150,12 +215,19 @@ class GameManager:
         s = self.settings
         cfg, seat = setup.game_config(), setup.human_seat
         game_id = f"{s.batch_id}-{secrets.token_hex(8)}"
-        make_agent, colors = (s.agents or llm_agents_for)(cfg)
+        if s.agents:
+            make_agent, colors = s.agents(cfg)
+        else:
+            make_agent, colors = llm_agents_for(cfg, s.play.max_tokens)
+        calls: set[asyncio.Task] = set()
+        make_agent = _metered(make_agent, self.ledger, game_id, calls)
         sinks: list[Any] = [JsonlSink(s.batch_id, s.runs_dir)]
         if self.neon_connect:
             from societysim.logging.sinks.neon import NeonSink
 
-            sinks.append(NeonSink(s.batch_id, connect=self.neon_connect, agents="llm"))
+            sinks.append(
+                NeonSink(s.batch_id, connect=self.neon_connect, agents="llm", public_only=True)
+            )
         agent = token = None
         if seat is not None:
             agent = WebHumanAgent(s.turn_timeout, s.max_timeouts)
@@ -165,18 +237,26 @@ class GameManager:
         logger = EventLogger(game_id, sinks)
         game = Game(cfg, make_agent, logger, colors)
         session = Session(game_id, game, logger, seat, agent, token and hash_token(token))
+        session.client, session.calls = client, calls
         session.task = asyncio.create_task(self._run(session))
         self.games[game_id] = session
+        counts = self._started_counts()
+        counts[client] = counts.get(client, 0) + 1
         return session, token
 
     async def _run(self, session: Session) -> None:
         game, cfg = session.game, session.game.state.config
         try:
-            await session.logger.start_game(
-                cfg.model_dump(mode="json"), cfg.seed, cfg.seat_models()
-            )
-            await session.logger.end_game(await game.run())
+            async with asyncio.timeout(self.settings.play.max_game_minutes * 60):
+                await session.logger.start_game(
+                    cfg.model_dump(mode="json"), cfg.seed, cfg.seat_models()
+                )
+                winner = await game.run()
+            await session.logger.end_game(winner)
             session.status = "finished"
+        except TimeoutError:
+            log.warning("game %s hit the time limit; ended", session.game_id)
+            session.status = "failed"
         except Forfeit:
             # ponytail: calls already running beside the visitor's turn (gather) finish
             # unobserved; they are seconds long next to the 90 s turn timeout.
@@ -184,15 +264,37 @@ class GameManager:
         except asyncio.CancelledError:  # server shutdown
             session.status = "failed"
             raise
-        except Exception:
-            log.exception("game %s failed", session.game_id)
+        except Exception as exc:  # by type only: provider text can echo request details
+            log.error("game %s failed (%s)", session.game_id, type(exc).__name__)
             session.status = "failed"
         finally:
             session.ended_at = time.time()
+            # Calls still running (beside a forfeited turn, say) are cancelled and booked.
+            for call in list(session.calls):
+                call.cancel()
+            await asyncio.gather(*session.calls, return_exceptions=True)
             await session.logger.close()
             self._tag(session)
+            if session.status == "finished":
+                await self._backfill(session)
             cost = sum(e.meta.usage.cost_usd for e in game.events if e.meta.usage)
-            self.ledger.record(session.game_id, cost)
+            await self.ledger.record(session.game_id, cost)
+
+    async def _backfill(self, session: Session) -> None:
+        """The full log to Neon, now that the game is over (live, it got public events only)."""
+        if not self.neon_connect:
+            return
+        from societysim.logging.sinks import neon
+
+        path = self.settings.runs_dir / self.settings.batch_id / f"{session.game_id}.jsonl"
+        try:
+            conn = await self.neon_connect()
+            try:
+                await neon.sync_game(path, conn)
+            finally:
+                await conn.close()
+        except Exception as exc:
+            log.warning("game %s: Neon backfill failed (%s)", session.game_id, type(exc).__name__)
 
     def _tag(self, session: Session) -> None:
         """run_meta like `play --agents llm` writes it, plus `forfeit: true` for one."""
@@ -251,6 +353,17 @@ class GameManager:
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+
+
+def _metered(
+    make_agent: AgentFactory, ledger: Ledger, game_id: str, calls: set[asyncio.Task]
+) -> AgentFactory:
+    def make(state: GameState, s: str) -> Agent:
+        per_call = admission.call_estimate(state.models[s])
+        fallback = RandomAgent(state, s)
+        return MeteredAgent(make_agent(state, s), fallback, ledger, game_id, per_call, calls)
+
+    return make
 
 
 def _seat(make_agent: AgentFactory, seat: str, agent: Agent) -> AgentFactory:

@@ -145,7 +145,7 @@ async def test_full_game_as_a_human_seat(make_client, tmp_path):
         last = (await play_out(c, started))[-1]
         assert last["status"] == "finished" and last["winner"] in ("wolves", "villagers", "draw")
         await finished(c, started)
-        assert c.manager.ledger.spend[started["game_id"]][1] == 0  # scripted agents are free
+        assert c.manager.ledger.games.get(started["game_id"], 0) == 0  # scripted: free
 
     events, meta = read_log(tmp_path, started["game_id"])
     assert events[-1]["type"] == "game_end"
@@ -239,7 +239,7 @@ async def test_abandoned_game_is_forfeit(make_client, tmp_path):
         started = await start(c)
         assert (await until(c, started, lambda m: m["status"] != "running"))["status"] == "forfeit"
         await finished(c, started)
-        assert started["game_id"] in c.manager.ledger.spend
+        assert c.manager.ledger.games.get(started["game_id"], 0) == 0
     events, meta = read_log(tmp_path, started["game_id"])
     assert meta["forfeit"] is True and meta["agents"] == "llm"
     assert "game_end" not in {e["type"] for e in events}

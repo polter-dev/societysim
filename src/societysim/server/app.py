@@ -3,14 +3,16 @@
     uvicorn --factory societysim.server.app:create_app
 
 What a visitor sees of the game comes only from agents/observation.py (`observe`), the same
-view a model in that seat gets. Errors are FastAPI's `{"detail": ...}`.
+view a model in that seat gets. Every error is `{"error": <code>, "message": <text>}`
+(security.Error); limits and hardening are in security.py, ratelimit.py and admission.py.
 """
 
 import json
+import logging
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, Literal
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, Request
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 from pydantic.json_schema import models_json_schema
 
@@ -18,13 +20,16 @@ from societysim.agents.observation import observe
 from societysim.agents.prompts import Action
 from societysim.agents.schemas import AgentResponse
 from societysim.roles import Phase, Role, SeatId, Winner
-from societysim.server import admission
+from societysim.server import admission, security
 from societysim.server.ledger import Ledger
 from societysim.server.manager import GameManager, Session, Settings, Status
+from societysim.server.security import Error, PlayError
 from societysim.server.web_agent import NotYourTurn
 from societysim.setup import GameSetup
 
 MAX_ACTION_BYTES = 8192
+
+log = logging.getLogger(__name__)
 
 
 class _Strict(BaseModel):
@@ -96,25 +101,34 @@ class ActionBody(RootModel[AgentResponse]):
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
-    manager = GameManager(settings, Ledger())
+    play = settings.play
+    security.check_startup(play, settings.neon)  # fails closed
+    ledger = Ledger(play.daily_budget_usd, persistent=settings.neon)
+    ledger.game_estimate_usd = admission.default_estimate(play.allowed_models)
+    manager = GameManager(settings, ledger)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        names = security.secret_names()
+        log.info("play server: secrets set: %s", ", ".join(names) or "none")  # names only
         if settings.neon:
             await manager.prepare_neon()
+            await ledger.load(manager.neon_connect)
         yield
         await manager.shutdown()
+        await ledger.close()
 
     app = FastAPI(title="societysim Play API", lifespan=lifespan)
     app.state.manager = manager
+    security.install(app, play)
 
     def session_for(game_id: str, authorization: str | None) -> Session:
         session = manager.games.get(game_id)
         if session is None:
-            raise HTTPException(404, "no such game")
+            raise PlayError(404, "game_not_found", "no such game")
         scheme, _, token = (authorization or "").partition(" ")
         if scheme.lower() != "bearer" or not session.authorized(token.strip()):
-            raise HTTPException(401, "bad or missing seat token")
+            raise PlayError(401, "unauthorized", "bad or missing seat token")
         return session
 
     @app.get("/api/health")
@@ -129,15 +143,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/games")
     async def start(body: StartGame, request: Request) -> StartedGame:
-        if not settings.play_enabled or manager.ledger.remaining_today() <= 0:
-            raise HTTPException(503, "play is closed for today")
         request.state.turnstile_token = body.turnstile_token
         request.state.watch_only = body.watch_only
-        await admission.check_start(request, body.setup)
+        admitted = await admission.check_start(request, body.setup)
         try:
-            session, token = manager.start(body.setup, body.watch_only)
+            session, token = manager.start(admitted.setup, body.watch_only, admitted.client)
         except ValueError as exc:
-            raise HTTPException(422, str(exc)) from None
+            raise PlayError(422, "invalid_request", str(exc)) from None
         return StartedGame(game_id=session.game_id, seat=session.seat, seat_token=token)
 
     @app.get("/api/games/{game_id}/me")
@@ -173,18 +185,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> Accepted:
         s = session_for(game_id, authorization)
         raw = await request.body()
-        if len(raw) > MAX_ACTION_BYTES:
-            raise HTTPException(413, f"body over {MAX_ACTION_BYTES} bytes")
+        if len(raw) > MAX_ACTION_BYTES:  # security.BodyLimit already capped the read at 16 KB
+            raise PlayError(413, "payload_too_large", f"body over {MAX_ACTION_BYTES} bytes")
         try:
             data = json.loads(raw)
         except ValueError:
-            raise HTTPException(422, "body is not JSON") from None
+            raise PlayError(422, "invalid_request", "body is not JSON") from None
         try:
             manager.submit(s, data)
         except NotYourTurn:
-            raise HTTPException(409, "not your turn") from None
+            raise PlayError(409, "not_your_turn", "not your turn") from None
         except ValueError as exc:
-            raise HTTPException(422, str(exc)) from None
+            raise PlayError(422, "invalid_request", str(exc)) from None
         return Accepted()
 
     return app
@@ -202,6 +214,7 @@ def play_api_json_schema() -> dict[str, Any]:
         (Accepted, "serialization"),
         (Limits, "serialization"),
         (Health, "serialization"),
+        (Error, "serialization"),
     ]
     _, schema = models_json_schema(models, ref_template="#/$defs/{model}")
     return {
@@ -219,5 +232,6 @@ def play_api_json_schema() -> dict[str, Any]:
             "GET /api/limits": {"response": "Limits"},
             "GET /api/health": {"response": "Health"},
         },
+        "x-error": "Error",
         **schema,
     }

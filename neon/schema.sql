@@ -101,6 +101,19 @@ where g.agents is distinct from 'scripted'
   and l.label_type in ('false_role_claim', 'false_report', 'bussing', 'hidden_knowledge')
 group by g.batch_id, seat.value ->> 'model', l.source, l.label_type;
 
+-- Visitor play spend (#281): one row per booked model call, plus a row per game for anything
+-- the per-call metering missed. The server sums today's rows at startup to enforce
+-- PLAY_DAILY_BUDGET_USD. Server-only: never granted to anonymous, and row-level security with
+-- no policies hides it from any non-owner role that gets a grant by mistake.
+create table if not exists visitor_spend (
+    day        date not null,
+    game_id    text not null,
+    cost_usd   numeric not null,
+    created_at timestamptz not null default now()
+);
+create index if not exists visitor_spend_day_idx on visitor_spend (day);
+alter table visitor_spend enable row level security;
+
 -- Read-only access for the Data API's anonymous role (viewer, #40). Never grant writes.
 do $$
 begin
@@ -108,5 +121,6 @@ begin
         grant usage on schema public to anonymous;
         grant select on games, events, labels, leaderboard to anonymous;
         grant select on leaderboard_by_batch, lies_by_model to anonymous;
+        revoke all on visitor_spend from anonymous;
     end if;
 end $$;

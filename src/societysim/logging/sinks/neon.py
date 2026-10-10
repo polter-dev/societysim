@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from societysim.logging.events import Event
+from societysim.logging.events import Event, Visibility
 from societysim.logging.textio import read_text_lenient
 
 log = logging.getLogger(__name__)
@@ -93,6 +93,10 @@ class NeonSink:
 
     Events are buffered and inserted `batch_size` at a time, by a background timer every
     `flush_after` seconds (so a slow LLM game shows up live), and on end_game / close.
+
+    `public_only` (visitor games, #281): the live feed gets only public events, without
+    private reasoning or suspicion, since the Data API is readable by anyone, the visitor
+    included. The full log goes in afterwards with `sync_game`.
     """
 
     def __init__(
@@ -101,6 +105,7 @@ class NeonSink:
         *,
         connect: Connect | None = None,
         agents: str | None = None,
+        public_only: bool = False,
         batch_size: int = 25,
         max_pending: int = 2000,
         timeout: float = 10,
@@ -113,6 +118,7 @@ class NeonSink:
         self._timeout = timeout
         self.batch_id = batch_id
         self.agents = agents  # 'scripted' | 'llm'; None when unknown
+        self.public_only = public_only
         self._connect = connect or connect_neon
         self._batch_size = batch_size
         self._max_pending = max_pending
@@ -154,6 +160,10 @@ class NeonSink:
 
     async def write(self, event: Event) -> None:
         try:
+            if self.public_only:
+                if event.visibility != Visibility.PUBLIC:
+                    return
+                event = event.model_copy(update={"private_reasoning": None, "suspicion": None})
             self._pending.append(event_row(event.model_dump(mode="json")))
             if len(self._pending) > self._max_pending:
                 del self._pending[: len(self._pending) - self._max_pending]
@@ -229,42 +239,51 @@ async def sync_batch(batch_dir: Path, conn: Any, chunk: int = 500) -> dict[str, 
     for path in sorted(batch_dir.glob("*.jsonl")):
         if path.name.endswith(".labels.jsonl"):
             continue
-        events = _read_jsonl(path)
-        if not events:
-            continue
-        gid = events[0]["game_id"]
-        start_meta = events[0]["meta"] if events[0]["type"] == "game_start" else {}
-        models = [s["model"] for s in (start_meta.get("seats") or {}).values()]
-        end = next((e for e in reversed(events) if e["type"] == "game_end"), None)
-        started = start_meta.get("ts")
-        agents = None
-        meta_path = batch_dir / f"{path.stem}.run_meta.json"
-        if meta_path.is_file():
-            with contextlib.suppress(OSError, ValueError, AttributeError):
-                agents = json.loads(read_text_lenient(meta_path)).get("agents")
-        await conn.execute(
-            _INSERT_GAME,
-            gid,
-            batch_dir.name,
-            json.dumps(models),
-            datetime.fromisoformat(started) if started else None,
-            agents,
-        )
-        await conn.execute(_CLEAR_EVENTS, gid)
-        await conn.execute(_CLEAR_LABELS, gid)
-        rows = [event_row(e) for e in events]
-        for i in range(0, len(rows), chunk):
-            await conn.executemany(_INSERT_EVENT, rows[i : i + chunk])
-        winner = end["meta"].get("winner") if end else None
-        await conn.execute(_END_GAME, gid, "finished" if end else "failed", winner)
-        labels_path = batch_dir / f"{path.stem}.labels.jsonl"
-        labels = _read_jsonl(labels_path) if labels_path.is_file() else []
-        if labels:
-            await conn.executemany(_INSERT_LABEL, [label_row(i, lb) for i, lb in enumerate(labels)])
-        totals["games"] += 1
-        totals["events"] += len(events)
-        totals["labels"] += len(labels)
+        counts = await sync_game(path, conn, chunk)
+        if counts:
+            totals["games"] += 1
+            totals["events"] += counts["events"]
+            totals["labels"] += counts["labels"]
     return totals
+
+
+async def sync_game(path: Path, conn: Any, chunk: int = 500) -> dict[str, int] | None:
+    """Backfill one game's log (and its labels file) into Neon; batch_id is the dir name.
+    Returns its event and label counts, or None for an empty log."""
+    batch_dir = path.parent
+    events = _read_jsonl(path)
+    if not events:
+        return None
+    gid = events[0]["game_id"]
+    start_meta = events[0]["meta"] if events[0]["type"] == "game_start" else {}
+    models = [s["model"] for s in (start_meta.get("seats") or {}).values()]
+    end = next((e for e in reversed(events) if e["type"] == "game_end"), None)
+    started = start_meta.get("ts")
+    agents = None
+    meta_path = batch_dir / f"{path.stem}.run_meta.json"
+    if meta_path.is_file():
+        with contextlib.suppress(OSError, ValueError, AttributeError):
+            agents = json.loads(read_text_lenient(meta_path)).get("agents")
+    await conn.execute(
+        _INSERT_GAME,
+        gid,
+        batch_dir.name,
+        json.dumps(models),
+        datetime.fromisoformat(started) if started else None,
+        agents,
+    )
+    await conn.execute(_CLEAR_EVENTS, gid)
+    await conn.execute(_CLEAR_LABELS, gid)
+    rows = [event_row(e) for e in events]
+    for i in range(0, len(rows), chunk):
+        await conn.executemany(_INSERT_EVENT, rows[i : i + chunk])
+    winner = end["meta"].get("winner") if end else None
+    await conn.execute(_END_GAME, gid, "finished" if end else "failed", winner)
+    labels_path = batch_dir / f"{path.stem}.labels.jsonl"
+    labels = _read_jsonl(labels_path) if labels_path.is_file() else []
+    if labels:
+        await conn.executemany(_INSERT_LABEL, [label_row(i, lb) for i, lb in enumerate(labels)])
+    return {"events": len(events), "labels": len(labels)}
 
 
 async def delete_games(conn: Any, game_ids: list[str]) -> dict[str, Any]:

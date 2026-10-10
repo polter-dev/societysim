@@ -338,3 +338,14 @@ async def test_random_agent_games(tmp_path):
         assert a["invalid_output_rate"] > 0
     # every seat is the same scripted model: self-play keeps one overall rating
     assert len(m["openskill"]["overall"]) == 1
+
+
+def test_human_seat_is_not_ranked():
+    game = load_game(FIXTURE)
+    game.events[0].meta.seats["p4"].model = "human"
+    m = compute_metrics([game])
+    assert "human" not in m["models"]
+    assert "human" not in m["openskill"]["overall"]
+    assert all("human" not in v for k, v in m["openskill"].items() if k != "wolf_side")
+    assert "deepseek-v3.1" not in m["models"]
+    assert m["models"]["qwen3-235b"]  # AI seats still ranked

@@ -54,6 +54,7 @@ LS_KEYS = (
     "base_abstained",
 )
 WOLF_SIDE = "wolf_side"
+HUMAN = "human"  # model name of a --human-seat; never ranked
 
 
 @dataclass
@@ -450,6 +451,14 @@ def openskill_ratings(games: list[GameData]) -> dict[str, dict[str, dict]]:
     }
 
 
+def _without_human(ratings: dict) -> dict:
+    """The human seat still counts toward its team's strength while rating, but gets no row."""
+    return {
+        k: ({m: r for m, r in v.items() if m != HUMAN} if k != WOLF_SIDE else v)
+        for k, v in ratings.items()
+    }
+
+
 def compute_metrics(games: list[GameData]) -> dict:
     """Every metric, per model and group, plus the same groups across all models."""
     per_model: dict[str, dict[str, Row]] = defaultdict(lambda: defaultdict(Row))
@@ -458,7 +467,8 @@ def compute_metrics(games: list[GameData]) -> dict:
         roles, models = g.roles, g.models
         for seat, row in game_rows(g).items():
             for grp in _groups(roles[seat]):
-                per_model[models[seat]][grp].add(row)
+                if models[seat] != HUMAN:
+                    per_model[models[seat]][grp].add(row)
                 by_group[grp].add(row)
     return {
         "games": len(games),
@@ -469,5 +479,5 @@ def compute_metrics(games: list[GameData]) -> dict:
             for m, groups in sorted(per_model.items())
         },
         "by_group": {grp: summarize(r) for grp, r in sorted(by_group.items())},
-        "openskill": openskill_ratings(games),
+        "openskill": _without_human(openskill_ratings(games)),
     }

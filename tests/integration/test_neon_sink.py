@@ -391,3 +391,19 @@ def test_real_neon_roundtrip(tmp_path):
     assert count == n_events
     assert status == "finished"
     shutil.rmtree(batch)
+
+
+def test_abandoned_human_game_ends_failed_in_neon(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    conn = FakeConn()
+
+    async def connect():
+        return conn
+
+    monkeypatch.setattr("societysim.logging.sinks.neon.connect_neon", connect)
+    args = ["play", "--config", str(CONFIG), "--neon", "--human-seat", "p0"]
+    res = CliRunner().invoke(app, args, input="")  # stdin EOF: the player walks away
+    assert res.exit_code == 130, res.output
+    ends = [a for sql, a in conn.executed if sql.startswith("update games")]
+    assert ends == [("selfplay_smoke-s0", "failed", None)]

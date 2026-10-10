@@ -5,7 +5,8 @@
 # models: one ModelSpec each (see societysim.config.ModelSpec).
 #   structured: json_schema | json_object | none. `doctor` reports which one actually works.
 #   Prices are USD per 1M tokens, only where LiteLLM's table is likely missing the model.
-#   HF model ids and provider pins are best guesses until `doctor` has run with a real HF_TOKEN.
+#   HF ids, provider pins and prices come from router.huggingface.co/v1/models (live providers
+#   that support structured output). Gemini ids from ai.google.dev/gemini-api/docs/models.
 
 providers:
   gemini: {concurrency: 2, rpm: 10}
@@ -16,27 +17,28 @@ models:
   # --- Hugging Face Inference Providers ---
   - name: qwen3-235b
     litellm_model: huggingface/Qwen/Qwen3-235B-A22B-Instruct-2507
-    hf_provider: together
+    hf_provider: deepinfra
     structured: json_object
     temperature: 0.7
     max_tokens: 1024
-    input_cost_per_mtok: 0.2
-    output_cost_per_mtok: 0.6
+    input_cost_per_mtok: 0.09
+    output_cost_per_mtok: 0.55
     color: "#4f8ef7"
   - name: llama4-maverick
-    litellm_model: huggingface/meta-llama/Llama-4-Maverick-17B-128E-Instruct
-    hf_provider: together
+    litellm_model: huggingface/meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8
+    hf_provider: novita
     structured: json_object
     max_tokens: 1024
     input_cost_per_mtok: 0.27
     output_cost_per_mtok: 0.85
     color: "#9b6bf2"
   - name: gemma4-26b
-    litellm_model: huggingface/google/gemma-4-26b-it
-    structured: none
+    litellm_model: huggingface/google/gemma-4-26B-A4B-it
+    hf_provider: deepinfra
+    structured: json_object
     max_tokens: 1024
-    input_cost_per_mtok: 0.1
-    output_cost_per_mtok: 0.3
+    input_cost_per_mtok: 0.07
+    output_cost_per_mtok: 0.34
     color: "#34a853"
   - name: gpt-oss-120b
     litellm_model: huggingface/openai/gpt-oss-120b
@@ -44,27 +46,27 @@ models:
     structured: json_object
     reasoning_effort: low
     max_tokens: 2048
-    input_cost_per_mtok: 0.25
-    output_cost_per_mtok: 0.69
+    input_cost_per_mtok: 0.35
+    output_cost_per_mtok: 0.75
     color: "#e8833a"
   - name: deepseek-v3.1
     litellm_model: huggingface/deepseek-ai/DeepSeek-V3.1
-    hf_provider: together
+    hf_provider: deepinfra
     structured: json_object
     max_tokens: 1024
-    input_cost_per_mtok: 0.6
-    output_cost_per_mtok: 1.7
+    input_cost_per_mtok: 0.25
+    output_cost_per_mtok: 0.95
     color: "#2bb3b1"
 
   # --- Google AI Studio ---
   - name: gemini-flash-lite
-    litellm_model: gemini/gemini-2.5-flash-lite
+    litellm_model: gemini/gemini-3.5-flash-lite
     structured: json_schema
     reasoning_effort: disable # thinking budget 0
     max_tokens: 1024
     color: "#fbbc04"
   - name: gemini-flash
-    litellm_model: gemini/gemini-2.5-flash
+    litellm_model: gemini/gemini-3.8-flash
     structured: json_schema
     reasoning_effort: disable
     max_tokens: 1024

@@ -37,7 +37,7 @@ def test_every_model_provider_has_a_limit():
 
 def test_hf_pin_applies_to_model_string():
     spec = load_registry(DEFAULT_PATH).get("qwen3-235b")
-    assert litellm_model_name(spec).startswith("huggingface/together/Qwen/")
+    assert litellm_model_name(spec).startswith("huggingface/deepinfra/Qwen/")
 
 
 def test_resolve_match_and_unknown():

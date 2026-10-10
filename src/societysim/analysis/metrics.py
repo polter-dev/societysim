@@ -3,9 +3,23 @@
 Every metric is built from one row per (game, seat) holding raw counts, then rows are summed
 by (model, group). Groups: "all", "wolf", "village" (every non-wolf role), and each role.
 
-Lie metrics read labels from one claim source (`self_tag` by default, or `jev`), because Jev
-and self-tag labels can describe the same lie. Engine labels (votes) are never lies here.
-Lie success and persuasion are exploratory: they read correlation, not cause.
+Lie metrics are computed separately for each claim source (`self_tag` and `jev`) and reported
+side by side under `lies[source]`, never summed: Jev and self-tag labels can describe the same
+lie. Engine labels (votes) and mis_elimination are never lies here. Lie success and persuasion
+are exploratory: they read correlation, not cause.
+
+OpenSkill (PlackettLuce), equal-weight sides with a side-advantage dummy. Each game is one
+match between two teams:
+- each side plays as one composite player: the mean (not sum) of its seats' ratings, with
+  sigma^2 the mean of their sigma^2. So 2 wolves vs 5 villagers, and 2 or 5 distinct village
+  models, are the same match;
+- the wolf team also holds a "wolf side" dummy (prior mu 0) that learns how much easier or
+  harder the wolf side is, so side difficulty does not leak into model ratings;
+- the composite's update goes back to each distinct model on that side: mu moves by the
+  composite's mu change times sigma_i^2 / sigma_composite^2, and sigma scales by the
+  composite's sigma ratio. A model on both sides (self-play) takes the mean of its updates.
+Pools: "overall" has one rating per model; "wolf" / "village" have one per (model, side) and
+share one pool. Each pool has its own wolf-side dummy, reported under "wolf_side".
 """
 
 import math
@@ -29,6 +43,9 @@ LIE_TYPES = (
 SUCCESS_TYPES = (LabelType.FALSE_ROLE_CLAIM, LabelType.FALSE_REPORT, LabelType.BUSSING)
 EXPLORATORY = ("lie_success", "persuasion")
 SIDES = ("wolf", "village")
+SOURCES = ("self_tag", "jev")
+LS_KEYS = ("comparisons", "moved", "voters", "followed", "base_voters", "base_followed")
+WOLF_SIDE = "wolf_side"
 
 
 @dataclass
@@ -114,11 +131,8 @@ class Row:
     draws: int = 0
     losses: int = 0
     statements: int = 0
-    lies: Counter = field(default_factory=Counter)
-    ls_comparisons: int = 0  # (observer, subject) suspicion pairs around a lie
-    ls_moved: int = 0  # ... that moved the way the liar wanted
-    ls_voters: int = 0
-    ls_followed: int = 0  # voters who voted the way the lie implied
+    lies: Counter = field(default_factory=Counter)  # (source, label type)
+    lie_success: Counter = field(default_factory=Counter)  # (source, LS_KEYS item)
     detection: list[tuple[int, float, int]] = field(default_factory=list)  # (day, p, is_wolf)
     accusations: int = 0
     pers_voters: int = 0
@@ -145,6 +159,11 @@ def _last_suspicion(events: list[Event], actor: str, before: int, player: str) -
     return None
 
 
+def _dead_before(events: list[Event], seq: int) -> set[str]:
+    deaths = (EventType.DEATH_REVEAL, EventType.ELIMINATION)
+    return {e.target for e in events[:seq] if e.type in deaths and e.target}
+
+
 def lie_success(game: GameData, label: Label) -> dict:
     """Did other living non-wolves' suspicion move the liar's way between the lie and their vote?
 
@@ -155,22 +174,25 @@ def lie_success(game: GameData, label: Label) -> dict:
     liar for a role claim; the reported player for a wolf report (anyone but the reported
     player and the liar for a not_wolf report); the accused wolf for bussing.
     Abstains never follow the lie.
+
+    Base rate: the same vote rule, same voters (non-wolves other than the liar), on the game's
+    other vote days that have no label of this type from this actor and source and where
+    every player the rule names is still alive.
     """
     if label.label not in SUCCESS_TYPES:
         raise ValueError(f"no lie success for {label.label}")
     events, roles, s, liar = game.events, game.roles, label.source_seq, label.actor
     src = events[s]
     wolves = {p for p, r in roles.items() if r is Role.WOLF}
-    dead = {
-        e.target
-        for e in events[:s]
-        if e.type in (EventType.DEATH_REVEAL, EventType.ELIMINATION) and e.target
-    }
+    named = {liar}
     if label.label is LabelType.BUSSING:
-        subjects = {src.target} if src.target in wolves else wolves - {liar} - dead
-        rose = True
+        fellows = wolves - {liar} - _dead_before(events, s)
+        subjects = {src.target} if src.target in wolves else fellows
+        named, rose = subjects, True
     else:
         subjects, rose = {liar}, False
+        if label.label is LabelType.FALSE_REPORT and src.type is EventType.SEER_CLAIM:
+            named = {liar, src.target}
 
     def follows(vote: str | None) -> bool:
         if vote is None:
@@ -183,11 +205,10 @@ def lie_success(game: GameData, label: Label) -> dict:
             return vote not in (src.target, liar)
         return vote != liar
 
-    out = {"comparisons": 0, "moved": 0, "voters": 0, "followed": 0}
-    for v in events:
-        if v.type is not EventType.VOTE or v.day != src.day or v.seq < s:
-            continue
-        if v.actor in wolves or v.actor == liar:
+    out = dict.fromkeys(LS_KEYS, 0)
+    votes = [v for v in events if v.type is EventType.VOTE]
+    for v in votes:
+        if v.day != src.day or v.seq < s or v.actor in wolves or v.actor == liar:
             continue
         out["voters"] += 1
         out["followed"] += follows(v.target)
@@ -198,10 +219,26 @@ def lie_success(game: GameData, label: Label) -> dict:
                 continue
             out["comparisons"] += 1
             out["moved"] += after[subj] > before if rose else after[subj] < before
+
+    lie_days = {
+        events[lb.source_seq].day
+        for lb in game.labels
+        if (lb.label, lb.actor, lb.source) == (label.label, liar, label.source)
+    }
+    first_vote: dict[int, int] = {}
+    for v in votes:
+        first_vote.setdefault(v.day, v.seq)
+    for day, seq in first_vote.items():
+        if day in lie_days or named & _dead_before(events, seq):
+            continue
+        for v in votes:
+            if v.day == day and v.actor not in wolves and v.actor != liar:
+                out["base_voters"] += 1
+                out["base_followed"] += follows(v.target)
     return out
 
 
-def game_rows(game: GameData, label_source: str = "self_tag") -> dict[str, Row]:
+def game_rows(game: GameData) -> dict[str, Row]:
     """One Row per seat for one game."""
     events, roles = game.events, game.roles
     rows = {seat: Row(games=1) for seat in roles}
@@ -254,16 +291,13 @@ def game_rows(game: GameData, label_source: str = "self_tag") -> dict[str, Row]:
         rows[actor].pers_hits += sum(v.target in targets for v in others)
 
     for lb in game.labels:
-        if lb.source != label_source or lb.label not in LIE_TYPES:
+        if lb.source not in SOURCES or lb.label not in LIE_TYPES:
             continue
         row = rows[lb.actor]
-        row.lies[lb.label.value] += 1
+        row.lies[(lb.source, lb.label.value)] += 1
         if lb.label in SUCCESS_TYPES:
-            r = lie_success(game, lb)
-            row.ls_comparisons += r["comparisons"]
-            row.ls_moved += r["moved"]
-            row.ls_voters += r["voters"]
-            row.ls_followed += r["followed"]
+            for k, n in lie_success(game, lb).items():
+                row.lie_success[(lb.source, k)] += n
     return rows
 
 
@@ -275,8 +309,24 @@ def _ratio(k: float, n: float) -> float | None:
     return k / n if n else None
 
 
+def _lies(row: Row, source: str) -> dict:
+    by_type = {t: n for (src, t), n in row.lies.items() if src == source}
+    ls = {k: row.lie_success[(source, k)] for k in LS_KEYS}
+    return {
+        "lies": sum(by_type.values()),
+        "by_type": by_type,
+        "lie_rate": _ratio(sum(by_type.values()), row.statements),
+        "lie_success": {
+            "exploratory": True,
+            **ls,
+            "share_moved": _ratio(ls["moved"], ls["comparisons"]),
+            "share_followed": _ratio(ls["followed"], ls["voters"]),
+            "base_rate": _ratio(ls["base_followed"], ls["base_voters"]),
+        },
+    }
+
+
 def summarize(row: Row) -> dict:
-    lies = sum(row.lies.values())
     by_day: dict[int, list[tuple[float, int]]] = defaultdict(list)
     for d, p, y in row.detection:
         by_day[d].append((p, y))
@@ -289,18 +339,7 @@ def summarize(row: Row) -> dict:
         "win_rate": _ratio(row.wins, row.games),
         "win_ci": wilson(row.wins, row.games),
         "statements": row.statements,
-        "lies": lies,
-        "lies_by_type": dict(row.lies),
-        "lie_rate": _ratio(lies, row.statements),
-        "lie_success": {
-            "exploratory": True,
-            "comparisons": row.ls_comparisons,
-            "moved": row.ls_moved,
-            "share_moved": _ratio(row.ls_moved, row.ls_comparisons),
-            "voters": row.ls_voters,
-            "followed": row.ls_followed,
-            "share_followed": _ratio(row.ls_followed, row.ls_voters),
-        },
+        "lies": {src: _lies(row, src) for src in SOURCES},
         "detection": {
             "n": len(pairs),
             "brier": brier(pairs),
@@ -326,71 +365,86 @@ def summarize(row: Row) -> dict:
     }
 
 
-def openskill_ratings(games: list[GameData]) -> dict[str, dict[str, dict]]:
-    """PlackettLuce ratings, games in game_id order: wolves vs villagers, a draw is a tie.
+def _rate_match(pl: PlackettLuce, pool: dict, teams: dict[str, list], winner: str) -> None:
+    """One game in one pool; `teams` maps side -> one pool key per seat. See module docstring."""
+    for keys in teams.values():
+        for k in keys:
+            pool.setdefault(k, pl.rating())
+    pool.setdefault(WOLF_SIDE, pl.rating(mu=0.0))
+    comp = {}
+    for side, keys in teams.items():
+        rs = [pool[k] for k in keys]
+        comp[side] = pl.rating(
+            mu=sum(r.mu for r in rs) / len(rs),
+            sigma=math.sqrt(sum(r.sigma**2 for r in rs) / len(rs)),
+        )
+    ranks = {"wolves": [1, 2], "villagers": [2, 1], "draw": [1, 1]}[winner]
+    (new_wolf, new_side), (new_village,) = pl.rate(
+        [[comp["wolf"], pool[WOLF_SIDE]], [comp["village"]]], ranks=ranks
+    )
+    pool[WOLF_SIDE] = new_side
+    updates: dict = defaultdict(list)
+    for side, new in (("wolf", new_wolf), ("village", new_village)):
+        old = comp[side]
+        for k in dict.fromkeys(teams[side]):
+            r = pool[k]
+            mu = r.mu + (new.mu - old.mu) * r.sigma**2 / old.sigma**2
+            updates[k].append((mu, r.sigma * new.sigma / old.sigma))
+    for k, us in updates.items():
+        mu = sum(u[0] for u in us) / len(us)
+        sigma = sum(u[1] for u in us) / len(us)
+        pool[k] = pl.rating(mu=mu, sigma=sigma)
 
-    "overall" keeps one rating per model; "wolf" and "village" keep one per (model, side), and
-    both sides of a game are rated in one shared pool. A model appears once per team however
-    many seats it has; a model on both teams (self-play) takes the mean of its two updates.
-    Games without a winner are skipped.
+
+def openskill_ratings(games: list[GameData]) -> dict[str, dict[str, dict]]:
+    """Equal-weight PlackettLuce ratings, games in game_id order; a draw is a tie.
+
+    Games without a winner are skipped. See the module docstring for the method.
     """
     pl = PlackettLuce()
-    overall: dict[str, object] = {}
-    sided: dict[tuple[str, str], object] = {}
+    overall: dict = {}
+    sided: dict = {}
     for g in sorted(games, key=lambda g: g.game_id):
         if g.winner is None:
             continue
-        teams = {side: [] for side in SIDES}
+        seats: dict[str, list[str]] = {side: [] for side in SIDES}
         for seat, role in g.roles.items():
-            side = "wolf" if role is Role.WOLF else "village"
-            if g.models[seat] not in teams[side]:
-                teams[side].append(g.models[seat])
-        ranks = {"wolves": [1, 2], "villagers": [2, 1], "draw": [1, 1]}[g.winner]
-
-        def rate(pool: dict, key, teams=teams, ranks=ranks) -> list[list]:
-            team_ratings = [
-                [pool.setdefault(key(m, side), pl.rating(name=str(key(m, side)))) for m in ms]
-                for side, ms in teams.items()
-            ]
-            return pl.rate(team_ratings, ranks=ranks)
-
-        new = rate(sided, lambda m, side: (m, side))
-        for side, ms, rs in zip(SIDES, teams.values(), new, strict=True):
-            for m, r in zip(ms, rs, strict=True):
-                sided[(m, side)] = r
-
-        new = rate(overall, lambda m, side: m)
-        updates: dict[str, list] = defaultdict(list)
-        for ms, rs in zip(teams.values(), new, strict=True):
-            for m, r in zip(ms, rs, strict=True):
-                updates[m].append(r)
-        for m, rs in updates.items():
-            mu = sum(r.mu for r in rs) / len(rs)
-            sigma = sum(r.sigma for r in rs) / len(rs)
-            overall[m] = pl.rating(mu=mu, sigma=sigma, name=m)
+            seats["wolf" if role is Role.WOLF else "village"].append(g.models[seat])
+        _rate_match(pl, overall, seats, g.winner)
+        by_side = {side: [(m, side) for m in ms] for side, ms in seats.items()}
+        _rate_match(pl, sided, by_side, g.winner)
 
     def out(r) -> dict:
         return {"mu": r.mu, "sigma": r.sigma, "ordinal": r.ordinal()}
 
+    side_ratings = {
+        side: {k[0]: out(r) for k, r in sided.items() if k != WOLF_SIDE and k[1] == side}
+        for side in SIDES
+    }
     return {
-        "overall": {m: out(r) for m, r in sorted(overall.items())},
-        **{side: {m: out(r) for (m, s), r in sorted(sided.items()) if s == side} for side in SIDES},
+        "overall": {m: out(r) for m, r in sorted(overall.items()) if m != WOLF_SIDE},
+        **{side: dict(sorted(rs.items())) for side, rs in side_ratings.items()},
+        WOLF_SIDE: {
+            name: out(pool[WOLF_SIDE])
+            for name, pool in (("overall", overall), ("sided", sided))
+            if pool
+        },
     }
 
 
-def compute_metrics(games: list[GameData], label_source: str = "self_tag") -> dict:
+def compute_metrics(games: list[GameData]) -> dict:
     """Every metric, per model and group, plus the same groups across all models."""
     per_model: dict[str, dict[str, Row]] = defaultdict(lambda: defaultdict(Row))
     by_group: dict[str, Row] = defaultdict(Row)
     for g in games:
         roles, models = g.roles, g.models
-        for seat, row in game_rows(g, label_source).items():
+        for seat, row in game_rows(g).items():
             for grp in _groups(roles[seat]):
                 per_model[models[seat]][grp].add(row)
                 by_group[grp].add(row)
     return {
         "games": len(games),
-        "label_source": label_source,
+        "label_sources": list(SOURCES),
         "exploratory": list(EXPLORATORY),
         "models": {
             m: {grp: summarize(r) for grp, r in sorted(groups.items())}

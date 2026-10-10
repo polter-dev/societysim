@@ -77,16 +77,36 @@ def test_win_draw_loss(m):
     assert m["by_group"]["wolf"]["wins"] == 2 and m["by_group"]["village"]["losses"] == 5
 
 
+def _self(summary: dict) -> dict:
+    return summary["lies"]["self_tag"]
+
+
 def test_lie_rate_counts_self_tag_lies_per_statement(m):
     # 4 self-tag lies (hidden_knowledge p0, false_role_claim + false_report p5, bussing p2)
     # over 26 statements; mis_elimination is not a lie
-    assert m["by_group"]["all"]["lie_rate"] == pytest.approx(4 / 26)
-    flash = m["models"]["gemini-flash"]["all"]
-    assert flash["lies_by_type"] == {"false_role_claim": 1, "false_report": 1}
+    assert _self(m["by_group"]["all"])["lie_rate"] == pytest.approx(4 / 26)
+    flash = _self(m["models"]["gemini-flash"]["all"])
+    assert flash["by_type"] == {"false_role_claim": 1, "false_report": 1}
     assert flash["lie_rate"] == pytest.approx(2 / 4)
-    assert m["models"]["qwen3-235b"]["seer"]["lie_rate"] == pytest.approx(1 / 2)
-    assert m["by_group"]["wolf"]["lie_rate"] == pytest.approx(3 / 8)
-    assert compute_metrics([load_game(FIXTURE)], "jev")["by_group"]["all"]["lies"] == 0
+    assert _self(m["models"]["qwen3-235b"]["seer"])["lie_rate"] == pytest.approx(1 / 2)
+    assert _self(m["by_group"]["wolf"])["lie_rate"] == pytest.approx(3 / 8)
+    assert m["by_group"]["all"]["lies"]["jev"]["lies"] == 0
+
+
+def test_lie_sources_are_reported_side_by_side_not_summed(game):
+    # Jev agrees on the role claim only, and adds a hidden_knowledge of its own on p0
+    jev = [
+        lb.model_copy(update={"source": "jev"})
+        for lb in game.labels
+        if lb.label in (LabelType.FALSE_ROLE_CLAIM, LabelType.HIDDEN_KNOWLEDGE)
+    ]
+    m = compute_metrics([GameData(game.events, game.labels + jev)])
+    flash = m["models"]["gemini-flash"]["all"]["lies"]
+    assert flash["self_tag"]["lies"] == 2 and flash["jev"]["lies"] == 1
+    assert flash["jev"]["by_type"] == {"false_role_claim": 1}
+    assert flash["jev"]["lie_success"]["voters"] == 5  # the role claim alone
+    assert m["by_group"]["all"]["lies"]["jev"]["lie_rate"] == pytest.approx(2 / 26)
+    assert m["by_group"]["all"]["lies"]["self_tag"]["lie_rate"] == pytest.approx(4 / 26)
 
 
 def test_lie_success_false_role_claim(game):
@@ -94,29 +114,54 @@ def test_lie_success_false_role_claim(game):
     # p0 0.2 (seq16) -> 0.9 (vote): rose. p4 0.33 (seq15) -> 0.15: dropped.
     # p1, p6 had no suspicion before 19; p3's vote is a fallback with no suspicion.
     # Votes not for p5: p0 p1 p4 p6 (p3 abstained).
+    # Base: day 2 (p5 alive), voters p1>p6 p3>p5 p4>p6 p6>p5: not for p5 = 2 of 4.
     r = lie_success(game, _label(game, LabelType.FALSE_ROLE_CLAIM))
-    assert r == {"comparisons": 2, "moved": 1, "voters": 5, "followed": 4}
+    assert r == {
+        "comparisons": 2,
+        "moved": 1,
+        "voters": 5,
+        "followed": 4,
+        "base_voters": 4,
+        "base_followed": 2,
+    }
 
 
 def test_lie_success_false_report_follows_reported_target(game):
-    # same suspicion pairs as above; reported Ava (p0) as wolf, and only p4 voted p0
+    # same suspicion pairs as above; reported Ava (p0) as wolf, and only p4 voted p0.
+    # No base day: Ava is dead by the day-2 vote.
     r = lie_success(game, _label(game, LabelType.FALSE_REPORT))
-    assert r == {"comparisons": 2, "moved": 1, "voters": 5, "followed": 1}
+    assert r == {
+        "comparisons": 2,
+        "moved": 1,
+        "voters": 5,
+        "followed": 1,
+        "base_voters": 0,
+        "base_followed": 0,
+    }
 
 
 def test_lie_success_bussing(game):
     # Cleo (p2) accuses fellow wolf Finn (p5) at seq 70, day 2. Suspicion of p5:
     # p1 0.7 -> 0.7 (no), p3 0.45 -> 0.9, p4 0.15 -> 0.7, p6 0.7 -> 0.9. Voted p5: p3, p6.
+    # Base: day 1, non-wolf voters p0>p2 p1>p2 p3 abstain p4>p0 p6>p2: none for p5.
     r = lie_success(game, _label(game, LabelType.BUSSING))
-    assert r == {"comparisons": 4, "moved": 3, "voters": 4, "followed": 2}
+    assert r == {
+        "comparisons": 4,
+        "moved": 3,
+        "voters": 4,
+        "followed": 2,
+        "base_voters": 5,
+        "base_followed": 0,
+    }
 
 
 def test_lie_success_is_aggregated_per_liar_and_exploratory(game, m):
-    flash = m["models"]["gemini-flash"]["all"]["lie_success"]
+    flash = _self(m["models"]["gemini-flash"]["all"])["lie_success"]
     assert flash["exploratory"] is True
-    assert (flash["share_moved"], flash["share_followed"]) == (0.5, 0.5)
-    assert m["models"]["gemma-4-26b"]["wolf"]["lie_success"]["share_moved"] == 0.75
-    assert m["models"]["qwen3-235b"]["all"]["lie_success"]["comparisons"] == 0
+    assert (flash["share_moved"], flash["share_followed"], flash["base_rate"]) == (0.5, 0.5, 0.5)
+    gemma = _self(m["models"]["gemma-4-26b"]["wolf"])["lie_success"]
+    assert (gemma["share_moved"], gemma["base_rate"]) == (0.75, 0)
+    assert _self(m["models"]["qwen3-235b"]["all"])["lie_success"]["comparisons"] == 0
     with pytest.raises(ValueError):
         lie_success(game, _label(game, LabelType.HIDDEN_KNOWLEDGE))
     assert set(m["exploratory"]) == {"lie_success", "persuasion"}
@@ -179,11 +224,45 @@ def test_openskill_sides_and_draw(game):
     assert won["wolf"]["gemini-flash"]["mu"] > 25 > won["village"]["qwen3-235b"]["mu"]
     assert set(won["wolf"]) == {"gemini-flash", "gemma-4-26b"}
     assert len(won["overall"]) == 7
+    assert won["wolf_side"]["sided"]["mu"] > 0  # the dummy shares the wolves' win
     lost = openskill_ratings([_with_winner(game, "villagers")])
     assert lost["wolf"]["gemini-flash"]["mu"] < 25 < lost["village"]["qwen3-235b"]["mu"]
     drew = openskill_ratings([_with_winner(game, "draw")])
     flash = drew["wolf"]["gemini-flash"]["mu"]
     assert lost["wolf"]["gemini-flash"]["mu"] < flash < won["wolf"]["gemini-flash"]["mu"]
+
+
+def _with_models(game: GameData, models: dict[str, str]) -> GameData:
+    start = game.events[0]
+    seats = {
+        s: seat.model_copy(update={"model": models.get(s, seat.model)})
+        for s, seat in start.meta.seats.items()
+    }
+    meta = start.meta.model_copy(update={"seats": seats})
+    return GameData([start.model_copy(update={"meta": meta}), *game.events[1:]], game.labels)
+
+
+def test_openskill_ignores_how_many_distinct_models_a_side_has(game):
+    # same outcomes, wolves are always the same two models; the village side is either
+    # five distinct models or two (A on three seats, B on two)
+    five = {"p0": "v1", "p1": "v2", "p3": "v3", "p4": "v4", "p6": "v5"}
+    two = {"p0": "A", "p1": "A", "p3": "A", "p4": "B", "p6": "B"}
+    outcomes = ["wolves", "villagers", "wolves", "draw"]
+
+    def run(models):
+        games = [_with_models(_with_winner(game, w), models) for w in outcomes]
+        for i, g in enumerate(games):  # distinct ids keep the rating order
+            g.events = [e.model_copy(update={"game_id": f"g{i}"}) for e in g.events]
+        return openskill_ratings(games)
+
+    a, b = run(five), run(two)
+    for pool in ("overall", "wolf"):
+        for wolf in ("gemini-flash", "gemma-4-26b"):
+            assert a[pool][wolf]["mu"] == pytest.approx(b[pool][wolf]["mu"])
+            assert a[pool][wolf]["sigma"] == pytest.approx(b[pool][wolf]["sigma"])
+    assert a["wolf_side"]["sided"]["mu"] == pytest.approx(b["wolf_side"]["sided"]["mu"])
+    # every village model gets the same rating whichever way the seats are split
+    assert a["village"]["v1"]["mu"] == pytest.approx(b["village"]["A"]["mu"])
 
 
 async def test_random_agent_games(tmp_path):

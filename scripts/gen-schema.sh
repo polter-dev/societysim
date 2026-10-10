@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Regenerate schema/events.schema.json (from the Pydantic models), viewer/src/types/events.ts
 # (from that schema) and the static viewer-data schemas (index, leaderboard, metrics,
-# highlights, narration_index; see docs/DATA_CONTRACT.md). Check that they are current with:
+# highlights, narration_index; see docs/DATA_CONTRACT.md) and schema/game_setup.schema.json
+# (the settings screen's GameSetup, societysim/setup.py). Check that they are current with:
 #   ./scripts/gen-schema.sh && git diff --exit-code schema/ viewer/src/types/
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -79,6 +80,11 @@ for name, tp in [
         **s,
     }
     Path(f"schema/{name}.schema.json").write_text(json.dumps(s, indent=2) + "\n")
+
+# What the settings screen submits; `play --setup` runs it.
+from societysim.setup import setup_json_schema
+
+Path("schema/game_setup.schema.json").write_text(json.dumps(setup_json_schema(), indent=2) + "\n")
 PY
 
 mkdir -p viewer/src/types

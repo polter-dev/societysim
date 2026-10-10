@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "game_setup.schema.json",
+  "$defs": {
+    "SeatModel": {
+      "additionalProperties": false,
+      "properties": {
+        "seat": {
+          "pattern": "^p[0-9]$",
+          "title": "Seat",
+          "type": "string"
+        },
+        "model": {
+          "description": "A model name from models_catalog.json, or 'human'.",
+          "title": "Model",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seat",
+        "model"
+      ],
+      "title": "SeatModel",
+      "type": "object"
+    },
+    "SpecialRoles": {
+      "additionalProperties": false,
+      "properties": {
+        "seer": {
+          "default": true,
+          "title": "Seer",
+          "type": "boolean"
+        },
+        "doctor": {
+          "default": true,
+          "title": "Doctor",
+          "type": "boolean"
+        }
+      },
+      "title": "SpecialRoles",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One game's settings. Every default is the Basic setup.\n\nValidate with `GameSetup.model_validate(data)`; model names are checked against\nconfigs/models.yaml unless `context={\"models\": {...}}` gives another set.",
+  "properties": {
+    "mode": {
+      "default": "basic",
+      "description": "basic allows only seed and human_seat to change.",
+      "enum": [
+        "basic",
+        "advanced"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "n_players": {
+      "default": 10,
+      "maximum": 10,
+      "minimum": 7,
+      "title": "N Players",
+      "type": "integer"
+    },
+    "n_wolves": {
+      "default": 2,
+      "description": "Must be fewer than the villager side.",
+      "minimum": 1,
+      "title": "N Wolves",
+      "type": "integer"
+    },
+    "special_roles": {
+      "$ref": "#/$defs/SpecialRoles",
+      "default": {
+        "seer": true,
+        "doctor": true
+      }
+    },
+    "seats": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/SeatModel"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "One entry per seat p0..p{n_players-1}. Excludes model_pool.",
+      "title": "Seats"
+    },
+    "model_pool": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Models to fill the seats from; null means the default lineup.",
+      "title": "Model Pool"
+    },
+    "rotation": {
+      "default": "shuffle",
+      "description": "How model_pool fills the model seats: in_order repeats the pool from p0; shuffle first shuffles the pool with the seed.",
+      "enum": [
+        "in_order",
+        "shuffle"
+      ],
+      "title": "Rotation",
+      "type": "string"
+    },
+    "human_seat": {
+      "anyOf": [
+        {
+          "pattern": "^p[0-9]$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The seat a person plays, or null.",
+      "title": "Human Seat"
+    },
+    "seed": {
+      "default": 0,
+      "title": "Seed",
+      "type": "integer"
+    }
+  },
+  "title": "GameSetup",
+  "type": "object"
+}

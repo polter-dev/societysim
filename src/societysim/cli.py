@@ -74,9 +74,80 @@ def _neon_connect(neon: bool):
     return neon_sink.connect_neon
 
 
+class Preset(StrEnum):
+    BASIC = "basic"
+
+
+@app.command()
+def catalog(
+    out: Annotated[Path, typer.Option("--out", help="Directory for models_catalog.json.")] = Path(
+        "."
+    ),
+    registry: Annotated[Path, typer.Option("--registry", help="Model registry file.")] = Path(
+        "configs/models.yaml"
+    ),
+    check: Annotated[
+        bool, typer.Option("--check", help="Also ask each self-hosted server what it serves.")
+    ] = False,
+) -> None:
+    """Write models_catalog.json: every model the settings screen can offer.
+
+    A self-hosted model whose base URL variable (environment or .env) is unset is marked
+    unavailable; --check also marks it unavailable when its server doesn't serve it.
+    """
+    from societysim.models.registry import load_registry
+    from societysim.setup import build_catalog
+
+    if not registry.is_file():
+        typer.echo(f"config file not found: {registry}")
+        raise typer.Exit(1)
+    load_dotenv()
+    cat = build_catalog(load_registry(registry).models, check=check)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / "models_catalog.json"
+    path.write_text(cat.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    n_off = sum(not m.available for m in cat.models)
+    typer.echo(f"wrote {path} ({len(cat.models)} models, {n_off} unavailable)")
+
+
+def _load_setup(path: Path | None, human_seat: str | None, seed: int | None):
+    """GameSetup from --preset basic (path None) or a --setup file, with CLI overrides."""
+    import yaml
+    from pydantic import ValidationError
+
+    from societysim.setup import GameSetup, setup_errors
+
+    data = {"mode": "basic"}
+    if path is not None:
+        if not path.is_file():
+            typer.echo(f"setup file not found: {path}")
+            raise typer.Exit(1)
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}  # YAML reads JSON too
+        if not isinstance(data, dict):
+            typer.echo(f"setup file must hold an object: {path}")
+            raise typer.Exit(1)
+    if human_seat is not None:
+        data["human_seat"] = human_seat
+    if seed is not None:
+        data["seed"] = seed
+    try:
+        return GameSetup.model_validate(data)
+    except ValidationError as exc:
+        for line in setup_errors(exc):
+            typer.echo(f"invalid setup: {line}")
+        raise typer.Exit(1) from None
+
+
 @app.command()
 def play(
-    config: Annotated[Path, typer.Option("--config", help="Game config YAML file.")],
+    config: Annotated[Path | None, typer.Option("--config", help="Game config YAML file.")] = None,
+    preset: Annotated[
+        Preset | None, typer.Option("--preset", help="Play a preset: basic = 10 seats, 2 wolves.")
+    ] = None,
+    setup: Annotated[
+        Path | None,
+        typer.Option("--setup", help="GameSetup JSON or YAML (schema/game_setup.schema.json)."),
+    ] = None,
     agents: Annotated[AgentMode, typer.Option("--agents", help="Agent type.")] = AgentMode.SCRIPTED,
     seed: Annotated[int | None, typer.Option("--seed", help="Override the config seed.")] = None,
     batch_id: Annotated[
@@ -98,15 +169,23 @@ def play(
     from societysim.models.registry import load_registry
     from societysim.orchestrator import run_game
 
-    if not config.is_file():
+    if sum(x is not None for x in (config, preset, setup)) != 1:
+        typer.echo("give exactly one of --config, --preset or --setup")
+        raise typer.Exit(1)
+    if config is None:
+        game_setup = _load_setup(setup, human_seat, seed)
+        cfg, human_seat = game_setup.game_config(), game_setup.human_seat
+        stem = setup.stem if setup is not None else preset.value
+    elif not config.is_file():
         typer.echo(f"config file not found: {config}")
         raise typer.Exit(1)
-    cfg = load_yaml(config, GameConfig)
-    if seed is not None:
-        cfg = cfg.model_copy(update={"seed": seed})
-    batch_id = batch_id if batch_id is not None else config.stem
+    else:
+        cfg, stem = load_yaml(config, GameConfig), config.stem
+        if seed is not None:
+            cfg = cfg.model_copy(update={"seed": seed})
+    batch_id = batch_id if batch_id is not None else stem
     game_id = f"{batch_id}-s{cfg.seed}"
-    if human_seat is not None:
+    if config is not None and human_seat is not None:
         models = cfg.seat_models()
         seats = [f"p{i}" for i in range(cfg.n_players)]
         if human_seat not in seats or not models:

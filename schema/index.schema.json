@@ -36,7 +36,7 @@
         },
         "seats": {
           "patternProperties": {
-            "^p[0-8]$": {
+            "^p[0-9]$": {
               "$ref": "#/$defs/IndexSeat"
             }
           },

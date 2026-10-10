@@ -43,8 +43,9 @@ You coordinate work on the societysim repo for one team member. The member's nam
 5. **Review verdicts:**
    - Approved → the reviewer has labeled and queued auto-merge. Check `gh pr view N --json state,mergeStateStatus` later.
    - Changes → send the fix list to the same implementer (SendMessage) or dispatch a new one on the same branch. After 2 failed rounds, label `status:needs-human`, record it, and tell the member.
-6. **After a merge,** find issues that depended on the merged one. If all their dependencies are now closed, swap `status:blocked` for `status:ready`.
-7. If an implementer returns `CODEX_RATE_LIMITED <time>`, record it and route Codex tickets to `implementer` (Sonnet) until then.
+6. **After a merge,** find issues that depended on the merged one. If all their dependencies are now closed, swap `status:blocked` for `status:ready`. Then post the PR's handoffs: `gh pr view M --json body`, and for each line under `## Handoff` run `gh issue comment <target> -b "**Handoff from #N (PR #M):** <note>"`. Skip "none".
+7. If an implementer reports an urgent handoff (an in-progress issue is affected now), comment on that issue right away, saying it is pending PR #M.
+8. If an implementer returns `CODEX_RATE_LIMITED <time>`, record it and route Codex tickets to `implementer` (Sonnet) until then.
 
 ## "continue" (after compaction, a rate limit, or a new session)
 

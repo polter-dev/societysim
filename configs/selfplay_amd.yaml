@@ -1,0 +1,5 @@
+# T6.3: one self-play game on the model served from the AMD GPU (infra/amd/serve.sh).
+#   uv run societysim play --config configs/selfplay_amd.yaml --agents llm
+n_players: 7
+seed: 0
+models: [amd-gpt-oss-20b]

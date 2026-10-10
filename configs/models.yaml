@@ -19,13 +19,20 @@ providers:
   huggingface: {concurrency: 8, rpm: 120}
   openai: {concurrency: 8, rpm: 300}
   hosted_vllm: {concurrency: 8, rpm: 120} # HF unified endpoint, see env below
+  llamafile: {concurrency: 8, rpm: 600} # our AMD GPU server (infra/amd/serve.sh)
 
 # DeepInfra rejects LiteLLM's huggingface/deepinfra/... route, so those models go through the
 # HF unified endpoint as `hosted_vllm/<hf_id>:deepinfra`; LiteLLM reads these variables.
+# The AMD server (T6.3) is OpenAI-compatible, but `openai/` and `hosted_vllm/` already take
+# their base URL from the variables above and from OPENAI_*, and ModelSpec has no per-model
+# api_base. So amd-* entries use LiteLLM's `llamafile/` route: a plain OpenAI client that
+# reads LLAMAFILE_API_BASE and LLAMAFILE_API_KEY. It works for vLLM and llama-server alike.
 env:
   HOSTED_VLLM_API_BASE: https://router.huggingface.co/v1
 env_from:
   HOSTED_VLLM_API_KEY: HF_TOKEN
+  LLAMAFILE_API_BASE: AMD_VLLM_BASE_URL # https://<name>.trycloudflare.com/v1, printed by serve.sh
+  LLAMAFILE_API_KEY: AMD_API_KEY
 
 models:
   # --- Hugging Face Inference Providers ---
@@ -82,6 +89,19 @@ models:
     reasoning_effort: disable
     max_tokens: 1024
     color: "#f29900"
+
+  # --- Self-hosted on AMD Radeon AI PRO R9700 (T6.3, infra/amd/serve.sh) ---
+  # The part after `llamafile/` is the served model name (AMD_MODEL in serve.sh).
+  # Cost is 0: the AMD quota is minutes, not dollars. $/game = hours x AMD_PRICE_PER_HOUR.
+  # LiteLLM drops reasoning_effort on this route, so gpt-oss reasons at its default effort;
+  # max_tokens leaves room for that.
+  - name: amd-gpt-oss-20b
+    litellm_model: llamafile/openai/gpt-oss-20b
+    structured: json_schema # vLLM guided decoding (xgrammar, else outlines)
+    max_tokens: 4096
+    input_cost_per_mtok: 0
+    output_cost_per_mtok: 0
+    color: "#ed1c24"
 
   # --- OpenAI (selected runs only) ---
   - name: gpt-5-nano

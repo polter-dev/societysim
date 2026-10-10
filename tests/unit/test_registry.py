@@ -16,6 +16,7 @@ EXPECTED = {
     "gemini-flash",
     "gpt-5-nano",
     "gpt-5-mini",
+    "amd-gpt-oss-20b",
 }
 
 
@@ -56,6 +57,30 @@ def test_apply_env_routes_hf_unified_endpoint(monkeypatch):
         assert spec.litellm_model.endswith(":deepinfra")
         assert litellm_model_name(spec) == spec.litellm_model
         assert spec.input_cost_per_mtok is not None
+
+
+def test_amd_entry_routes_to_self_hosted_server(monkeypatch):
+    import os
+
+    import litellm
+
+    # apply_env writes os.environ directly; give it a throwaway copy.
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("LLAMAFILE_", "OPENAI_API"))}
+    monkeypatch.setattr(os, "environ", env)
+    env["AMD_VLLM_BASE_URL"] = "https://abc.trycloudflare.com/v1"
+    env["AMD_API_KEY"] = "amd-key"
+    reg = load_registry(DEFAULT_PATH)
+    reg.apply_env()
+
+    spec = reg.get("amd-gpt-oss-20b")
+    assert spec.structured == "json_schema"
+    assert spec.input_cost_per_mtok == spec.output_cost_per_mtok == 0
+    assert reg.limits()[spec.provider].concurrency >= 1
+    model, provider, key, base = litellm.get_llm_provider(litellm_model_name(spec))
+    assert (model, provider) == ("openai/gpt-oss-20b", "llamafile")
+    assert (key, base) == ("amd-key", "https://abc.trycloudflare.com/v1")
+    # The real OpenAI models keep their own endpoint.
+    assert litellm.get_llm_provider("openai/gpt-5-nano")[3] != base
 
 
 def test_resolve_match_and_unknown():

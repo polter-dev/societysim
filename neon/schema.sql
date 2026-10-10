@@ -128,7 +128,7 @@ select e.game_id,
        e.actor,
        e.schema_version,
        case when g.status = 'running'
-            then e.event || '{"private_reasoning": null, "suspicion": null}'::jsonb
+            then e.event || jsonb_build_object('private_reasoning', null, 'suspicion', null)
             else e.event end as event
 from events e
 join games g on g.game_id = e.game_id

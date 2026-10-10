@@ -67,7 +67,7 @@ Players you can vote for: Ben (p0), Cleo (p1), Dev (p5).""",
 Wolf channel: only the wolves see this message.
 
 "action" shape: {"message": string, "proposed_target": id}
-- "message": what you say to your fellow wolves.
+- "message": what you say to your fellow wolves, at most 80 words. Longer text is cut off.
 - "proposed_target": the player you want to kill tonight.
 Players you can target: Ben (p0), Cleo (p1), Dev (p5).""",
     "lone_wolf": """<OBS>

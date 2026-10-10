@@ -151,7 +151,8 @@ Players you can vote for: {targets}.""",
     "wolf_chat": """Wolf channel: only the wolves see this message.
 
 "action" shape: {{"message": string, "proposed_target": id}}
-- "message": what you say to your fellow wolves.
+- "message": what you say to your fellow wolves, at most {max_words} words. Longer text \
+is cut off.
 - "proposed_target": the player you want to kill tonight.
 Players you can target: {targets}.""",
     "lone_wolf": """Night: you are the only wolf alive, so there is no wolf channel. Choose one \

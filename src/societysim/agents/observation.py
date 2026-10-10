@@ -26,10 +26,16 @@ from societysim.roles import Phase, Role
 MAX_CHARS = 12_000
 LAST_WORDS = 25  # earlier days keep each player's last statement, cut to this many words
 OMITTED = "(Older history left out for length.)"
-# Per-quote cap: an 80-word statement is ~500 chars. Longer text is cut and ends in "...".
-MAX_QUOTE = 800
-# Quote marks a player could use to fake the end of their quote. Pi/Pf cover the rest.
-_QUOTE_MARKS = set('"\u201a\u201e\u301d\u301e\u301f\u275d\u275e')
+# Characters a player could use to fake the end of their quote, matched by Unicode name so
+# new look-alikes are caught too; they all render as '.
+_QUOTE_NAMES = ("QUOTATION", "PRIME", "DITTO", "GERSHAYIM", "DOUBLE APOSTROPHE", "DOUBLE ACUTE")
+_BLANK_NAMES = ("FILLER", "BLANK")  # invisible letters (Hangul fillers, blank Braille)
+
+
+def quote_chars(max_words: int) -> int:
+    """Per-quote character cap: 10 chars per word (English averages ~6) plus 200 slack."""
+    return max_words * 10 + 200
+
 
 type Name = Callable[[str], str]
 
@@ -63,9 +69,10 @@ def observe(state: GameState, events: Sequence[Event], seat: str) -> str:
     def name(s: str) -> str:
         return player(s, state.names[s])
 
+    cap = quote_chars(state.config.rules.max_statement_words)
     head = [f"Now: {_now(state)}.", *_knowledge(state, seat, role, seen, name), *_dead(seen, name)]
-    days = [_summary(d, [e for e in seen if e.day == d], name) for d in range(1, state.day)]
-    today = [line for e in seen if e.day == state.day for line in _line(e, name)]
+    days = [_summary(d, [e for e in seen if e.day == d], name, cap) for d in range(1, state.day)]
+    today = [line for e in seen if e.day == state.day for line in _line(e, name, cap)]
     return _fit("\n".join(head), days, today)
 
 
@@ -137,13 +144,13 @@ def _claim(e: Event, name: Name, tense: str) -> str:
     return f"report{tense} {name(e.target)} as {result} (night {e.meta.night})"
 
 
-def _line(e: Event, name: Name) -> Iterable[str]:
+def _line(e: Event, name: Name, cap: int) -> Iterable[str]:
     """Today's history: one line per event, public fields only."""
     match e.type:
         case EventType.PHASE_START:
             yield f"[{e.public_text}]"
         case EventType.WOLF_CHAT:
-            yield f"(wolf channel) {name(e.actor)}: {_quote(e.public_text)}"
+            yield f"(wolf channel) {name(e.actor)}: {_quote(e.public_text, cap)}"
         case EventType.WOLF_PROPOSAL:
             yield f"(wolf channel) {name(e.actor)} proposes killing {name(e.target)}."
         case EventType.NIGHT_KILL:
@@ -151,7 +158,7 @@ def _line(e: Event, name: Name) -> Iterable[str]:
         case EventType.DEATH_REVEAL:
             yield _death(e, name)
         case EventType.STATEMENT:
-            yield f"{name(e.actor)}: {_quote(e.public_text)}"
+            yield f"{name(e.actor)}: {_quote(e.public_text, cap)}"
         case EventType.ACCUSATION:
             yield f"  {name(e.actor)} accuses {name(e.target)}."
         case EventType.ROLE_CLAIM | EventType.SEER_CLAIM:
@@ -164,31 +171,35 @@ def _line(e: Event, name: Name) -> Iterable[str]:
 
 
 def _char(c: str) -> str:
-    cat = unicodedata.category(c)
-    if c in _QUOTE_MARKS or cat in ("Pi", "Pf"):
+    if c == "\\":  # a trailing backslash would read as an escaped closing quote
+        return "/"
+    cat, uname = unicodedata.category(c), unicodedata.name(c, "")
+    if any(k in uname for k in _QUOTE_NAMES):
         return "'"
-    if cat[0] == "C" or cat in ("Zl", "Zp"):  # control, zero-width, bidi, unassigned, newlines
+    # control, format (zero-width, bidi), unassigned, line breaks, invisible letters
+    if cat[0] == "C" or cat in ("Zl", "Zp") or any(k in uname for k in _BLANK_NAMES):
         return " "
     return c
 
 
-def _quote(text: str | None, words: int | None = None) -> str:
+def _quote(text: str | None, cap: int, words: int | None = None) -> str:
     """Model-written text as one line in double quotes it cannot forge or close.
 
-    NFKC folds look-alikes (fullwidth quotes), quote marks become ', control and format
-    characters become spaces, and all whitespace collapses to single spaces, so no fake
-    event lines. Cut to `words` words if given, then to MAX_QUOTE chars; a cut ends in "...".
+    NFKC folds look-alikes (fullwidth quotes), quote marks become ', backslashes become /,
+    control, format and invisible characters become spaces, and all whitespace collapses to
+    single spaces, so no fake event lines. Cut to `words` words if given, then to `cap`
+    chars; a cut ends in "...".
     """
     text = "".join(map(_char, unicodedata.normalize("NFKC", text or "")))
     parts = text.split()
     text = " ".join(parts[:words])
     cut = words is not None and len(parts) > words
-    if len(text) > MAX_QUOTE:
-        text, cut = text[:MAX_QUOTE].rstrip(), True
+    if len(text) > cap:
+        text, cut = text[:cap].rstrip(), True
     return f'"{text}{"..." if cut else ""}"'
 
 
-def _summary(day: int, evs: list[Event], name: Name) -> str:
+def _summary(day: int, evs: list[Event], name: Name, cap: int) -> str:
     """Deterministic summary of one earlier day (night, discussion and vote)."""
     lines = [f"Day {day} summary:"]
     lines += [f"- {_death(e, name)}" for e in evs if e.type is EventType.DEATH_REVEAL]
@@ -209,7 +220,7 @@ def _summary(day: int, evs: list[Event], name: Name) -> str:
         elif e.type in (EventType.ROLE_CLAIM, EventType.SEER_CLAIM) and e.actor:
             said.setdefault(e.actor, []).append(_claim(e, name, "ed"))
     for actor in sorted(said):
-        quote = _quote(last.get(actor), LAST_WORDS)
+        quote = _quote(last.get(actor), cap, LAST_WORDS)
         parts = [*dict.fromkeys(said[actor]), f"last said: {quote}"]  # dedupe, keep order
         lines.append(f"- {name(actor)}: " + "; ".join(parts))
 

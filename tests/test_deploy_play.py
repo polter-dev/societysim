@@ -3,8 +3,8 @@
 import os
 import re
 import shutil
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest

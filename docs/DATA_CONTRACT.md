@@ -1,0 +1,405 @@
+# Data contract: what the viewer reads
+
+Contract version: 1
+
+This is every file and endpoint the viewer reads, in one place. The viewer has two sources:
+
+1. **Static files**: one batch dir, deployed as `data/` next to the viewer.
+2. **Neon Data API** (PostgREST) at `VITE_NEON_DATA_API_URL`.
+
+Each static JSON file has a JSON Schema under `schema/`, generated from Pydantic models by
+`./scripts/gen-schema.sh`. `tests/contract/` runs the free scripted pipeline and validates every
+file it produces against those schemas, and checks the Neon tables and views below against
+`neon/schema.sql`. If this doc and the code disagree, the schema files win; fix the doc.
+
+| Viewer type (today) | Backed by |
+|---|---|
+| `Event` (`viewer/src/types/events.ts`) | `schema/events.schema.json` (generated already) |
+| `Label` (`viewer/src/data/labels.ts`, hand-copied) | `$defs.Label` in `schema/events.schema.json`; `events.ts` already exports a generated `Label` |
+| `IndexEntry` (`viewer/src/data/staticSource.ts`) | `schema/index.schema.json` |
+| `Board`, `BoardRow`, `Rating` (`viewer/src/pages/Leaderboard.tsx`) | `schema/leaderboard.schema.json` |
+| `BySide` (`Leaderboard.tsx`) | `openskill` in `schema/metrics.schema.json` |
+| narration index (not typed yet) | `schema/narration_index.schema.json` |
+| highlights (not typed yet) | `schema/highlights.schema.json` |
+
+The viewer types should match these schemas. They can be generated the same way `events.ts` is
+(`json-schema-to-typescript`).
+
+## Versioning
+
+- Events and labels carry `schema_version` on every line (1 or 2 today; the reader accepts both).
+- Static JSON files: one version for all of them, the **contract version** above. Each generated
+  schema carries it as `"x-contract-version"`. `leaderboard.json` also carries it in-file as
+  `schema` (currently 1). The other files have no in-file version field: `index.json` and
+  `highlights.json` are bare lists, and we don't add a field just to carry a number.
+- Adding a field is not breaking. It still regenerates the schemas in the same PR (they reject
+  unknown keys, so the contract tests fail until you do), and it updates this doc.
+- Renaming, removing or retyping a field, or changing what a value means, is breaking. Per
+  AGENTS.md hard rule 3 it needs its own ticket, a contract version bump (`CONTRACT_VERSION` in
+  `scripts/gen-schema.sh`, this doc, and `SCHEMA` in `analysis/report.py` if the leaderboard
+  changes), and regenerated schema files in the same PR.
+- Neon: tables and views are versioned with this doc. Renaming or dropping a column exposed to
+  `anonymous`, or changing a view's columns or their order, is breaking in the same way.
+
+## Conventions
+
+- `actor`, `target`, seat keys and `speaker` are seat ids `p0`..`p8`, never names.
+- Rates and shares are fractions 0..1, not percentages. Money is USD. Latency is milliseconds.
+- `null` means "no data" (for example a wolf win rate for a model that never played wolf). It
+  never means 0.
+- Every key listed is always present unless the doc says it can be absent.
+- Label sources are `self_tag` (the speaker tagged it), `jev` (a judge model found it) and
+  `engine` (votes, `mis_elimination`). Lie numbers from `self_tag` and `jev` are always kept
+  apart, never summed.
+
+## Producing a batch
+
+```bash
+uv run societysim batch --config <cfg.yaml> [--agents llm]  # runs/<batch_id>/<game_id>.jsonl, run_meta
+uv run societysim label runs/<batch_id> [--no-jev]          # <game_id>.labels.jsonl
+uv run societysim report runs/<batch_id>                    # report/
+uv run societysim highlights runs/<batch_id>                # highlights.json
+uv run python -m societysim.analysis.narrate runs/<batch_id>/<game_id>.jsonl  # <game_id>.audio/ (paid, ElevenLabs)
+scripts/deploy-space.sh runs/<batch_id> <owner/space>       # deploy viewer + data/
+```
+
+## Deployed layout
+
+`scripts/deploy-space.sh` copies the batch dir to `data/` next to the built viewer, leaving out
+`.cache/` (raw judge responses) and `*.png` (charts for `report.md`). So the viewer sees:
+
+```
+data/
+  <game_id>.jsonl              events, one per line
+  <game_id>.labels.jsonl       labels (absent if `label` never ran)
+  <game_id>.audio/index.json   narration index (absent unless narrated)
+  <game_id>.audio/<seq>.mp3
+  highlights.json              at the batch root, not in report/
+  report/index.json            the game list; the viewer starts here
+  report/leaderboard.json
+  report/metrics.json
+  report/report.md             human-facing, not part of the contract
+  run_meta.json, <game_id>.run_meta.json, agreement.json   not part of the contract
+```
+
+The viewer's default index URL is `data/report/index.json`. Every other static path is resolved
+from it.
+
+## Static files
+
+### Events: `<game_id>.jsonl`
+
+- Path: `<batch>/<game_id>.jsonl`. The file stem is the game id.
+- Produced by: `societysim batch` or `societysim play` (the orchestrator through `EventLogger`).
+- Shape: one event per line, `schema/events.schema.json` (the `Event` model in
+  `logging/events.py`). `schema_version` is 1 or 2. Lines are in `seq` order from 0.
+- The raw log is never edited (hard rule 5).
+
+```json
+{"schema_version":2,"game_id":"fixture-0001","seq":18,"t":2,"day":1,"phase":"day","type":"accusation","visibility":"public","actor":"p5","target":"p0","public_text":null,"private_reasoning":null,"suspicion":null,"meta":{"ts":"2026-10-10T12:00:36Z","statement_seq":17}}
+```
+
+### Labels: `<game_id>.labels.jsonl`
+
+- Path: next to the log, `<batch>/<game_id>.labels.jsonl` (the log URL with `.jsonl` replaced
+  by `.labels.jsonl`). Missing file means no labels, not an error.
+- Produced by: `societysim label <batch>` (`--no-jev` for self-tag and engine labels only).
+- Shape: one label per line, `$defs.Label` in `schema/events.schema.json`:
+  `schema_version` (1|2), `game_id`, `label` (`false_role_claim` | `false_report` | `bussing` |
+  `hidden_knowledge` | `mis_elimination`), `actor` (seat id), `source_seq` (seq of the labelled
+  event), `source` (`self_tag` | `jev` | `engine`), `confidence` (0..1), `detail` (string).
+
+```json
+{"schema_version":2,"game_id":"fixture-0001","label":"hidden_knowledge","actor":"p0","source_seq":16,"source":"self_tag","confidence":1.0,"detail":"Ava checked Cleo (p2) as a wolf on night 1 and spoke on day 1 without reporting it."}
+```
+
+### Game index: `report/index.json`
+
+- Path: `<batch>/report/index.json`. Schema: `schema/index.schema.json`.
+- Produced by: `societysim report <batch>` (`analysis/report.py`, `build_index`).
+- Shape: a list, one entry per finished game, in file-name order. Unfinished logs are left out.
+
+| Field | Type | Notes |
+|---|---|---|
+| `game_id` | string | |
+| `file` | string | Log file name, relative to the batch dir (one level above `index.json`): resolve as `new URL("../" + file, indexUrl)` |
+| `seed` | integer | Game seed |
+| `days` | integer | Last day reached |
+| `winner` | `"wolves"` \| `"villagers"` \| `"draw"` \| null | |
+| `seats` | object, seat id -> `{name: string, model: string, role: "wolf"\|"seer"\|"doctor"\|"villager"}` | Holds roles: don't show before the game is opened |
+
+```json
+[{"game_id": "c-g0000", "file": "c-g0000.jsonl", "seed": 2958207524, "days": 2, "winner": "wolves",
+  "seats": {"p0": {"name": "Ben", "model": "a", "role": "villager"}, "p4": {"name": "Dev", "model": "a", "role": "wolf"}}}]
+```
+
+### Leaderboard: `report/leaderboard.json`
+
+- Path: `<batch>/report/leaderboard.json`. Schema: `schema/leaderboard.schema.json`.
+- Produced by: `societysim report <batch>` (`build_leaderboard`).
+
+| Field | Type | Notes |
+|---|---|---|
+| `schema` | 1 | In-file contract version |
+| `games` | integer | Finished games in the batch |
+| `label_sources` | `["self_tag", "jev"]` | |
+| `wolf_side_advantage` | object \| null | `{overall: Rating, sided: Rating}`: the wolf-side dummy player, one per OpenSkill pool. `{}` when no game had a winner. Compare `mu` with its prior of 0 |
+| `models` | list of rows | Sorted by `openskill.ordinal`, best first; rows with no rating last |
+
+`Rating` is `{mu: number, sigma: number, ordinal: number}` (ordinal = mu - 3 sigma).
+
+Each row of `models`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `model` | string | Registry name |
+| `games` | integer \| null | Distinct games the model played in |
+| `seats` | integer | Seats it filled, summed over games. Win rate is counted over these |
+| `win_rate` | number \| null | Per seat, all roles |
+| `win_ci` | [number, number] \| null | Wilson 95% interval |
+| `wolf_win_rate`, `village_win_rate` | number \| null | Null if it never played that side |
+| `openskill` | Rating \| null | Overall pool |
+| `detection_auc`, `detection_brier` | number \| null | Village seats: suspicion vs true wolf |
+| `invalid_output_rate` | number \| null | Invalid outputs per model call attempt |
+| `cost_usd_per_game` | number \| null | Per seat-game |
+| `lie_rate` | `{self_tag: number\|null, jev: number\|null}` | Lies per statement. Null when that source has no labels in the batch |
+
+```json
+{"schema": 1, "games": 3, "label_sources": ["self_tag", "jev"],
+ "wolf_side_advantage": {"overall": {"mu": 5.97, "sigma": 7.70, "ordinal": -17.12},
+                         "sided": {"mu": 5.69, "sigma": 7.70, "ordinal": -17.42}},
+ "models": [{"model": "gemini-flash", "games": 1, "seats": 1, "win_rate": 1.0, "win_ci": [0.21, 1.0],
+             "wolf_win_rate": 1.0, "village_win_rate": null,
+             "openskill": {"mu": 26.95, "sigma": 8.11, "ordinal": 2.64},
+             "detection_auc": null, "detection_brier": null, "invalid_output_rate": 0.0,
+             "cost_usd_per_game": 0.0096, "lie_rate": {"self_tag": 0.0, "jev": null}}]}
+```
+
+The viewer's `BoardRow` lacks `seats` and its `wolf_side_advantage` type lacks `sided`; both are
+in the file and part of the contract.
+
+### Metrics: `report/metrics.json`
+
+- Path: `<batch>/report/metrics.json`. Schema: `schema/metrics.schema.json`.
+- Produced by: `societysim report <batch>` (`analysis/metrics.py` `compute_metrics`, plus
+  `summary` and `speed` from `report.py`).
+
+Top level:
+
+| Field | Type | Notes |
+|---|---|---|
+| `games`, `unfinished_games` | integer | |
+| `label_sources` | `["self_tag", "jev"]` | |
+| `exploratory` | `["lie_success", "persuasion"]` | Correlation, not cause |
+| `models` | model -> group -> GroupStats | Groups: `all`, `wolf`, `village`, `seer`, `doctor`, `villager` (only those the model played). Human seats have no entry |
+| `by_group` | group -> GroupStats | All models together |
+| `openskill` | object | `overall`, `wolf`, `village`: model -> Rating. `wolf_side`: `{overall, sided}` Rating, same as `leaderboard.json`'s `wolf_side_advantage`. The viewer's `BySide` reads `wolf` and `village` |
+| `summary` | object | Headline numbers, see below |
+| `speed` | model -> Speed | |
+
+GroupStats: `games`, `wins`, `draws`, `losses` (integers, per seat); `win_rate`, `win_ci`;
+`statements` (integer); `lies` (`{self_tag: Lies, jev: Lies}`); `detection`
+(`{n, brier, auc, by_day: {"<day>": {n, brier, auc}}}`, day keys are strings); `persuasion`
+(`{exploratory: true, accusations, voters, hits, share}`); and per-seat averages that can be
+null: `survival_days`, `night_targeted`, `voted_out`, `invalid_output_rate`, `tokens_per_game`,
+`cost_usd_per_game`.
+
+Lies: `lies` (integer), `by_type` (lie type -> count, only types seen), `lie_rate` (per
+statement), `lie_success` (`{exploratory: true, comparisons, moved, voters, followed,
+base_voters, base_followed, base_abstained, share_moved, share_followed, base_rate}`: counts are
+integers, the last three are number | null).
+
+`summary`: `games`, `unfinished_games`, `cost_usd`, `input_tokens`, `output_tokens`,
+`wolf_wins`, `village_wins`, `draws`, `wolf_win_share`, `village_win_share` (number | null),
+`lies` (source -> `{lies, statements, lie_rate, lie_success}`), `top_openskill`
+(`{model, ordinal}` | null), `top_wolf_win` (`{model, win_rate, seats}` | null),
+`top_share_moved` (source -> `{model, share_moved, comparisons}` | null), `min_comparisons`.
+
+Speed: `calls`, `timed_calls` (integers), `median_latency_ms` (number | null),
+`p90_latency_ms` (integer | null), `output_tokens_per_s`, `tokens_per_game`,
+`cost_usd_per_game` (number | null), `self_hosted` (boolean: calls made and none cost anything).
+
+```json
+{"games": 3, "unfinished_games": 0, "label_sources": ["self_tag", "jev"], "exploratory": ["lie_success", "persuasion"],
+ "openskill": {"overall": {"a": {"mu": 25.0, "sigma": 7.95, "ordinal": 1.14}}, "wolf": {}, "village": {},
+               "wolf_side": {"overall": {"mu": 5.97, "sigma": 7.70, "ordinal": -17.12}, "sided": {"mu": 5.69, "sigma": 7.70, "ordinal": -17.42}}},
+ "speed": {"gemini-flash": {"calls": 12, "timed_calls": 12, "median_latency_ms": 1610.0, "p90_latency_ms": 2232,
+                            "output_tokens_per_s": 142.4, "tokens_per_game": 42470.0, "cost_usd_per_game": 0.0096, "self_hosted": false}},
+ "models": {"...": "..."}, "by_group": {"...": "..."}, "summary": {"...": "..."}}
+```
+
+### Highlights: `highlights.json`
+
+- Path: `<batch>/highlights.json`, at the batch root (not in `report/`). Schema:
+  `schema/highlights.schema.json`.
+- Produced by: `societysim highlights <batch> [--top N]` (`analysis/highlights.py`).
+- Shape: a list, best first (score, then game id, then first seq).
+
+| Field | Type | Notes |
+|---|---|---|
+| `type` | `lie_moved_vote` \| `wolf_survived_vote` \| `doctor_save` \| `seer_led_elimination` | |
+| `score` | number | Rounded to 2 places. Only for ordering |
+| `game_id` | string | |
+| `day` | integer | |
+| `seq` | [integer, integer] | First and last event of the moment |
+| `actor`, `target` | seat id \| null | |
+| `actor_name`, `actor_model`, `target_name`, `target_model` | string \| null | |
+| `description` | string | One sentence. Names roles, so it spoils the game |
+| `link` | string | A viewer query string `?game=<id>&seq=<n>&mode=narrator`; prefix it with the viewer URL |
+
+```json
+[{"type": "doctor_save", "score": 3.0, "game_id": "c-g0001", "day": 2, "seq": [57, 57],
+  "actor": "p1", "actor_name": "Cleo", "actor_model": "a", "target": "p4", "target_name": "Dev", "target_model": "b",
+  "description": "Cleo (p1, doctor) saved Dev (p4) from the night kill.", "link": "?game=c-g0001&seq=57&mode=narrator"}]
+```
+
+### Narration: `<game_id>.audio/index.json` and `<seq>.mp3`
+
+- Path: `<batch>/<game_id>.audio/index.json`, and one mp3 per clip in the same dir. Schema:
+  `schema/narration_index.schema.json`.
+- Produced by: `uv run python -m societysim.analysis.narrate <batch>/<game_id>.jsonl` (paid,
+  ElevenLabs; `--dry-run` prints the estimate and writes nothing). Absent for games nobody
+  narrated: the viewer must work without it.
+- Only public events are voiced (statements, votes, phase starts, deaths, eliminations,
+  no-elimination, game end). Never private reasoning, wolf chat, night actions or the role list.
+
+| Field | Type | Notes |
+|---|---|---|
+| `game_id` | string | |
+| `model_id`, `output_format` | string | ElevenLabs settings, e.g. `eleven_flash_v2_5`, `mp3_44100_128` |
+| `voices` | object, `"narrator"` or seat id -> voice id | |
+| `clips` | list of `{seq, speaker, voice_id, text, file}` | `seq` is the event's seq; `speaker` is `"narrator"` or a seat id; `file` is relative to the `.audio` dir (`"<seq>.mp3"`) |
+
+```json
+{"game_id": "fixture-0001", "model_id": "eleven_flash_v2_5", "output_format": "mp3_44100_128",
+ "voices": {"narrator": "JBFqnCBsd6RMkjVDRZzb", "p0": "EXAVITQu4vr4xnSDxMaL"},
+ "clips": [{"seq": 1, "speaker": "narrator", "voice_id": "JBFqnCBsd6RMkjVDRZzb", "text": "Night 1", "file": "1.mp3"}]}
+```
+
+Neon has no narration: in Neon mode there is no audio location. Audio exists only as static
+files.
+
+### Not part of the contract
+
+- `run_meta.json` (batch) and `<game_id>.run_meta.json` (per game): runner bookkeeping (budget,
+  spend, config, agent type). Not viewer-facing. If a viewer PR starts reading it, that PR adds
+  it here with a schema.
+- `agreement.json` (self-tag vs Jev agreement), `report/report.md`, the report PNGs and `.cache/`.
+
+## Neon Data API
+
+- Base URL: `VITE_NEON_DATA_API_URL` (PostgREST). Requests without an `Authorization` header
+  run as the read-only `anonymous` role; `VITE_NEON_ANON_KEY`, if set, is sent as
+  `Authorization: Bearer <key>`.
+- Grants to `anonymous` (`neon/schema.sql`): `usage` on schema `public`; `select` on `games`,
+  `events`, `labels`, `leaderboard`, `leaderboard_by_batch`, `lies_by_model`. No writes.
+- Produced by: `NeonSink` during `societysim batch --neon` / `play --neon` (live, game by
+  game), or `societysim sync-neon <batch>` (backfill). JSONL stays the source of truth.
+- Types below are Postgres `information_schema.columns.data_type`. In JSON, `integer` and
+  `bigint` arrive as numbers, `jsonb` as JSON, `timestamp with time zone` as an ISO 8601 string.
+  `numeric` (`win_rate`) may arrive as a string such as `"0.571"`: read it with `Number()`.
+- Column order below is the table's order. View columns and their order are fixed.
+
+### Tables
+
+`games`, one row per game:
+
+<!-- neon:games -->
+| Column | Type | Notes |
+|---|---|---|
+| `game_id` | text | Primary key |
+| `batch_id` | text | Run dir name (`runs/<batch_id>`); nullable, but current code always sets it |
+| `status` | text | `running` \| `finished` \| `failed` |
+| `winner` | text | `wolves` \| `villagers` \| `draw` \| null |
+| `models` | jsonb | Model name per seat, in seat order (`["a", "b", ...]`) |
+| `started_at` | timestamp with time zone | |
+| `ended_at` | timestamp with time zone | Null while running |
+| `agents` | text | `scripted` \| `llm` \| null (rows from before #219). Scripted games are replayable but left out of the three views |
+
+`events`, one row per event:
+
+<!-- neon:events -->
+| Column | Type | Notes |
+|---|---|---|
+| `game_id` | text | |
+| `seq` | integer | Primary key with `game_id` |
+| `day` | integer | |
+| `phase` | text | |
+| `type` | text | Event type |
+| `actor` | text | Seat id or null |
+| `schema_version` | integer | |
+| `event` | jsonb | The full event, exactly the JSONL line (`schema/events.schema.json`) |
+
+`labels`, one row per line of `<game_id>.labels.jsonl`:
+
+<!-- neon:labels -->
+| Column | Type | Notes |
+|---|---|---|
+| `game_id` | text | |
+| `idx` | integer | Line index in the labels file; primary key with `game_id` |
+| `label_type` | text | |
+| `actor` | text | Seat id |
+| `source_seq` | integer | |
+| `source` | text | `self_tag` \| `jev` \| `engine` |
+| `label` | jsonb | The full label line (`$defs.Label`) |
+
+### Views
+
+All three count finished games only, leave out `human` seats and leave out games with
+`agents = 'scripted'` (null `agents` rows stay in).
+
+`leaderboard`: per model, pooled over every batch. A seat wins if its team won; a draw is not a
+win.
+
+<!-- neon:leaderboard -->
+| Column | Type | Notes |
+|---|---|---|
+| `model` | text | |
+| `seat_games` | bigint | |
+| `wins` | bigint | |
+| `win_rate` | numeric | 3 decimals, 0..1 |
+
+`leaderboard_by_batch`: the same per batch, with draws.
+
+<!-- neon:leaderboard_by_batch -->
+| Column | Type | Notes |
+|---|---|---|
+| `batch_id` | text | |
+| `model` | text | |
+| `seat_games` | bigint | |
+| `wins` | bigint | |
+| `draws` | bigint | |
+| `win_rate` | numeric | 3 decimals, 0..1 |
+
+`lies_by_model`: lie labels per liar model, from `self_tag` and `jev` only, for the four lie
+types (`false_role_claim`, `false_report`, `bussing`, `hidden_knowledge`). Not split by game
+status.
+
+<!-- neon:lies_by_model -->
+| Column | Type | Notes |
+|---|---|---|
+| `batch_id` | text | |
+| `model` | text | |
+| `source` | text | `self_tag` \| `jev`; never sum the two |
+| `label_type` | text | |
+| `lies` | bigint | |
+
+### Requests the viewer makes
+
+```
+GET {base}/games?select=game_id,models&order=started_at.desc.nullslast      game list
+GET {base}/games?select=game_id&status=eq.finished                          finished-game count
+GET {base}/events?select=event&game_id=eq.<id>&order=seq                    a whole game
+GET {base}/events?select=event&game_id=eq.<id>&seq=gt.<n>&order=seq         live poll after seq n
+GET {base}/labels?select=label&game_id=eq.<id>&order=idx                    a game's labels
+GET {base}/leaderboard?select=model,seat_games,win_rate&order=win_rate.desc.nullslast
+GET {base}/leaderboard_by_batch?select=*&batch_id=eq.<batch_id>
+GET {base}/lies_by_model?select=*&batch_id=eq.<batch_id>
+```
+
+Each returns a JSON array of row objects with the selected columns, for example
+`[{"event": {...}}]` or `[{"model": "a", "seat_games": 14, "win_rate": "0.571"}]`. URL-encode
+ids in filters (`encodeURIComponent`).
+
+The Neon leaderboard is simpler than `leaderboard.json`: no OpenSkill, detection, lies or cost.
+Those exist only in the static report files.

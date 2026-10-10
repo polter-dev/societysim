@@ -1,0 +1,44 @@
+name: Pages
+
+# Mirrors the HF static Space (viewer + games, uploaded by scripts/deploy-space.sh) to
+# GitHub Pages. deploy-space.sh starts this after each upload; it can also be run by hand.
+# Needs Settings > Pages > Source set to "GitHub Actions".
+
+on:
+  workflow_dispatch:
+    inputs:
+      space:
+        description: "HF Space id (owner/name); defaults to the HF_SPACE repo variable"
+        required: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      SPACE: ${{ inputs.space || vars.HF_SPACE }}
+    steps:
+      - uses: astral-sh/setup-uv@v6
+      - name: Download the Space
+        run: |
+          test -n "$SPACE" || { echo "set the space input or the HF_SPACE variable"; exit 1; }
+          uvx --from huggingface_hub==1.33.0 hf download "$SPACE" --repo-type space --local-dir site \
+            --exclude README.md --exclude .gitattributes
+          rm -rf site/.cache
+          test -f site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

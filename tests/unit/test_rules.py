@@ -96,7 +96,7 @@ def test_vote_targets_follow_abstain_flag(allow_abstain):
     actor = game.seats[0]
     dead = game.seats[1]
     game.alive.remove(dead)
-    expected = set(game.alive)
+    expected = game.alive - {actor}
     if allow_abstain:
         expected.add("abstain")
     assert legal_targets(game, actor, Phase.VOTE) == ordered(game, expected)
@@ -121,7 +121,14 @@ def test_legal_targets_are_a_list_in_seat_order(game):
     targets = legal_targets(game, actor, Phase.NIGHT)
     assert isinstance(targets, list)
     assert targets == [seat for seat in game.seats if seat in game.alive]
-    assert legal_targets(game, actor, Phase.VOTE) == targets + ["abstain"]
+    assert legal_targets(game, actor, Phase.VOTE) == [t for t in targets if t != actor] + [
+        "abstain"
+    ]
+
+
+def test_vote_excludes_self(game):
+    actor = seat_with_role(game, Role.VILLAGER)
+    assert actor not in legal_targets(game, actor, Phase.VOTE)
 
 
 def test_seeded_fallback_choices_ignore_python_hash_seed():

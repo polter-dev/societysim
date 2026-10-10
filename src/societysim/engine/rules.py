@@ -40,7 +40,8 @@ def legal_targets(state: GameState, actor: str, phase: Phase) -> list[str]:
         return []
 
     if phase == Phase.VOTE:
-        targets = [seat for seat in state.seats if seat in state.alive]
+        # Votes name another living player. Self-votes are illegal; only the Doctor may self-target.
+        targets = [seat for seat in state.seats if seat in state.alive and seat != actor]
         if state.config.rules.allow_abstain:
             targets.append("abstain")
         return targets

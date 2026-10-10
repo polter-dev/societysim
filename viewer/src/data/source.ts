@@ -18,6 +18,8 @@ export interface GameSource {
   pollEvents(gameId: string, afterSeq: number): Promise<Event[]>;
   /** The game's lie labels; [] when it has none. */
   loadLabels?(id: string): Promise<Label[]>;
+  /** URL of the game's `<game_id>.audio/index.json`, or null when the source has no narration. */
+  audioIndexUrl?(id: string): Promise<string | null>;
 }
 
 /** Fetch and parse one .jsonl log by URL. */

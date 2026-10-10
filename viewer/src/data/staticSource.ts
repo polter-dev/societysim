@@ -1,3 +1,4 @@
+import { siblingAudioIndexUrl } from "../audio/narration";
 import { fetchLabels, siblingLabelsUrl } from "./labels";
 import { staticSource, type GameSource, type GameSummary } from "./source";
 
@@ -50,6 +51,10 @@ export function indexSource(indexUrl: string, base = window.location.href): Game
     loadLabels: async (id) => {
       const url = (await loaded).urls[id];
       return url ? fetchLabels(siblingLabelsUrl(url)) : [];
+    },
+    audioIndexUrl: async (id) => {
+      const url = (await loaded).urls[id];
+      return url ? siblingAudioIndexUrl(url) : null;
     },
   };
 }

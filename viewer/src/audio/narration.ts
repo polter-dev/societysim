@@ -100,3 +100,6 @@ export function clipsForSeq(
 export function clipUrl(indexUrl: string, clip: Clip): string {
   return indexUrl.slice(0, indexUrl.lastIndexOf("/") + 1) + clip.file;
 }
+
+/** `<game_id>.jsonl` -> `<game_id>.audio/index.json` beside it. */
+export const siblingAudioIndexUrl = (logUrl: string) => logUrl.replace(/\.jsonl(?=$|[?#])/, ".audio/index.json");

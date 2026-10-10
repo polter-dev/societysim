@@ -7,7 +7,8 @@ function currentSearch(): string {
 }
 
 /** Owns the selected event seq and keeps the shareable URL in sync. */
-export function useSeqParam(events: readonly Event[]): [number | null, (seq: number) => void] {
+/** `sync` false (the stepper owns the position and the URL) leaves the address bar alone. */
+export function useSeqParam(events: readonly Event[], sync = true): [number | null, (seq: number) => void] {
   const [requested, setRequested] = useState<number | null>(() => {
     const raw = new URLSearchParams(currentSearch()).get("seq");
     return raw !== null && /^-?\d+$/.test(raw) ? Number(raw) : null;
@@ -17,18 +18,19 @@ export function useSeqParam(events: readonly Event[]): [number | null, (seq: num
     : readSeqParam(events, currentSearch());
 
   useEffect(() => {
+    if (!sync) return;
     const onPopState = () => setRequested(readSeqParam(events, currentSearch()));
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [events]);
+  }, [events, sync]);
 
   useEffect(() => {
-    if (seq === null) return;
+    if (!sync || seq === null) return;
     const search = withSeqParam(window.location.search, seq);
     if (search !== window.location.search) {
       window.history.replaceState(window.history.state, "", `${window.location.pathname}${search}${window.location.hash}`);
     }
-  }, [seq]);
+  }, [seq, sync]);
 
   const setSeq = useCallback((value: number) => {
     const next = nearestSeq(events, value);

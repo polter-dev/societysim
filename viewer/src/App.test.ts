@@ -29,6 +29,20 @@ function load(text: string, labelsJsonl: string) {
       ),
     );
 
+  // Same page with the stepper and narration controls mounted, narration on and every category ticked.
+  const everything = { narrator: true, speech: true, wolf_chat: true, highlight: true };
+  const renderWithControls = (idx: number, mode: Mode, selected: string | null) =>
+    unescape(
+      renderToStaticMarkup(
+        createElement(Game, {
+          events, labels, idx, mode, selected, onSelect: () => {},
+          step: { pos: 3, count: 12, live: false, atLatest: false, newCount: 0, onPrev: () => {}, onNext: () => {}, onLive: () => {} },
+          seq: events[idx].seq, onSeek: () => {},
+          narration: { available: true, on: true, enabled: everything, onToggle: () => {}, onCategory: () => {} },
+        }),
+      ),
+    );
+
   // Text a villager may see; a private string that also appears in it can't prove a leak.
   const publicText = events.filter((e) => e.visibility === "public").map((e) => e.public_text ?? "").join("\n");
   const secrets = [
@@ -63,11 +77,11 @@ function load(text: string, labelsJsonl: string) {
     return found;
   }
 
-  return { events, seats, secrets, revealedAt, leaks, render };
+  return { events, seats, secrets, revealedAt, leaks, render, renderWithControls };
 }
 
 const sample = load(fixture, labelsText);
-const { events, seats, secrets, revealedAt, leaks, render } = sample;
+const { events, seats, secrets, revealedAt, leaks, render, renderWithControls } = sample;
 
 describe("App villager view", () => {
   it("shows nothing private at any event, whoever is selected", () => {
@@ -78,6 +92,24 @@ describe("App villager view", () => {
     });
     expect([...found]).toEqual([]);
   }, 30_000);
+
+  it("the stepper and narration controls add nothing private, with every category ticked", () => {
+    const found = new Set<string>();
+    events.forEach((_, idx) => {
+      const html = renderWithControls(idx, "villager", null);
+      expect(html).toContain("Narration on");
+      expect(html).toContain("Next beat");
+      expect(html).not.toMatch(/Wolf chat|Highlights/);
+      leaks(html, idx).forEach((l) => found.add(l));
+    });
+    expect([...found]).toEqual([]);
+  }, 30_000);
+
+  it("the narrator view does offer the hidden-info narration categories (so the check above can fail)", () => {
+    const html = renderWithControls(0, "narrator", null);
+    expect(html).toContain("Wolf chat (narrator view only)");
+    expect(html).toContain("Highlights (narrator view only)");
+  });
 
   it("the same checks catch narrator content (so the villager test can fail)", () => {
     const idx = events.findIndex((e) => e.seq === 19); // Finn's false Seer claim, labelled at this seq

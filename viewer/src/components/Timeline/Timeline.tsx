@@ -11,11 +11,20 @@ export interface TimelineProps {
   mode: Mode;
   /** Called with both the shareable seq and the array index needed by deriveScene. */
   onSeqChange?: (seq: number, index: number) => void;
+  /**
+   * Controlled mode: the stepper owns the position. `seq` is the shown event; every jump (slider, markers,
+   * play) calls `onSeek` instead, and the ?seq= param is left alone. Arrow keys, Home and End are left to the stepper.
+   */
+  seq?: number | null;
+  onSeek?: (seq: number) => void;
 }
 
 const EMPTY_LABELS: Label[] = [];
-export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqChange }: TimelineProps) {
-  const [seq, setSeq] = useSeqParam(events);
+export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqChange, seq: controlled, onSeek }: TimelineProps) {
+  const isControlled = onSeek !== undefined;
+  const [ownSeq, ownSet] = useSeqParam(events, !isControlled);
+  const seq = isControlled ? (controlled ?? null) : ownSeq;
+  const setSeq = isControlled ? onSeek : ownSet;
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const groups = useMemo(() => buildTimelineGroups(events, labels, mode), [events, labels, mode]);
@@ -49,6 +58,7 @@ export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqCha
     const tag = (event.target as HTMLElement).tagName;
     if (tag === "SELECT" || (tag === "BUTTON" && event.key === " ")) return;
     let next: number | null | undefined;
+    if (isControlled && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     switch (event.key) {
       case "ArrowLeft":
       case "ArrowDown":

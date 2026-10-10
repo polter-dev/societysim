@@ -3,11 +3,15 @@
 # endpoint, for societysim T6.3. Built for the AUP Learning Cloud "Basic GPU Environment" pod:
 # Ubuntu 24.04, Python 3.12, uv, system torch with ROCm 7.x, no Docker, no root, no inbound port.
 #
-#   bash infra/amd/serve.sh          # install (first run only), serve, tunnel, print the URL
-#   bash infra/amd/serve.sh status   # what is running, the public URL, latest serving stats
+#   bash infra/amd/serve.sh          # install (first run only), serve, print the next steps
+#   bash infra/amd/serve.sh status   # what is running, the URL, latest serving stats
 #   bash infra/amd/serve.sh stop     # stop server, tunnel and stats logger; print session hours
 #
 # Safe to re-run: finished steps are skipped and a healthy server is reused.
+#
+# Local mode (the default inside JupyterHub pods such as AUP, or AMD_TUNNEL=none): no tunnel.
+# The server stays on 127.0.0.1 and societysim runs in the same pod (infra/amd/run_on_box.sh).
+# AUP pods block Cloudflare tunnels: QUIC times out and TLS to the edge on 7844 is reset.
 #
 # Backend order (AMD_BACKEND=auto):
 #   vLLM: AMD's gfx120X wheel on the system torch, the same wheel with its own torch,
@@ -26,7 +30,8 @@
 #   AMD_API_KEY        required, 32+ chars (openssl rand -hex 32); same value in the laptop .env
 #   AMD_WORK           working dir for venvs, weights, logs (default ~/amd-serve)
 #   AMD_PORT           local port (default 8000)
-#   AMD_TUNNEL         1 = open a cloudflared quick tunnel (default), 0 = localhost only
+#   AMD_TUNNEL         none (or 0) = local mode, 1 = open a cloudflared quick tunnel
+#                      (default: none inside JupyterHub, so on AUP; 1 elsewhere)
 #   AMD_TUNNEL_PROTOCOL http2 | quic | auto (default http2; http2 works without outbound UDP)
 #   AMD_MAX_MODEL_LEN  context per request (default 16384)
 #   AMD_GPU_MEM_UTIL   vLLM --gpu-memory-utilization (default 0.90)
@@ -43,6 +48,7 @@ AMD_GGUF_REPO="${AMD_GGUF_REPO:-ggml-org/gpt-oss-20b-GGUF}"
 AMD_GGUF_FILE="${AMD_GGUF_FILE:-gpt-oss-20b-MXFP4.gguf}"
 AMD_BACKEND="${AMD_BACKEND:-auto}"
 AMD_PORT="${AMD_PORT:-8000}"
+if [ -n "${JUPYTERHUB_API_URL:-}" ]; then AMD_TUNNEL="${AMD_TUNNEL:-none}"; fi
 AMD_TUNNEL="${AMD_TUNNEL:-1}"
 AMD_TUNNEL_PROTOCOL="${AMD_TUNNEL_PROTOCOL:-http2}"
 AMD_MAX_MODEL_LEN="${AMD_MAX_MODEL_LEN:-16384}"
@@ -67,6 +73,7 @@ SYS_PY=/usr/bin/python3
 VENV="$AMD_WORK/venv"       # Python 3.12, sees the system ROCm torch
 VENV313="$AMD_WORK/venv313" # Python 3.13, AMD's matched torch + vLLM
 LOCAL="http://127.0.0.1:$AMD_PORT"
+REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 export HF_HOME="${HF_HOME:-$AMD_WORK/hf}"
 export PATH="$AMD_WORK/bin:$PATH:/opt/rocm/bin"
 [ -x "$SYS_PY" ] || SYS_PY=python3
@@ -585,6 +592,10 @@ start_stats() { # the logger takes AMD_API_KEY from its env; cmd_up restarts it 
 }
 
 validate_tunnel_protocol() {
+  case "$AMD_TUNNEL" in
+    1 | 0 | none) ;;
+    *) die "AMD_TUNNEL must be none, 0 or 1" ;;
+  esac
   case "$AMD_TUNNEL_PROTOCOL" in
     http2 | quic | auto) ;;
     *) die "AMD_TUNNEL_PROTOCOL must be http2, quic or auto" ;;
@@ -638,23 +649,42 @@ start_tunnel() {
 }
 
 summary() {
-  local url
-  url=$(cat "$AMD_WORK/public_url" 2>/dev/null || echo "$LOCAL")
   log "Ready. Backend: $(cat "$AMD_WORK/backend")"
+  if [ "$AMD_TUNNEL" != 1 ]; then
+    cat <<EOF
+----------------------------------------------------------------------------
+Local mode, no tunnel. Run societysim here in this pod, from a shell with
+the same AMD_API_KEY exported (this script never prints the key):
+
+  cd $REPO
+  uv sync --frozen
+  export AMD_VLLM_BASE_URL=$LOCAL/v1
+  uv run societysim doctor --model 'amd-*'
+  uv run societysim play --config configs/selfplay_amd.yaml --agents llm
+
+Or doctor, N games and a tarball of runs/<batch> to download, in one go:
+
+  bash infra/amd/run_on_box.sh configs/selfplay_amd.yaml 3
+
+Logs:  $LOGS/server.log  (server)   $LOGS/stats.log  (stats)
+Stop:  bash $0 stop
+----------------------------------------------------------------------------
+EOF
+    return 0
+  fi
   cat <<EOF
 ----------------------------------------------------------------------------
 Put this line in .env on the machine that runs societysim, next to the same
 AMD_API_KEY you exported here (this script never prints the key):
 
-AMD_VLLM_BASE_URL=$url/v1
+AMD_VLLM_BASE_URL=$(cat "$AMD_WORK/public_url")/v1
 
 Then:  uv run societysim doctor --model 'amd-*'
 Logs:  $LOGS/server.log  (server)   $LOGS/stats.log  (stats)
 Stop:  bash $0 stop
 ----------------------------------------------------------------------------
+The quick-tunnel URL changes every time the tunnel restarts.
 EOF
-  [ "$AMD_TUNNEL" = 1 ] && echo "The quick-tunnel URL changes every time the tunnel restarts."
-  return 0
 }
 
 # --- commands --------------------------------------------------------------------------------
@@ -705,7 +735,7 @@ cmd_status() {
   echo "backend $(cat "$AMD_WORK/backend" 2>/dev/null || echo none)"
   echo "health  $(healthy && echo ok || echo down)"
   echo "registered $(alive "$AMD_WORK/tunnel.pid" && grep -q 'Registered tunnel connection' "$LOGS/tunnel.log" 2>/dev/null && echo yes || echo no)"
-  echo "url     $([ -s "$AMD_WORK/public_url" ] && echo "$(cat "$AMD_WORK/public_url")/v1" || echo none)"
+  echo "url     $([ -s "$AMD_WORK/public_url" ] && echo "$(cat "$AMD_WORK/public_url")/v1" || echo "$LOCAL/v1 (local only)")"
   [ -f "$LOGS/stats.log" ] && { echo "--- latest stats"; tail -n 20 "$LOGS/stats.log"; }
   return 0
 }

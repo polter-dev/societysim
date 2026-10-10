@@ -10,7 +10,9 @@ from societysim.agents.prompts import player
 from societysim.config import GameConfig, ModelSpec, RoleCounts
 from societysim.engine.state import GameState
 from societysim.logging.events import EventLogger, EventType
-from societysim.orchestrator import DEFAULT_COLOR, SILENT, Game, run_game
+from societysim.models.cache import CachedUsage
+from societysim.models.client import Usage
+from societysim.orchestrator import DEFAULT_COLOR, SILENT, Game, _add, run_game
 from societysim.roles import Role
 
 SPEC = ModelSpec(name="fake", litellm_model="fake/fake")
@@ -76,6 +78,48 @@ def others(game, seat):
 
 def of(game, type_, actor=None):
     return [e for e in game.events if e.type is type_ and (actor is None or e.actor == actor)]
+
+
+def test_single_cached_attempt_keeps_cached_usage():
+    cached = CachedUsage(model="fake", input_tokens=10)
+
+    total = _add(None, cached)
+
+    assert total is cached
+    assert total.cached is True
+
+
+def test_cached_and_live_retry_is_not_cached():
+    cached = CachedUsage(model="fake", input_tokens=10, output_tokens=2, cost_usd=0.125)
+    live = Usage(model="fake", input_tokens=20, output_tokens=3, cost_usd=0.25)
+
+    total = _add(_add(None, cached), live)
+
+    assert type(total) is Usage
+    assert getattr(total, "cached", False) is False
+    assert total.input_tokens == 30
+    assert total.output_tokens == 5
+    assert total.cost_usd == 0.375
+
+
+def test_two_cached_attempts_keep_cached_and_sum_usage():
+    first = CachedUsage(
+        model="fake", input_tokens=10, output_tokens=2, cost_usd=0.125, latency_ms=5
+    )
+    second = CachedUsage(
+        model="fake", input_tokens=20, output_tokens=3, cost_usd=0.25, latency_ms=7
+    )
+
+    total = _add(_add(None, first), second)
+
+    assert isinstance(total, CachedUsage)
+    assert total.cached is True
+    assert total.model == "fake"
+    assert total.input_tokens == 30
+    assert total.output_tokens == 5
+    assert total.cost_usd == 0.375
+    assert total.latency_ms == 12
+    assert total.attempts == 2
 
 
 async def test_retry_then_success_appends_error_naming_missing_player():

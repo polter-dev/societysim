@@ -1,10 +1,13 @@
+import copy
 import json
 import shutil
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
-from societysim.analysis.report import write_report
+from societysim.analysis.metrics import compute_metrics, load_game
+from societysim.analysis.report import build_leaderboard, render_markdown, write_report
 from societysim.cli import app
 
 FIX = Path(__file__).parents[2] / "fixtures"
@@ -88,3 +91,27 @@ def test_cli_report(tmp_path):
     empty = tmp_path / "empty"
     empty.mkdir()
     assert CliRunner().invoke(app, ["report", str(empty)]).exit_code == 1
+
+
+def test_missing_jev_labels_show_na_not_zero(tmp_path):
+    out = write_report(_batch(tmp_path))  # fixture has self_tag labels only
+    board = json.loads((out / "leaderboard.json").read_text())
+    assert all(r["lie_rate"]["jev"] is None for r in board["models"])
+    assert any(r["lie_rate"]["self_tag"] is not None for r in board["models"])
+    md = (out / "report.md").read_text(encoding="utf-8")
+    lies = md.split("## Lies")[1].split("###")[0]
+    rows = [ln for ln in lies.splitlines() if ln.startswith("| ") and "---" not in ln][1:]
+    assert rows and all(ln.split("|")[-2].strip() == "n/a" for ln in rows)
+    assert "compared with its prior" in md
+
+
+def test_missing_base_rate_raises():
+    metrics = compute_metrics([load_game(FIX / "sample_game.jsonl")])
+    broken = copy.deepcopy(metrics)
+    for groups in broken["models"].values():
+        for grp in groups.values():
+            for src in grp["lies"].values():
+                del src["lie_success"]["base_rate"]
+    board = build_leaderboard(broken)
+    with pytest.raises(KeyError):
+        render_markdown(broken, board)

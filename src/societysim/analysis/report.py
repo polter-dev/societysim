@@ -87,7 +87,8 @@ def build_index(games: list[tuple[Path, GameData]]) -> list[dict]:
     return out
 
 
-def build_leaderboard(metrics: dict) -> dict:
+def build_leaderboard(metrics: dict, present: set[str] | None = None) -> dict:
+    present = set(LABEL_SOURCES) if present is None else present
     base = metrics
     ratings = base["openskill"]["overall"]
     rows = []
@@ -107,7 +108,8 @@ def build_leaderboard(metrics: dict) -> dict:
                 "invalid_output_rate": a.get("invalid_output_rate"),
                 "cost_usd_per_game": a.get("cost_usd_per_game"),
                 "lie_rate": {
-                    src: groups.get("all", {}).get("lies", {}).get(src, {}).get("lie_rate")
+                    # no labels from a source means unknown, not a 0% lie rate
+                    src: groups["all"]["lies"][src]["lie_rate"] if src in present else None
                     for src in LABEL_SOURCES
                 },
             }
@@ -128,7 +130,8 @@ def _table(head: list[str], rows: list[list[str]]) -> list[str]:
     return lines + [""]
 
 
-def render_markdown(metrics: dict, board: dict) -> str:
+def render_markdown(metrics: dict, board: dict, present: set[str] | None = None) -> str:
+    present = set(LABEL_SOURCES) if present is None else present
     lines = [
         "# Batch report",
         "",
@@ -143,9 +146,9 @@ def render_markdown(metrics: dict, board: dict) -> str:
     if side:
         o = side["overall"]
         lines += [
-            f"Wolf-side advantage (dummy player): mu {_num(o['mu'])}, "
-            f"ordinal {_num(o['ordinal'])}. "
-            "Above 0 means the wolf side wins more than its prior; it is not a model.",
+            f"Wolf-side advantage (dummy player): mu {_num(o['mu'])}, compared with its prior "
+            "mu of 0 (mu, not ordinal). Above 0 means the wolf side wins more than expected; "
+            "it is not a model.",
             "",
         ]
     lines += _table(
@@ -190,7 +193,12 @@ def render_markdown(metrics: dict, board: dict) -> str:
             [
                 m,
                 str(metrics["models"][m]["all"]["statements"]),
-                *(_pct(metrics["models"][m]["all"]["lies"][s]["lie_rate"]) for s in LABEL_SOURCES),
+                *(
+                    _pct(
+                        metrics["models"][m]["all"]["lies"][s]["lie_rate"] if s in present else None
+                    )
+                    for s in LABEL_SOURCES
+                ),
             ]
             for m in metrics["models"]
         ],
@@ -324,7 +332,8 @@ def write_report(batch_dir: Path) -> Path:
     out.mkdir(exist_ok=True)
     data = [g for _, g in games]
     metrics: dict[str, Any] = compute_metrics(data)
-    board = build_leaderboard(metrics)
+    present = {lb.source for g in data for lb in g.labels}
+    board = build_leaderboard(metrics, present)
     write_charts(board, out)
 
     def dump(name: str, obj) -> None:
@@ -333,5 +342,5 @@ def write_report(batch_dir: Path) -> Path:
     dump("metrics.json", metrics)
     dump("leaderboard.json", board)
     dump("index.json", build_index(games))
-    (out / "report.md").write_text(render_markdown(metrics, board), encoding="utf-8")
+    (out / "report.md").write_text(render_markdown(metrics, board, present), encoding="utf-8")
     return out

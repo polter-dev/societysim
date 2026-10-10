@@ -1,0 +1,126 @@
+import { describe, expect, it, vi } from "vitest";
+import { clipsForSeq, clipUrl, DEFAULT_ENABLED, loadIndex, parseIndex } from "./narration";
+import { type AudioLike, createPlayer } from "./player";
+
+const clip = (seq: number, category: string, file: string) => ({
+  seq,
+  category,
+  speaker: "x",
+  voice: "v",
+  text: file,
+  file,
+});
+const raw = {
+  game_id: "g1",
+  clips: [
+    clip(3, "narrator", "a.mp3"),
+    clip(3, "speech", "b.mp3"),
+    clip(3, "wolf_chat", "c.mp3"),
+    clip(3, "highlight", "d.mp3"),
+    clip(4, "narrator", "e.mp3"),
+    { seq: "x", category: "narrator", file: "bad.mp3" },
+    clip(5, "bogus", "bad2.mp3"),
+  ],
+};
+const all = { narrator: true, speech: true, wolf_chat: true, highlight: true };
+
+describe("parseIndex", () => {
+  it("keeps valid clips and drops bad ones", () => {
+    const idx = parseIndex(raw);
+    expect(idx?.gameId).toBe("g1");
+    expect(idx?.clips.map((c) => c.file)).toEqual(["a.mp3", "b.mp3", "c.mp3", "d.mp3", "e.mp3"]);
+  });
+  it("returns null for junk", () => {
+    expect(parseIndex(null)).toBeNull();
+    expect(parseIndex({ clips: "no" })).toBeNull();
+  });
+  it("treats a missing index as no narration", async () => {
+    expect(
+      await loadIndex("x/index.json", async () => new Response("", { status: 404 })),
+    ).toBeNull();
+    expect(
+      await loadIndex("x/index.json", async () => {
+        throw new Error("net");
+      }),
+    ).toBeNull();
+    expect(clipsForSeq(null, 3, "narrator")).toEqual([]);
+  });
+});
+
+describe("clipsForSeq", () => {
+  const idx = parseIndex(raw);
+  it("defaults to narrator events only", () => {
+    expect(clipsForSeq(idx, 3, "narrator").map((c) => c.file)).toEqual(["a.mp3"]);
+  });
+  it("narrator mode plays everything enabled, in index order", () => {
+    expect(clipsForSeq(idx, 3, "narrator", all).map((c) => c.file)).toEqual([
+      "a.mp3",
+      "b.mp3",
+      "c.mp3",
+      "d.mp3",
+    ]);
+  });
+  it("villager mode never plays wolf_chat or highlight", () => {
+    expect(clipsForSeq(idx, 3, "villager", all).map((c) => c.file)).toEqual(["a.mp3", "b.mp3"]);
+    expect(clipsForSeq(idx, 3, "villager", DEFAULT_ENABLED).map((c) => c.file)).toEqual(["a.mp3"]);
+  });
+  it("builds clip urls beside the index", () => {
+    expect(clipUrl("/runs/g1.audio/index.json", idx!.clips[0])).toBe("/runs/g1.audio/a.mp3");
+  });
+});
+
+function fakeAudio() {
+  const made: AudioLike[] = [];
+  const make = () => {
+    const a: AudioLike = {
+      src: "",
+      onended: null,
+      onerror: null,
+      play: vi.fn(async () => {}),
+      pause: vi.fn(),
+    };
+    made.push(a);
+    return a;
+  };
+  return { made, make };
+}
+
+describe("createPlayer", () => {
+  const idx = parseIndex(raw)!;
+  const urlOf = (c: { file: string }) => `/u/${c.file}`;
+
+  it("plays clips in order on one element", () => {
+    const { made, make } = fakeAudio();
+    const p = createPlayer(make, urlOf as never);
+    p.play(clipsForSeq(idx, 3, "narrator", all));
+    expect(made).toHaveLength(1);
+    expect(made[0].src).toBe("/u/a.mp3");
+    made[0].onended?.();
+    expect(made[0].src).toBe("/u/b.mp3");
+    made[0].onerror?.();
+    expect(made[0].src).toBe("/u/c.mp3");
+  });
+
+  it("stepping stops the previous clip and its queue", () => {
+    const { made, make } = fakeAudio();
+    const p = createPlayer(make, urlOf as never);
+    p.play(clipsForSeq(idx, 3, "narrator", all));
+    const first = made[0];
+    const staleEnded = first.onended;
+    p.play(clipsForSeq(idx, 4, "narrator", all));
+    expect(first.pause).toHaveBeenCalled();
+    expect(made).toHaveLength(1);
+    expect(first.src).toBe("/u/e.mp3");
+    staleEnded?.(); // a late event from the old queue does nothing
+    expect(first.src).toBe("/u/e.mp3");
+  });
+
+  it("stop pauses and plays nothing further", () => {
+    const { made, make } = fakeAudio();
+    const p = createPlayer(make, urlOf as never);
+    p.play(clipsForSeq(idx, 3, "narrator", all));
+    p.stop();
+    expect(made[0].pause).toHaveBeenCalled();
+    expect(made[0].onended).toBeNull();
+  });
+});

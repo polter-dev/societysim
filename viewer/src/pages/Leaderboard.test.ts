@@ -53,3 +53,13 @@ describe("LeaderboardTable", () => {
     expect(html.match(/n\/a/g)!.length).toBe(8);
   });
 });
+
+describe("LeaderboardTable profile links", () => {
+  it("links each model name to its profile page when given profileHref", () => {
+    const html = renderToStaticMarkup(
+      createElement(LeaderboardTable, { board, profileHref: (m: string) => `?page=model&model=${m}` }),
+    );
+    expect(html).toContain('<th scope="row"><a href="?page=model&amp;model=alpha">alpha</a></th>');
+    expect(renderToStaticMarkup(createElement(LeaderboardTable, { board }))).not.toContain("<a ");
+  });
+});

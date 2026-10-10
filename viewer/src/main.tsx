@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { neonSource, withFallback } from "./data/neonSource";
 import { DEFAULT_INDEX_URL, indexSource, publishedBase } from "./data/staticSource";
+import ModelProfilePage from "./components/ModelProfile/ModelProfile";
 import IndexPage from "./pages/Index";
 import LeaderboardPage from "./pages/Leaderboard";
 import NewGamePage from "./pages/NewGame";
@@ -10,7 +11,8 @@ import ResearchPage from "./pages/Research";
 import "./pages/pages.css";
 import "./a11y.css";
 
-// Routes: ?game=<id> or ?log=<url> or ?page=replay -> replay, ?page=leaderboard, else the game index.
+// Routes: ?game=<id> or ?log=<url> or ?page=replay -> replay, ?page=leaderboard,
+// ?page=model&model=<name> -> model profile, else the game index.
 // ?base=<url> overrides the published data root. Legacy ?index=<url> remains supported.
 const params = new URLSearchParams(location.search);
 const indexParam = params.get("index");
@@ -34,6 +36,10 @@ const sibling = (name: string) => new URL(name, new URL(indexUrl, location.href)
 
 const page = params.get("page");
 const replay = params.has("game") || params.has("log") || page === "replay";
+const profileModel = page === "model" ? params.get("model") : null;
+const profileHref = (model: string) => href({ page: "model", model });
+const title =
+  profileModel ?? { leaderboard: "leaderboard", research: "research", new: "new game" }[page ?? ""] ?? "games";
 const style = { fontFamily: "system-ui, sans-serif", padding: 16, maxWidth: 1100 };
 
 createRoot(document.getElementById("root")!).render(
@@ -48,10 +54,17 @@ createRoot(document.getElementById("root")!).render(
       <App source={source} />
     ) : (
       <main style={style} className="info-page">
-        <h1>SocietySim {{ leaderboard: "leaderboard", research: "research", new: "new game" }[page ?? ""] ?? "games"}</h1>
+        <h1>SocietySim {title}</h1>
         <form method="get" className="batch-source"><label>Published batch base URL <input name="base" type="url" required defaultValue={dataBase.href} /></label><button type="submit">Load batch</button></form>
-        {page === "leaderboard" ? (
-          <LeaderboardPage leaderboardUrl={sibling("leaderboard.json")} metricsUrl={sibling("metrics.json")} loadBoard={neon?.loadBoard} />
+        {profileModel ? (
+          <ModelProfilePage metricsUrl={sibling("metrics.json")} model={profileModel} />
+        ) : page === "leaderboard" ? (
+          <LeaderboardPage
+            leaderboardUrl={sibling("leaderboard.json")}
+            metricsUrl={sibling("metrics.json")}
+            loadBoard={neon?.loadBoard}
+            profileHref={profileHref}
+          />
         ) : page === "research" ? (
           <ResearchPage metricsUrl={sibling("metrics.json")} />
         ) : page === "new" ? (

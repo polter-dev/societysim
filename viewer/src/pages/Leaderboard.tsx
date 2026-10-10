@@ -43,7 +43,16 @@ export interface BySide {
 const pct = (x: number | null | undefined) => (x == null ? "n/a" : `${Math.round(x * 100)}%`);
 const num = (x: number | null | undefined) => (x == null ? "n/a" : x.toFixed(2));
 
-export function LeaderboardTable({ board, bySide = {} }: { board: Board; bySide?: BySide }) {
+/** `profileHref(model)` links each model name to its profile page; omit it for plain names. */
+export function LeaderboardTable({
+  board,
+  bySide = {},
+  profileHref,
+}: {
+  board: Board;
+  bySide?: BySide;
+  profileHref?: (model: string) => string;
+}) {
   const side = board.wolf_side_advantage?.overall;
   return (
     <>
@@ -75,7 +84,7 @@ export function LeaderboardTable({ board, bySide = {} }: { board: Board; bySide?
           {board.models.map((r, i) => (
             <tr key={r.model}>
               <td>{i + 1}</td>
-              <th scope="row">{r.model}</th>
+              <th scope="row">{profileHref ? <a href={profileHref(r.model)}>{r.model}</a> : r.model}</th>
               <td>{r.games ?? "n/a"}</td>
               <td>{r.seats ?? "n/a"}</td>
               <td>
@@ -104,10 +113,12 @@ export default function LeaderboardPage({
   leaderboardUrl,
   metricsUrl,
   loadBoard,
+  profileHref,
 }: {
   leaderboardUrl: string;
   metricsUrl: string;
   loadBoard?: () => Promise<Board>;
+  profileHref?: (model: string) => string;
 }) {
   const [board, setBoard] = useState<Board | null>(null);
   const [bySide, setBySide] = useState<BySide>({});
@@ -127,5 +138,5 @@ export default function LeaderboardPage({
 
   if (error) return <p role="alert">Could not load the leaderboard: {error}</p>;
   if (!board) return <p>Loading leaderboard...</p>;
-  return <LeaderboardTable board={board} bySide={bySide} />;
+  return <LeaderboardTable board={board} bySide={bySide} profileHref={profileHref} />;
 }

@@ -1,6 +1,6 @@
 # Demo scripts
 
-Six sponsor rooms on Sunday (hours 42 to 46), one 60-second pitch each. Every section has the spoken script (about 150 words), the click path, the numbers behind it, and what to do if the live demo breaks.
+Six sponsor rooms on Sunday (hours 42 to 46), one 60-second pitch each. Every section has the spoken script (about 150 words), the click path, the numbers behind it, and what to do if the live demo breaks. The main 3-minute pitch and slide outline are in [PITCH.md](PITCH.md).
 
 `TODO(batch)` marks a number that comes from the T5.2 self-play batch (#35) or the T5.3 mixed batch (#36). Fill those in #38 once the batches finish and #37 has run `label`, `report` and `publish`. Other `TODO(...)` tags name the open issue that settles them.
 

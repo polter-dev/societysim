@@ -82,7 +82,10 @@ models:
     color: "#fbbc04"
   - name: gemini-flash
     litellm_model: gemini/gemini-3.8-flash
-    structured: json_schema
+    # #189: thinking is already minimal ("disable" maps to thinkingLevel=minimal for Gemini 3+
+    # flash in LiteLLM), so it isn't the cause. In the live doctor json_schema and json_object
+    # passed 120 s while `none` took 62.7 s, so use the fastest mode. Re-run doctor to confirm.
+    structured: none
     reasoning_effort: disable
     max_tokens: 1024
     color: "#f29900"

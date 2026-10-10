@@ -38,21 +38,21 @@ It creates the schema `workspace.societysim` and the volume `workspace.societysi
 
 Each run replaces the tables, so ingest everything you want in one call (`--runs runs/` picks up every batch under it). The batch id is the name of the directory a log sits in.
 
-## 4. Import both notebooks
+## 4. Import and run both notebooks
 
-Through the API, or in the UI (Workspace > Import > File):
+One command ingests the games, imports `metrics.py` and `mlflow_batches.py` to `/Users/<you>/societysim_<name>` (overwriting), runs each as a serverless one-time run in that order, and prints each run's state and page URL:
 
 ```bash
-for nb in metrics mlflow_batches; do
-  curl -sf -X POST "$DATABRICKS_HOST/api/2.0/workspace/import" \
-    -H "Authorization: Bearer $DATABRICKS_TOKEN" \
-    -d "{\"path\": \"/Users/<your-email>/societysim_$nb\", \"format\": \"SOURCE\", \"language\": \"PYTHON\", \"overwrite\": true, \"content\": \"$(base64 < notebooks/databricks/$nb.py | tr -d '\n')\"}"
-done
+uv run python scripts/databricks_ingest.py --runs runs/ --notebooks
 ```
 
-## 5. Run the metrics notebook
+`DATABRICKS_HOST` can be the bare host; a `?o=` suffix is dropped. A failed notebook prints its error message and the command exits 1. `--dry-run` prints the API calls without sending them. The check cell in `metrics` prints `N checks, 0 mismatches` and fails if any metric differs from `metrics.json`; its last cell saves the four `metrics_*` tables. `mlflow_batches` logs one run per batch to the experiment `/Users/<you>/societysim`.
 
-Open `societysim_metrics`, attach it to Serverless compute and click Run all. The check cell prints `N checks, 0 mismatches` and fails if any metric differs from `metrics.json`. The last cell then saves the four `metrics_*` tables. Run it again after every ingest.
+To do it by hand instead, import the files in the UI (Workspace > Import > File), attach each to Serverless compute and click Run all.
+
+## 5. Re-run later
+
+Run the same command after every ingest. The notebooks are overwritten and run again, and each batch's MLflow run is replaced so params like the game count stay current.
 
 ## 6. Import the dashboard
 
@@ -64,9 +64,9 @@ It looks for a dashboard named `societysim`, updates it if it exists and creates
 
 If the API call fails, import the file by hand: Workspace > Import > File, pick `notebooks/databricks/societysim.lvdash.json`, then open it and click Publish.
 
-## 7. Log the batches to MLflow
+## 7. About the MLflow notebook
 
-Open `societysim_mlflow_batches`, attach it to Serverless compute and click Run all. It uses the MLflow that comes with serverless; nothing is installed. Runs go to the experiment `/Users/<you>/societysim` (the `experiment` widget changes it), one per batch, named after the batch id. Running it again replaces each batch's run, so params like the game count stay current.
+It uses the MLflow that comes with serverless; nothing is installed. Runs go to the experiment `/Users/<you>/societysim` (the `experiment` widget changes it), one per batch, named after the batch id.
 
 Metric keys are `metric/model/group`, for example `win_rate/qwen3-235b/wolf` or `detection_auc/all_models/village`. Groups follow T3.3: `all`, `wolf`, `village` and each village role. Lie metrics carry their label source (`lie_rate_jev`, `lie_share_followed_self_tag`). Lie success and persuasion are exploratory.
 

@@ -372,3 +372,99 @@ def test_deploy_dashboard_creates_in_home_folder():
     assert not any(r.method == "PATCH" for r in log)
     assert not any(r.url.path == "/api/2.0/sql/warehouses" for r in log)
     assert log[-1].url.path == "/api/2.0/lakeview/dashboards/d2/published"
+
+
+# --- --notebooks ---
+
+
+def _jobs_client(states, calls, output=None):
+    """Mock workspace: runs/get walks `states` (one list per run, in submit order)."""
+    polls = {"n": 0, "run": 0}
+
+    def handler(req):
+        path = req.url.path
+        calls.append((req.method, path, json.loads(req.content) if req.content else None))
+        if path.endswith("/Me"):
+            return httpx.Response(200, json={"userName": "me@x.com"})
+        if path.endswith("/workspace/import"):
+            return httpx.Response(200, json={})
+        if path.endswith("/runs/submit"):
+            polls["run"] += 1
+            polls["n"] = 0
+            return httpx.Response(200, json={"run_id": 100 + polls["run"]})
+        if path.endswith("/runs/get-output"):
+            return httpx.Response(200, json=output or {})
+        seq = states[polls["run"] - 1]
+        st = seq[min(polls["n"], len(seq) - 1)]
+        polls["n"] += 1
+        return httpx.Response(
+            200,
+            json={"state": st, "run_page_url": "https://dbx.test/run/1", "tasks": [{"run_id": 7}]},
+        )
+
+    return httpx.Client(base_url="https://dbx.test", transport=httpx.MockTransport(handler))
+
+
+OK = [
+    {"life_cycle_state": "PENDING"},
+    {"life_cycle_state": "RUNNING"},
+    {"life_cycle_state": "TERMINATED", "result_state": "SUCCESS"},
+]
+
+
+def test_run_notebooks_imports_submits_in_order_and_polls(monkeypatch, capsys):
+    monkeypatch.setattr(ingest.time, "sleep", lambda s: None)
+    calls = []
+    assert ingest.run_notebooks(_jobs_client([OK, OK], calls), poll=0)
+    imports = [c[2] for c in calls if c[1].endswith("/workspace/import")]
+    assert [i["path"] for i in imports] == [
+        "/Users/me@x.com/societysim_metrics",
+        "/Users/me@x.com/societysim_mlflow_batches",
+    ]
+    assert all(i["overwrite"] and i["format"] == "SOURCE" for i in imports)
+    submits = [c[2] for c in calls if c[1].endswith("/runs/submit")]
+    assert submits[0] == {
+        "run_name": "societysim_metrics",
+        "tasks": [
+            {
+                "task_key": "metrics",
+                "notebook_task": {"notebook_path": "/Users/me@x.com/societysim_metrics"},
+            }
+        ],
+    }
+    assert "cluster" not in json.dumps(submits)
+    assert len([c for c in calls if c[1].endswith("/runs/get")]) == 6  # 3 polls each
+    out = capsys.readouterr().out
+    assert "metrics: SUCCESS https://dbx.test/run/1" in out
+    assert "mlflow_batches: SUCCESS" in out
+
+
+def test_failed_notebook_prints_error_and_stops(monkeypatch, capsys):
+    monkeypatch.setattr(ingest.time, "sleep", lambda s: None)
+    calls = []
+    bad = [{"life_cycle_state": "TERMINATED", "result_state": "FAILED"}]
+    client = _jobs_client([bad, OK], calls, output={"error": "AssertionError: 3 mismatches"})
+    assert not ingest.run_notebooks(client, poll=0)
+    assert "metrics failed: AssertionError: 3 mismatches" in capsys.readouterr().out
+    assert len([c for c in calls if c[1].endswith("/runs/submit")]) == 1
+
+
+def test_main_exits_one_when_notebook_fails(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATABRICKS_HOST", "https://dbx.test/?o=123")
+    monkeypatch.setenv("DATABRICKS_TOKEN", "dapi-test")
+    monkeypatch.setattr(ingest, "upload", lambda *a, **k: None)
+    monkeypatch.setattr(ingest, "run_notebooks", lambda client: False)
+    assert ingest.main(["--fixture", "--notebooks", "--out", str(tmp_path)]) == 1
+
+
+def test_notebooks_dry_run_prints_calls(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(ingest, "run_notebooks", lambda *a, **k: pytest.fail("sent"))
+    assert ingest.main(["--fixture", "--notebooks", "--dry-run", "--out", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "POST /api/2.1/jobs/runs/submit" in out
+    assert "societysim_mlflow_batches" in out
+
+
+def test_normalize_host():
+    for h in ("dbc-1.cloud.databricks.com", "https://dbc-1.cloud.databricks.com/?o=99"):
+        assert ingest.normalize_host(h) == "https://dbc-1.cloud.databricks.com"

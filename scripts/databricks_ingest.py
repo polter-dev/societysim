@@ -3,6 +3,12 @@
     uv run python scripts/databricks_ingest.py --fixture            # fixtures/sample_game.jsonl
     uv run python scripts/databricks_ingest.py --runs runs/<batch>  # finished games under a dir
     uv run python scripts/databricks_ingest.py --dashboard          # import/update the dashboard
+    uv run python scripts/databricks_ingest.py --runs runs/ --notebooks   # ingest, then run both
+
+--notebooks (after the ingest) imports notebooks/databricks/metrics.py and mlflow_batches.py to
+/Users/<me>/societysim_<name>, submits each as a serverless one-time run in that order, polls
+until it finishes and prints its state and run page URL. A failed run prints the notebook's
+error and exits 1. With --dry-run it prints the API calls instead of sending them.
 
 Always writes games.jsonl, events.jsonl, labels.jsonl, batch_metrics.jsonl (the headline T3.3
 metrics of each batch, long format, for the MLflow notebook) and metrics.json (the T3.3 metrics
@@ -21,12 +27,14 @@ Rows are newline-delimited JSON, not Parquet: pyarrow is not a dependency here.
 """
 
 import argparse
+import base64
 import json
 import os
 import re
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 
@@ -37,6 +45,8 @@ ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "fixtures" / "sample_game.jsonl"
 DASHBOARD = ROOT / "notebooks" / "databricks" / "societysim.lvdash.json"
 DASHBOARD_NAME = "societysim"
+NOTEBOOK_DIR = ROOT / "notebooks" / "databricks"
+NOTEBOOKS = ("metrics", "mlflow_batches")  # run in this order: mlflow reads what metrics saved
 GAME_END = re.compile(r'"type":\s*"game_end"')
 
 # Column -> Spark type. Explicit, so a column that happens to be all null still gets its type.
@@ -369,6 +379,77 @@ def deploy_dashboard(
     return did
 
 
+def normalize_host(host: str) -> str:
+    """Bare host or full URL (maybe with a path or ?o=<id>) -> https://host."""
+    u = urlparse(host if "//" in host else f"https://{host}")
+    return f"{u.scheme}://{u.netloc}"
+
+
+def import_payload(name: str, path: str) -> dict:
+    content = base64.b64encode((NOTEBOOK_DIR / f"{name}.py").read_bytes()).decode()
+    return {
+        "path": path,
+        "format": "SOURCE",
+        "language": "PYTHON",
+        "overwrite": True,
+        "content": content,
+    }
+
+
+def run_payload(name: str, path: str) -> dict:
+    """One-time run with no cluster spec, which Free Edition runs serverless."""
+    return {
+        "run_name": f"societysim_{name}",
+        "tasks": [{"task_key": name, "notebook_task": {"notebook_path": path}}],
+    }
+
+
+def run_notebook(client: httpx.Client, name: str, path: str, poll: float = 5) -> bool:
+    """Submit the notebook, wait for it, print state and run page URL; False if it failed."""
+    r = client.post("/api/2.1/jobs/runs/submit", json=run_payload(name, path))
+    r.raise_for_status()
+    run_id = r.json()["run_id"]
+    while True:
+        r = client.get("/api/2.1/jobs/runs/get", params={"run_id": run_id})
+        r.raise_for_status()
+        run = r.json()
+        state = run["state"]
+        if state["life_cycle_state"] in ("TERMINATED", "SKIPPED", "INTERNAL_ERROR"):
+            break
+        time.sleep(poll)
+    result = state.get("result_state") or state["life_cycle_state"]
+    print(f"{name}: {result} {run.get('run_page_url', '')}")
+    if result == "SUCCESS":
+        return True
+    task_run = (run.get("tasks") or [{}])[0].get("run_id", run_id)
+    r = client.get("/api/2.1/jobs/runs/get-output", params={"run_id": task_run})
+    err = r.json().get("error") if r.is_success else None
+    print(f"{name} failed: {err or state.get('state_message') or 'no error message'}")
+    return False
+
+
+def run_notebooks(client: httpx.Client, poll: float = 5) -> bool:
+    """Import then run each notebook in order; stop at the first failure."""
+    me = client.get("/api/2.0/preview/scim/v2/Me")
+    me.raise_for_status()
+    for name in NOTEBOOKS:
+        path = f"/Users/{me.json()['userName']}/societysim_{name}"
+        client.post("/api/2.0/workspace/import", json=import_payload(name, path)).raise_for_status()
+        print(f"imported {path}")
+        if not run_notebook(client, name, path, poll):
+            return False
+    return True
+
+
+def print_notebook_calls() -> None:
+    print("GET  /api/2.0/preview/scim/v2/Me  (for <me>)")
+    for name in NOTEBOOKS:
+        path = f"/Users/<me>/societysim_{name}"
+        print(f"POST /api/2.0/workspace/import  path={path} overwrite=true")
+        print(f"POST /api/2.1/jobs/runs/submit  {json.dumps(run_payload(name, path))}")
+        print("GET  /api/2.1/jobs/runs/get?run_id=<id>  (until TERMINATED)")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     src = ap.add_mutually_exclusive_group(required=True)
@@ -378,6 +459,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=ROOT / ".cache" / "databricks")
     ap.add_argument(
         "--include-scripted", action="store_true", help="also ingest scripted (random-agent) games"
+    )
+    ap.add_argument(
+        "--notebooks", action="store_true", help="after the ingest, import and run both notebooks"
     )
     ap.add_argument("--dry-run", action="store_true", help="write local files only")
     ap.add_argument("--catalog", default="workspace")
@@ -405,8 +489,10 @@ def main(argv: list[str] | None = None) -> int:
     if a.dry_run or not (host and token):
         why = "--dry-run" if a.dry_run else "DATABRICKS_HOST / DATABRICKS_TOKEN not set"
         print(f"dry run ({why}): nothing uploaded")
+        if a.notebooks:
+            print_notebook_calls()
         return 0
-    base = (host if host.startswith("http") else f"https://{host}").rstrip("/")
+    base = normalize_host(host)
     headers = {"Authorization": f"Bearer {token}"}
     wid = os.environ.get("DATABRICKS_WAREHOUSE_ID")
     with httpx.Client(base_url=base, headers=headers, timeout=120) as client:
@@ -415,7 +501,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"published {base}/dashboardsv3/{did}/published")
             return 0
         upload(client, files, a.catalog, a.schema, a.volume, wid)
-    print(f"created {', '.join(f'{a.catalog}.{a.schema}.{t}' for t in SCHEMAS)}")
+        print(f"created {', '.join(f'{a.catalog}.{a.schema}.{t}' for t in SCHEMAS)}")
+        if a.notebooks and not run_notebooks(client):
+            return 1
     return 0
 
 

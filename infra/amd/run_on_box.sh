@@ -15,7 +15,8 @@
 # the environment or the repo's .env; an exported value wins over .env. Never printed here.
 #
 # Settings: AMD_VLLM_BASE_URL (default http://127.0.0.1:8000/v1), SEED (default 0),
-#   PUBLISH=1 to also run `societysim publish runs/<batch>` after packing.
+#   PUBLISH=1 to also run `societysim publish runs/<batch>` after packing. publish takes the
+#   dataset repo from SOCIETYSIM_HF_DATASET (env or .env) and needs HF_TOKEN with write access.
 
 set -Eeuo pipefail
 die() {

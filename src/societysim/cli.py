@@ -537,7 +537,12 @@ def highlights(
 @app.command()
 def publish(
     batch_dir: Path,
-    repo: Annotated[str, typer.Option("--repo", help="Hugging Face dataset, org/name.")],
+    repo: Annotated[
+        str | None,
+        typer.Option(
+            "--repo", help="Hugging Face dataset, org/name. Default: $SOCIETYSIM_HF_DATASET."
+        ),
+    ] = None,
     private: Annotated[
         bool, typer.Option("--private/--public", help="Visibility if the repo is created.")
     ] = True,
@@ -550,6 +555,10 @@ def publish(
     from societysim.analysis.publish import publish_batch
 
     load_dotenv()
+    repo = repo or os.environ.get("SOCIETYSIM_HF_DATASET")
+    if not repo:
+        typer.echo("no dataset repo: pass --repo org/name or set SOCIETYSIM_HF_DATASET")
+        raise typer.Exit(1)
     token = os.environ.get("HF_TOKEN")
     if not token:
         typer.echo("HF_TOKEN is not set")

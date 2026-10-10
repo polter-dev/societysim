@@ -81,6 +81,34 @@ def test_cli_requires_token(tmp_path, monkeypatch):
     assert r.exit_code == 1 and "HF_TOKEN" in r.output
 
 
+def test_cli_repo_from_env_when_flag_omitted(tmp_path, monkeypatch):
+    FakeHub.repo, FakeHub.calls = {}, []
+    monkeypatch.setenv("HF_TOKEN", "tok")
+    monkeypatch.setenv("SOCIETYSIM_HF_DATASET", "env-org/env-ds")
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    monkeypatch.setattr("huggingface_hub.HfApi", FakeHub)
+    b = str(batch(tmp_path))
+    r = CliRunner().invoke(app, ["publish", b])
+    assert r.exit_code == 0, r.output
+    assert FakeHub.calls[0][1] == "env-org/env-ds" and "to env-org/env-ds" in r.output
+    FakeHub.calls = []
+    r = CliRunner().invoke(app, ["publish", b, "--repo", "org/ds"])
+    assert r.exit_code == 0, r.output
+    assert FakeHub.calls[0][1] == "org/ds"
+
+
+def test_cli_requires_repo(tmp_path, monkeypatch):
+    FakeHub.calls = []
+    monkeypatch.setenv("HF_TOKEN", "tok")
+    monkeypatch.delenv("SOCIETYSIM_HF_DATASET", raising=False)
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    monkeypatch.setattr("huggingface_hub.HfApi", FakeHub)
+    r = CliRunner().invoke(app, ["publish", str(batch(tmp_path))])
+    assert r.exit_code == 1
+    assert "--repo" in r.output and "SOCIETYSIM_HF_DATASET" in r.output
+    assert FakeHub.calls == []
+
+
 def test_cli_publish(tmp_path, monkeypatch):
     FakeHub.repo, FakeHub.calls = {}, []
     monkeypatch.setenv("HF_TOKEN", "tok")

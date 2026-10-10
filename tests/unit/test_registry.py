@@ -3,7 +3,13 @@ from typer.testing import CliRunner
 
 from societysim.cli import app
 from societysim.config import ModelSpec
-from societysim.models.client import CompletionResult, ProviderLimit, Usage, litellm_model_name
+from societysim.models.client import (
+    CompletionResult,
+    ProviderLimit,
+    Usage,
+    limit_key,
+    litellm_model_name,
+)
 from societysim.models.registry import DEFAULT_PATH, Ping, Registry, load_registry, probe_model
 
 EXPECTED = {
@@ -33,7 +39,16 @@ def test_gemini_limit_matches_free_tier():
 
 def test_every_model_provider_has_a_limit():
     reg = load_registry(DEFAULT_PATH)
-    assert {m.provider for m in reg.models} <= set(reg.providers)
+    assert {limit_key(m) for m in reg.models} <= set(reg.providers)
+
+
+def test_hf_router_routes_share_one_limit(monkeypatch):
+    monkeypatch.setenv("HOSTED_VLLM_API_BASE", "https://router.huggingface.co/v1")
+    reg = load_registry(DEFAULT_PATH)
+    keys = {limit_key(reg.get(n)) for n in ("qwen3-235b", "gemma4-26b", "llama4-maverick")}
+    assert keys == {"huggingface"}
+    assert limit_key(reg.get("gemini-flash")) == "gemini"
+    assert limit_key(reg.get("gpt-5-mini")) == "openai"
 
 
 def test_hf_pin_applies_to_model_string():

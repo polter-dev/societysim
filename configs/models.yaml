@@ -2,6 +2,9 @@
 #
 # providers: throttle per LiteLLM provider prefix (concurrency = calls in flight, rpm = per minute).
 #   gemini is set for the AI Studio free tier (about 10-15 RPM); raise it with a paid key.
+#   hosted_vllm/ models served from the HF router (HOSTED_VLLM_API_BASE below) count against the
+#   huggingface limit, because both routes hit router.huggingface.co (client.limit_key). The
+#   hosted_vllm entry below only applies to a hosted_vllm model on some other endpoint.
 # models: one ModelSpec each (see societysim.config.ModelSpec).
 #   structured: json_schema | json_object | none. `doctor` reports which one actually works.
 #   Prices are USD per 1M tokens, only where LiteLLM's table is likely missing the model.
@@ -18,7 +21,7 @@ providers:
   gemini: {concurrency: 2, rpm: 10}
   huggingface: {concurrency: 8, rpm: 120}
   openai: {concurrency: 8, rpm: 300}
-  hosted_vllm: {concurrency: 8, rpm: 120} # HF unified endpoint, see env below
+  hosted_vllm: {concurrency: 8, rpm: 120} # hosted_vllm on a non-HF-router endpoint
 
 # DeepInfra rejects LiteLLM's huggingface/deepinfra/... route, so those models go through the
 # HF unified endpoint as `hosted_vllm/<hf_id>:deepinfra`; LiteLLM reads these variables.

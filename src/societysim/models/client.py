@@ -11,6 +11,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -73,6 +74,19 @@ DEFAULT_LIMITS: dict[str, ProviderLimit] = {
     "openai": ProviderLimit(concurrency=8, rpm=500),
 }
 FALLBACK_LIMIT = ProviderLimit(concurrency=8, rpm=300)
+HF_ROUTER_HOST = "router.huggingface.co"
+
+
+def limit_key(spec: ModelSpec) -> str:
+    """Which provider limit a model counts against. `hosted_vllm/` models whose endpoint is the
+    HF router share the `huggingface` limit, since both routes hit router.huggingface.co."""
+    if spec.provider != "hosted_vllm":
+        return spec.provider
+    try:
+        base = spec.resolved_api_base() or os.environ.get("HOSTED_VLLM_API_BASE", "")
+    except ValueError:
+        return spec.provider
+    return "huggingface" if urlparse(base).hostname == HF_ROUTER_HOST else spec.provider
 
 
 class _Limiter:
@@ -266,7 +280,7 @@ class LiteLLMClient:
             return CompletionResult(
                 parsed=None, raw="", error=str(e), usage=Usage(model=model.name, attempts=0)
             )
-        limiter = self._limiter(model.provider)
+        limiter = self._limiter(limit_key(model))
         usage = Usage(model=model.name, attempts=0)
         latency = 0.0
         for attempt in range(self.max_retries + 1):

@@ -15,6 +15,7 @@ from societysim.models.client import (
     _Limiter,
     estimate_cost,
     extract_json,
+    limit_key,
     litellm_model_name,
     request_kwargs,
 )
@@ -388,6 +389,43 @@ async def test_concurrency_limit_per_provider(monkeypatch):
     monkeypatch.setattr(litellm, "acompletion", slow)
     await asyncio.gather(*(client.complete(spec(), MESSAGES, VoteResponse) for _ in range(6)))
     assert peak == 2
+
+
+HF_BASE = "https://router.huggingface.co/v1"
+
+
+async def test_hf_router_routes_share_one_in_flight_limit(monkeypatch):
+    monkeypatch.setenv("HOSTED_VLLM_API_BASE", HF_BASE)
+    client = LiteLLMClient(limits={"huggingface": ProviderLimit(concurrency=3, rpm=10_000)})
+    in_flight = peak = 0
+
+    async def slow(**kw):
+        nonlocal in_flight, peak
+        in_flight += 1
+        peak = max(peak, in_flight)
+        await asyncio.sleep(0.01)
+        in_flight -= 1
+        return reply(json.dumps(VOTE))
+
+    monkeypatch.setattr(litellm, "acompletion", slow)
+    hf = spec(litellm_model="huggingface/org/model")
+    vllm = spec(litellm_model="hosted_vllm/org/model:deepinfra")
+    await asyncio.gather(
+        *(client.complete(s, MESSAGES, VoteResponse) for s in [hf, vllm] * 6),
+    )
+    assert peak == 3
+
+
+def test_limit_key(monkeypatch):
+    monkeypatch.delenv("HOSTED_VLLM_API_BASE", raising=False)
+    vllm = spec(litellm_model="hosted_vllm/org/model")
+    assert limit_key(vllm) == "hosted_vllm"  # no HF router configured
+    monkeypatch.setenv("HOSTED_VLLM_API_BASE", HF_BASE)
+    assert limit_key(vllm) == "huggingface"
+    assert limit_key(spec(litellm_model="huggingface/org/model")) == "huggingface"
+    assert limit_key(spec()) == "openai"
+    own = spec(litellm_model="hosted_vllm/org/model", api_base="https://my.box/v1")
+    assert limit_key(own) == "hosted_vllm"  # its own endpoint keeps its own limit
 
 
 async def test_token_bucket_waits_for_refill():

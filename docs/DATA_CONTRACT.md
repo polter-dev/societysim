@@ -19,6 +19,7 @@ file it produces against those schemas, and checks the Neon tables and views bel
 | `IndexEntry` (`viewer/src/data/staticSource.ts`) | `schema/index.schema.json` |
 | `Board`, `BoardRow`, `Rating` (`viewer/src/pages/Leaderboard.tsx`) | `schema/leaderboard.schema.json` |
 | `BySide` (`Leaderboard.tsx`) | `openskill` in `schema/metrics.schema.json` |
+| `ModelProfile`, `PairRow` (`viewer/src/data/models.ts`) | `profiles` in `schema/metrics.schema.json` |
 | narration index (not typed yet) | `schema/narration_index.schema.json` |
 | highlights (not typed yet) | `schema/highlights.schema.json` |
 | settings screen (not built yet) | `schema/game_setup.schema.json` and `models_catalog.json`, see [Game setup](#game-setup) |
@@ -192,7 +193,7 @@ in the file and part of the contract.
 
 - Path: `<batch>/report/metrics.json`. Schema: `schema/metrics.schema.json`.
 - Produced by: `societysim report <batch>` (`analysis/metrics.py` `compute_metrics`, plus
-  `summary` and `speed` from `report.py`).
+  `summary`, `speed` and `profiles` from `report.py`).
 
 Top level:
 
@@ -207,6 +208,7 @@ Top level:
 | `deception_matrix` | object | Who fools whom, see below. Exploratory |
 | `summary` | object | Headline numbers, see below |
 | `speed` | model -> Speed | |
+| `profiles` | model -> ModelProfile | One per leaderboard row, for the model profile page. See below |
 
 GroupStats: `games`, `wins`, `draws`, `losses` (integers, per seat); `win_rate`, `win_ci`;
 `statements` (integer); `lies` (`{self_tag: Lies, jev: Lies}`); `detection`
@@ -259,6 +261,29 @@ Speed: `calls`, `timed_calls` (integers), `median_latency_ms` (number | null),
 `p90_latency_ms` (integer | null), `output_tokens_per_s`, `tokens_per_game`,
 `cost_usd_per_game` (number | null), `self_hosted` (boolean: calls made and none cost anything).
 
+`profiles` (added for #297; additive, so the contract version stays 1): one ModelProfile per
+model in `leaderboard.json`, keyed by model name. Everything in it is also elsewhere in the
+report; it is gathered here so the profile page needs one lookup.
+
+| Field | Type | Notes |
+|---|---|---|
+| `model` | string | Same as the key |
+| `games`, `seats`, `win_rate`, `win_ci`, `wolf_win_rate`, `village_win_rate`, `openskill`, `lie_rate` | | Copied from the model's `leaderboard.json` row, same types and nulls |
+| `statements` | integer | Public statements, the lie-rate denominator |
+| `detection` | `{n: integer, auc: number\|null, brier: number\|null}` | Village seats, as `models.<m>.village.detection` without `by_day`. `n` 0 and nulls when it never played village |
+| `median_latency_ms` | number \| null | From `speed` |
+| `voice` | `{voice_id: string, fallback: boolean}` | ElevenLabs voice for this model's clips, from `configs/voices.yaml`. `fallback` is true when the model has no entry and gets `default_model_voice` |
+| `fools` | `{self_tag: [PairRow], jev: [PairRow]}` | Listeners who heard this model lie: its row of `deception_matrix.pairs`. `model` is the listener |
+| `fooled_by` | `{self_tag: [PairRow], jev: [PairRow]}` | Liars this model heard: its column of `deception_matrix.pairs`. `model` is the liar |
+
+PairRow is a deception Cell plus `model`. Lists are sorted by `vote_follow_rate`, highest first
+(null last), then `voters` descending, then model name. A source with no labels gives `[]`. The
+same exploratory caveat applies: show `voters` and the CI, and treat thin cells as noise.
+
+There is no avatar field. Avatars are viewer assets; `avatarFor(model)` in
+`viewer/src/data/models.ts` maps a model to its image and returns null (placeholder) until the
+art is in the repo.
+
 ```json
 {"games": 3, "unfinished_games": 0, "label_sources": ["self_tag", "jev"], "exploratory": ["lie_success", "persuasion"],
  "openskill": {"overall": {"a": {"mu": 25.0, "sigma": 7.95, "ordinal": 1.14}}, "wolf": {}, "village": {},
@@ -269,6 +294,12 @@ Speed: `calls`, `timed_calls` (integers), `median_latency_ms` (number | null),
    "pairs": {"jev": {}, "self_tag": {"gemini-flash": {"deepseek-v3.1": {"heard": 2, "voters": 2, "followed": 2, "vote_follow_rate": 1.0, "vote_follow_ci": [0.34, 1.0],
      "comparisons": 2, "moved": 2, "belief_shift_rate": 1.0, "belief_shift_ci": [0.34, 1.0], "baseline_rate": 0.25, "baseline_voters": 2}}}},
    "baseline": {"role_claim": {"deepseek-v3.1": {"heard": 2, "voters": 2, "followed": 1, "vote_follow_rate": 0.5, "vote_follow_ci": [0.09, 0.91]}}}},
+ "profiles": {"gemini-flash": {"model": "gemini-flash", "games": 1, "seats": 1, "win_rate": 1.0, "win_ci": [0.21, 1.0],
+   "wolf_win_rate": 1.0, "village_win_rate": null, "openskill": {"mu": 26.95, "sigma": 8.11, "ordinal": 2.64},
+   "statements": 4, "lie_rate": {"self_tag": 0.5, "jev": null}, "detection": {"n": 0, "auc": null, "brier": null},
+   "median_latency_ms": 1610.0, "voice": {"voice_id": "cgSgspJ2msm6clMCkdW9", "fallback": false},
+   "fools": {"self_tag": [{"model": "deepseek-v3.1", "heard": 2, "voters": 2, "followed": 2, "vote_follow_rate": 1.0, "...": "..."}], "jev": []},
+   "fooled_by": {"self_tag": [], "jev": []}}},
  "models": {"...": "..."}, "by_group": {"...": "..."}, "summary": {"...": "..."}}
 ```
 

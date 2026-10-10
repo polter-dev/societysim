@@ -46,7 +46,7 @@ function fakeNeon(games: Record<string, GameRow>) {
         return json(all.filter(([, g]) => g.status === "finished" && g.agents !== "scripted").map(([g]) => ({ game_id: g })));
       return json(all.map(([g, v]) => ({ game_id: g, models: v.models, status: v.status })));
     }
-    if (table === "events") {
+    if (table === "events_public") {
       let rows = games[id!]?.rows ?? [];
       const after = p.get("seq")?.replace(/^gt\./, "");
       if (after !== undefined) rows = rows.filter((e) => e.seq > Number(after));
@@ -57,7 +57,7 @@ function fakeNeon(games: Record<string, GameRow>) {
       const fields = select.split(",").map((f) => f.match(/^(\w+):event->(\w+)$/)!.slice(1));
       return json(rows.map((e) => Object.fromEntries(fields.map(([alias, f]) => [alias, e[f as keyof Event]]))));
     }
-    if (table === "labels") return json(id === ID ? labelRows : []);
+    if (table === "labels_public") return json(id === ID ? labelRows : []);
     if (table === "leaderboard")
       return json([
         { model: "a", seat_games: 14, win_rate: "0.571" },
@@ -123,13 +123,14 @@ describe("neonSource, running games (hidden information)", () => {
     const game = await src.loadGame(ID);
     await src.pollEvents(ID, game.events.at(-1)!.seq);
     await src.loadLabels!(ID);
-    const events = asked.filter((u) => u.includes("/events?"));
+    const events = asked.filter((u) => u.includes("/events_public?"));
     expect(events.length).toBe(2);
     for (const u of events) {
       expect(u).toContain("event->>visibility=eq.public");
       expect(u).not.toMatch(/select=event&|private_reasoning|suspicion/);
     }
-    expect(asked.some((u) => u.includes("/labels?"))).toBe(false);
+    expect(asked.some((u) => u.includes("/labels_public?"))).toBe(false);
+    expect(asked.some((u) => /\/(events|labels)\?/.test(u))).toBe(false); // anonymous can't read them (#323)
   });
 
   it("returns no private text and no roles", async () => {

@@ -20,7 +20,7 @@ from societysim.agents.observation import observe
 from societysim.agents.prompts import Action
 from societysim.agents.schemas import AgentResponse
 from societysim.roles import Phase, Role, SeatId, Winner
-from societysim.server import admission, security
+from societysim.server import admission, alerts, security
 from societysim.server.ledger import Ledger
 from societysim.server.manager import GameManager, Session, Settings, Status
 from societysim.server.security import Error, PlayError
@@ -102,8 +102,14 @@ class ActionBody(RootModel[AgentResponse]):
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     play = settings.play
-    security.check_startup(play, settings.neon)  # fails closed
+    try:
+        security.check_startup(play, settings.neon)  # fails closed
+    except Exception as exc:
+        alerts.send(f"Play server failed to start: {type(exc).__name__}")  # type only
+        raise
     ledger = Ledger(play.daily_budget_usd, persistent=settings.neon)
+    watch = alerts.Alerts()
+    ledger.on_spend = watch.spend
     ledger.game_estimate_usd = admission.default_estimate(play.allowed_models)
     manager = GameManager(settings, ledger)
 
@@ -111,6 +117,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         names = security.secret_names()
         log.info("play server: secrets set: %s", ", ".join(names) or "none")  # names only
+        await watch.kill_switch(settings.play_enabled)
         if settings.neon:
             await manager.prepare_neon()
             await ledger.load(manager.neon_connect)
@@ -137,6 +144,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/limits")
     async def limits() -> Limits:
+        await watch.kill_switch(settings.play_enabled)  # the uptime check polls this
         return Limits(
             play_enabled=settings.play_enabled, remaining_today=manager.ledger.remaining_today()
         )

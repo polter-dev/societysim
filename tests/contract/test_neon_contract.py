@@ -12,7 +12,8 @@ ROOT = Path(__file__).parents[2]
 DOC = (ROOT / "docs/DATA_CONTRACT.md").read_text(encoding="utf-8")
 SQL = (ROOT / "neon/schema.sql").read_text(encoding="utf-8")
 TABLES = ("games", "events", "labels")
-VIEWS = ("leaderboard", "leaderboard_by_batch", "lies_by_model")
+VIEWS = ("leaderboard", "leaderboard_by_batch", "lies_by_model", "events_public", "labels_public")
+ANON = {"games", *VIEWS}  # events and labels only through events_public, labels_public (#323)
 SQL_TYPES = {"timestamptz": "timestamp with time zone"}
 
 
@@ -41,7 +42,10 @@ def sql_table_columns(name: str) -> list[tuple[str, str]]:
 
 def sql_view_columns(name: str) -> list[str]:
     """Output column names of the view's top-level (unindented) select."""
-    body = "\n" + re.search(rf"create or replace view {name} as\n(.*?);\n", SQL, re.S)[1]
+    body = (
+        "\n"
+        + re.search(rf"create or replace view {name}(?: with \(\w+\))? as\n(.*?);\n", SQL, re.S)[1]
+    )
     select = body[body.rindex("\nselect ") + 8 :].split("\nfrom ", 1)[0]
     items, depth, cur = [], 0, ""
     for ch in select:
@@ -67,8 +71,27 @@ def test_doc_views_match_schema_sql(view):
 def test_doc_grants_match_schema_sql():
     grants = re.findall(r"grant select on ([\w, ]+) to anonymous", SQL)
     granted = {t.strip() for g in grants for t in g.split(",")}
-    assert granted == {*TABLES, *VIEWS}
+    assert granted == ANON
     assert "grant insert" not in SQL and "grant all" not in SQL
+    assert "revoke all on events, labels from anonymous" in SQL
+
+
+def test_events_public_hides_running_games():
+    """Static check of #323; tests/integration/test_neon_anon_privacy.py runs it on Postgres."""
+    view = re.search(r"create or replace view events_public (.*?);\n", SQL, re.S)[1]
+    assert view.startswith("with (security_barrier) as")
+    assert "where g.status = 'finished' or e.event ->> 'visibility' = 'public'" in view
+    assert "jsonb_build_object('private_reasoning', null, 'suspicion', null)" in view
+    assert sql_view_columns("events_public") == [c for c, _ in sql_table_columns("events")]
+
+
+def test_labels_only_for_finished_games():
+    view = re.search(r"create or replace view labels_public (.*?);\n", SQL, re.S)[1]
+    assert view.startswith("with (security_barrier) as")
+    assert view.rstrip().endswith("where g.status = 'finished'")
+    assert sql_view_columns("labels_public") == [c for c, _ in sql_table_columns("labels")]
+    lies = re.search(r"create or replace view lies_by_model as\n(.*?);\n", SQL, re.S)[1]
+    assert "g.status = 'finished'" in lies
 
 
 @pytest.mark.live

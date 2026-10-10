@@ -1,0 +1,25 @@
+# Seth's decision: 10-player games from now on. Same nine models as selfplay_baseline, 10 games each.
+# The dry run estimates $11.52 price-based for the 90 games (10 per model), so budget_usd is 12.0.
+# Real runs need --agents llm (the default is scripted): societysim batch --config <this file> --agents llm
+# Per-model self-play baseline: every model plays all seats, 10 games each (9 models, 90 games).
+batch_id: selfplay_baseline_10p
+seed: 4
+n_games: 90
+mode: selfplay
+# Cap sized from T5.1 measurements: about $0.023 per game for the cheap HF models, about 4x below
+# the dry-run price prior. Expected real cost is about $4 for 90 games; the cap is about 2x that.
+# amd-gpt-oss-20b is left out: the AMD server wasn't reachable (AMD_VLLM_BASE_URL unset).
+budget_usd: 12.0
+max_concurrency: 8
+models:
+  - gemma4-26b
+  - qwen3-235b
+  - llama4-maverick
+  - gpt-oss-120b
+  - deepseek-v3.1
+  - gemini-flash-lite
+  - gemini-flash
+  - gpt-5-nano
+  - gpt-5-mini
+game:
+  n_players: 10

@@ -9,7 +9,8 @@ import type { GameSource, GameSummary, LoadedGame } from "./source";
  * GameSource over the Neon Data API (docs/DATA_CONTRACT.md "Neon Data API"), through neonFetch
  * (anonymous JWT). Hidden information: while a game runs, only its public events are requested,
  * and only their public fields (`private_reasoning` and `suspicion` never leave the database).
- * The full log is read once the game has ended.
+ * The full log is read once the game has ended. Events come from the `events_public` view: the
+ * anonymous role can't read `events`, and the view enforces the same hiding in the database (#323).
  */
 export interface NeonSource extends GameSource {
   loadBoard(): Promise<Board>;
@@ -33,7 +34,7 @@ const toLog = (rows: unknown[]): ParsedLog => parseLog(rows.map((r) => JSON.stri
 /** Public events after `afterSeq`, redacted on the server side by the select. */
 async function publicEvents(id: string, afterSeq = -1): Promise<Event[]> {
   const rows = await get<Record<string, unknown>>(
-    `events?select=${PUBLIC_SELECT}&${gid(id)}&event->>visibility=eq.public&seq=gt.${afterSeq}&order=seq`,
+    `events_public?select=${PUBLIC_SELECT}&${gid(id)}&event->>visibility=eq.public&seq=gt.${afterSeq}&order=seq`,
   );
   // Belt and braces: drop anything that isn't public and blank the private fields.
   const events = toLog(rows.map((r) => ({ ...r, private_reasoning: null, suspicion: null }))).events;
@@ -104,7 +105,7 @@ export function neonSource(): NeonSource {
         const events = await publicEvents(id);
         return { events: [publicSeats(id, row.models, events), ...events], errors: [], live: true, partial: true };
       }
-      const log = toLog((await get<{ event: unknown }>(`events?select=event&${gid(id)}&order=seq`)).map((r) => r.event));
+      const log = toLog((await get<{ event: unknown }>(`events_public?select=event&${gid(id)}&order=seq`)).map((r) => r.event));
       // A visitor game that never reached game_end keeps its public-only rows (no game_start).
       if (log.events.some((e) => e.type === "game_start")) return log;
       return { ...log, events: [publicSeats(id, row.models, log.events), ...log.events], partial: true };
@@ -116,9 +117,9 @@ export function neonSource(): NeonSource {
 
     loadLabels: async (id): Promise<Label[]> => {
       try {
-        // Labels name roles; a running game has none, but never ask while it runs.
+        // Labels name roles; labels_public has none for an unfinished game, but never ask while it runs.
         if ((await gameRow(id)).status === "running") return [];
-        const rows = await get<{ label: unknown }>(`labels?select=label&${gid(id)}&order=idx`);
+        const rows = await get<{ label: unknown }>(`labels_public?select=label&${gid(id)}&order=idx`);
         return parseLabels(rows.map((r) => JSON.stringify(r.label)).join("\n"));
       } catch {
         return []; // same as a missing labels file

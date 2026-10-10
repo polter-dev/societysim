@@ -138,6 +138,8 @@ Space variables the script sets: `PLAY_TRUSTED_PROXIES` (HF's private proxy rang
 
 Kill switch: set the Space variable `PLAY_ENABLED=0` (Space settings, Variables, then restart). New games get a `play_disabled` error; the rest of the site keeps working.
 
+Alerts: set `PLAY_ALERT_WEBHOOK_URL` (a Discord webhook URL) as a Space secret, and as a repo secret so the deploy script copies it. The server posts when daily spend passes 50% and 90% of the cap, when it starts with the kill switch on (or the switch flips while it runs), and when it fails to start. The `Play uptime` workflow checks `/api/limits` every 15 minutes and posts to the same webhook if the Space is down; it reads the `VITE_PLAY_API_URL` repo variable. With no webhook set, nothing is posted.
+
 ## Models
 
 The lineup is in [configs/models.yaml](configs/models.yaml). All calls go through LiteLLM.
@@ -152,7 +154,7 @@ Open models through Hugging Face Inference Providers:
 | `gpt-oss-120b` | [openai/gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) |
 | `deepseek-v3.1` | [deepseek-ai/DeepSeek-V3.1](https://huggingface.co/deepseek-ai/DeepSeek-V3.1) |
 
-Self-hosted on an AMD GPU: `amd-gpt-oss-20b`, [openai/gpt-oss-20b](https://huggingface.co/openai/gpt-oss-20b) served with vLLM on ROCm. So far it plays self-play games inside the AMD pod (`configs/selfplay_amd.yaml`); the mixed batches leave it out because laptops can't reach the pod. TODO(batch): AMD throughput, latency and cost per game.
+Self-hosted on an AMD GPU: `amd-gpt-oss-20b`, [openai/gpt-oss-20b](https://huggingface.co/openai/gpt-oss-20b) served with vLLM on ROCm. There is also `amd-strix-gpt-oss-20b`, the same model as a GGUF on llama.cpp, running on a Radeon 8060S (Strix Halo). Both play self-play games inside the AMD pod (`configs/selfplay_amd.yaml`, `configs/selfplay_amd_strix.yaml`); the mixed batches leave them out because laptops can't reach the pod. Strix Halo numbers, from 5 self-play games with no errors: 7.3 s per call, 39.5 output tokens/s, about 138 s per game, $0/h (hackathon-provided GPU). Every game ended in a wolf win by parity on day 2, so these are short games.
 
 Closed models: `gemini-flash-lite` and `gemini-flash` through Google AI Studio, and `gpt-5-nano` and `gpt-5-mini` from OpenAI, which sit in at most 10 games each.
 

@@ -1,0 +1,46 @@
+name: Play uptime
+
+# Every 15 minutes: GET /api/limits on the play Space; post to Discord if it is down.
+# Needs the repo variable VITE_PLAY_API_URL (already used by the viewer build) and the repo
+# secret PLAY_ALERT_WEBHOOK_URL. Without either it does nothing.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read # gh run list: the previous run's result is the previous state
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      PLAY_URL: ${{ vars.VITE_PLAY_API_URL }}
+      WEBHOOK: ${{ secrets.PLAY_ALERT_WEBHOOK_URL }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Check /api/limits
+        run: |
+          if [ -z "$PLAY_URL" ]; then
+            echo "::notice::Set the VITE_PLAY_API_URL repo variable to check the play Space."
+            exit 0
+          fi
+          # Previous state = conclusion of the last finished success/failure run of this workflow
+          # (this run is still in progress, so it is not in the list). Alert only on a change.
+          prev=$(gh run list --workflow play-uptime.yml --status completed --limit 10 \
+            --json conclusion --jq '[.[] | select(.conclusion=="success" or .conclusion=="failure")][0].conclusion // "success"' || echo success)
+          notify() {
+            [ -n "$WEBHOOK" ] || return 0
+            curl -fsS --max-time 20 -H 'Content-Type: application/json' \
+              -d "{\"content\":\"[societysim play] $1\"}" \
+              "$WEBHOOK" >/dev/null || echo "::warning::Discord post failed"
+          }
+          if curl -fsS --max-time 20 --retry 2 --retry-delay 10 "${PLAY_URL%/}/api/limits" >/dev/null; then
+            [ "$prev" = failure ] && notify "Space recovered: GET /api/limits is answering again"
+            exit 0
+          fi
+          echo "::error::Play Space is down: GET /api/limits failed"
+          [ "$prev" = failure ] || notify "Space is down: GET /api/limits failed (uptime check)"
+          exit 1

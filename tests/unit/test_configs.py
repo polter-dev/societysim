@@ -13,7 +13,14 @@ from societysim.models.registry import load_registry
 from societysim.roles import Role
 
 CONFIGS = Path(__file__).resolve().parents[2] / "configs"
-NAMES = ["smoke_batch", "selfplay_baseline", "mixed_v1", "mixed_v2_10p", "mixed_v2_10p_gpt"]
+NAMES = [
+    "smoke_batch",
+    "selfplay_baseline",
+    "selfplay_baseline_10p",
+    "mixed_v1",
+    "mixed_v2_10p",
+    "mixed_v2_10p_gpt",
+]
 HF_PROVIDERS = {"huggingface", "hosted_vllm"}
 
 
@@ -48,14 +55,20 @@ def test_smoke_is_cheap_hf_only():
     assert max(s.output_cost_per_mtok for s in specs) <= 1.0
 
 
-def test_selfplay_ten_games_per_model():
-    cfg = load("selfplay_baseline")
+@pytest.mark.parametrize("name", ["selfplay_baseline", "selfplay_baseline_10p"])
+def test_selfplay_ten_games_per_model(name):
+    cfg = load(name)
     assert cfg.mode == "selfplay"
     games = assign_games(cfg)
     counts = Counter(g.models[0] for g in games)
     assert set(counts) == set(cfg.models)
     assert set(counts.values()) == {10}
     assert all(len(set(g.models)) == 1 for g in games)
+
+
+def test_selfplay_10p_ten_players():
+    cfg = load("selfplay_baseline_10p")
+    assert cfg.game.n_players == 10 and cfg.n_games == 90 and cfg.budget_usd == 12.0
 
 
 def test_mixed_v1_rotation_and_gpt_subset():

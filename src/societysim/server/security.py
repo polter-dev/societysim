@@ -42,7 +42,7 @@ DEFAULT_ALLOWED = frozenset(
         "gpt-5-nano",
     }
 )
-_SECRET_NAME = re.compile(r"(_KEY|_TOKEN|DATABASE_URL)$")
+_SECRET_NAME = re.compile(r"(_KEY|_TOKEN|DATABASE_URL|WEBHOOK_URL)$")
 
 type Network = ipaddress.IPv4Network | ipaddress.IPv6Network
 

@@ -25,6 +25,7 @@ from societysim.config import GameConfig  # noqa: E402
 from societysim.engine.state import GameState  # noqa: E402
 from societysim.models.client import CompletionResult, Usage  # noqa: E402
 from societysim.server import admission, security  # noqa: E402
+from societysim.server import manager as manager_module  # noqa: E402
 from societysim.server.app import create_app  # noqa: E402
 from societysim.server.ledger import (
     Ledger,  # noqa: E402
@@ -35,6 +36,7 @@ from societysim.server.security import PlayConfig  # noqa: E402
 from societysim.setup import GameSetup  # noqa: E402
 
 TIMEOUT = 30
+SEED = 1  # p0 survives Night 1 and gets a turn
 ROOT = Path(__file__).resolve().parents[2]
 SECRETS = {
     "OPENAI_API_KEY": "sk-LEAKCHECK-openai-7f3a",
@@ -63,7 +65,9 @@ def play(**kw) -> PlayConfig:
 
 
 @pytest.fixture
-async def make_client(tmp_path):
+async def make_client(tmp_path, monkeypatch):
+    # Fixed seed: a random one can kill the visitor on Night 1 before they get a turn.
+    monkeypatch.setattr(manager_module.secrets, "randbelow", lambda n: SEED)
     clients = []
 
     def make(seen: list | None = None, **kw):

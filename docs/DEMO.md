@@ -22,6 +22,27 @@ Six sponsor rooms on Sunday (hours 42 to 46), one 60-second pitch each. Every se
 - Keep a local viewer running (`cd viewer && npm ci && npm run dev`) with one mixed-batch game loaded through `?log=<url>`, in case the Space or the venue wifi is down.
 - Pick the demo game ahead of time: a mixed game with at least one labeled lie that moved a vote. `TODO(batch)`: game id and the seq numbers to jump to.
 
+## Running and checking a batch
+
+Real batches need `--agents llm` (the default is scripted, which costs nothing). Everything below except the second line is free.
+
+```bash
+uv run societysim batch --config configs/smoke_batch.yaml --dry-run        # plan and cost estimate, runs nothing
+uv run societysim batch --config configs/smoke_batch.yaml --agents llm     # paid: real model calls
+uv run societysim label runs/smoke_batch --no-jev                          # free labels only, no Jev
+uv run societysim report runs/smoke_batch
+uv run societysim highlights runs/smoke_batch
+uv run python -m societysim.analysis.narrate runs/smoke_batch/<game_id>.jsonl --dry-run
+uv run societysim play --help                                              # see --human-seat
+```
+
+- Use `label --no-jev` for free or test runs. Without it, and with `TYPESAFE_API_KEY` set, `label` also calls Jev, which costs money.
+- A scripted run of `configs/smoke_batch.yaml` writes to `runs/smoke_batch`, the same folder as the real run, and the real run then stops with a mismatch error. Delete `runs/smoke_batch` between the two.
+- If a model fails 10 calls in a row with no tokens, the batch stops starting new games (`provider_down`), lets running games finish, and exits with status 1. Fix the provider and run the same command again: finished games are skipped and the rest are played (#177).
+- Each call times out after 120 seconds. Set `timeout_s` on a provider in `configs/models.yaml` (for example `huggingface: {concurrency: 8, rpm: 120, timeout_s: 60}`) to change that for its models (#181).
+- Failed and empty replies are never written to the response cache, so a re-run retries them instead of replaying the failure (#188).
+- `narrate --dry-run` only prints the clip and character count. The real run needs `ELEVENLABS_API_KEY` and is billed per character.
+
 ## Hugging Face: Best Use of Open Source AI
 
 ### Script
@@ -85,23 +106,24 @@ The viewer replay of the AMD game from the laptop, plus the #114 results comment
 
 ### Script
 
-> Every game we run is a stream of events: speeches, accusations, night kills, votes. Neon Postgres holds all of them. Each game becomes a row in a games table, marked running, finished or failed, along with its models and winner. Each event lands in an events table as JSONB keyed by game and sequence number. Labels sit in their own table, and a leaderboard view computes win rates in SQL. Because events are stored whole as JSONB, a schema change needs no migration. When a batch finishes, one command, sync-neon, backfills every game, and it's safe to re-run. A read-only anonymous role can select from those four objects and nothing else, so a browser can query them without a backend. Right now Neon holds TODO(batch) games and TODO(batch) events.
+> Every game we run is a stream of events: speeches, accusations, night kills, votes. Neon Postgres holds all of them. Each game becomes a row in a games table, marked running, finished or failed, along with its models and winner. Each event lands in an events table as JSONB keyed by game and sequence number. Labels sit in their own table, and a leaderboard view computes win rates in SQL. Because events are stored whole as JSONB, a schema change needs no migration. Games stream into Neon while they run, and one command, sync-neon, backfills any batch you played without streaming. It's safe to re-run. A read-only anonymous role can select from those four objects and nothing else, so a browser can query them without a backend. Right now Neon holds TODO(batch) games and TODO(batch) events.
 
-`TODO(#120/#157)`: only if held PR #120 (viewer reads the Data API) and #157 (`NeonSink` attached during games) both merge before Sunday, replace the sync-neon sentence with: "The viewer calls the Neon Data API directly, and for a game that's still running it asks for anything newer than the last sequence number every two seconds, so you can watch it live." Until then the script above is the one to say.
+`TODO(#120)`: only if held PR #120 (viewer reads the Data API) merges before Sunday, add: "The viewer calls the Neon Data API directly, and for a game that's still running it asks for anything newer than the last sequence number every two seconds, so you can watch it live." Until then the script above is the one to say.
 
 ### Demo path
 
 1. Neon console, SQL editor: `select status, count(*) from games group by status;` then `select * from leaderboard;`.
-2. Show `uv run societysim sync-neon runs/<batch>` and its `synced N games, N events, N labels` line (or a screenshot of it).
+2. Stream a game live: `uv run societysim play --config <game config> --agents llm --neon` (or `batch ... --neon`), with `NEON_DATABASE_URL` set. Events show up in the SQL editor while it runs. Then show `uv run societysim sync-neon runs/<batch>` and its `synced N games, N events, N labels` line (or a screenshot of it).
 3. Back in the SQL editor, pull one game's events in order: `select seq, type, actor, target from events where game_id = '<id>' order by seq limit 20;`
-4. `TODO(#120/#157)`: only if both merge, open the viewer built against Neon (index and leaderboard from the Data API), then a running game with new events arriving every 2 s.
+4. `TODO(#120)`: only if it merges, open the viewer built against Neon (index and leaderboard from the Data API), then a running game with new events arriving every 2 s.
 
 ### Status and numbers
 
 - Merged (#39): `neon/schema.sql` (`games`, `events`, `labels`, `leaderboard` view, SELECT granted to `anonymous` only), `NeonSink`, and `societysim sync-neon runs/<batch>` for backfill.
+- Merged (#157): `--neon` on `play` and `batch` streams events to Neon while the game runs. A Neon error is logged and never stops a game. It needs `NEON_DATABASE_URL`.
+- Merged (#175): `societysim sync-neon --delete GAME_ID` removes a game (repeatable). Give it a batch dir or `--delete`, not both.
 - Open, on `hold` for Augustin: PR #120 (#40), the Neon `GameSource` with the 2-second live poll. The viewer part of this pitch depends on it.
 - `TODO(#40)`: confirm a bare request with no `Authorization` header returns 200 from the Data API, and that CORS allows the Space's origin.
-- `TODO(#157)`: `NeonSink` exists, but `play` and `batch` don't attach it yet, so games reach Neon through `sync-neon` after they finish. #157 wires it in for live spectating.
 - `TODO(batch)`: game, event and label counts after the T5.2/T5.3 backfill.
 
 ### Backup if the live demo fails
@@ -189,7 +211,7 @@ The before and after screenshots from PR #121, and the backup video.
 
 - Every `TODO(batch)` above, once T5.2 and T5.3 are labeled and reported.
 - Space and Dataset URLs (#37).
-- Neon: whether PR #120 and #157 merge (they decide which Neon script to use), and the bare Data API request check (#40).
+- Neon: whether PR #120 merges (it decides which Neon script to use), and the bare Data API request check (#40).
 - Databricks dashboard and MLflow on the live workspace (#42).
 - Viewer PRs #120 and #121, and the Figma file (#22): Augustin decides.
 - The AMD hourly rate used for imputed $/game.

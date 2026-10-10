@@ -41,7 +41,7 @@ uv run pytest
 uv run societysim --help
 ```
 
-Copy `.env.example` to `.env` and fill in the keys you have. Hugging Face models need `HF_TOKEN`, Gemini needs `GEMINI_API_KEY`, and the GPT models need `OPENAI_API_KEY`. Jev labels need `TYPESAFE_API_KEY`; without it, labeling still runs on self-tags and game facts.
+Copy `.env.example` to `.env` and fill in the keys you have. The Hugging Face models (gpt-oss-120b included) need `HF_TOKEN`, Gemini needs `GEMINI_API_KEY`, and `gpt-5-nano` and `gpt-5-mini` need `OPENAI_API_KEY`. The AMD model needs `AMD_VLLM_BASE_URL` and `AMD_API_KEY`. Jev labels need `TYPESAFE_API_KEY`; without it, labeling still runs on self-tags and game facts.
 
 Play one game with scripted random agents. This needs no keys and writes `runs/selfplay_smoke/selfplay_smoke-s0.jsonl`:
 
@@ -91,7 +91,7 @@ Closed models: `gemini-flash-lite` and `gemini-flash` through Google AI Studio, 
 ## Sponsor tracks
 
 - Hugging Face: most players are open models on HF Inference Providers, every game goes into an HF Dataset, and the viewer and leaderboard run on an HF Space (links at the top).
-- AMD: gpt-oss-20b runs on an AMD Radeon AI PRO R9700 with vLLM on ROCm and plays at the same table as the API models. See [infra/amd/README.md](infra/amd/README.md).
+- AMD: gpt-oss-20b runs on an AMD Radeon AI PRO R9700 with vLLM on ROCm. So far it plays self-play games inside the AMD pod (`configs/selfplay_amd.yaml`); the mixed batches leave it out because laptops can't reach the pod. TODO(batch): AMD throughput, latency and $/game. See [infra/amd/README.md](infra/amd/README.md).
 - Neon: `societysim sync-neon runs/<batch>` mirrors games, events and labels into Neon Postgres. The schema is [neon/schema.sql](neon/schema.sql).
 - Databricks: game logs become Delta tables, a notebook recomputes the metrics in Spark SQL, an AI/BI dashboard sits on top, and MLflow tracks each batch. See [notebooks/databricks/README.md](notebooks/databricks/README.md).
 - Figma and Adobe: the [viewer](viewer/) is designed for someone who has never played Werewolf. It works with a keyboard and a screen reader and respects reduced-motion settings. The illustrated table and night/day lighting are in progress (#33).
@@ -100,8 +100,8 @@ Closed models: `gemini-flash-lite` and `gemini-flash` through Google AI Studio, 
 
 - [Werewolf Arena](https://arxiv.org/abs/2407.13943) (Google): we took replay viewer ideas from it. Our agents also give a suspicion score for every living player on every turn, so we can score detection directly instead of inferring it from votes.
 - [WOLF](https://arxiv.org/abs/2512.09187): we borrowed its event log layout and deception taxonomy. Our lie labels compare what a player says with the true state the engine holds, and they sit in a separate file from the log.
-- Foaster Werewolf benchmark: Elo split by wolf and villager, plus speech tags. We split OpenSkill ratings the same way and add lie success and persuasion.
-- [Kaggle Game Arena Werewolf](https://arxiv.org/abs/2609.31473): another Werewolf leaderboard for LLMs. Ours puts cheap open models, a self-hosted AMD model and a few closed ones at the same table, and logs every player's private reasoning.
+- [Foaster Werewolf benchmark](https://huggingface.co/spaces/Foaster/Werewolf_benchmark): Elo split by wolf and villager, plus speech tags. We split OpenSkill ratings the same way and add lie success and persuasion.
+- [Kaggle Game Arena Werewolf](https://arxiv.org/abs/2609.31473): another Werewolf leaderboard for LLMs. Ours puts cheap open models and a few closed ones at the same table, and logs every player's private reasoning.
 - [Mini-Mafia](https://arxiv.org/abs/2509.23023): found name and recency biases in LLM players. That is why we shuffle neutral player names by seed, and speaking order is random each round.
 
 ## Repo layout and contributing

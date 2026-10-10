@@ -258,7 +258,18 @@ def format_table(table: dict[str, dict]) -> str:
 
 
 def read_log(path: Path) -> list[Event]:
-    return [Event.model_validate_json(line) for line in path.read_text().splitlines() if line]
+    """Parse a game log. An unparseable final line (a hard kill mid-write) is dropped with a
+    warning; a bad line anywhere else raises."""
+    lines = [line for line in path.read_text().splitlines() if line]
+    events = []
+    for i, line in enumerate(lines):
+        try:
+            events.append(Event.model_validate_json(line))
+        except ValueError:
+            if i == 0 or i < len(lines) - 1:
+                raise
+            print(f"warning: {path.name} ends with a torn line, ignored")
+    return events
 
 
 def label_batch(

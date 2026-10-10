@@ -92,9 +92,24 @@ def load_game(path: Path) -> GameData:
     return GameData(events, labels)
 
 
-def load_batch(batch_dir: Path) -> list[GameData]:
+def load_finished(batch_dir: Path) -> tuple[list[tuple[Path, GameData]], int]:
+    """Finished games in a batch dir, plus how many unfinished logs (no game_end) were skipped."""
     logs = sorted(p for p in batch_dir.glob("*.jsonl") if not p.name.endswith(".labels.jsonl"))
-    return [load_game(p) for p in logs if p.stat().st_size]
+    games, skipped = [], 0
+    for p in logs:
+        if not p.stat().st_size:
+            continue
+        g = load_game(p)
+        if not any(e.type is EventType.GAME_END for e in g.events):
+            print(f"warning: {p.name} has no game_end, skipped")
+            skipped += 1
+            continue
+        games.append((p, g))
+    return games, skipped
+
+
+def load_batch(batch_dir: Path) -> list[GameData]:
+    return [g for _, g in load_finished(batch_dir)[0]]
 
 
 def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float] | None:
@@ -459,7 +474,7 @@ def _without_human(ratings: dict) -> dict:
     }
 
 
-def compute_metrics(games: list[GameData]) -> dict:
+def compute_metrics(games: list[GameData], unfinished: int = 0) -> dict:
     """Every metric, per model and group, plus the same groups across all models."""
     per_model: dict[str, dict[str, Row]] = defaultdict(lambda: defaultdict(Row))
     by_group: dict[str, Row] = defaultdict(Row)
@@ -472,6 +487,7 @@ def compute_metrics(games: list[GameData]) -> dict:
                 by_group[grp].add(row)
     return {
         "games": len(games),
+        "unfinished_games": unfinished,
         "label_sources": list(SOURCES),
         "exploratory": list(EXPLORATORY),
         "models": {

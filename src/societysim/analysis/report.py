@@ -49,15 +49,14 @@ from societysim.analysis.metrics import (  # noqa: E402
     WOLF_SIDE,
     GameData,
     compute_metrics,
-    load_game,
+    load_finished,
 )
 
 SCHEMA = 1
 
 
-def _load(batch_dir: Path) -> list[tuple[Path, GameData]]:
-    logs = sorted(p for p in batch_dir.glob("*.jsonl") if not p.name.endswith(".labels.jsonl"))
-    return [(p, load_game(p)) for p in logs if p.stat().st_size]
+def _load(batch_dir: Path) -> tuple[list[tuple[Path, GameData]], int]:
+    return load_finished(batch_dir)
 
 
 def _pct(x: float | None) -> str:
@@ -159,6 +158,9 @@ def render_markdown(metrics: dict, board: dict, present: set[str] | None = None)
         "Ranked by OpenSkill ordinal (equal-weight sides plus a side-advantage dummy player).",
         "",
     ]
+    if metrics.get("unfinished_games"):
+        n = metrics["unfinished_games"]
+        lines[2:2] = [f"{n} unfinished games (no game_end) were skipped.", ""]
     side = board.get("wolf_side_advantage")
     if side:
         o = side["overall"]
@@ -357,13 +359,13 @@ def write_charts(board: dict, out: Path) -> list[str]:
 
 def write_report(batch_dir: Path) -> Path:
     """Write the whole report directory; returns its path."""
-    games = _load(batch_dir)
+    games, unfinished = _load(batch_dir)
     if not games:
         raise ValueError(f"no game logs in {batch_dir}")
     out = batch_dir / "report"
     out.mkdir(exist_ok=True)
     data = [g for _, g in games]
-    metrics: dict[str, Any] = compute_metrics(data)
+    metrics: dict[str, Any] = compute_metrics(data, unfinished)
     present = {lb.source for g in data for lb in g.labels}
     board = build_leaderboard(metrics, present, model_game_counts(data))
     write_charts(board, out)

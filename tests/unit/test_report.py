@@ -171,3 +171,32 @@ def test_base_rate_shows_its_denominator(tmp_path):
     # no base days at all: n/a with a zero denominator
     jev = next(ln for ln in md.splitlines() if ln.startswith("| gemma-4-26b | jev |"))
     assert jev.split("|")[-2].strip() == "n/a (0)"
+
+
+def _mixed_batch(tmp_path: Path) -> Path:
+    batch = _batch(tmp_path, labels=False)
+    lines = (FIX / "sample_game.jsonl").read_text().splitlines()
+    ends = [i for i, ln in enumerate(lines) if json.loads(ln)["type"] == "game_end"]
+    cut = "\n".join(lines[: ends[0]]) + "\n"
+    for gid, tail in (("cut", ""), ("torn", '{"game_id": "x')):
+        text = cut.replace("fixture-0001", gid) + tail
+        (batch / f"{gid}.jsonl").write_text(text)
+    return batch
+
+
+def test_unfinished_games_are_skipped_and_counted(tmp_path, capsys):
+    batch = _mixed_batch(tmp_path)
+    out = write_report(batch)
+    m = json.loads((out / "metrics.json").read_text())
+    assert m["games"] == 1 and m["unfinished_games"] == 2
+    assert [g["game_id"] for g in json.loads((out / "index.json").read_text())] == ["fixture-0001"]
+    assert "2 unfinished games" in (out / "report.md").read_text()
+    assert capsys.readouterr().out.count("has no game_end, skipped") == 2
+
+
+def test_label_report_highlights_succeed_on_mixed_batch(tmp_path):
+    batch = _mixed_batch(tmp_path)
+    r = CliRunner()
+    for cmd in (["label", "--no-jev"], ["report"], ["highlights"]):
+        res = r.invoke(app, [cmd[0], str(batch), *cmd[1:]])
+        assert res.exit_code == 0, (cmd, res.output)

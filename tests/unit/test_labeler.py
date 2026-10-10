@@ -267,3 +267,15 @@ def test_cli_fails_when_automatic_labeling_fails(tmp_path, monkeypatch, no_key, 
         monkeypatch.setenv("TYPESAFE_API_KEY", key)
     (tmp_path / "broken.jsonl").write_text("not json\n")
     assert CliRunner().invoke(app, ["label", str(tmp_path)]).exit_code != 0
+
+
+def test_torn_last_line_is_ignored_but_a_bad_middle_line_raises(tmp_path, capsys):
+    lines = FIXTURE.read_text().splitlines()
+    torn = tmp_path / "torn.jsonl"
+    torn.write_text("\n".join(lines) + '\n{"game_id": "fixt')
+    assert len(read_log(torn)) == len(lines)
+    assert "torn line" in capsys.readouterr().out
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text("\n".join([lines[0], '{"game_id": "fixt', *lines[1:]]) + "\n")
+    with pytest.raises(ValueError):
+        read_log(bad)

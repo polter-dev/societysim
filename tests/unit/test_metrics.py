@@ -349,3 +349,12 @@ def test_human_seat_is_not_ranked():
     assert all("human" not in v for k, v in m["openskill"].items() if k != "wolf_side")
     assert "deepseek-v3.1" not in m["models"]
     assert m["models"]["qwen3-235b"]  # AI seats still ranked
+
+
+def test_load_batch_skips_unfinished_games(tmp_path, capsys):
+    lines = FIXTURE.read_text().splitlines()
+    (tmp_path / "done.jsonl").write_text("\n".join(lines) + "\n")
+    (tmp_path / "cut.jsonl").write_text("\n".join(lines[:-1]) + "\n")
+    games = load_batch(tmp_path)
+    assert [g.game_id for g in games] == ["fixture-0001"]
+    assert "cut.jsonl has no game_end, skipped" in capsys.readouterr().out

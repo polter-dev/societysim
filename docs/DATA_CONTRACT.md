@@ -343,6 +343,13 @@ files.
   it here with a schema.
 - `agreement.json` (self-tag vs Jev agreement), `report/report.md`, the report PNGs and `.cache/`.
 
+## Static assets
+
+`/avatars/<model>.webp` (512x512) is one portrait per model name in `configs/models.yaml`, plus
+`/avatars/human.webp`. They live in `viewer/public/avatars/` and ship with the viewer build, not
+the data batch. A model with no file gets the viewer's default avatar, so a missing file is never
+an error. These are images, not JSON, so they are outside the contract version: no bump.
+
 ## Game setup
 
 The settings screen has two modes. Both produce one **setup JSON**, a `GameSetup`

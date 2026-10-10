@@ -105,6 +105,51 @@ async def test_retries_rate_limit(tmp_path, monkeypatch):
     assert len(requests) == N_STATEMENTS + 2
 
 
+async def test_retries_timeout_with_explicit_timeout(tmp_path, monkeypatch):
+    async def no_sleep(_):
+        pass
+
+    monkeypatch.setattr(jev.asyncio, "sleep", no_sleep)
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if len(requests) == 1:
+            raise httpx.ReadTimeout("slow", request=request)
+        return httpx.Response(200, json=fake_answers(json.loads(request.content)))
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        results = await jev.classify_game(FIXTURE, cache_dir=tmp_path, client=client, concurrency=1)
+    assert len(results) == N_STATEMENTS
+    assert len(requests) == N_STATEMENTS + 1
+    assert requests[0].extensions["timeout"]["read"] == jev.TIMEOUT
+
+
+async def test_timeout_gives_up_after_last_try(monkeypatch):
+    async def no_sleep(_):
+        pass
+
+    monkeypatch.setattr(jev.asyncio, "sleep", no_sleep)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("slow", request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(httpx.ReadTimeout):
+            await jev._post(client, {}, tries=2)
+
+
+def test_claim_role_none_parses_as_no_claim():
+    events = [jev.Event.model_validate_json(line) for line in FIXTURE.read_text().splitlines()]
+    stmt = next(e for e in events if e.seq == 17)
+    names = {seat: s.name for seat, s in events[0].meta.seats.items()}
+    data = fake_answers(jev.build_request(stmt, names))
+    data["answers"]["claim_role"].update(choice="none", confidence=0.7)
+    result = jev.parse_response(stmt, data)
+    assert result.claim_role is None
+    assert result.claim_role_confidence == 0.7
+
+
 @pytest.mark.skipif(not os.environ.get("TYPESAFE_API_KEY"), reason="TYPESAFE_API_KEY unset")
 async def test_real_jev_on_fixture(tmp_path):
     results = {r.seq: r for r in await jev.classify_game(FIXTURE, cache_dir=tmp_path)}

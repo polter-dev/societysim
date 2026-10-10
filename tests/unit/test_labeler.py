@@ -2,9 +2,19 @@ import json
 import shutil
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
-from societysim.analysis.labeler import JevReport, JevVerdict, label_batch, label_game, read_log
+from societysim.analysis import jev as jev_mod
+from societysim.analysis.jev import JevResult
+from societysim.analysis.labeler import (
+    JevReport,
+    JevVerdict,
+    jev_verdicts,
+    label_batch,
+    label_game,
+    read_log,
+)
 from societysim.cli import app
 from societysim.logging.events import EventType, Label
 
@@ -103,7 +113,90 @@ def test_jev_labels_and_agreement(tmp_path):
     assert json.loads((tmp_path / "agreement.json").read_text()) == table
 
 
-def test_cli_writes_labels_next_to_game_and_leaves_raw_log_alone(tmp_path):
+@pytest.fixture
+def no_key(monkeypatch):
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+
+
+def _result(seq=15, actor="p4", **kw) -> JevResult:
+    """A JevResult for Elif's (p4) statement; nothing above 0.5 unless overridden."""
+    base = dict(
+        game_id="fixture-0001",
+        seq=seq,
+        actor=actor,
+        accuse={"p0": 0.1},
+        claim_role=None,
+        claim_role_confidence=0.9,
+        seer_report=0.1,
+        seer_target="p0",
+        seer_result="wolf",
+    )
+    return JevResult(**base | kw)
+
+
+def test_jev_verdicts_thresholds():
+    v = jev_verdicts(
+        [
+            _result(
+                accuse={"p0": 0.51, "p1": 0.5, "p2": 0.49}, claim_role="seer", seer_report=0.51
+            ),
+            _result(seq=16, actor="p0", seer_report=0.5, claim_role_confidence=0.6),
+        ]
+    )
+    assert v[15].accuse == ["p0"]  # 0.5 itself is not a yes
+    assert v[15].claim_role == "seer" and v[15].confidence == 0.9
+    assert v[15].seer_report == JevReport(target="p0", result="wolf")
+    assert v[16] == JevVerdict(confidence=0.6)  # seer_report == 0.5 -> None
+
+
+def test_empty_log_is_skipped(tmp_path, capsys):
+    shutil.copy(FIXTURE, tmp_path / "fixture-0001.jsonl")
+    (tmp_path / "empty.jsonl").write_text("")
+    label_batch(tmp_path)
+    assert "empty.jsonl is empty" in capsys.readouterr().out
+    assert (tmp_path / "fixture-0001.labels.jsonl").exists()
+    assert not (tmp_path / "empty.labels.jsonl").exists()
+
+
+def test_cli_with_key_runs_jev_and_writes_agreement(tmp_path, monkeypatch, no_key):
+    monkeypatch.setenv("TYPESAFE_API_KEY", "fake")
+    seen = []
+
+    async def fake_classify(events):
+        seen.append(events[0].game_id)
+        return [_result(claim_role="seer")]  # Jev hears Elif claim Seer
+
+    monkeypatch.setattr(jev_mod, "classify_events", fake_classify)
+    shutil.copy(FIXTURE, tmp_path / "fixture-0001.jsonl")
+
+    result = CliRunner().invoke(app, ["label", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert seen == ["fixture-0001"]
+    table = json.loads((tmp_path / "agreement.json").read_text())
+    assert table["false_role_claim"]["jev_only"] == 1
+    labels = (tmp_path / "fixture-0001.labels.jsonl").read_text()
+    assert '"source":"jev"' in labels
+
+
+def test_cli_no_jev_flag_skips_jev(tmp_path, monkeypatch, no_key):
+    monkeypatch.setenv("TYPESAFE_API_KEY", "fake")
+
+    async def boom(events):
+        raise AssertionError("Jev called")
+
+    monkeypatch.setattr(jev_mod, "classify_events", boom)
+    shutil.copy(FIXTURE, tmp_path / "fixture-0001.jsonl")
+
+    result = CliRunner().invoke(app, ["label", str(tmp_path), "--no-jev"])
+
+    assert result.exit_code == 0, result.output
+    assert "Jev skipped (--no-jev)" in result.output
+    assert not (tmp_path / "agreement.json").exists()
+
+
+def test_cli_writes_labels_next_to_game_and_leaves_raw_log_alone(tmp_path, no_key):
     game = tmp_path / "fixture-0001.jsonl"
     shutil.copy(FIXTURE, game)
     before = game.read_bytes()
@@ -111,6 +204,7 @@ def test_cli_writes_labels_next_to_game_and_leaves_raw_log_alone(tmp_path):
     result = CliRunner().invoke(app, ["label", str(tmp_path)])
 
     assert result.exit_code == 0, result.output
+    assert "Jev skipped (TYPESAFE_API_KEY not set)" in result.output
     assert game.read_bytes() == before
     written = (tmp_path / "fixture-0001.labels.jsonl").read_text().splitlines()
     assert len(written) == len(PLANTED.read_text().splitlines())

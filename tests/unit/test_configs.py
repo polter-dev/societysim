@@ -7,11 +7,11 @@ from typer.testing import CliRunner
 
 from societysim.batch.assign import assign_games
 from societysim.cli import app
-from societysim.config import BatchConfig, load_yaml
+from societysim.config import BatchConfig, GameConfig, load_yaml
 from societysim.models.registry import load_registry
 
 CONFIGS = Path(__file__).resolve().parents[2] / "configs"
-NAMES = ["smoke_batch", "selfplay_baseline", "mixed_v1"]
+NAMES = ["smoke_batch", "selfplay_baseline", "mixed_v1", "mixed_v2_10p"]
 HF_PROVIDERS = {"huggingface", "hosted_vllm"}
 
 
@@ -70,6 +70,21 @@ def test_mixed_v1_rotation_and_gpt_subset():
     assert all(appearances[m] > 3 * max(appearances[g] for g in gpt) for m in others)
 
 
+def test_mixed_v2_10p_ten_seats_nine_models():
+    cfg = load("mixed_v2_10p")
+    assert cfg.game.n_players == 10 and len(set(cfg.models)) == 9
+    assert cfg.budget_usd <= 15
+    assert all(len(g.models) == 10 for g in assign_games(cfg))
+
+
+def test_human_vs_ai_10p_config():
+    cfg = load_yaml(CONFIGS / "human_vs_ai_10p.yaml", GameConfig)
+    assert cfg.n_players == 10 and len(cfg.models) == 10
+    assert len(set(cfg.models[1:])) == 9  # p1..p9 are nine different models; p0 is the human
+    reg = load_registry(CONFIGS / "models.yaml")
+    assert {s.name for s in reg.resolve(sorted(set(cfg.models)))} == set(cfg.models)
+
+
 @pytest.mark.parametrize("name", NAMES)
 def test_dry_run_estimate_under_budget(name, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)  # a stray runs/ would land here, not in the repo
@@ -91,7 +106,7 @@ def test_dry_run_estimate_under_budget(name, tmp_path, monkeypatch):
     match = re.search(r"(\d+) games, estimated \$([\d.]+)", result.output)
     assert match, result.output
     assert int(match[1]) == cfg.n_games
-    if name in ("selfplay_baseline", "mixed_v1"):
+    if name in ("selfplay_baseline", "mixed_v1", "mixed_v2_10p"):
         # The caps come from measured T5.1 costs; the price-based dry-run prior is ~4x too
         # conservative, so its estimate legitimately exceeds the cap here (mixed_v1: $20 vs $10).
         return

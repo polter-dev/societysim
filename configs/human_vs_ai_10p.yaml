@@ -1,0 +1,17 @@
+# Play one seat yourself against nine different models:
+#   societysim play --config configs/human_vs_ai_10p.yaml --human-seat p0 --agents llm
+# The human takes p0; p1..p9 are nine different models from configs/models.yaml. Roles are dealt
+# from the seed (2 wolves among 10), so change the seed to change who you are.
+n_players: 10
+seed: 0
+models:
+  - gemma4-26b  # p0: replaced by the human
+  - gemma4-26b
+  - qwen3-235b
+  - llama4-maverick
+  - gpt-oss-120b
+  - deepseek-v3.1
+  - gemini-flash-lite
+  - gemini-flash
+  - gpt-5-nano
+  - gpt-5-mini

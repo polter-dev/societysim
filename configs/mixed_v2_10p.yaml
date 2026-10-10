@@ -1,0 +1,31 @@
+# Real runs need --agents llm (the default is scripted): societysim batch --config <this file> --agents llm
+# 10-player mixed batch for the deception matrix (#251, issue #259): 2 wolves + 8 others, the same
+# 9 models as mixed_v1. Seats rotate through all models (batch/assign.py), so one model fills two
+# seats per game and every game holds all 9 models. Not run yet; start it after #256 merges.
+batch_id: mixed_v2_10p
+seed: 3
+n_games: 100
+mode: mixed
+# Dry-run estimate is the cap's basis. The dry-run prior runs about 4x high (see mixed_v1), so the
+# real cost should land well under it.
+budget_usd: 15.0
+max_concurrency: 8
+models:
+  - gemma4-26b
+  - qwen3-235b
+  - llama4-maverick
+  - gpt-oss-120b
+  - deepseek-v3.1
+  - gemini-flash-lite
+  - gemini-flash
+  - gpt-5-nano
+  - gpt-5-mini
+# GPT models are the pricey ones, so they sit in at most 12 games each (same cap as mixed_v1 plus a
+# little). Wolf-vs-listener pair counts for this seed: every pair of the seven non-GPT models gets
+# at least 26 games; pairs that involve a GPT model get fewer (at least 1). Reaching 5 for those
+# would take ~30+ GPT games each and push the estimate past the cap.
+model_game_limits:
+  gpt-5-nano: 12
+  gpt-5-mini: 12
+game:
+  n_players: 10

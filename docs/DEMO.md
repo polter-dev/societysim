@@ -37,6 +37,8 @@ uv run python -m societysim.analysis.narrate runs/smoke_batch/<game_id>.jsonl --
 uv run societysim play --help                                              # see --human-seat
 ```
 
+- 10-player batch (not run yet, estimate $13.62 against a $15 cap, 100 games): `uv run societysim batch --config configs/mixed_v2_10p.yaml --agents llm --dry-run`, then drop `--dry-run`.
+- Play against nine models: `uv run societysim play --config configs/human_vs_ai_10p.yaml --human-seat p0 --agents llm` (needs the providers' keys and an HF token that can call Inference Providers).
 - Use `label --no-jev` for free or test runs. Without it, and with `TYPESAFE_API_KEY` set, `label` also calls Jev, which costs money.
 - A scripted run of `configs/smoke_batch.yaml` writes to `runs/smoke_batch`, the same folder as the real run, and the real run then stops with a mismatch error. Delete `runs/smoke_batch` between the two.
 - If a model fails 10 calls in a row with no tokens, the batch stops starting new games (`provider_down`), lets running games finish, and exits with status 1. Fix the provider and run the same command again: finished games are skipped and the rest are played (#177).

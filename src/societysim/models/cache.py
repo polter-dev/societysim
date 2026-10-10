@@ -36,6 +36,11 @@ def cache_key(
     return hashlib.sha256(blob.encode()).hexdigest()
 
 
+def _failed(error: str | None, parsed: bool, output_tokens: int) -> bool:
+    """Errors and empty replies (timeouts, outages) are never worth replaying."""
+    return error is not None or (output_tokens == 0 and not parsed)
+
+
 class CachedClient:
     def __init__(
         self, inner: ModelClient, directory: Path | str, mode: CacheMode = "record_missing"
@@ -55,10 +60,15 @@ class CachedClient:
         key = cache_key(model, messages, response_model)
         path = self.dir / f"{key}.json"
         if self.mode != "record" and path.exists():
-            return self._load(path, response_model)
+            hit = self._load(path, response_model)
+            if not _failed(hit.error, hit.parsed is not None, hit.usage.output_tokens):
+                return hit
+            # an error entry recorded by an older version counts as a miss
         if self.mode == "replay":
             raise CacheMiss(f"no recording for {model.name} call {key[:12]}")
         result = await self.inner.complete(model, messages, response_model)
+        if _failed(result.error, result.parsed is not None, result.usage.output_tokens):
+            return result
         self.dir.mkdir(parents=True, exist_ok=True)
         entry = {
             "raw": result.raw,

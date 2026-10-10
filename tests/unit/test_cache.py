@@ -8,6 +8,7 @@ from societysim.agents.schemas import TargetResponse, VoteResponse
 from societysim.config import GameConfig, ModelSpec
 from societysim.logging.sinks.jsonl import JsonlSink
 from societysim.models.cache import CachedClient, CacheMiss, cache_key
+from societysim.models.client import CompletionResult, Usage
 from societysim.orchestrator import run_game
 
 SPEC = ModelSpec(name="m", litellm_model="openai/x")
@@ -66,12 +67,53 @@ async def test_record_always_calls_inner_and_off_writes_nothing(tmp_path):
     assert not off.exists()
 
 
-async def test_failed_parse_round_trips(tmp_path):
+class _Seq:
+    """Returns the given results in order and counts calls."""
+
+    def __init__(self, *results):
+        self.results = list(results)
+        self.calls = 0
+
+    async def complete(self, model, messages, response_model):
+        self.calls += 1
+        return self.results.pop(0)
+
+
+def _timeout():
+    return CompletionResult(parsed=None, raw="", error="Timeout: 60s", usage=Usage(model="m"))
+
+
+@pytest.mark.parametrize("mode", ["record", "record_missing"])
+async def test_error_results_are_not_cached(tmp_path, mode):
+    good = await FakeClient(players=PLAYERS).complete(SPEC, MSGS, VoteResponse)
+    inner = _Seq(_timeout(), good)
+    c = CachedClient(inner, tmp_path, mode)
+    assert (await c.complete(SPEC, MSGS, VoteResponse)).error == "Timeout: 60s"
+    assert not list(tmp_path.glob("*.json"))
+    ok = await c.complete(SPEC, MSGS, VoteResponse)
+    assert inner.calls == 2 and ok.parsed is not None
+    assert len(list(tmp_path.glob("*.json"))) == 1
+    if mode == "record_missing":
+        again = await c.complete(SPEC, MSGS, VoteResponse)
+        assert inner.calls == 2 and again.usage.cached
+
+
+async def test_bad_parse_is_not_cached(tmp_path):
     bad = FakeClient(script=["not json"])
-    a = await CachedClient(bad, tmp_path, "record").complete(SPEC, MSGS, VoteResponse)
-    b = await CachedClient(FakeClient(), tmp_path, "replay").complete(SPEC, MSGS, VoteResponse)
-    assert a.parsed is None and b.parsed is None
-    assert (a.raw, a.error) == (b.raw, b.error)
+    await CachedClient(bad, tmp_path, "record").complete(SPEC, MSGS, VoteResponse)
+    assert not list(tmp_path.glob("*.json"))
+
+
+async def test_existing_error_entry_is_a_miss(tmp_path):
+    path = tmp_path / f"{cache_key(SPEC, MSGS, VoteResponse)}.json"
+    entry = {"raw": "", "error": "Timeout: 60s", "parsed": False, "usage": {"model": "m"}}
+    path.write_text(json.dumps(entry))
+    with pytest.raises(CacheMiss):
+        await CachedClient(FakeClient(), tmp_path, "replay").complete(SPEC, MSGS, VoteResponse)
+    inner = FakeClient(players=PLAYERS)
+    r = await CachedClient(inner, tmp_path, "record_missing").complete(SPEC, MSGS, VoteResponse)
+    assert len(inner.calls) == 1 and r.parsed is not None
+    assert json.loads(path.read_text())["error"] is None
 
 
 def test_key_depends_on_model_messages_schema_only():

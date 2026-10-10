@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import re
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from societysim.agents.schemas import (
     VoteResponse,
     WolfChatResponse,
 )
+from societysim.batch import runner
 from societysim.batch.runner import PROVIDER_DOWN_AFTER, BatchMismatch, run_batch
 from societysim.cli import app
 from societysim.config import BatchConfig, ModelSpec
@@ -272,6 +274,71 @@ async def test_unreadable_run_meta_is_never_a_fresh_batch(tmp_path):
 async def test_run_meta_written_via_replace(tmp_path):
     await run_batch(cfg(n_games=1), SPECS, None, runs_dir=tmp_path)
     assert not list((tmp_path / "t").glob("*.tmp"))
+
+
+def locked_replace(monkeypatch, locked):
+    """os.replace raises PermissionError when locked(dst, n) is true; n counts calls so far."""
+    real, calls = os.replace, []
+
+    def fake(src, dst):
+        n = len(calls)
+        calls.append(Path(dst).name)
+        if locked(Path(dst), n):
+            raise PermissionError(5, "Access is denied")
+        real(src, dst)
+
+    monkeypatch.setattr(runner.os, "replace", fake)
+    monkeypatch.setattr(runner, "REPLACE_BACKOFF", (0.0,) * 6)
+    return calls
+
+
+def test_replace_retries_then_raises(tmp_path, monkeypatch):
+    src, dst = tmp_path / "a.tmp", tmp_path / "a"
+    src.write_text("x")
+    calls = locked_replace(monkeypatch, lambda d, n: n < 3)
+    runner._replace(src, dst)
+    assert dst.read_text() == "x" and len(calls) == 4
+    src.write_text("y")
+    calls.clear()
+    locked_replace(monkeypatch, lambda d, n: True)
+    with pytest.raises(PermissionError):
+        runner._replace(src, dst)
+    assert dst.read_text() == "x"
+
+
+def test_replace_gives_up_after_a_bounded_number_of_tries(tmp_path, monkeypatch):
+    (tmp_path / "a.tmp").write_text("x")
+    calls = locked_replace(monkeypatch, lambda d, n: True)
+    with pytest.raises(PermissionError):
+        runner._replace(tmp_path / "a.tmp", tmp_path / "a")
+    assert len(calls) == len(runner.REPLACE_BACKOFF) + 1
+    assert sum(runner.REPLACE_BACKOFF) <= 2.5
+
+
+async def test_run_meta_locked_for_a_while_is_retried(tmp_path, monkeypatch):
+    calls = locked_replace(monkeypatch, lambda d, n: d.name == "run_meta.json" and n < 3)
+    res = await run_batch(cfg(n_games=2), SPECS, None, runs_dir=tmp_path)
+    assert res["status"] == "completed" and res["failed"] == {}
+    meta = json.loads((tmp_path / "t/run_meta.json").read_text())
+    assert meta["status"] == "completed" and calls.count("run_meta.json") > 3
+
+
+async def test_stuck_run_meta_never_fails_a_finished_game(tmp_path, monkeypatch):
+    # The first save goes through. Then the ledger and every game's run_meta tag stay locked
+    # until the end of the run, when the final save succeeds.
+    n_meta = 0
+
+    def locked(dst, n):
+        nonlocal n_meta
+        if dst.name == "run_meta.json":
+            n_meta += 1
+            return 1 < n_meta < 30
+        return dst.name.endswith(".run_meta.json")
+
+    locked_replace(monkeypatch, locked)
+    res = await run_batch(cfg(n_games=2, max_concurrency=1), SPECS, PricedFake(), runs_dir=tmp_path)
+    assert res["failed"] == {} and len(res["finished"]) == 2
+    assert all(last_type(p) == EventType.GAME_END for p in finished_logs(tmp_path))
 
 
 async def test_scripted_logs_do_not_satisfy_an_llm_resume(tmp_path):

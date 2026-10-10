@@ -165,13 +165,27 @@ def plan(cfg: BatchConfig, specs: Mapping[str, ModelSpec]) -> list[dict[str, Any
     return rows
 
 
+REPLACE_BACKOFF = (0.05, 0.1, 0.2, 0.4, 0.8, 0.4)  # seconds; about 2 s in all
+
+
+def _replace(src: Path, dst: Path) -> None:
+    """os.replace that waits out a reader holding dst open (Windows: watchdog, OneDrive)."""
+    for delay in REPLACE_BACKOFF:
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            time.sleep(delay)
+    os.replace(src, dst)
+
+
 def _tag_agents(path: Path, agents: str) -> None:
     """Record the agent type in a game's run_meta.json, next to its finished JSONL."""
     meta = json.loads(path.read_text())
     meta["agents"] = agents
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(meta, indent=2))
-    os.replace(tmp, path)
+    _replace(tmp, path)
 
 
 class BatchMismatch(Exception):
@@ -331,6 +345,13 @@ async def run_batch(
     def spent() -> float:
         return prior_spend + (metered.spent if metered else 0.0)
 
+    def save_quietly() -> None:
+        """Mid-game ledger write: a stuck run_meta.json must not kill the game being played."""
+        try:
+            save("running")
+        except OSError:
+            log.warning("batch %s: run_meta.json not written; the next save retries", cfg.batch_id)
+
     def save(status: Status) -> dict[str, Any]:
         s = {
             "batch_id": cfg.batch_id,
@@ -352,11 +373,11 @@ async def run_batch(
         }
         tmp = meta_path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(s, indent=2))
-        os.replace(tmp, meta_path)  # a hard kill leaves the old file, never half of one
+        _replace(tmp, meta_path)  # a hard kill leaves the old file, never half of one
         return s
 
     if client:
-        metered = MeteredClient(client, provider_concurrency, on_spend=lambda: save("running"))
+        metered = MeteredClient(client, provider_concurrency, on_spend=save_quietly)
     make_agent: AgentFactory = llm_agents(metered, specs) if metered else RandomAgent
     colors = {name: s.color for name, s in specs.items()}
 
@@ -396,7 +417,10 @@ async def run_batch(
                 sinks.append(NeonSink(cfg.batch_id, connect=neon_connect, agents=agents))
             game = await run_game(a.game_config(cfg.game), make_agent, sinks, a.game_id, colors)
             outcome = {"event": "finished", "winner": getattr(game.winner, "value", game.winner)}
-            _tag_agents(out / f"{a.game_id}.run_meta.json", agents)
+            try:
+                _tag_agents(out / f"{a.game_id}.run_meta.json", agents)
+            except OSError:  # the game is done; its JSONL and game_end are the result
+                log.warning("game %s: could not tag run_meta.json with agents", a.game_id)
             finished.append(a.game_id)
             count_invalid(a)
             if invalid_stop:

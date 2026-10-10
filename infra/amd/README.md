@@ -83,7 +83,7 @@ Set these before `bash infra/amd/serve.sh`:
 | Variable | Default | Use |
 |---|---|---|
 | `AMD_BACKEND` | `auto` | `vllm` to fail instead of falling back, `llamacpp` to skip vLLM |
-| `AMD_MODEL` | `openai/gpt-oss-20b` | Another HF model for vLLM. Also add a matching `amd-*` entry with `litellm_model: openai/<that id>` and the same `api_base` and `api_key_env` as `amd-gpt-oss-20b`. It has to fit in 32 GB with room for the KV cache: Qwen3-32B in BF16 (about 64 GB) does not, Qwen3-8B or an AWQ/FP8 14B does. |
+| `AMD_MODEL` | `openai/gpt-oss-20b` | Another HF model for vLLM. Also add a matching `amd-*` entry with `litellm_model: openai/<that id>` (for example `openai/Qwen/Qwen3-8B`) and the same `api_base` and `api_key_env` as `amd-gpt-oss-20b`. It has to fit in 32 GB with room for the KV cache: Qwen3-32B in BF16 (about 64 GB) does not, Qwen3-8B or an AWQ/FP8 14B does. |
 | `AMD_GGUF_REPO`, `AMD_GGUF_FILE` | `ggml-org/gpt-oss-20b-GGUF`, `gpt-oss-20b-MXFP4.gguf` | Model for the llama.cpp fallback |
 | `AMD_TUNNEL` | `1` | `0` for no tunnel (run the games on the box itself, see below) |
 | `AMD_TUNNEL_PROTOCOL` | `http2` | Tunnel transport: `http2`, `quic`, or `auto`. Use `http2` when outbound UDP is blocked. |
@@ -99,4 +99,14 @@ An HTTP 530 or 000 from the public URL means the tunnel is not registered. Re-ru
 
 ## How models.yaml reaches the server
 
-The `amd-gpt-oss-20b` entry uses `litellm_model: openai/gpt-oss-20b` with `api_base: ${AMD_VLLM_BASE_URL}` and `api_key_env: AMD_API_KEY`. Those two fields are per model, so only the amd-* calls use the tunnel URL and key. The OpenAI models keep their default endpoint. It works the same against vLLM and llama-server.
+The `amd-gpt-oss-20b` entry uses `litellm_model: openai/openai/gpt-oss-20b` with `api_base: ${AMD_VLLM_BASE_URL}` and `api_key_env: AMD_API_KEY`. Those two fields are per model, so only the amd-* calls use the tunnel URL and key. The OpenAI models keep their default endpoint. It works the same against vLLM and llama-server.
+
+The prefix is doubled on purpose. LiteLLM's `openai/` route strips the first segment and sends the rest as the model id, and `serve.sh` serves the model under its HF id (`--served-model-name $AMD_MODEL` for vLLM, `--alias $AMD_MODEL` for llama.cpp), so `/v1/models` lists `openai/gpt-oss-20b`. With a single prefix every call sends `gpt-oss-20b` and gets a 404.
+
+`doctor`, `play` and `batch` call `GET {api_base}/models` first and stop with a clear message if the id they would send isn't listed. If that happens, check what the server lists:
+
+```bash
+curl -s -H "Authorization: Bearer $AMD_API_KEY" "$AMD_VLLM_BASE_URL/models"
+```
+
+Then either set `litellm_model` to `openai/<listed id>` or restart `serve.sh` so it serves `$AMD_MODEL` again. A server started by any earlier `serve.sh` already lists `openai/gpt-oss-20b`, so pulling this change needs no restart.

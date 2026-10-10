@@ -18,7 +18,9 @@
 #
 # Settings (environment variables, all optional):
 #   AMD_MODEL          HF model id for vLLM (default openai/gpt-oss-20b). It is also the served
-#                      model name; keep it in sync with litellm_model in configs/models.yaml.
+#                      model name (vLLM --served-model-name, llama.cpp --alias), so /v1/models
+#                      lists exactly this id. configs/models.yaml must send it verbatim: LiteLLM's
+#                      openai/ route strips one prefix, so litellm_model is openai/$AMD_MODEL.
 #   AMD_GGUF_REPO/FILE GGUF used by the llama.cpp fallback (default ggml-org/gpt-oss-20b-GGUF).
 #   AMD_BACKEND        auto | vllm | llamacpp (default auto)
 #   AMD_API_KEY        required, 32+ chars (openssl rand -hex 32); same value in the laptop .env

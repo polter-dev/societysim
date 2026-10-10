@@ -31,6 +31,17 @@ def version() -> None:
     typer.echo(__version__)
 
 
+def _require_served(specs) -> None:
+    """Exit before game 1 if a self-hosted server doesn't list the model id we would send."""
+    from societysim.models.registry import check_served_model
+
+    errors = [e for s in specs if (e := check_served_model(s))]
+    for e in errors:
+        typer.echo(e)
+    if errors:
+        raise typer.Exit(1)
+
+
 @app.command()
 def play(
     config: Annotated[Path, typer.Option("--config", help="Game config YAML file.")],
@@ -89,6 +100,7 @@ def play(
         if missing:
             typer.echo(f"missing provider key: {', '.join(missing)}")
             raise typer.Exit(1)
+        _require_served(specs)
 
         from societysim.models.client import LiteLLMClient
 
@@ -161,7 +173,8 @@ def batch(
             "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
             "openai": ("OPENAI_API_KEY",),
         }
-        providers = {spec.provider for spec in specs.values()}
+        # Self-hosted entries carry their own key (checked by _require_served below).
+        providers = {spec.provider for spec in specs.values() if not spec.api_key_env}
         missing = [
             " or ".join(keys)
             for provider, keys in provider_keys.items()
@@ -170,6 +183,7 @@ def batch(
         if missing:
             typer.echo(f"missing provider key: {', '.join(missing)}")
             raise typer.Exit(1)
+        _require_served(specs.values())
 
         from societysim.models.client import LiteLLMClient
 
@@ -217,7 +231,7 @@ def doctor(
     or if its configured `structured` mode fails.
     """
     from societysim.models.client import LiteLLMClient
-    from societysim.models.registry import load_registry, probe_model
+    from societysim.models.registry import check_served_model, load_registry, probe_model
 
     load_dotenv()
     if not config.is_file():
@@ -231,10 +245,19 @@ def doctor(
         raise typer.Exit(1)
     client = LiteLLMClient(limits=reg.limits())
 
+    failed = False
+    reachable = []
+    for spec in specs:
+        if error := check_served_model(spec):
+            failed = True
+            typer.echo(f"{spec.name}: FAIL {error}")
+        else:
+            reachable.append(spec)
+    specs = reachable
+
     async def run():
         return await asyncio.gather(*(probe_model(client, s) for s in specs))
 
-    failed = False
     for spec, results in zip(specs, asyncio.run(run()), strict=True):
         working = [r.mode for r in results if r.ok]
         configured_ok = any(r.mode == spec.structured and r.ok for r in results)

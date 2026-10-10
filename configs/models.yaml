@@ -85,11 +85,14 @@ models:
     color: "#f29900"
 
   # --- Self-hosted on AMD Radeon AI PRO R9700 (T6.3, infra/amd/serve.sh) ---
-  # The part after `openai/` is the served model name (AMD_MODEL in serve.sh).
+  # LiteLLM's `openai/` route strips that first prefix and sends the rest as the model id, so
+  # the rest must equal the server's served name. serve.sh serves under the HF id
+  # (--served-model-name $AMD_MODEL = openai/gpt-oss-20b), hence the doubled prefix. doctor and
+  # play check GET {api_base}/models lists that id before any game call.
   # Cost is 0: the AMD quota is minutes, not dollars. $/game = hours x AMD_PRICE_PER_HOUR.
   # max_tokens leaves room for gpt-oss reasoning at its default effort.
   - name: amd-gpt-oss-20b
-    litellm_model: openai/gpt-oss-20b
+    litellm_model: openai/openai/gpt-oss-20b
     api_base: ${AMD_VLLM_BASE_URL} # https://<name>.trycloudflare.com/v1
     api_key_env: AMD_API_KEY
     structured: json_schema # vLLM guided decoding (xgrammar, else outlines)

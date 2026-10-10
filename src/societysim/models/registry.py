@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from typing import Literal
 
+import httpx
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -72,6 +73,37 @@ class Registry(BaseModel):
 
 def load_registry(path: str | Path = DEFAULT_PATH) -> Registry:
     return Registry.model_validate(yaml.safe_load(Path(path).read_text()) or {})
+
+
+# --- served-model preflight -----------------------------------------------------------------
+
+
+def check_served_model(spec: ModelSpec) -> str | None:
+    """For a self-hosted model (`api_base` set): None if GET {api_base}/models lists the id we
+    send, else a one-line reason. LiteLLM's `openai/` route strips the first prefix, so
+    `openai/openai/gpt-oss-20b` sends `openai/gpt-oss-20b`."""
+    try:
+        base = spec.resolved_api_base()
+    except ValueError as exc:
+        return str(exc)
+    if base is None:
+        return None
+    sent = spec.litellm_model.split("/", 1)[1]
+    key = os.environ.get(spec.api_key_env or "", "")
+    url = f"{base.rstrip('/')}/models"
+    try:
+        r = httpx.get(url, headers={"Authorization": f"Bearer {key}"}, timeout=20)
+        r.raise_for_status()
+        served = [m["id"] for m in r.json()["data"]]
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+        return f"{spec.name}: GET {url} failed: {exc}"
+    if sent in served:
+        return None
+    return (
+        f"{spec.name}: the server does not serve {sent!r}; GET {url} lists {served}. "
+        "Set litellm_model to 'openai/<one of those>' in configs/models.yaml, "
+        "or restart serve.sh."
+    )
 
 
 # --- doctor ---------------------------------------------------------------------------------

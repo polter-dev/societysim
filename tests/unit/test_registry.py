@@ -70,7 +70,7 @@ def test_amd_entry_routes_to_self_hosted_server(monkeypatch):
     assert spec.input_cost_per_mtok == spec.output_cost_per_mtok == 0
     assert reg.limits()[spec.provider].concurrency >= 1
     assert spec.provider == "openai"
-    assert request_kwargs(spec, Ping)["model"] == "openai/gpt-oss-20b"
+    assert request_kwargs(spec, Ping)["model"] == "openai/openai/gpt-oss-20b"
     assert request_kwargs(spec, Ping)["api_base"] == "https://abc.trycloudflare.com/v1"
     assert request_kwargs(spec, Ping)["api_key"] == "amd-key"
     assert "api_base" not in request_kwargs(reg.get("gpt-5-nano"), Ping)
@@ -89,29 +89,7 @@ def test_play_missing_amd_vars_fails_fast(tmp_path, monkeypatch):
     assert "AMD_VLLM_BASE_URL" in res.output
 
 
-def test_doctor_amd_uses_per_model_endpoint(monkeypatch):
-    from types import SimpleNamespace
-
-    import litellm
-
-    monkeypatch.setenv("AMD_VLLM_BASE_URL", "https://fake-amd.example/v1")
-    monkeypatch.setenv("AMD_API_KEY", "fake-key")
-    calls = []
-
-    async def fake_server(**kwargs):
-        calls.append(kwargs)
-        return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content='{"ok":true,"word":"yes"}'))],
-            usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
-        )
-
-    monkeypatch.setattr(litellm, "acompletion", fake_server)
-    res = CliRunner().invoke(app, ["doctor", "--model", "amd-gpt-oss-20b"])
-    assert res.exit_code == 0, res.output
-    assert len(calls) == 3
-    assert all(call["model"] == "openai/gpt-oss-20b" for call in calls)
-    assert all(call["api_base"] == "https://fake-amd.example/v1" for call in calls)
-    assert all(call["api_key"] == "fake-key" for call in calls)
+# doctor against the AMD server: tests/unit/test_served_model.py (real HTTP fake server).
 
 
 def test_resolve_match_and_unknown():

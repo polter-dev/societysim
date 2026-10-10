@@ -12,6 +12,9 @@ name: Deploy
 # runs/ is gitignored, so CI gets real batches from the HF Dataset instead.
 # Cloudflare needs the CLOUDFLARE_API_TOKEN secret and the CLOUDFLARE_ACCOUNT_ID variable;
 # without them that step is skipped. hf-space needs the HF_TOKEN secret.
+# Visitor play: the viewer build gets the VITE_PLAY_API_URL and VITE_TURNSTILE_SITE_KEY repo
+# variables (both public). The deploy-play job (dispatch with deploy_play=true) pushes the game
+# server to the polter-dev/societysim-play Space; see README, "Visitor play".
 # Live Neon games: set the VITE_NEON_DATA_API_URL and VITE_NEON_AUTH_URL repo variables (README,
 # deploy section). Unset, the viewer builds in static mode and the log says so.
 
@@ -33,6 +36,10 @@ on:
       space:
         description: "HF Space id (owner/name); defaults to the HF_SPACE repo variable"
         required: false
+      deploy_play:
+        description: "Deploy only the visitor-play server Space (deploy-play job); skips the site deploy"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -44,6 +51,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.event_name == 'push' || !inputs.deploy_play
     runs-on: ubuntu-latest
     env:
       BATCH: ${{ inputs.batch }}
@@ -61,6 +69,9 @@ jobs:
       VITE_NEON_DATA_API_URL: ${{ vars.VITE_NEON_DATA_API_URL }}
       VITE_NEON_AUTH_URL: ${{ vars.VITE_NEON_AUTH_URL }}
       VITE_NEON_ANON_KEY: ${{ vars.VITE_NEON_ANON_KEY }}
+      # Visitor play (both public by design). Unset, the viewer hides the play entry.
+      VITE_PLAY_API_URL: ${{ vars.VITE_PLAY_API_URL }}
+      VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -153,3 +164,29 @@ jobs:
         run: |
           test -n "$SPACE" || { echo "::error::set the space input or the HF_SPACE variable"; exit 1; }
           gh workflow run pages.yml -f space="$SPACE"
+
+  deploy-play:
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_play
+    runs-on: ubuntu-latest
+    env:
+      # HF_TOKEN deploys the Space. The PLAY_* keys are dedicated, limited keys for visitors;
+      # the script sets them on the Space as OPENAI_API_KEY, HF_TOKEN and GEMINI_API_KEY.
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      PLAY_OPENAI_API_KEY: ${{ secrets.PLAY_OPENAI_API_KEY }}
+      PLAY_HF_TOKEN: ${{ secrets.PLAY_HF_TOKEN }}
+      PLAY_GEMINI_API_KEY: ${{ secrets.PLAY_GEMINI_API_KEY }}
+      NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+      TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+      PLAY_DAILY_BUDGET_USD: ${{ vars.PLAY_DAILY_BUDGET_USD }}
+      PLAY_ENABLED: ${{ vars.PLAY_ENABLED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - name: Deploy the play Space
+        run: |
+          if [ -z "$HF_TOKEN" ] || [ -z "$NEON_DATABASE_URL" ] || [ -z "$TURNSTILE_SECRET_KEY" ]; then
+            echo "::notice::Skipping deploy-play: set the HF_TOKEN, NEON_DATABASE_URL and TURNSTILE_SECRET_KEY secrets (and PLAY_OPENAI_API_KEY, PLAY_HF_TOKEN, PLAY_GEMINI_API_KEY for the models)."
+            exit 0
+          fi
+          bash scripts/deploy-play-space.sh

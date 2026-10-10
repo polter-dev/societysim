@@ -128,6 +128,16 @@ What these do:
   Never put `NEON_DATABASE_URL` (it can write) in a variable or in the build. If a variable is unset, the build still succeeds, the viewer uses static data, and the log has a `::notice::`.
 - To put a real batch on Cloudflare (`runs/` is gitignored, so CI can't see it): `bash scripts/deploy-space.sh --out /tmp/site --force runs/<batch>`, then `npx wrangler login` (one time, browser sign-in) and `npx wrangler pages deploy /tmp/site --project-name societysim --branch main`.
 
+### Visitor play
+
+The game server for visitor play (`src/societysim/server`) runs as a Docker Space, `polter-dev/societysim-play` (https://polter-dev-societysim-play.hf.space). The site calls it from the browser; the viewer build needs two public repo variables, `VITE_PLAY_API_URL` (that URL) and `VITE_TURNSTILE_SITE_KEY`.
+
+Deploy it with `scripts/deploy-play-space.sh [--dry-run]`. It reads these from your environment and sets them on the Space by name, never printing a value: `HF_TOKEN` (deploys the Space), `PLAY_OPENAI_API_KEY`, `PLAY_HF_TOKEN` and `PLAY_GEMINI_API_KEY` (dedicated, limited keys; set on the Space as `OPENAI_API_KEY`, `HF_TOKEN`, `GEMINI_API_KEY`), `NEON_DATABASE_URL` and `TURNSTILE_SECRET_KEY` (the server won't start without these two). `--dry-run` prints the plan. The `Deploy` workflow does the same with `gh workflow run deploy.yml -f deploy_play=true` and repo secrets, and skips with a notice if they are missing.
+
+Space variables the script sets: `PLAY_TRUSTED_PROXIES` (HF's private proxy ranges, so the server sees the visitor's IP from `X-Forwarded-For`; without it every visitor shares one rate limit, so the server refuses to start) and `PLAY_ALLOWED_MODELS` (priced models only, so the daily budget holds). Limits, all optional Space variables: `PLAY_DAILY_BUDGET_USD` (default 2.00), `PLAY_MAX_CONCURRENT` (4), `PLAY_MAX_GAMES_PER_IP_DAY` (5), `PLAY_MAX_ACTIVE_PER_IP` (1), `PLAY_RATE_PER_MIN` (120), `PLAY_MAX_GAME_MINUTES` (45), `PLAY_MAX_TOKENS` (2048).
+
+Kill switch: set the Space variable `PLAY_ENABLED=0` (Space settings, Variables, then restart). New games get a `play_disabled` error; the rest of the site keeps working.
+
 ## Models
 
 The lineup is in [configs/models.yaml](configs/models.yaml). All calls go through LiteLLM.

@@ -129,6 +129,11 @@ The viewer replay of the AMD game from the laptop, plus the #114 results comment
 - `TODO(#40)`: confirm a bare request with no `Authorization` header returns 200 from the Data API, and that CORS allows the Space's origin.
 - `TODO(batch)`: game, event and label counts after the T5.2/T5.3 backfill.
 
+### Visitor play hosting
+
+- Visitor games run on the Docker Space `polter-dev/societysim-play`, called from society-sim.us. Limits per visitor IP: 1 active game, 5 a day. Globally: 4 games at once and a $2.00 daily budget, then new games get a friendly "come back tomorrow" error and running games finish with random fill-ins. Only public events reach Neon while a game runs; the full log is backfilled after it ends.
+- Kill switch: set the Space variable `PLAY_ENABLED=0` and restart. Deploy and variables: README, "Visitor play".
+
 ### Backup if the live demo fails
 
 Show the static Space (it reads `report/index.json`, no Neon) and run the two queries in the Neon console.

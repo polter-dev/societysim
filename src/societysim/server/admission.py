@@ -41,6 +41,22 @@ def call_estimate(model: str) -> float:
     return prior_seat_cost(spec) / PRIOR_CALLS_PER_SEAT if spec else 0.0
 
 
+PROMPT_OVERHEAD_TOKENS = 2000  # chat template, the response schema and the like
+
+
+def call_worst_case(model: str, prompt_bytes: int, max_tokens: int) -> float:
+    """The most one call can cost: a token per prompt byte (byte-level tokenizers never use
+    more) plus overhead in, and the full output cap (the model's, at most `max_tokens`) out.
+    A model the registry doesn't know can't be priced, so it is never called."""
+    from societysim.models.client import estimate_cost
+
+    spec = _specs().get(model)
+    if spec is None:
+        return float("inf")
+    out = min(spec.max_tokens, max_tokens)
+    return estimate_cost(spec, prompt_bytes + PROMPT_OVERHEAD_TOKENS, out)
+
+
 def estimate_usd(setup: GameSetup) -> float:
     """Prior USD of a whole game: the batch price prior summed over its model seats."""
     from societysim.batch.runner import PRIOR_CALLS_PER_SEAT

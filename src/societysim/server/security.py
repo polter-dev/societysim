@@ -137,6 +137,7 @@ class PlayConfig:
     max_tokens: int = 2048  # PLAY_MAX_TOKENS: per model call
     trusted_proxies: tuple[Network, ...] = ()  # PLAY_TRUSTED_PROXIES, comma separated CIDRs
     space_host: str = ""  # SPACE_HOST (set by HF Spaces): its https origin is allowed
+    on_space: bool = False  # SPACE_ID is set: running on HF Spaces, behind its proxy
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "PlayConfig":
@@ -169,6 +170,7 @@ class PlayConfig:
             max_tokens=_env_int(env, "PLAY_MAX_TOKENS", cls.max_tokens),
             trusted_proxies=proxies,
             space_host=env.get("SPACE_HOST", "").strip(),
+            on_space=bool(env.get("SPACE_ID")),
         )
 
     def origins(self) -> list[str]:
@@ -180,8 +182,17 @@ class PlayConfig:
         return out
 
 
+HF_PROXIES = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"  # documented value for HF Spaces
+
+
 def check_startup(play: PlayConfig, neon: bool) -> None:
-    """Fail closed: production needs Turnstile and the Neon spend ledger."""
+    """Fail closed: production needs Turnstile and the Neon spend ledger, and on HF Spaces
+    the proxy must be trusted, or every visitor would share the proxy's IP and its limits."""
+    if play.on_space and not play.trusted_proxies:
+        raise RuntimeError(
+            "play server refuses to start on HF Spaces without PLAY_TRUSTED_PROXIES: every "
+            f"visitor would share the proxy's IP. Set PLAY_TRUSTED_PROXIES={HF_PROXIES}"
+        )
     if play.dev_mode:
         return
     required = {"TURNSTILE_SECRET_KEY": play.turnstile_secret, "NEON_DATABASE_URL": neon}
@@ -197,6 +208,15 @@ def secret_names(env: Mapping[str, str] | None = None) -> list[str]:
     """Names (never values) of the set env vars that look like secrets."""
     env = os.environ if env is None else env
     return sorted(k for k, v in env.items() if v and _SECRET_NAME.search(k))
+
+
+def redact(text: str) -> str:
+    """`text` with the value of every secret-looking env var (8+ characters) blanked out."""
+    for name in secret_names():
+        value = os.environ[name]
+        if len(value) >= 8:
+            text = text.replace(value, "[redacted]")
+    return text
 
 
 def _ip(text: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:

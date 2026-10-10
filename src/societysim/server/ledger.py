@@ -5,9 +5,10 @@ startup (a restart keeps today's spend) and every booked cost is inserted as a r
 `persistent=True` the ledger is not `ready` until that load succeeds, and a ledger that is
 not ready reports nothing left: no Neon, no visitor games (fail closed).
 
-Each model call reserves its estimated cost before it starts and settles to the real cost
-when it returns; a call that never returns (cancelled at game end) keeps its reservation, so
-the cap can't be passed by calls nobody waited for.
+Each model call reserves its worst-case cost before it starts (`try_reserve`, refused when
+it doesn't fit) and settles to the real cost when it returns; a call that never returns
+(cancelled at game end) keeps its reservation. Amounts are integer nano-dollars, so as long
+as a call costs at most its reservation, spend never passes the budget, not even by rounding.
 """
 
 import asyncio
@@ -30,9 +31,13 @@ def _today() -> date:
     return datetime.now(UTC).date()
 
 
+def nanos(usd: float) -> int:
+    return max(0, round(usd * 1e9))
+
+
 class Ledger:
     def __init__(self, budget_usd: float = 2.0, *, persistent: bool = False, timeout=10.0):
-        self.budget_usd = budget_usd
+        self.budget_nanos = nanos(budget_usd)
         self.game_estimate_usd = 0.0  # the default game's prior estimate; set by the app
         self.persistent = persistent
         self.ready = not persistent
@@ -41,12 +46,12 @@ class Ledger:
         self._conn: Any = None
         self._lock = asyncio.Lock()
         self._day = _today()
-        self._spent = 0.0
+        self.spent_nanos = 0  # booked plus reserved, today
         self.games: dict[str, float] = {}  # game_id -> USD booked today
 
     def _roll(self) -> None:
         if (today := _today()) != self._day:
-            self._day, self._spent, self.games = today, 0.0, {}
+            self._day, self.spent_nanos, self.games = today, 0, {}
 
     async def load(self, connect: Any) -> bool:
         """Read today's spend from Neon. Returns whether the ledger is ready."""
@@ -60,7 +65,7 @@ class Ledger:
                 conn = await self._conn_ready()
                 self._roll()
                 total = await asyncio.wait_for(conn.fetchval(_TODAY, self._day), self.timeout)
-            self._spent = max(self._spent, float(total or 0))
+            self.spent_nanos = max(self.spent_nanos, nanos(float(total or 0)))
             self.ready = True
         except Exception as exc:  # the message may hold the DSN: log the type only
             log.warning("spend ledger unavailable (%s); refusing visitor games", type(exc).__name__)
@@ -69,12 +74,13 @@ class Ledger:
 
     def spent_usd(self) -> float:
         self._roll()
-        return self._spent
+        return self.spent_nanos / 1e9
 
     def remaining_usd(self) -> float:
         if not self.ready:
             return 0.0
-        return max(0.0, self.budget_usd - self.spent_usd())
+        self._roll()
+        return max(0, self.budget_nanos - self.spent_nanos) / 1e9
 
     def remaining_today(self) -> int:
         """Games of the default estimate still affordable today (GET /api/limits)."""
@@ -85,25 +91,32 @@ class Ledger:
             return MAX_GAMES_SHOWN
         return min(MAX_GAMES_SHOWN, int(left // self.game_estimate_usd))
 
-    def reserve(self, usd: float) -> None:
-        """Hold a call's estimated cost until settle(); counts against the budget at once."""
+    def try_reserve(self, usd: float) -> int | None:
+        """Hold `usd` against the budget if it fits; returns the held nanos, or None.
+        Synchronous, so two calls can't both take the last of the budget."""
+        if not self.ready or not usd < float("inf"):  # an unpriceable call never fits
+            return None
+        held = nanos(usd)
         self._roll()
-        self._spent += max(0.0, usd)
+        if self.spent_nanos + held > self.budget_nanos:
+            return None
+        self.spent_nanos += held
+        return held
 
-    async def settle(self, game_id: str, reserved: float, cost_usd: float | None) -> None:
-        """Book a call: its real cost, or (None: it never returned) its reservation."""
-        booked = max(0.0, reserved) if cost_usd is None else max(0.0, cost_usd)
+    async def settle(self, game_id: str, held: int, cost_usd: float | None) -> None:
+        """Book a call: its real cost, or (None: it never returned) what was held for it."""
+        booked = held if cost_usd is None else nanos(cost_usd)
         self._roll()
-        self._spent += booked - max(0.0, reserved)
-        await self._book(game_id, booked)
+        self.spent_nanos = max(0, self.spent_nanos + booked - held)
+        await self._book(game_id, booked / 1e9)
 
     async def record(self, game_id: str, cost_usd: float) -> None:
         """At game end, however it ended: books what the per-call metering missed, if any."""
-        missed = cost_usd - self.games.get(game_id, 0.0)
-        if missed > 1e-9:
+        missed = nanos(cost_usd - self.games.get(game_id, 0.0))
+        if missed > 0:
             self._roll()
-            self._spent += missed
-            await self._book(game_id, missed)
+            self.spent_nanos += missed
+            await self._book(game_id, missed / 1e9)
 
     async def _book(self, game_id: str, usd: float) -> None:
         self.games[game_id] = self.games.get(game_id, 0.0) + usd

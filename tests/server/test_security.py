@@ -19,14 +19,18 @@ import httpx  # noqa: E402
 from starlette.requests import Request  # noqa: E402
 from test_play_api import play_env  # noqa: E402, F401  (autouse: dev-mode env)
 
+from societysim.agents.base import Turn  # noqa: E402
 from societysim.agents.scripted import RandomAgent  # noqa: E402
 from societysim.config import GameConfig  # noqa: E402
 from societysim.engine.state import GameState  # noqa: E402
-from societysim.models.client import CompletionResult  # noqa: E402
+from societysim.models.client import CompletionResult, Usage  # noqa: E402
 from societysim.server import admission, security  # noqa: E402
 from societysim.server.app import create_app  # noqa: E402
-from societysim.server.ledger import Ledger  # noqa: E402
-from societysim.server.manager import Settings, llm_agents_for  # noqa: E402
+from societysim.server.ledger import (
+    Ledger,  # noqa: E402
+    nanos,  # noqa: E402
+)
+from societysim.server.manager import MeteredAgent, Settings, llm_agents_for  # noqa: E402
 from societysim.server.security import PlayConfig  # noqa: E402
 from societysim.setup import GameSetup  # noqa: E402
 
@@ -276,6 +280,21 @@ def test_startup_fails_closed(tmp_path):
         PlayConfig.from_env({"PLAY_MAX_CONCURRENT": "lots"})
 
 
+def test_hf_space_needs_trusted_proxies(tmp_path):
+    """On a Space every request comes through HF's proxy: without trusting it, all visitors
+    would share one IP and one set of limits."""
+    base = {"runs_dir": tmp_path, "agents": scripted, "neon": False}
+    space = PlayConfig.from_env({"SPACE_ID": "polter-dev/societysim", "PLAY_DEV_MODE": "1"})
+    with pytest.raises(RuntimeError, match=f"PLAY_TRUSTED_PROXIES={security.HF_PROXIES}"):
+        create_app(Settings(**base, play=space))
+    trusted = PlayConfig.from_env(
+        {"SPACE_ID": "x/y", "PLAY_DEV_MODE": "1", "PLAY_TRUSTED_PROXIES": security.HF_PROXIES}
+    )
+    create_app(Settings(**base, play=trusted))
+    hops = {"X-Forwarded-For": "198.51.100.20"}  # what HF's proxy sends
+    assert security.client_ip(scope("10.16.4.2", hops), trusted.trusted_proxies) == "198.51.100.20"
+
+
 # --- models -------------------------------------------------------------------------------------
 
 
@@ -354,19 +373,22 @@ async def test_ledger_persists_to_neon_and_fails_closed():
     db = FakeNeon()
     ledger = Ledger(2.0, persistent=True)
     assert ledger.remaining_usd() == 0 and ledger.remaining_today() == 0  # not loaded yet
+    assert ledger.try_reserve(0.01) is None
     db.down = True
     assert not await ledger.load(db.connect)
     db.down = False
     assert await ledger.load(db.connect) and ledger.remaining_usd() == 2.0
 
-    ledger.reserve(0.10)
-    assert ledger.remaining_usd() == pytest.approx(1.90)
-    await ledger.settle("g1", 0.10, 0.25)  # the real cost
-    ledger.reserve(0.10)
-    await ledger.settle("g1", 0.10, None)  # never came back: the reservation is booked
+    held = ledger.try_reserve(0.30)
+    assert ledger.remaining_usd() == pytest.approx(1.70)
+    await ledger.settle("g1", held, 0.25)  # the real cost; the rest of the hold is released
+    held = ledger.try_reserve(0.10)
+    await ledger.settle("g1", held, None)  # never came back: the hold is booked
     await ledger.record("g1", 0.40)  # at game end: 0.05 the metering missed
     assert ledger.spent_usd() == pytest.approx(0.40)
     assert [round(cost, 6) for _, gid, cost in db.spend] == [0.25, 0.10, 0.05]
+    assert ledger.try_reserve(1.61) is None and ledger.try_reserve(1.60) is not None
+    assert ledger.spent_nanos == ledger.budget_nanos
 
     restarted = Ledger(2.0, persistent=True)  # a restart keeps today's spend
     await restarted.load(db.connect)
@@ -386,55 +408,88 @@ async def test_start_refused_when_ledger_or_budget_is_out(make_client):
     err(await c2.post("/api/games", json={"watch_only": True}), 503, "budget_exhausted")
 
 
+COST = 0.0003  # per call: below every allowed model's worst case (1024 output tokens or more)
+
+
 class CostlyAgent:
-    """A model seat that costs `cost` per call (and may be slow); counts what happened."""
+    """A model seat that costs COST per call (and may be slow); counts what happened."""
 
-    log = {"done": 0, "cancelled": 0, "estimate": 0.0}
+    log = {"done": 0, "cancelled": 0, "held": 0.0}
 
-    def __init__(self, state, seat, cost=0.01, delay=0.0):
-        self.inner, self.cost, self.delay = RandomAgent(state, seat), cost, delay
-        self.estimate = admission.call_estimate(state.models[seat])
+    def __init__(self, state, seat, delay=0.0):
+        self.inner, self.delay = RandomAgent(state, seat), delay
+        self.model = state.models[seat]
 
     async def act(self, turn) -> CompletionResult:
+        worst = admission.call_worst_case(self.model, len(turn.prompt.encode()), 2048)
+        assert worst >= COST
         try:
             await asyncio.sleep(self.delay)
         except asyncio.CancelledError:
             CostlyAgent.log["cancelled"] += 1
-            CostlyAgent.log["estimate"] += self.estimate
+            CostlyAgent.log["held"] += worst
             raise
         result = await self.inner.act(turn)
         CostlyAgent.log["done"] += 1
-        usage = result.usage.model_copy(update={"model": "costly", "cost_usd": self.cost})
+        usage = result.usage.model_copy(update={"model": "costly", "cost_usd": COST})
         return result.model_copy(update={"usage": usage})
 
 
 @pytest.fixture
 def costly():
-    CostlyAgent.log = {"done": 0, "cancelled": 0, "estimate": 0.0}
+    CostlyAgent.log = {"done": 0, "cancelled": 0, "held": 0.0}
     return CostlyAgent.log
 
 
 async def test_budget_hit_midgame_falls_back_to_scripted(make_client, tmp_path, costly):
-    estimate = admission.estimate_usd(
-        admission.allowed_setup(GameSetup(), security.DEFAULT_ALLOWED)
-    )
-    budget = estimate + 0.05
-    c = make_client(play=play(daily_budget_usd=budget), agents=lambda cfg: (CostlyAgent, {}))
+    c = make_client(play=play(), agents=lambda cfg: (CostlyAgent, {}))
     started = await start(c, watch_only=True)
+    ledger = c.manager.ledger
+    ledger.budget_nanos = nanos(0.01)  # about 30 calls' worth, set once the game is running
     session = await finished(c, started["game_id"])
     assert session.status == "finished"
     log = events(tmp_path, started["game_id"])
     used = [e["meta"]["usage"]["model"] for e in log if e["meta"].get("usage")]
     assert "scripted" in used, "the cap never kicked in"
-    assert "costly" not in used[used.index("scripted") + 10 :]  # at most a vote round in flight
-    spent = c.manager.ledger.spent_usd()
-    assert spent == pytest.approx(costly["done"] * 0.01)
-    assert budget <= spent <= budget + 10 * 0.01
+    assert ledger.spent_nanos <= ledger.budget_nanos  # exactly: worst cases are held first
+    assert ledger.spent_usd() == pytest.approx(costly["done"] * COST)
+
+
+async def test_concurrent_calls_and_games_never_pass_the_cap(make_client, costly):
+    """Fifty calls race for a budget that fits five worst cases: five run, none overshoots."""
+    ledger = Ledger(0.005)
+    calls, ran = set(), []
+
+    class Paid:
+        async def act(self, turn):
+            ran.append(turn)
+            await asyncio.sleep(0.01)
+            return await RandomAgent(state, "p1").act(turn)  # costs 0: settles below the hold
+
+    state = GameState(GameConfig(n_players=7, models=["qwen3-235b"] * 7))
+    agent = MeteredAgent(Paid(), RandomAgent(state, "p1"), ledger, "g", lambda _: 0.001, calls)
+    turn = Turn(action="vote", prompt="vote", others=["p2"], targets=["p2"])
+    replies = await asyncio.gather(*(agent.act(turn) for _ in range(50)))
+    assert len(ran) == 5 and len(replies) == 50 and not calls
+    assert ledger.spent_nanos == 0  # all five settled to their real cost
+
+    # Several games started at once share one budget; the holds keep the total under it.
+    c = make_client(play=play(), agents=lambda cfg: (CostlyAgent, {}))
+    c.manager.ledger.budget_nanos = nanos(admission.estimate_usd(GameSetup()) + 0.002)
+    games = await asyncio.gather(
+        *(c.post("/api/games", json={"watch_only": True}) for _ in range(3))
+    )
+    assert [r.status_code for r in games] == [200, 200, 200]
+    c.manager.ledger.budget_nanos = nanos(0.02)
+    for r in games:
+        await finished(c, r.json()["game_id"])
+    assert c.manager.ledger.spent_nanos <= c.manager.ledger.budget_nanos
+    assert costly["done"] * COST <= 0.02
 
 
 async def test_forfeit_books_calls_in_flight(make_client, monkeypatch, costly):
     """p0 is a wolf (seed 7) and forfeits on night 1 while the Seer's and Doctor's slow calls
-    run: they are cancelled, and their reservations are booked."""
+    run: they are cancelled, and their worst-case holds are booked."""
     monkeypatch.setattr("societysim.server.manager.secrets.randbelow", lambda n: 7)
     agents = lambda cfg: (lambda st, s: CostlyAgent(st, s, delay=5), {})  # noqa: E731
     c = make_client(play=play(), agents=agents, turn_timeout=0.2, max_timeouts=1)
@@ -445,7 +500,7 @@ async def test_forfeit_books_calls_in_flight(make_client, monkeypatch, costly):
     assert session.status == "forfeit" and not session.calls
     assert costly["cancelled"] >= 1 and costly["done"] == 0
     booked = c.manager.ledger.games[started["game_id"]]
-    assert booked == pytest.approx(costly["estimate"]) and booked > 0
+    assert booked == pytest.approx(costly["held"]) and booked > 0
     assert c.manager.ledger.spent_usd() == pytest.approx(booked)
 
 
@@ -563,12 +618,42 @@ async def test_every_error_is_a_code_and_a_safe_message(make_client, monkeypatch
 # --- keys never leave the server ----------------------------------------------------------------
 
 
-async def test_no_key_in_any_response_or_log(make_client, monkeypatch, turnstile, caplog):
+class LeakyProvider:
+    """A model seat whose provider errors echo the key, as a Gemini URL with ?key=... would.
+    Its first call gets a bad reply plus such an error, the retry a bare provider error, and
+    later calls answer normally. Keeps every prompt it is shown."""
+
+    prompts: list[str] = []
+
+    def __init__(self, state, seat):
+        self.inner, self.model, self.calls = RandomAgent(state, seat), state.models[seat], 0
+
+    async def act(self, turn) -> CompletionResult:
+        LeakyProvider.prompts.append(turn.prompt)
+        self.calls += 1
+        key = SECRETS["GEMINI_API_KEY"]
+        url = f"https://generativelanguage.googleapis.com/v1/models/x:generate?key={key}"
+        usage = Usage(model=self.model)
+        if self.calls == 1:
+            return CompletionResult(
+                parsed=None, raw=f'{{"echo": "{key}"}}', error=f"400 for {url}", usage=usage
+            )
+        if self.calls == 2:
+            error = f"BadRequestError: GeminiException - {url} Authorization: Bearer {key}"
+            return CompletionResult(parsed=None, raw="", error=error, usage=usage)
+        return await self.inner.act(turn)
+
+
+async def test_no_key_in_any_response_or_log(make_client, monkeypatch, turnstile, caplog, tmp_path):
     for name, value in SECRETS.items():
         monkeypatch.setenv(name, value)
     caplog.set_level(logging.DEBUG)
     seen: list[httpx.Response] = []
-    c = make_client(seen=seen)  # play config from env: dev mode, Turnstile on
+    LeakyProvider.prompts = []
+    # Play config from env: dev mode, Turnstile on. Seats are leaky providers; Neon is a fake.
+    c = make_client(seen=seen, agents=lambda cfg: (LeakyProvider, {}))
+    db = FakeNeon()
+    c.manager.neon_connect = db.connect
     assert c.manager.settings.play.turnstile_secret == SECRETS["TURNSTILE_SECRET_KEY"]
 
     async with c.app.router.lifespan_context(c.app):
@@ -600,6 +685,15 @@ async def test_no_key_in_any_response_or_log(make_client, monkeypatch, turnstile
             assert value not in text, f"{name} leaked in a {r.status_code} from {r.url}"
             assert "LEAKCHECK" not in text
     assert "LEAKCHECK" not in caplog.text
+    # Provider error text reaches neither the game log, Neon (backfilled after game_end, where
+    # the Data API serves it publicly) nor the retry prompt; only its category does.
+    log_text = (tmp_path / "visitor" / f"{started['game_id']}.jsonl").read_text(encoding="utf-8")
+    neon_text = json.dumps(list(db.events.values()))
+    assert "LEAKCHECK" not in log_text and "LEAKCHECK" not in neon_text
+    assert "provider_error" in log_text and "invalid_output: the reply" in log_text
+    assert '"type": "invalid_output"' in neon_text  # the full log did reach Neon
+    retries = [p for p in LeakyProvider.prompts if "previous reply was rejected" in p]
+    assert retries and not [p for p in LeakyProvider.prompts if "LEAKCHECK" in p]
 
 
 # --- schema ---------------------------------------------------------------------------------------

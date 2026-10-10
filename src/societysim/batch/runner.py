@@ -274,10 +274,11 @@ async def run_batch(
     on_progress, if given, gets a dict after each game ends (event "finished" or "failed", with
     done, total, game_id, winner or reason, seconds, spent, budget, running, eta_seconds) and
     once when the guard stops new games (event "stopped", with reason, spent, budget, running).
-    done counts games skipped on resume. eta_seconds is remaining games divided by the observed
-    finish rate (games finished in this run per wall second since it began, so it already
-    reflects concurrency, slow models and the lone first game of each unseen model). It is None
-    until a game finishes in this run (failed games say nothing about pace); callers show
+    done counts games skipped on resume. eta_seconds is games left divided by the observed finish
+    rate (games finished in this run per wall second since it began, so it already reflects
+    concurrency, slow models and the lone first game of each unseen model). Games left is only
+    the running ones once new games are barred (budget, provider down, invalid output). It is
+    None until a game finishes in this run (failed games say nothing about pace); callers show
     "estimating..." for None.
     """
     out = Path(runs_dir) / cfg.batch_id
@@ -470,7 +471,12 @@ async def run_batch(
             if outcome:
                 seconds = _now() - t0
                 done = len(skipped) + len(finished) + len(failed)
-                eta = (_now() - run_t0) / len(finished) * (total - done) if finished else None
+                # Once new games are barred (budget, provider down, invalid output), only the
+                # games already running are still to come.
+                nxt = todo[len(started_ids)] if len(started_ids) < len(todo) else None
+                barred = budget_hit or (nxt is not None and verdict(nxt) == "stop")
+                left = in_flight if barred else total - done
+                eta = (_now() - run_t0) / len(finished) * left if finished else None
                 progress(
                     **outcome,
                     done=done,

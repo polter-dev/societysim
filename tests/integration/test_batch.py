@@ -857,21 +857,45 @@ async def test_eta_is_none_until_a_game_finishes_and_skips_resumed_games(tmp_pat
     assert {e["event"] for e in events} == {"failed"}
     assert [e["eta_seconds"] for e in events] == [None, None, None]  # no pace to go on
 
-    # Resume with 2 of 3 games on disk: only the game played now sets the pace.
+    # Resume with 3 of 6 games on disk: only the games played now set the pace.
     await run_batch(
-        cfg(batch_id="r", n_games=3, max_concurrency=1), SPECS, ClockFake(clock), runs_dir=tmp_path
+        cfg(batch_id="r", n_games=6, max_concurrency=1), SPECS, ClockFake(clock), runs_dir=tmp_path
     )
-    (tmp_path / "r/r-g0002.jsonl").unlink()
+    for n in (3, 4, 5):
+        (tmp_path / f"r/r-g000{n}.jsonl").unlink()
     clock["t"] += 500
     events.clear()
     await run_batch(
-        cfg(batch_id="r", n_games=3, max_concurrency=1),
+        cfg(batch_id="r", n_games=6, max_concurrency=1),
         SPECS,
         ClockFake(clock),
         runs_dir=tmp_path,
         on_progress=events.append,
     )
-    assert [(e["done"], e["eta_seconds"]) for e in events] == [(3, 0)]
+    assert [e["done"] for e in events] == [4, 5, 6]
+    # If the 3 skipped games counted as finished, these would be a third of this.
+    assert events[0]["eta_seconds"] == pytest.approx(events[0]["seconds"] * 2)
+    assert events[1]["eta_seconds"] == pytest.approx(
+        (events[0]["seconds"] + events[1]["seconds"]) / 2
+    )
+    assert events[2]["eta_seconds"] == 0
+
+
+async def test_eta_only_counts_running_games_once_new_games_are_barred(tmp_path, monkeypatch):
+    clock = _fake_clock(monkeypatch)
+    events: list[dict] = []
+    await run_batch(
+        cfg(n_games=8, models=["a", "b", "c", "d"], max_concurrency=3, budget_usd=0.4),
+        PRICED,
+        ClockFake(clock),
+        runs_dir=tmp_path,
+        on_progress=events.append,
+    )
+    assert events[-1]["event"] == "stopped" and events[-1]["reason"] == "budget"
+    ends = [e for e in events if e["event"] == "finished"]
+    # Fewer games ran than were asked for; the ones that will never start are not owed.
+    assert ends[-1]["done"] < ends[-1]["total"]
+    assert ends[-1]["running"] == 0 and ends[-1]["eta_seconds"] == 0
 
 
 def test_cli_progress_line_says_estimating_until_there_is_an_eta():

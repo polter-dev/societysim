@@ -4,48 +4,96 @@
 #
 #   scripts/deploy-space.sh [--dry-run] <batch_dir> <space_id>
 #   scripts/deploy-space.sh runs/batch-01 polter-dev/societysim
+#   scripts/deploy-space.sh --out <dir> [--force] <batch_dir>
 #
 # The batch needs `societysim report <batch_dir>` first (it writes report/index.json).
 # The batch dir is copied to data/ next to the viewer, which is where the viewer looks
 # for data/report/index.json. --dry-run builds and stages everything and lists it, but
 # uploads nothing and needs no token.
 #
+# --out writes the staged site (viewer build plus data/) to <dir> and stops: no upload, no
+# HF_TOKEN, no space id. <dir> must be empty or missing unless --force. Preview it with
+# `python -m http.server -d <dir> 8000`. The build reads VITE_NEON_DATA_API_URL and
+# VITE_NEON_ANON_KEY from the environment; the output says which data source it uses.
+#
 # HF_TOKEN must be set in the environment (write access to the Space). It is read by
 # huggingface_hub directly and never printed or passed on a command line.
+#
+# Test hooks: SOCIETYSIM_SKIP_VIEWER_BUILD=1 skips npm and copies SOCIETYSIM_VIEWER_DIST
+# (default viewer/dist) as is.
 set -euo pipefail
 
-dry_run=false
-if [[ "${1:-}" == "--dry-run" ]]; then
-  dry_run=true
-  shift
-fi
-if [[ $# -ne 2 ]]; then
-  sed -n '5,6p' "$0" >&2
+usage() {
+  echo "usage: $0 [--dry-run] <batch_dir> <space_id>" >&2
+  echo "       $0 --out <dir> [--force] <batch_dir>" >&2
   exit 2
+}
+
+dry_run=false
+force=false
+out=""
+args=()
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --dry-run) dry_run=true ;;
+    --force) force=true ;;
+    --out)
+      [[ $# -ge 2 ]] || usage
+      out=$2
+      shift
+      ;;
+    *) args+=("$1") ;;
+  esac
+  shift
+done
+space=""
+if [[ -n "$out" ]]; then
+  [[ ${#args[@]} -eq 1 ]] || usage
+else
+  [[ ${#args[@]} -eq 2 ]] || usage
+  space=${args[1]}
 fi
-batch=$1
-space=$2
+batch=${args[0]}
 root=$(cd "$(dirname "$0")/.." && pwd)
 
 if [[ ! -f "$batch/report/index.json" ]]; then
   echo "error: $batch/report/index.json is missing; run: uv run societysim report $batch" >&2
   exit 1
 fi
-if [[ ! "$space" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+if [[ -n "$space" && ! "$space" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
   echo "error: space id must look like owner/name, got: $space" >&2
   exit 1
 fi
-if [[ "$dry_run" == false && -z "${HF_TOKEN:-}" ]]; then
+if [[ -z "$out" && "$dry_run" == false && -z "${HF_TOKEN:-}" ]]; then
   echo "error: HF_TOKEN is not set" >&2
   exit 1
 fi
+if [[ -n "$out" && "$force" == false && -d "$out" && -n "$(ls -A "$out")" ]]; then
+  echo "error: $out is not empty; pass --force to write into it" >&2
+  exit 1
+fi
 
-(cd "$root/viewer" && npm ci --silent && npm run build --silent)
+dist="$root/viewer/dist"
+if [[ "${SOCIETYSIM_SKIP_VIEWER_BUILD:-}" == 1 ]]; then
+  dist=${SOCIETYSIM_VIEWER_DIST:-$dist}
+else
+  (cd "$root/viewer" && npm ci --silent && npm run build --silent)
+fi
+if [[ -n "${VITE_NEON_DATA_API_URL:-}" ]]; then
+  echo "data source: Neon (VITE_NEON_DATA_API_URL is set)"
+else
+  echo "data source: static data/report/index.json"
+fi
 
-stage=$(mktemp -d)
-trap 'rm -rf "$stage"' EXIT
-cp -R "$root/viewer/dist/." "$stage/"
-mkdir "$stage/data"
+if [[ -n "$out" ]]; then
+  stage=$out
+  mkdir -p "$stage"
+else
+  stage=$(mktemp -d)
+  trap 'rm -rf "$stage"' EXIT
+fi
+cp -R "$dist/." "$stage/"
+mkdir -p "$stage/data"
 # .cache holds raw judge responses; the PNGs are for report.md, not the viewer.
 rsync -a --exclude '.cache' --exclude '*.png' "$batch/" "$stage/data/"
 cat >"$stage/README.md" <<'EOF'
@@ -60,6 +108,18 @@ pinned: false
 
 Replays and a leaderboard for LLM agents playing Werewolf. Source: https://github.com/polter-dev/societysim
 EOF
+
+if [[ -n "$out" ]]; then
+  echo "staged site: $out"
+  echo "serve it:    python -m http.server -d $out 8000"
+  echo "index:       http://localhost:8000/"
+  echo "leaderboard: http://localhost:8000/?page=leaderboard"
+  if [[ -f "$batch/highlights.json" ]]; then
+    link=$(python3 -c 'import json,sys; h=json.load(open(sys.argv[1])); print(h[0].get("link","") if h else "")' "$batch/highlights.json")
+    [[ -z "$link" ]] || echo "top moment:  http://localhost:8000/$link"
+  fi
+  exit 0
+fi
 
 echo "space: $space"
 (cd "$stage" && find . -type f | sort)

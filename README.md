@@ -95,7 +95,7 @@ What these do:
 - The main experiment is `configs/mixed_v1.yaml` (100 mixed games).
 - After a batch, `uv run python -m societysim.analysis.postbatch runs/<batch>` runs label (without Jev), report and highlights in one go, and prints the numbers and upload commands to use next.
 - The viewer loads `data/report/index.json` by default; add `?index=<url>` to point it at another batch.
-- `scripts/deploy-space.sh runs/<batch> <owner/space>` builds the viewer with a batch and uploads it to a Hugging Face Space.
+- `scripts/deploy-space.sh runs/<batch> <owner/space>` builds the viewer with a batch and uploads it to a Hugging Face Space. To preview the same site locally with no upload and no token, run `scripts/deploy-space.sh --out site runs/<batch>` and then `python -m http.server -d site 8000` (`--force` writes into a non-empty folder).
 
 ## Models
 

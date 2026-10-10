@@ -54,8 +54,8 @@ def test_no_logs_is_an_error(tmp_path):
 
 
 def test_parse_spec():
-    assert fetch.parse_spec("hf:polter-dev/societysim-games") == (
-        "polter-dev/societysim-games",
+    assert fetch.parse_spec("hf:societysim/societysim-games") == (
+        "societysim/societysim-games",
         "societysim-games",
     )
     assert fetch.parse_spec("hf:a/b:run1") == ("a/b", "run1")

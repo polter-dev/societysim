@@ -3,7 +3,7 @@ name: Deploy
 # Stages the viewer plus one batch of games and publishes it. Runs by hand, and on every
 # push to main that touches viewer/ (default targets, default data source).
 #   gh workflow run deploy.yml -f targets=cloudflare
-#   gh workflow run deploy.yml -f source=hf:polter-dev/societysim-games:my-batch
+#   gh workflow run deploy.yml -f source=hf:societysim/societysim-games:my-batch
 # Data source, first match wins: the batch input (a committed dir), the source input, the
 # DEPLOY_SOURCE repo variable, then the sample game. A source of hf:<owner/name>[:<batch_id>]
 # downloads that HF Dataset (written by `societysim publish`), labels it with --no-jev if it

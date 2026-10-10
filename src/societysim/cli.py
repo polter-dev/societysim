@@ -232,5 +232,20 @@ def sync_neon(batch_dir: Path) -> None:
     typer.echo(f"synced {n['games']} games, {n['events']} events, {n['labels']} labels")
 
 
+@app.command()
+def report(
+    batch: Annotated[Path, typer.Argument(help="Batch directory, e.g. runs/<batch>.")],
+) -> None:
+    """Write report.md, metrics.json, charts, leaderboard.json and index.json to <batch>/report."""
+    from societysim.analysis.report import write_report
+
+    try:
+        out = write_report(batch)
+    except ValueError as e:
+        typer.echo(str(e))
+        raise typer.Exit(1) from e
+    typer.echo(f"wrote {out}")
+
+
 if __name__ == "__main__":
     app()

@@ -14,6 +14,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import FastAPI, Request
@@ -181,6 +182,10 @@ class PlayConfig:
             out.append(DEV_ORIGIN)
         return out
 
+    def hostnames(self) -> set[str]:
+        """Hosts a Turnstile token may be solved on: those of origins()."""
+        return {urlsplit(o).hostname or "" for o in self.origins()}
+
 
 HF_PROXIES = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"  # documented value for HF Spaces
 
@@ -220,16 +225,37 @@ def redact(text: str) -> str:
 
 
 def _ip(text: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """An address, also from the "1.2.3.4:5678" and "[2001:db8::1]:5678" forms some
+    proxies write; None for anything else."""
+    text = text.strip()
+    if text.startswith("["):
+        text = text[1:].partition("]")[0]
+    elif text.count(":") == 1:
+        text = text.partition(":")[0]
     try:
-        return ipaddress.ip_address(text.strip())
+        return ipaddress.ip_address(text)
     except ValueError:
         return None
+
+
+def ip_hint(ip: str) -> str:
+    """Enough of an address to check the server sees the visitor, not the proxy, without
+    exposing it: "104.53.x.x" or "2001:db8:x::"."""
+    addr = _ip(ip)
+    if addr is None:
+        return "unknown"
+    if addr.version == 4:
+        return ".".join(str(addr).split(".")[:2]) + ".x.x"
+    return ":".join(addr.exploded.split(":")[:2]) + ":x::"
 
 
 def client_ip(request: Request, trusted: tuple[Network, ...]) -> str:
     """The visitor's address. Forwarding headers count only when the socket peer is a trusted
     proxy; X-Forwarded-For is read right to left, skipping trusted hops, so a client can't
-    spoof it by sending its own. CF-Connecting-IP is used when there is no X-Forwarded-For."""
+    spoof it by sending its own. CF-Connecting-IP is used when there is no X-Forwarded-For.
+
+    On HF Spaces the peer is HF's proxy (10.x) and X-Forwarded-For ends with the visitor's
+    address, after anything the visitor sent; /api/limits shows a masked copy (ip_hint)."""
     peer = request.client.host if request.client else ""
 
     def is_trusted(addr) -> bool:
@@ -250,15 +276,23 @@ def client_ip(request: Request, trusted: tuple[Network, ...]) -> str:
     return str(cf) if cf else peer
 
 
-async def verify_turnstile(token: str, ip: str, secret: str) -> bool:
-    """Cloudflare's siteverify. Any failure (network, timeout, bad reply) is a no."""
+async def verify_turnstile(token: str, ip: str, secret: str, hostnames: set[str]) -> bool:
+    """Cloudflare's siteverify. Yes only if the token was solved on one of `hostnames` (our
+    own site: HF's proxy answers CORS for any origin, so this is the check that holds). Any
+    failure (network, timeout, bad reply) is a no."""
     if not token:
         return False
     try:
         async with httpx.AsyncClient(timeout=5, transport=TURNSTILE_TRANSPORT) as http:
             data = {"secret": secret, "response": token, "remoteip": ip}
             r = await http.post(SITEVERIFY, data=data)
-        return r.status_code == 200 and r.json().get("success") is True
+        reply = r.json() if r.status_code == 200 else {}
+        if reply.get("success") is not True:
+            return False
+        if reply.get("hostname") not in hostnames:
+            log.warning("Turnstile token from a host that isn't ours")  # not the host itself
+            return False
+        return True
     except Exception as exc:  # the message could hold the request, secret included
         log.warning("Turnstile check failed (%s)", type(exc).__name__)
         return False
@@ -345,6 +379,23 @@ class SecurityHeaders:
         await self.app(scope, receive, add_headers)
 
 
+class OriginCheck:
+    """A POST must carry an allowed Origin, else 403 `forbidden`. HF's proxy answers CORS
+    preflights itself, allowing any origin, so the CORS allowlist alone stops nothing there.
+    Browsers always send Origin on a POST; a script without one is refused too."""
+
+    def __init__(self, app: Any, origins: list[str]):
+        self.app, self.origins = app, {o.encode() for o in origins}
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        if scope["type"] == "http" and scope["method"] == "POST":
+            origin = dict(scope.get("headers") or []).get(b"origin")
+            if origin not in self.origins:
+                forbidden = error_response(403, "forbidden", "request from a site that isn't ours")
+                return await forbidden(scope, receive, send)
+        await self.app(scope, receive, send)
+
+
 class BodyLimit:
     """Rejects a body over `limit` bytes with 413 while streaming: at once on Content-Length,
     and for a chunked body as soon as the bytes read pass the limit. The app then gets the
@@ -386,13 +437,15 @@ class BodyLimit:
 
 def install(app: FastAPI, play: PlayConfig) -> None:
     """Error handlers and middleware, outermost first: CatchAll, SecurityHeaders, CORS,
-    BodyLimit, RateLimit. CORS sits outside the limits so a browser can read a 429 or 413."""
+    OriginCheck, BodyLimit, RateLimit. CORS sits outside the limits so a browser can read a
+    429 or 413."""
     from societysim.server.ratelimit import RateLimit
 
     app.add_exception_handler(StarletteHTTPException, _http_error)
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.add_middleware(RateLimit, play=play)  # add_middleware wraps: last added is outermost
     app.add_middleware(BodyLimit)
+    app.add_middleware(OriginCheck, origins=play.origins())
     app.add_middleware(
         CORSMiddleware,
         allow_origins=play.origins(),

@@ -3,6 +3,7 @@ a fake Neon, a mocked Turnstile. No paid calls; the one real-Neon test needs
 NEON_DATABASE_URL and skips without it."""
 
 import asyncio
+import ipaddress
 import json
 import logging
 import os
@@ -37,6 +38,8 @@ from societysim.setup import GameSetup  # noqa: E402
 
 TIMEOUT = 30
 SEED = 1  # p0 survives Night 1 and gets a turn
+SITE = "https://society-sim.us"
+DEV = "http://localhost:5173"
 ROOT = Path(__file__).resolve().parents[2]
 SECRETS = {
     "OPENAI_API_KEY": "sk-LEAKCHECK-openai-7f3a",
@@ -82,7 +85,10 @@ async def make_client(tmp_path, monkeypatch):
 
             hooks = {"response": [keep]}
         client = httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app), base_url="http://test", event_hooks=hooks
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+            event_hooks=hooks,
+            headers={"Origin": SITE},  # a POST without an allowed Origin is refused
         )
         client.app, client.manager = app, app.state.manager
         clients.append(client)
@@ -102,7 +108,9 @@ def turnstile(monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         form = dict(x.split("=", 1) for x in request.content.decode().split("&"))
         forms.append(form)
-        return httpx.Response(200, json={"success": form.get("response") == "good"})
+        ok = form.get("response") in ("good", "elsewhere")
+        host = "evil.example" if form.get("response") == "elsewhere" else "society-sim.us"
+        return httpx.Response(200, json={"success": ok, "hostname": host})
 
     monkeypatch.setattr(security, "TURNSTILE_TRANSPORT", httpx.MockTransport(handler))
     return forms
@@ -263,6 +271,17 @@ async def test_turnstile_pass_and_fail(make_client, turnstile):
     assert sent["remoteip"] == "127.0.0.1"
 
 
+async def test_turnstile_token_from_another_site_is_refused(make_client, turnstile):
+    """HF's proxy allows any CORS origin, so siteverify's hostname is what ties a token to
+    our site: a token solved elsewhere (with our public site key) is a 403."""
+    c = make_client(play=play(turnstile_secret="ts-secret"))
+    r = await c.post("/api/games", json={"turnstile_token": "elsewhere", "watch_only": True})
+    err(r, 403, "bot_check_failed")
+    assert turnstile[-1]["response"] == "elsewhere"
+    hosts = play(dev_mode=False).hostnames()
+    assert hosts == {"society-sim.us", "www.society-sim.us", "societysim.pages.dev"}
+
+
 async def test_turnstile_outage_fails_closed(make_client, monkeypatch):
     def down(request):
         raise httpx.ConnectError("unreachable")
@@ -297,6 +316,52 @@ def test_hf_space_needs_trusted_proxies(tmp_path):
     create_app(Settings(**base, play=trusted))
     hops = {"X-Forwarded-For": "198.51.100.20"}  # what HF's proxy sends
     assert security.client_ip(scope("10.16.4.2", hops), trusted.trusted_proxies) == "198.51.100.20"
+
+
+# HF Spaces: the peer is HF's proxy (10.16.x.x in the Space logs), behind an AWS load balancer
+# that appends the address it saw to X-Forwarded-For, after whatever the client sent.
+HF_HEADERS = {
+    "Host": "polter-dev-societysim-play.hf.space",
+    "X-Forwarded-For": "198.51.100.20",
+    "X-Forwarded-Proto": "https",
+    "X-Forwarded-Port": "443",
+    "X-Amzn-Trace-Id": "Root=1-00000000-000000000000000000000000",
+}
+
+
+def test_client_ip_behind_hf_proxy():
+    hf = PlayConfig.from_env({"PLAY_TRUSTED_PROXIES": security.HF_PROXIES}).trusted_proxies
+    ip = security.client_ip
+    assert ip(scope("10.16.4.2", HF_HEADERS), hf) == "198.51.100.20"
+    # A visitor's own X-Forwarded-For comes first in the chain, so it is never used.
+    spoofed = HF_HEADERS | {"X-Forwarded-For": "6.6.6.6, 198.51.100.20"}
+    assert ip(scope("10.16.4.2", spoofed), hf) == "198.51.100.20"
+    # More private hops inside HF are skipped; a port on a hop is tolerated.
+    chained = HF_HEADERS | {"X-Forwarded-For": "6.6.6.6, 198.51.100.20:51234, 10.16.0.9"}
+    assert ip(scope("10.16.4.2", chained), hf) == "198.51.100.20"
+    v6 = HF_HEADERS | {"X-Forwarded-For": "[2001:db8:1:2::5]:443"}
+    assert ip(scope("10.16.4.2", v6), hf) == "2001:db8:1:2::5"
+    # The same spoofed header straight from a public peer: the peer is the client.
+    assert ip(scope("203.0.113.1", spoofed), hf) == "203.0.113.1"
+
+
+def test_ip_hint_masks_the_address():
+    assert security.ip_hint("104.53.17.200") == "104.53.x.x"
+    assert security.ip_hint("2001:db8:1:2::5") == "2001:0db8:x::"
+    assert security.ip_hint("unknown") == "unknown"
+
+
+async def test_limits_show_the_derived_ip_masked(make_client):
+    """The live check for #332: /api/limits echoes the IP the limits key on, masked."""
+    local = play(trusted_proxies=(ipaddress.ip_network("127.0.0.0/8"),))  # stands in for HF
+    c = make_client(play=local)
+    hops = HF_HEADERS | {"X-Forwarded-For": "6.6.6.6, 104.53.1.2"}
+    r = await c.get("/api/limits", headers=hops)
+    assert r.json()["client_ip_hint"] == "104.53.x.x"
+    assert "104.53.1.2" not in r.text
+    untrusted = make_client(play=play())
+    r = await untrusted.get("/api/limits", headers={"X-Forwarded-For": "104.53.1.2"})
+    assert r.json()["client_ip_hint"] == "127.0.x.x"  # the peer, header ignored
 
 
 # --- models -------------------------------------------------------------------------------------
@@ -556,6 +621,25 @@ async def test_cors_allows_only_listed_origins(make_client):
     dev = make_client(play=play())
     r = await dev.get("/api/limits", headers={"Origin": "http://localhost:5173"})
     assert r.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
+async def test_post_needs_an_allowed_origin(make_client):
+    """HF's proxy answers CORS preflights itself for any origin, so the server checks Origin
+    on every POST: a missing or foreign one is 403 before any work is done."""
+    prod = play(dev_mode=False, turnstile_secret="x", space_host="me.hf.space")
+    c = make_client(play=prod, neon=True)
+    for origin in ("https://evil.example", "null", DEV, None):
+        if origin is None:
+            del c.headers["Origin"]
+        headers = {"Origin": origin} if origin else {}
+        for path in ("/api/games", "/api/games/g1/action"):
+            r = await c.post(path, json={"watch_only": True}, headers=headers)
+            err(r, 403, "forbidden")
+    assert not c.manager.games
+    assert (await c.get("/api/limits", headers={"Origin": "https://evil.example"})).is_success
+    dev = make_client(play=play())
+    r = await dev.post("/api/games", json={"watch_only": True}, headers={"Origin": DEV})
+    assert r.status_code == 200, r.text
 
 
 async def test_security_headers_and_body_limit(make_client):

@@ -216,11 +216,16 @@
         "remaining_today": {
           "title": "Remaining Today",
           "type": "integer"
+        },
+        "client_ip_hint": {
+          "title": "Client Ip Hint",
+          "type": "string"
         }
       },
       "required": [
         "play_enabled",
-        "remaining_today"
+        "remaining_today",
+        "client_ip_hint"
       ],
       "title": "Limits",
       "type": "object"

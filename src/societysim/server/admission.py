@@ -109,7 +109,7 @@ async def check_start(request: Request, setup: GameSetup) -> Admission:
 
     if play.turnstile_secret:
         token = getattr(request.state, "turnstile_token", "")
-        if not await security.verify_turnstile(token, ip, play.turnstile_secret):
+        if not await security.verify_turnstile(token, ip, play.turnstile_secret, play.hostnames()):
             raise PlayError(403, "bot_check_failed", "Bot check failed; reload and try again")
     elif not play.dev_mode:  # check_startup prevents this; fail closed anyway
         raise PlayError(403, "bot_check_failed", "Bot check unavailable")

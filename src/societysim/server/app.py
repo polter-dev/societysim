@@ -87,6 +87,7 @@ class Accepted(_Strict):
 class Limits(_Strict):
     play_enabled: bool
     remaining_today: int
+    client_ip_hint: str  # the caller's IP as the server sees it, masked: "104.53.x.x"
 
 
 class Health(_Strict):
@@ -143,10 +144,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return Health()
 
     @app.get("/api/limits")
-    async def limits() -> Limits:
+    async def limits(request: Request) -> Limits:
         await watch.kill_switch(settings.play_enabled)  # the uptime check polls this
         return Limits(
-            play_enabled=settings.play_enabled, remaining_today=manager.ledger.remaining_today()
+            play_enabled=settings.play_enabled,
+            remaining_today=manager.ledger.remaining_today(),
+            client_ip_hint=security.ip_hint(security.client_ip(request, play.trusted_proxies)),
         )
 
     @app.post("/api/games")

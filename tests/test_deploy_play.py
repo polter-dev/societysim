@@ -88,3 +88,81 @@ def test_allowed_models_are_priced():
                 model=spec.litellm_model, prompt_tokens=1000, completion_tokens=1000
             )
             assert in_cost > 0 and out_cost > 0, name
+
+
+def _git(repo, *args):
+    subprocess.run(
+        ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True
+    )
+
+
+def _temp_repo(tmp_path):
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    shutil.copy(SCRIPT, repo / "scripts/deploy-play-space.sh")
+    for rel, text in {
+        "server/Dockerfile": "FROM x\n",
+        "server/README.md": "card\n",
+        "pyproject.toml": "[project]\n",
+        "uv.lock": "",
+        "LICENSE": "mit\n",
+        ".dockerignore": ".env\n",
+        "configs/models.yaml": "models: []\n",
+        "configs/voices.yaml": "{}\n",
+        "configs/mixed_v1.yaml": "not in the image\n",
+        "schema/a.json": "{}\n",
+        "src/societysim/__init__.py": "",
+    }.items():
+        f = repo / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(text)
+    _git(repo, "init", "-q")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "x")
+    return repo
+
+
+def _stage(repo, out):
+    return subprocess.run(
+        ["bash", str(repo / "scripts/deploy-play-space.sh"), "--stage-only", str(out)],
+        capture_output=True,
+        text=True,
+        cwd=repo,
+    )
+
+
+def test_stage_has_tracked_allowlist_only_never_untracked_env(tmp_path):
+    repo = _temp_repo(tmp_path)
+    dummy = "DUMMY-SECRET-VALUE-9999"
+    (repo / ".env").write_text(f"OPENAI_API_KEY={dummy}\n")
+    (repo / "runs").mkdir()
+    (repo / "runs/g.jsonl").write_text(dummy)
+    (repo / "src/societysim/.env.local").write_text(dummy)
+    (repo / "src/societysim/stray.py").write_text(dummy)  # untracked source file
+    out = tmp_path / "stage"
+    r = _stage(repo, out)
+    assert r.returncode == 0, r.stderr
+    staged = {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()}
+    assert staged == {
+        "Dockerfile",
+        "README.md",
+        "pyproject.toml",
+        "uv.lock",
+        "LICENSE",
+        ".dockerignore",
+        "configs/models.yaml",
+        "configs/voices.yaml",
+        "schema/a.json",
+        "src/societysim/__init__.py",
+    }
+    assert dummy not in r.stdout + r.stderr
+    assert not any(dummy in p.read_text() for p in out.rglob("*") if p.is_file())
+
+
+def test_stage_hard_fails_on_tracked_secret_looking_file(tmp_path):
+    repo = _temp_repo(tmp_path)
+    (repo / "schema/leak.pem").write_text("x")
+    _git(repo, "add", "-A")
+    r = _stage(repo, tmp_path / "s")
+    assert r.returncode == 1
+    assert "leak.pem" in r.stderr

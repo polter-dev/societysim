@@ -33,11 +33,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 dry_run=false
+stage_only=""
 space="polter-dev/societysim-play"
-for a in "$@"; do
+while [ $# -gt 0 ]; do
+  a=$1; shift
   case "$a" in
     --dry-run) dry_run=true ;;
-    -*) echo "usage: $0 [--dry-run] [space_id]" >&2; exit 2 ;;
+    --stage-only) stage_only=${1:?--stage-only needs a directory}; shift ;;
+    -*) echo "usage: $0 [--dry-run] [--stage-only dir] [space_id]" >&2; exit 2 ;;
     *) space="$a" ;;
   esac
 done
@@ -56,8 +59,35 @@ SECRETS=(
 PASSTHROUGH=(PLAY_RATE_PER_MIN PLAY_MAX_ACTIVE_PER_IP PLAY_MAX_GAMES_PER_IP_DAY PLAY_MAX_CONCURRENT
   PLAY_MAX_GAME_MINUTES PLAY_DAILY_BUDGET_USD PLAY_MAX_TOKENS PLAY_ENABLED)
 
-# The Space repo: Dockerfile and README at its root, then what the image copies.
-FILES=(Dockerfile README.md .dockerignore LICENSE pyproject.toml uv.lock src/ configs/ schema/)
+# The Space repo is built from TRACKED files only (git ls-files), never a directory copy, so an
+# untracked .env, runs/ or .cache/ can't reach a public Space. Dockerfile and README sit at the
+# Space root; the rest keeps its path.
+TRACKED=(src/societysim configs/models.yaml configs/voices.yaml schema pyproject.toml uv.lock
+  LICENSE .dockerignore)
+FORBIDDEN='(^|/)(\.env[^/]*|[^/]*\.pem|[^/]*\.key|runs|\.cache)(/|$)'
+
+stage=$(mktemp -d)
+trap 'rm -rf "$stage"' EXIT
+cp server/Dockerfile "$stage/Dockerfile"
+cp server/README.md "$stage/README.md"
+while IFS= read -r -d '' f; do
+  [ -f "$f" ] || continue
+  mkdir -p "$stage/$(dirname "$f")"
+  cp "$f" "$stage/$f"
+done < <(git ls-files -z -- "${TRACKED[@]}")
+bad=$(cd "$stage" && find . -type f | sed 's|^\./||' | grep -E "$FORBIDDEN" || true)
+if [ -n "$bad" ]; then
+  echo "error: staged files that look like secrets or local data:" >&2
+  echo "$bad" >&2
+  exit 1
+fi
+FILES=($(cd "$stage" && find . -type f | sed 's|^\./||' | sort))
+if [ -n "$stage_only" ]; then
+  mkdir -p "$stage_only"
+  cp -R "$stage"/. "$stage_only"/
+  printf '%s\n' "${FILES[@]}"
+  exit 0
+fi
 
 secret_lines=()
 missing_required=()
@@ -100,14 +130,6 @@ if [ "${#missing_required[@]}" -gt 0 ]; then
   exit 1
 fi
 test -n "${HF_TOKEN:-}" || { echo "error: HF_TOKEN (write access to the Space) is not set" >&2; exit 1; }
-
-stage=$(mktemp -d)
-trap 'rm -rf "$stage"' EXIT
-cp server/Dockerfile "$stage/Dockerfile"
-cp server/README.md "$stage/README.md"
-cp .dockerignore LICENSE pyproject.toml uv.lock "$stage/"
-cp -R src configs schema "$stage/"
-find "$stage" -name __pycache__ -type d -prune -exec rm -rf {} +
 
 # Names go in as arguments; the Python reads each value from the environment.
 secret_args=()

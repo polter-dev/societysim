@@ -5,19 +5,21 @@ FROM python:3.12-slim
 
 COPY --from=ghcr.io/astral-sh/uv:0.12 /uv /usr/local/bin/uv
 
-# HF Spaces runs the container as uid 1000.
+# HF Spaces runs the container as uid 1000. Copy as root, chown, then drop privileges, so
+# ownership doesn't depend on BuildKit.
 RUN useradd -m -u 1000 user
+WORKDIR /app
+COPY pyproject.toml uv.lock README.md LICENSE ./
+COPY src ./src
+COPY configs ./configs
+COPY schema ./schema
+RUN chown -R user:user /app
+
 USER user
 ENV HOME=/home/user \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     PATH=/app/.venv/bin:/home/user/.local/bin:$PATH
-WORKDIR /app
-
-COPY --chown=user pyproject.toml uv.lock README.md LICENSE ./
-COPY --chown=user src ./src
-COPY --chown=user configs ./configs
-COPY --chown=user schema ./schema
 RUN uv sync --frozen --extra server --no-dev
 
 EXPOSE 7860

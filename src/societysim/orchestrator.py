@@ -43,7 +43,13 @@ from societysim.roles import Phase, Role, Winner
 SILENT = "(silent)"
 DEFAULT_COLOR = "#888888"
 # Where each action keeps its choice; statements have none.
-_CHOICE = {"vote": "vote", "wolf_chat": "proposed_target", "seer": "target", "doctor": "target"}
+_CHOICE = {
+    "vote": "vote",
+    "wolf_chat": "proposed_target",
+    "lone_wolf": "target",
+    "seer": "target",
+    "doctor": "target",
+}
 
 
 def _add(total: Usage | None, usage: Usage) -> Usage:
@@ -144,7 +150,8 @@ class Game:
         # Seer and Doctor failures are logged after the parallel calls, in a fixed order.
         if seer_reply:
             target = self._settle(seer, seer_reply)
-            seer_check(st, self, seer, target, **seer_reply.fields())
+            fallback = seer_reply.response is None
+            seer_check(st, self, seer, target, fallback=fallback, **seer_reply.fields())
 
         counts = Counter(proposals.values())
         top = max(counts.values())
@@ -159,7 +166,8 @@ class Game:
 
         save, extra = None, {}
         if doctor_reply:
-            save, extra = self._settle(doctor, doctor_reply), doctor_reply.fields()
+            save = self._settle(doctor, doctor_reply)
+            extra = {"fallback": doctor_reply.response is None, **doctor_reply.fields()}
         tally_ = {s: counts[s] for s in st.seats if counts[s]}
         resolve_night(
             st, self, kill, method=method, tally=tally_, save=save, doctor=doctor, **extra
@@ -197,19 +205,22 @@ class Game:
     # --- phases ----------------------------------------------------------------------------
 
     async def _wolf_channel(self) -> dict[str, str]:
-        """Rounds of message + proposal, sequential within a round. Returns final proposals."""
+        """Rounds of message + proposal, sequential within a round. Returns final proposals.
+        A lone wolf gets one `lone_wolf` call (a target, no message) and logs only
+        wolf_proposal."""
         st = self.state
         wolves = [s for s in st.seats if s in st.alive and st.roles[s] is Role.WOLF]
         lone = len(wolves) == 1
         rounds = 1 if lone else st.config.rules.wolf_chat_rounds
+        action: Action = "lone_wolf" if lone else "wolf_chat"
         proposals: dict[str, str] = {}
         for rnd in range(1, rounds + 1):
             for wolf in wolves:
-                reply = await self._ask(wolf, "wolf_chat", legal_targets(st, wolf, Phase.NIGHT))
+                reply = await self._ask(wolf, action, legal_targets(st, wolf, Phase.NIGHT))
                 target = self._settle(wolf, reply)
                 proposals[wolf] = target
                 fields = {"round": rnd, "fallback": reply.fallback, **reply.fields()}
-                if not lone:  # a lone wolf only proposes; its message is dropped
+                if not lone:  # a lone wolf has no message; its proposal carries the reply
                     text = reply.response.action.message if reply.response else SILENT
                     self.emit(EventType.WOLF_CHAT, V.WOLVES, actor=wolf, public_text=text, **fields)
                     fields = {"round": rnd, "fallback": reply.fallback}
@@ -341,7 +352,7 @@ class Game:
         if reply.response is not None:
             return getattr(reply.response.action, _CHOICE[action]) if action in _CHOICE else None
         choice = None
-        if action in ("wolf_chat", "seer", "doctor") and reply.turn.targets:
+        if action in ("wolf_chat", "lone_wolf", "seer", "doctor") and reply.turn.targets:
             choice = self.state.rng.choice(reply.turn.targets)
         self.emit(
             EventType.FALLBACK_ACTION,

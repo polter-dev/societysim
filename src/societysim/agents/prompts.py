@@ -23,12 +23,13 @@ from societysim.agents.schemas import (
 from societysim.config import ModelSpec, RoleCounts, RuleFlags
 from societysim.roles import Role
 
-Action = Literal["statement", "vote", "wolf_chat", "seer", "doctor"]
+Action = Literal["statement", "vote", "wolf_chat", "lone_wolf", "seer", "doctor"]
 
 RESPONSE_MODELS: dict[Action, type[BaseModel]] = {
     "statement": StatementResponse,
     "vote": VoteResponse,
     "wolf_chat": WolfChatResponse,
+    "lone_wolf": TargetResponse,
     "seer": TargetResponse,
     "doctor": TargetResponse,
 }
@@ -150,6 +151,11 @@ Players you can vote for: {targets}.""",
 "action" shape: {{"message": string, "proposed_target": id}}
 - "message": what you say to your fellow wolves.
 - "proposed_target": the player you want to kill tonight.
+Players you can target: {targets}.""",
+    "lone_wolf": """Night: you are the only wolf alive, so there is no wolf channel. Choose one \
+player to kill tonight.
+
+"action" shape: {{"target": id}}
 Players you can target: {targets}.""",
     "seer": """Night: choose one player to check. You will learn whether they are a wolf.
 

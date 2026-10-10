@@ -108,6 +108,23 @@ def test_seer_checks_target_before_target_dies(game):
     assert seer_check(state, log, seer, seat(state, Role.WOLF)) == "wolf"
 
 
+@pytest.mark.parametrize("fallback", [False, True])
+def test_seer_and_doctor_fallback_flag_sets_meta(game, fallback):
+    state, log = game
+    seer, doctor = seat(state, Role.SEER), seat(state, Role.DOCTOR)
+    victim = seat(state, Role.VILLAGER)
+    seer_check(state, log, seer, victim, fallback=fallback)
+    resolve_night(state, log, victim, save=victim, doctor=doctor, fallback=fallback)
+    flags = {e.type: e.meta.fallback for e in log.events[1:]}
+    expected = True if fallback else None
+    assert flags == {
+        EventType.SEER_CHECK: expected,
+        EventType.NIGHT_KILL: None,
+        EventType.DOCTOR_SAVE: expected,
+        EventType.DEATH_REVEAL: None,
+    }
+
+
 def test_dead_actors_produce_no_special_event(game):
     state, log = game
     seer = seat(state, Role.SEER)

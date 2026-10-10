@@ -10,7 +10,7 @@ from societysim.agents.prompts import (
     schema_prompt,
     system_prompt,
 )
-from societysim.agents.schemas import StatementResponse, VoteResponse
+from societysim.agents.schemas import StatementResponse, TargetResponse, VoteResponse
 from societysim.config import GameConfig, ModelSpec, RoleCounts, RuleFlags
 from societysim.roles import Role
 
@@ -68,6 +68,12 @@ Wolf channel: only the wolves see this message.
 "action" shape: {"message": string, "proposed_target": id}
 - "message": what you say to your fellow wolves.
 - "proposed_target": the player you want to kill tonight.
+Players you can target: Ben (p0), Cleo (p1), Dev (p5).""",
+    "lone_wolf": """<OBS>
+
+Night: you are the only wolf alive, so there is no wolf channel. Choose one player to kill tonight.
+
+"action" shape: {"target": id}
 Players you can target: Ben (p0), Cleo (p1), Dev (p5).""",
     "seer": """<OBS>
 
@@ -166,6 +172,7 @@ def test_vote_without_abstain_and_custom_word_cap():
 
 def test_response_models_cover_every_phase():
     assert set(RESPONSE_MODELS) == set(PHASES)
+    assert RESPONSE_MODELS["lone_wolf"] is TargetResponse
 
 
 def test_schema_prompt_embeds_the_response_schema():

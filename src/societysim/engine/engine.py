@@ -77,10 +77,12 @@ def seer_check(
     private_reasoning: str | None = None,
     suspicion: list[Suspicion] | None = None,
     usage: Usage | None = None,
+    fallback: bool = False,
 ) -> SeerResult | None:
     """Record the Seer's check. Call before `resolve_night`, so a target killed tonight still
     gets a result. A dead Seer gets no check and no event. A living actor's illegal
-    target raises ValueError before changing state or logging an event."""
+    target raises ValueError before changing state or logging an event. `fallback` marks a
+    target the orchestrator picked after the Seer's replies failed (`meta.fallback`)."""
     if seer not in state.alive:
         return None
     if target not in legal_targets(state, seer, Phase.NIGHT):
@@ -98,6 +100,7 @@ def seer_check(
         suspicion=suspicion,
         result=result,
         usage=usage,
+        fallback=fallback or None,
     )
     return result
 
@@ -114,6 +117,7 @@ def resolve_night(
     private_reasoning: str | None = None,
     suspicion: list[Suspicion] | None = None,
     usage: Usage | None = None,
+    fallback: bool = False,
 ) -> list[str]:
     """Apply the wolves' kill and the Doctor's save. Returns the seats that died tonight.
 
@@ -122,7 +126,8 @@ def resolve_night(
     kill target prevents the death. The save also sets the Doctor's no-repeat marker.
     `save=None` means the orchestrator supplied no save. A dead Doctor's save is
     ignored; an illegal save from a living actor raises ValueError before any event
-    or state change.
+    or state change. `fallback` marks a save picked after the Doctor's replies failed; it
+    sets `meta.fallback` on doctor_save.
     """
     doctor_saves = doctor is not None and doctor in state.alive and save is not None
     if doctor_saves and save not in legal_targets(state, doctor, Phase.NIGHT):
@@ -153,6 +158,7 @@ def resolve_night(
             suspicion=suspicion,
             saved=saved,
             usage=usage,
+            fallback=fallback or None,
         )
 
     deaths = [] if saved else [kill]

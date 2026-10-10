@@ -37,6 +37,7 @@ def valid(turn: Turn, rng: random.Random) -> dict:
         },
         "vote": {"vote": pick},
         "wolf_chat": {"message": "go", "proposed_target": pick},
+        "lone_wolf": {"target": pick},
         "seer": {"target": pick},
         "doctor": {"target": pick},
     }[turn.action]
@@ -113,7 +114,22 @@ async def test_night_retry_then_fallback_picks_random_legal_target():
     assert fb.actor == seer and fb.meta.action == "seer" and fb.meta.usage.attempts == 2
     assert check.target == fb.target and check.target in game.agents[seer].turns[0].targets
     assert check.meta.usage is None and check.suspicion is None
+    assert check.meta.fallback is True
     assert game.events.index(fb) < game.events.index(check)
+
+
+async def test_doctor_fallback_marks_doctor_save():
+    game = new_game()
+    doctor = seats(game, Role.DOCTOR)[0]
+    game.agents[doctor].scripts["doctor"] = ["not json"] * 2
+
+    await game.night()
+
+    [fb] = of(game, EventType.FALLBACK_ACTION)
+    [save] = of(game, EventType.DOCTOR_SAVE)
+    assert fb.actor == doctor and fb.meta.action == "doctor" and save.target == fb.target
+    assert save.meta.fallback is True and save.meta.usage is None and save.suspicion is None
+    assert of(game, EventType.SEER_CHECK)[0].meta.fallback is None
 
 
 async def test_vote_and_statement_fallbacks():
@@ -163,18 +179,46 @@ async def test_wolf_disagreement_is_broken_by_seeded_rng():
     assert of(again, EventType.NIGHT_KILL)[0].target == kill.target
 
 
-async def test_lone_wolf_skips_chat_and_only_proposes():
+async def test_lone_wolf_gets_target_prompt_and_logs_only_proposal():
     game = new_game(GameConfig(seed=5, roles=RoleCounts(wolves=1)))
     [wolf] = seats(game, Role.WOLF)
 
     await game.night()
 
-    assert not of(game, EventType.WOLF_CHAT)
-    [proposal] = of(game, EventType.WOLF_PROPOSAL)
-    assert proposal.actor == wolf and proposal.meta.usage and proposal.suspicion
-    assert len(game.agents[wolf].turns) == 1
+    [turn] = game.agents[wolf].turns
+    assert turn.action == "lone_wolf" and '"action" shape: {"target": id}' in turn.prompt
+    assert "Wolf channel" not in turn.prompt and "message" not in turn.prompt
+    # LOG_SCHEMA night order for a lone wolf: no wolf_chat, the proposal carries the reply.
+    assert [e.type for e in game.events] == [
+        EventType.PHASE_START,
+        EventType.WOLF_PROPOSAL,
+        EventType.SEER_CHECK,
+        EventType.NIGHT_KILL,
+        EventType.DOCTOR_SAVE,
+        EventType.DEATH_REVEAL,
+    ]
+    proposal = game.events[1]
+    assert proposal.actor == wolf and proposal.visibility == "wolves"
+    assert proposal.meta.round == 1 and proposal.meta.usage and proposal.meta.fallback is None
+    assert proposal.suspicion and proposal.private_reasoning == "t"
     [kill] = of(game, EventType.NIGHT_KILL)
     assert kill.meta.method == "consensus" and kill.target == proposal.target
+    assert kill.meta.tally == {proposal.target: 1}
+
+
+async def test_lone_wolf_fallback():
+    game = new_game(GameConfig(seed=5, roles=RoleCounts(wolves=1)))
+    [wolf] = seats(game, Role.WOLF)
+    game.agents[wolf].scripts["lone_wolf"] = ["not json"] * 2
+
+    await game.night()
+
+    [fb] = of(game, EventType.FALLBACK_ACTION)
+    [proposal] = of(game, EventType.WOLF_PROPOSAL)
+    assert fb.actor == wolf and fb.meta.action == "lone_wolf" and fb.meta.usage.attempts == 2
+    assert proposal.target == fb.target and proposal.meta.fallback is True
+    assert proposal.meta.usage is None and proposal.suspicion is None
+    assert of(game, EventType.NIGHT_KILL)[0].target == fb.target
 
 
 async def test_statement_truncation_and_self_tags():
@@ -210,11 +254,12 @@ async def test_statement_truncation_and_self_tags():
 
 
 async def test_full_game_is_deterministic_and_complete():
-    async def play(seed):
-        return await run_game(GameConfig(seed=seed, models=["fake"]), FakeAgent, [], "g")
+    async def play(seed, wolves):
+        config = GameConfig(seed=seed, models=["fake"], roles=RoleCounts(wolves=wolves))
+        return await run_game(config, FakeAgent, [], "g")
 
-    for seed in range(6):
-        game = await play(seed)
+    for seed, wolves in [(s, w) for s in range(6) for w in (2, 1)]:
+        game = await play(seed, wolves)
         events = game.events
         assert events[0].type is EventType.GAME_START and events[0].meta.seats
         assert events[-1].type is EventType.GAME_END and game.winner == events[-1].meta.winner
@@ -222,7 +267,7 @@ async def test_full_game_is_deterministic_and_complete():
         llm = (EventType.STATEMENT, EventType.VOTE, EventType.WOLF_CHAT, EventType.SEER_CHECK)
         assert all(e.meta.usage for e in events if e.type in llm and not e.meta.fallback)
         assert events[1].day == 1 and events[1].phase == "night"
-        again = await play(seed)
+        again = await play(seed, wolves)
         assert [e.model_dump() for e in again.events] == [e.model_dump() for e in events]
 
 

@@ -161,12 +161,70 @@ def test_prune_cli_refuses_without_migration_even_with_apply(fake_neon):
     assert fake_neon.statements == [] and fake_neon.committed == [] and fake_neon.closed
 
 
-def test_migration_and_schema_add_inserted_at():
+def test_schema_never_alters_the_events_table():
+    root = Path(__file__).resolve().parents[2]
+    schema = (root / "neon/schema.sql").read_text(encoding="utf-8").lower()
+    assert "alter table events" not in schema  # existing tables change only via migrations
+    body = schema.split("create table if not exists events (", 1)[1].split("\n);", 1)[0]
+    assert "inserted_at    timestamptz not null default now()" in body
+
+
+def test_migrate_cli_dry_run_prints_sql_and_touches_no_database(monkeypatch):
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    monkeypatch.delenv("NEON_DATABASE_URL", raising=False)
+
+    async def boom():
+        raise AssertionError("dry run must not connect")
+
+    monkeypatch.setattr("societysim.logging.sinks.neon.connect_neon", boom)
+    res = CliRunner().invoke(app, ["sync-neon", "--migrate"])
+    assert res.exit_code == 0, res.output
+    assert "001_events_inserted_at.sql" in res.output
+    assert "alter table events add column if not exists inserted_at" in res.output
+    assert "dry run: nothing was run" in res.output
+
+
+def test_migrate_cli_apply_runs_migrations_in_a_transaction(fake_neon):
+    res = CliRunner().invoke(app, ["sync-neon", "--migrate", "--apply"])
+    assert res.exit_code == 0, res.output
+    assert [s for s, _ in fake_neon.committed] == [fake_neon.statements[0][0]]
+    assert "alter table events add column if not exists inserted_at" in fake_neon.committed[0][0]
+    assert fake_neon.closed
+
+
+def test_migrate_cli_rejects_other_modes(fake_neon):
+    res = CliRunner().invoke(app, ["sync-neon", "--migrate", "--prune"])
+    assert res.exit_code == 1 and fake_neon.statements == []
+
+
+async def test_sink_and_batch_start_never_run_migration_sql():
+    from societysim.logging.sinks.neon import NeonSink, list_migrations
+
+    conn = PgFake()
+    conn.many = []
+
+    async def executemany(sql, rows):
+        conn.many.append(sql)
+
+    conn.executemany = executemany
+
+    async def connect():
+        return conn
+
+    sink = NeonSink("b1", connect=connect)
+    await sink.start_game({"game_id": "g1", "started_at": None})
+    await sink.close()
+    sent = [s for s, _ in conn.statements]
+    assert sent  # it did write
+    migrations = [sql.strip() for _, sql in list_migrations()]
+    assert not [s for s in sent if "alter table" in s.lower() or s.strip() in migrations]
+
+
+def test_migration_adds_inserted_at():
     root = Path(__file__).resolve().parents[2]
     ddl = (
         "alter table events add column if not exists inserted_at timestamptz not null default now()"
     )
-    assert ddl in (root / "neon/schema.sql").read_text(encoding="utf-8").lower()
     migration = root / "neon/migrations/001_events_inserted_at.sql"
     assert ddl in migration.read_text(encoding="utf-8").lower()
 

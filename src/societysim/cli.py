@@ -539,8 +539,17 @@ def sync_neon(
             help="List partial, fixture and --batch test games. Deletes nothing without --apply.",
         ),
     ] = False,
+    migrate: Annotated[
+        bool,
+        typer.Option(
+            "--migrate",
+            help="Print neon/migrations/*.sql. Runs them only with --apply (needs Seth and "
+            "Marcus's OK on the live database).",
+        ),
+    ] = False,
     apply: Annotated[
-        bool, typer.Option("--apply", help="With --prune: actually delete the listed games.")
+        bool,
+        typer.Option("--apply", help="With --prune: delete the listed games. With --migrate: run."),
     ] = False,
     older_than_hours: Annotated[
         float, typer.Option("--older-than-hours", help="With --prune: partial-game age cutoff.")
@@ -550,24 +559,50 @@ def sync_neon(
         typer.Option("--batch", help="With --prune: also prune this test batch id (repeatable)."),
     ] = None,
 ) -> None:
-    """Backfill BATCH_DIR into Neon, --delete games, or --prune. Needs NEON_DATABASE_URL."""
+    """Backfill BATCH_DIR into Neon, or --delete, --prune, --migrate. Needs NEON_DATABASE_URL."""
     from societysim.logging.sinks.neon import (
         PruneBlocked,
+        apply_migrations,
         apply_schema,
         connect_neon,
         delete_games,
         find_prunable,
+        list_migrations,
         prune_games,
         sync_batch,
     )
 
     load_dotenv()
+    if migrate:
+        if batch_dir is not None or delete or prune or batch:
+            typer.echo("--migrate takes no BATCH_DIR, --delete, --prune or --batch")
+            raise typer.Exit(1)
+        migrations = list_migrations()
+        for name, sql in migrations:
+            typer.echo(f"-- {name}\n{sql.rstrip()}")
+        if not apply:
+            typer.echo("dry run: nothing was run. Re-run with --apply to run these.")
+            return
+        if not os.environ.get("NEON_DATABASE_URL"):
+            typer.echo("NEON_DATABASE_URL is not set")
+            raise typer.Exit(1)
+
+        async def migrate_db():
+            conn = await connect_neon()
+            try:
+                await apply_migrations(conn)
+            finally:
+                await conn.close()
+
+        asyncio.run(migrate_db())
+        typer.echo(f"ran {len(migrations)} migrations")
+        return
     if prune:
         if batch_dir is not None or delete:
             typer.echo("--prune takes no BATCH_DIR and no --delete")
             raise typer.Exit(1)
     elif apply or batch:
-        typer.echo("--apply and --batch only work with --prune")
+        typer.echo("--apply only works with --prune or --migrate, --batch only with --prune")
         raise typer.Exit(1)
     elif delete:
         if batch_dir is not None:

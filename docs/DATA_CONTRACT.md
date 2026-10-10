@@ -676,6 +676,12 @@ Limits, all set by env on the server (defaults in brackets):
 | `event` | jsonb | The full event, exactly the JSONL line (`schema/events.schema.json`) |
 | `inserted_at` | timestamp with time zone | Database clock at insert. Used by `sync-neon --prune` to find stalled games |
 
+`inserted_at` is in `create table` for fresh databases. An existing database gets it from
+`neon/migrations/001_events_inserted_at.sql`. No command applies that file implicitly (not
+`play --neon`, `batch --neon`, `sync-neon BATCH_DIR` or the server). `societysim sync-neon --migrate`
+prints the migrations; `--migrate --apply` runs them. Running it against the live Neon database needs
+Seth's and Marcus's OK. `sync-neon --prune` refuses until the column exists.
+
 `labels`, one row per line of `<game_id>.labels.jsonl`:
 
 <!-- neon:labels -->

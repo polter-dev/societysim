@@ -88,6 +88,22 @@ async def apply_schema(conn: Any) -> None:
     await conn.execute(SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
+MIGRATIONS_DIR = SCHEMA_PATH.parent / "migrations"
+
+
+def list_migrations() -> list[tuple[str, str]]:
+    """(file name, sql) of neon/migrations/*.sql in order. Read-only."""
+    return [(p.name, p.read_text(encoding="utf-8")) for p in sorted(MIGRATIONS_DIR.glob("*.sql"))]
+
+
+async def apply_migrations(conn: Any) -> None:
+    """Run every migration, all in one transaction. Only `sync-neon --migrate --apply` calls this:
+    schema.sql, NeonSink and batch start never alter an existing table."""
+    async with conn.transaction():
+        for _, sql in list_migrations():
+            await conn.execute(sql)
+
+
 class NeonSink:
     """EventSink writing to Neon. One instance per game; `batch_id` comes from the caller.
 
@@ -354,7 +370,8 @@ async def find_prunable(
     if not await conn.fetchval(_HAS_INSERTED_AT):
         raise PruneBlocked(
             "events.inserted_at is missing, so stalled games can't be told from live ones. "
-            "Apply neon/migrations/001_events_inserted_at.sql first."
+            "Apply neon/migrations/001_events_inserted_at.sql first "
+            "(`societysim sync-neon --migrate` shows it; `--migrate --apply` runs it)."
         )
     test_batches = set(batch_ids or [])
     found = []

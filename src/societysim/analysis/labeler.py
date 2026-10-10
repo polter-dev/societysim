@@ -16,6 +16,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from societysim.analysis.jev import JevResult
 from societysim.logging.events import Event, EventType, Label, LabelType
 from societysim.roles import Role, SeatId, SeerResult
 
@@ -35,6 +36,21 @@ class JevVerdict(BaseModel):
 
 
 Jev = dict[int, JevVerdict]  # statement seq -> verdict
+
+
+def jev_verdicts(results: list[JevResult]) -> Jev:
+    """Jev's probabilities -> verdicts. A yes needs P > 0.5; claim confidence covers all."""
+    return {
+        r.seq: JevVerdict(
+            accuse=[seat for seat, p in r.accuse.items() if p > 0.5],
+            claim_role=r.claim_role,
+            seer_report=JevReport(target=r.seer_target, result=r.seer_result)
+            if r.seer_report > 0.5
+            else None,
+            confidence=r.claim_role_confidence,
+        )
+        for r in results
+    }
 
 
 @dataclass
@@ -251,21 +267,26 @@ def label_batch(
     """Write <game_id>.labels.jsonl next to every game log in batch_dir.
 
     With jev_for, also print the self-tag vs Jev agreement table and write it to
-    <batch_dir>/agreement.json. Returns that table, or None without Jev.
+    <batch_dir>/agreement.json. Returns that table, or None without Jev. Empty logs are
+    skipped with a warning.
     """
     totals: dict[str, Counter] = {}
-    games = sorted(p for p in batch_dir.glob("*.jsonl") if not p.name.endswith(".labels.jsonl"))
-    for path in games:
+    logs = sorted(p for p in batch_dir.glob("*.jsonl") if not p.name.endswith(".labels.jsonl"))
+    games = 0
+    for path in logs:
         events = read_log(path)
+        if not events:
+            print(f"warning: {path.name} is empty, skipped")
+            continue
+        games += 1
         jev = jev_for(events) if jev_for else None
         labels = label_game(events, jev)
         out = path.with_name(f"{events[0].game_id}.labels.jsonl")
         out.write_text("".join(lb.model_dump_json() + "\n" for lb in labels))
         for name, c in (agreement(events, labels, jev) if jev is not None else {}).items():
             totals.setdefault(name, Counter()).update(c)
-    print(f"labelled {len(games)} games in {batch_dir}")
+    print(f"labelled {games} games in {batch_dir}")
     if jev_for is None:
-        print("no Jev results; self-tag vs Jev agreement skipped")
         return None
     table = _table(totals)
     (batch_dir / "agreement.json").write_text(json.dumps(table, indent=2) + "\n")

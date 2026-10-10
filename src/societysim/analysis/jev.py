@@ -30,6 +30,7 @@ MODEL = "jev-latest"
 DEFAULT_CACHE = Path(".cache/jev")
 NO_CLAIM = "none"
 RETRY_STATUS = {429, 529}
+TIMEOUT = 30.0  # seconds per request; a timeout is retried like a 429
 
 
 class JevResult(BaseModel):
@@ -118,31 +119,42 @@ def parse_response(stmt: Event, data: dict[str, Any]) -> JevResult:
 
 async def _post(client: httpx.AsyncClient, body: dict[str, Any], tries: int = 4) -> dict:
     for attempt in range(tries):
-        resp = await client.post(API_URL, json=body)
-        if resp.status_code not in RETRY_STATUS or attempt == tries - 1:
-            resp.raise_for_status()
-            return resp.json()
+        last = attempt == tries - 1
+        try:
+            resp = await client.post(API_URL, json=body, timeout=TIMEOUT)
+        except httpx.TimeoutException:
+            if last:
+                raise
+        else:
+            if resp.status_code not in RETRY_STATUS or last:
+                resp.raise_for_status()
+                return resp.json()
         await asyncio.sleep(2**attempt)
     raise AssertionError("unreachable")
 
 
-async def classify_game(
-    log_path: Path,
+async def classify_game(log_path: Path, **kwargs: Any) -> list[JevResult]:
+    """Classify every statement in a game log file. See `classify_events`."""
+    lines = log_path.read_text().splitlines()
+    return await classify_events([Event.model_validate_json(x) for x in lines if x], **kwargs)
+
+
+async def classify_events(
+    events: list[Event],
     cache_dir: Path = DEFAULT_CACHE,
     client: httpx.AsyncClient | None = None,
     concurrency: int = 8,
 ) -> list[JevResult]:
-    """Classify every statement in a game log. Cached statements make no calls.
+    """Classify every statement in one game's events. Cached statements make no calls.
 
     `client` must send the bearer token; by default one is built from TYPESAFE_API_KEY.
     """
-    events = [Event.model_validate_json(line) for line in log_path.read_text().splitlines()]
     start = next(e for e in events if e.type == EventType.GAME_START)
     names = {seat: s.name for seat, s in start.meta.seats.items()}
     statements = [e for e in events if e.type == EventType.STATEMENT]
     sem = asyncio.Semaphore(concurrency)
     key = os.environ.get("TYPESAFE_API_KEY", "")
-    http = client or httpx.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=30)
+    http = client or httpx.AsyncClient(headers={"Authorization": f"Bearer {key}"})
 
     async def one(stmt: Event) -> JevResult:
         path = cache_dir / stmt.game_id / f"{stmt.seq}.json"

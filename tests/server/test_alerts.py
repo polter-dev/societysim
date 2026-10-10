@@ -108,6 +108,14 @@ def test_send_failure_logs_type_not_url(monkeypatch, caplog):
     assert "OSError" in caplog.text and "SECRET-TOKEN-VALUE" not in caplog.text
 
 
+def test_malformed_webhook_url_neither_raises_nor_leaks(monkeypatch, caplog):
+    bad = "not-a-url-SECRET-TOKEN-VALUE"
+    monkeypatch.setenv(alerts.ENV, bad)
+    with caplog.at_level(logging.WARNING):
+        alerts.send("x")  # must not raise
+    assert "ValueError" in caplog.text and "SECRET-TOKEN-VALUE" not in caplog.text
+
+
 def test_webhook_url_counts_as_a_secret_name():
     from societysim.server.security import secret_names
 

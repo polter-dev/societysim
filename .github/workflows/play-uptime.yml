@@ -9,7 +9,8 @@ on:
     - cron: "*/15 * * * *"
   workflow_dispatch:
 
-permissions: {}
+permissions:
+  actions: read # gh run list: the previous run's result is the previous state
 
 jobs:
   check:
@@ -17,6 +18,8 @@ jobs:
     env:
       PLAY_URL: ${{ vars.VITE_PLAY_API_URL }}
       WEBHOOK: ${{ secrets.PLAY_ALERT_WEBHOOK_URL }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Check /api/limits
         run: |
@@ -24,13 +27,20 @@ jobs:
             echo "::notice::Set the VITE_PLAY_API_URL repo variable to check the play Space."
             exit 0
           fi
+          # Previous state = conclusion of the last finished success/failure run of this workflow
+          # (this run is still in progress, so it is not in the list). Alert only on a change.
+          prev=$(gh run list --workflow play-uptime.yml --status completed --limit 10 \
+            --json conclusion --jq '[.[] | select(.conclusion=="success" or .conclusion=="failure")][0].conclusion // "success"' || echo success)
+          notify() {
+            [ -n "$WEBHOOK" ] || return 0
+            curl -fsS --max-time 20 -H 'Content-Type: application/json' \
+              -d "{\"content\":\"[societysim play] $1\"}" \
+              "$WEBHOOK" >/dev/null || echo "::warning::Discord post failed"
+          }
           if curl -fsS --max-time 20 --retry 2 --retry-delay 10 "${PLAY_URL%/}/api/limits" >/dev/null; then
+            [ "$prev" = failure ] && notify "Space recovered: GET /api/limits is answering again"
             exit 0
           fi
           echo "::error::Play Space is down: GET /api/limits failed"
-          if [ -n "$WEBHOOK" ]; then
-            curl -fsS --max-time 20 -H 'Content-Type: application/json' \
-              -d '{"content":"[societysim play] Space is down: GET /api/limits failed (uptime check)"}' \
-              "$WEBHOOK" >/dev/null || echo "::warning::Discord post failed"
-          fi
+          [ "$prev" = failure ] || notify "Space is down: GET /api/limits failed (uptime check)"
           exit 1

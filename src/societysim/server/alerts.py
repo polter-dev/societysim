@@ -21,12 +21,12 @@ TIMEOUT = 5.0
 
 
 def _post(url: str, text: str) -> None:
-    req = urllib.request.Request(
-        url,
-        json.dumps({"content": text[:1900]}).encode(),
-        {"Content-Type": "application/json", "User-Agent": "societysim-play-alerts"},
-    )
-    try:
+    try:  # building the request can raise too (a malformed URL), with the URL in the message
+        req = urllib.request.Request(
+            url,
+            json.dumps({"content": text[:1900]}).encode(),
+            {"Content-Type": "application/json", "User-Agent": "societysim-play-alerts"},
+        )
         urllib.request.urlopen(req, timeout=TIMEOUT).close()
     except Exception as exc:  # never the message: it can hold the URL
         log.warning("play alert not sent (%s)", type(exc).__name__)

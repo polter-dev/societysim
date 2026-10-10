@@ -299,7 +299,7 @@ def test_lie_rate_chart_and_stable_keys(tmp_path):
     assert (out / "lie_rate.png").read_bytes()[:4] == b"\x89PNG"
     assert "![Lie rate](lie_rate.png)" in (out / "report.md").read_text(encoding="utf-8")
     base = json.loads(json.dumps(compute_metrics([load_game(FIX / "sample_game.jsonl")])))
-    assert set(m) - set(base) == {"summary", "speed"}
+    assert set(m) - set(base) == {"summary", "speed", "profiles"}
     assert m["models"] == base["models"] and m["by_group"] == base["by_group"]
     board = json.loads((out / "leaderboard.json").read_text())
     assert "summary" not in board and "speed" not in board
@@ -400,3 +400,46 @@ async def test_index_and_report_for_a_ten_player_game(tmp_path):
     assert sorted(index[0]["seats"]) == [f"p{i}" for i in range(10)]
     assert TypeAdapter(Seat).validate_python("p9") == "p9"
     assert "Jude" in {s["name"] for s in index[0]["seats"].values()}
+
+
+def test_model_profiles_in_metrics(tmp_path):
+    out = write_report(_batch(tmp_path))  # self_tag labels only
+    metrics = json.loads((out / "metrics.json").read_text())
+    board = json.loads((out / "leaderboard.json").read_text())
+    profiles = metrics["profiles"]
+    assert set(profiles) == {r["model"] for r in board["models"]}
+    for r in board["models"]:
+        p = profiles[r["model"]]
+        for k in ("games", "seats", "win_rate", "win_ci", "wolf_win_rate", "village_win_rate"):
+            assert p[k] == r[k], k
+        assert p["openskill"] == r["openskill"] and p["lie_rate"] == r["lie_rate"]
+        assert p["median_latency_ms"] == metrics["speed"][r["model"]]["median_latency_ms"]
+        assert p["fools"]["jev"] == [] and p["fooled_by"]["jev"] == []  # no jev labels
+        assert p["lie_rate"]["jev"] is None
+
+    gf = profiles["gemini-flash"]  # the fixture's lying wolf
+    assert gf["voice"] == {"voice_id": "cgSgspJ2msm6clMCkdW9", "fallback": False}
+    assert gf["detection"] == {"n": 0, "auc": None, "brier": None}  # never a village seat
+    fools = gf["fools"]["self_tag"]
+    cells = metrics["deception_matrix"]["pairs"]["self_tag"]["gemini-flash"]
+    assert {f["model"] for f in fools} == set(cells)
+    assert fools[0] == {**cells["deepseek-v3.1"], "model": "deepseek-v3.1"}
+    rates = [(f["vote_follow_rate"], f["voters"]) for f in fools]
+    assert rates == sorted(rates, key=lambda t: (-t[0], -t[1]))
+    assert gf["fooled_by"]["self_tag"] == []
+
+    ds = profiles["deepseek-v3.1"]
+    assert ds["fools"]["self_tag"] == []
+    assert [f["model"] for f in ds["fooled_by"]["self_tag"]] == ["gemini-flash", "gemma-4-26b"]
+    assert ds["fooled_by"]["self_tag"][0]["voters"] == 2
+    assert ds["detection"]["n"] == 11 and ds["detection"]["auc"] is not None
+    # a model missing from voices.yaml gets the default voice and says so
+    assert profiles["llama-4-maverick"]["voice"]["fallback"] is True
+
+
+def test_profile_pairs_put_missing_rates_last():
+    from societysim.analysis.report import _pair_rows
+
+    none = {**_cell(0, 1), "voters": 0, "followed": 0, "vote_follow_rate": None}
+    rows = _pair_rows({"z": _cell(1, 2), "n": none, "a": _cell(1, 2), "b": _cell(2, 4)})
+    assert [r["model"] for r in rows] == ["b", "a", "z", "n"]

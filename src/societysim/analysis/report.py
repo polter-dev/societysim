@@ -32,6 +32,9 @@ leaderboard.json (read by the viewer, T4.9 and T6.2):
 
 index.json: a list of {game_id, file, seed, days, winner, seats: {seat: {name, model, role}}}.
 
+metrics.json `profiles`: model -> one model's profile page (leaderboard numbers, detection,
+median latency, narration voice, and who it fools / who fools it from the deception matrix).
+
 The contract for these files (and the models below that generate schema/*.schema.json) is
 docs/DATA_CONTRACT.md.
 """
@@ -60,6 +63,7 @@ from societysim.analysis.metrics import (  # noqa: E402
 from societysim.analysis.metrics import (  # noqa: E402
     SOURCES as LABEL_SOURCES,
 )
+from societysim.analysis.narrate import Voices, load_voices  # noqa: E402
 from societysim.roles import Role, SeatId, Winner  # noqa: E402
 
 SCHEMA = 1
@@ -304,8 +308,50 @@ class DeceptionMatrix(_Out):
     baseline: dict[ClaimKind, dict[str, DeceptionBaseline]]  # kind -> listener model
 
 
+class PairRow(DeceptionCell):
+    """One deception_matrix cell seen from one side: `model` is the other model."""
+
+    model: str
+
+
+class PairsBySource(_Out):
+    self_tag: list[PairRow]
+    jev: list[PairRow]
+
+
+class ProfileDetection(_Out):
+    n: int
+    auc: Num
+    brier: Num
+
+
+class Voice(_Out):
+    voice_id: str
+    fallback: bool  # true when configs/voices.yaml has no entry and default_model_voice is used
+
+
+class ModelProfile(_Out):
+    """One model's profile page: leaderboard numbers, detection, who it fools, speed, voice."""
+
+    model: str
+    games: int | None
+    seats: int
+    win_rate: Num
+    win_ci: tuple[float, float] | None
+    wolf_win_rate: Num
+    village_win_rate: Num
+    openskill: Rating | None
+    statements: int
+    lie_rate: LieRate
+    detection: ProfileDetection
+    median_latency_ms: Num
+    voice: Voice
+    fools: PairsBySource
+    fooled_by: PairsBySource
+
+
 class Metrics(_Out):
-    """report/metrics.json: analysis.metrics.compute_metrics plus summary and speed."""
+    """report/metrics.json: analysis.metrics.compute_metrics plus summary, speed and profiles."""
 
     games: int
     unfinished_games: int
@@ -317,6 +363,7 @@ class Metrics(_Out):
     deception_matrix: DeceptionMatrix
     summary: Summary
     speed: dict[str, Speed]
+    profiles: dict[str, ModelProfile]
 
 
 def _load(batch_dir: Path) -> tuple[list[tuple[Path, GameData]], int]:
@@ -503,6 +550,63 @@ def build_speed(metrics: dict, games: list[GameData]) -> dict[str, dict]:
             "self_hosted": calls[m] > 0 and cost[m] == 0,
         }
     return res
+
+
+def _pair_rows(cells: dict[str, dict]) -> list[dict]:
+    """Highest vote-follow rate first (no rate last), then more voters, then model name."""
+    rows = [{**c, "model": m} for m, c in cells.items()]
+    return sorted(
+        rows,
+        key=lambda r: (
+            r["vote_follow_rate"] is None,
+            -(r["vote_follow_rate"] or 0),
+            -r["voters"],
+            r["model"],
+        ),
+    )
+
+
+def build_profiles(
+    metrics: dict, board: dict, speed: dict[str, dict], voices: Voices | None = None
+) -> dict[str, dict]:
+    """One profile per model in `board`: what the viewer's model page shows."""
+    voices = voices or load_voices()
+    pairs = metrics["deception_matrix"]["pairs"]
+    out = {}
+    for r in board["models"]:
+        m = r["model"]
+        groups = metrics["models"][m]
+        det = groups.get("village", {}).get("detection", {})
+        out[m] = {
+            "model": m,
+            **{
+                k: r[k]
+                for k in (
+                    "games",
+                    "seats",
+                    "win_rate",
+                    "win_ci",
+                    "wolf_win_rate",
+                    "village_win_rate",
+                    "openskill",
+                )
+            },
+            "statements": groups["all"]["statements"],
+            "lie_rate": r["lie_rate"],
+            "detection": {
+                "n": det.get("n", 0),
+                "auc": det.get("auc"),
+                "brier": det.get("brier"),
+            },
+            "median_latency_ms": speed.get(m, {}).get("median_latency_ms"),
+            "voice": {"voice_id": voices.model(m), "fallback": m not in voices.models},
+            "fools": {src: _pair_rows(pairs[src].get(m, {})) for src in LABEL_SOURCES},
+            "fooled_by": {
+                src: _pair_rows({liar: row[m] for liar, row in pairs[src].items() if m in row})
+                for src in LABEL_SOURCES
+            },
+        }
+    return out
 
 
 def _table(head: list[str], rows: list[list[str]]) -> list[str]:
@@ -1072,7 +1176,8 @@ def write_report(batch_dir: Path) -> Path:
         (out / name).write_text(json.dumps(obj, indent=2) + "\n", encoding="utf-8")
 
     summary, speed = build_summary(metrics, data), build_speed(metrics, data)
-    dump("metrics.json", {**metrics, "summary": summary, "speed": speed})
+    profiles = build_profiles(metrics, board, speed)
+    dump("metrics.json", {**metrics, "summary": summary, "speed": speed, "profiles": profiles})
     dump("leaderboard.json", board)
     dump("index.json", build_index(games))
     (out / "report.md").write_text(

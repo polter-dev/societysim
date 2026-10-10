@@ -447,6 +447,37 @@
       "title": "GroupStats",
       "type": "object"
     },
+    "LieRate": {
+      "additionalProperties": false,
+      "properties": {
+        "self_tag": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jev": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "self_tag",
+        "jev"
+      ],
+      "title": "LieRate",
+      "type": "object"
+    },
     "LieSuccess": {
       "additionalProperties": false,
       "properties": {
@@ -581,6 +612,135 @@
       "title": "LiesBySource",
       "type": "object"
     },
+    "ModelProfile": {
+      "additionalProperties": false,
+      "description": "One model's profile page: leaderboard numbers, detection, who it fools, speed, voice.",
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "games": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seats": {
+          "type": "integer"
+        },
+        "win_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "win_ci": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wolf_win_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "village_win_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "openskill": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rating"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "statements": {
+          "type": "integer"
+        },
+        "lie_rate": {
+          "$ref": "#/$defs/LieRate"
+        },
+        "detection": {
+          "$ref": "#/$defs/ProfileDetection"
+        },
+        "median_latency_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "voice": {
+          "$ref": "#/$defs/Voice"
+        },
+        "fools": {
+          "$ref": "#/$defs/PairsBySource"
+        },
+        "fooled_by": {
+          "$ref": "#/$defs/PairsBySource"
+        }
+      },
+      "required": [
+        "model",
+        "games",
+        "seats",
+        "win_rate",
+        "win_ci",
+        "wolf_win_rate",
+        "village_win_rate",
+        "openskill",
+        "statements",
+        "lie_rate",
+        "detection",
+        "median_latency_ms",
+        "voice",
+        "fools",
+        "fooled_by"
+      ],
+      "title": "ModelProfile",
+      "type": "object"
+    },
     "OpenSkill": {
       "additionalProperties": false,
       "properties": {
@@ -613,6 +773,142 @@
         "wolf_side"
       ],
       "title": "OpenSkill",
+      "type": "object"
+    },
+    "PairRow": {
+      "additionalProperties": false,
+      "description": "One deception_matrix cell seen from one side: `model` is the other model.",
+      "properties": {
+        "heard": {
+          "type": "integer"
+        },
+        "voters": {
+          "type": "integer"
+        },
+        "followed": {
+          "type": "integer"
+        },
+        "vote_follow_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "vote_follow_ci": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "comparisons": {
+          "type": "integer"
+        },
+        "moved": {
+          "type": "integer"
+        },
+        "belief_shift_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "belief_shift_ci": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "baseline_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "baseline_voters": {
+          "type": "integer"
+        },
+        "model": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "heard",
+        "voters",
+        "followed",
+        "vote_follow_rate",
+        "vote_follow_ci",
+        "comparisons",
+        "moved",
+        "belief_shift_rate",
+        "belief_shift_ci",
+        "baseline_rate",
+        "baseline_voters",
+        "model"
+      ],
+      "title": "PairRow",
+      "type": "object"
+    },
+    "PairsBySource": {
+      "additionalProperties": false,
+      "properties": {
+        "self_tag": {
+          "items": {
+            "$ref": "#/$defs/PairRow"
+          },
+          "type": "array"
+        },
+        "jev": {
+          "items": {
+            "$ref": "#/$defs/PairRow"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "self_tag",
+        "jev"
+      ],
+      "title": "PairsBySource",
       "type": "object"
     },
     "Persuasion": {
@@ -649,6 +945,41 @@
         "share"
       ],
       "title": "Persuasion",
+      "type": "object"
+    },
+    "ProfileDetection": {
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "type": "integer"
+        },
+        "auc": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "brier": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "n",
+        "auc",
+        "brier"
+      ],
+      "title": "ProfileDetection",
       "type": "object"
     },
     "Rating": {
@@ -974,10 +1305,27 @@
       ],
       "title": "TopWolfWin",
       "type": "object"
+    },
+    "Voice": {
+      "additionalProperties": false,
+      "properties": {
+        "voice_id": {
+          "type": "string"
+        },
+        "fallback": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "voice_id",
+        "fallback"
+      ],
+      "title": "Voice",
+      "type": "object"
     }
   },
   "additionalProperties": false,
-  "description": "report/metrics.json: analysis.metrics.compute_metrics plus summary and speed.",
+  "description": "report/metrics.json: analysis.metrics.compute_metrics plus summary, speed and profiles.",
   "properties": {
     "games": {
       "type": "integer"
@@ -1054,6 +1402,12 @@
         "$ref": "#/$defs/Speed"
       },
       "type": "object"
+    },
+    "profiles": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ModelProfile"
+      },
+      "type": "object"
     }
   },
   "required": [
@@ -1066,7 +1420,8 @@
     "openskill",
     "deception_matrix",
     "summary",
-    "speed"
+    "speed",
+    "profiles"
   ],
   "title": "Metrics",
   "type": "object"

@@ -34,6 +34,13 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
+      # System32\bash.exe is the WSL launcher; tests that spawn `bash` need Git Bash.
+      - name: Put Git Bash first on PATH
+        run: echo 'C:\Program Files\Git\bin' >> "$GITHUB_PATH"
+      - name: Check which bash tests will use
+        run: |
+          which -a bash
+          bash --version
       - run: uv sync --frozen
       - run: uv run ruff check
       - run: uv run pytest

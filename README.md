@@ -154,7 +154,7 @@ Open models through Hugging Face Inference Providers:
 | `gpt-oss-120b` | [openai/gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) |
 | `deepseek-v3.1` | [deepseek-ai/DeepSeek-V3.1](https://huggingface.co/deepseek-ai/DeepSeek-V3.1) |
 
-Self-hosted on an AMD GPU: `amd-gpt-oss-20b`, [openai/gpt-oss-20b](https://huggingface.co/openai/gpt-oss-20b) served with vLLM on ROCm. So far it plays self-play games inside the AMD pod (`configs/selfplay_amd.yaml`); the mixed batches leave it out because laptops can't reach the pod. TODO(batch): AMD throughput, latency and cost per game.
+Self-hosted on an AMD GPU: `amd-gpt-oss-20b`, [openai/gpt-oss-20b](https://huggingface.co/openai/gpt-oss-20b) served with vLLM on ROCm. There is also `amd-strix-gpt-oss-20b`, the same model as a GGUF on llama.cpp, running on a Radeon 8060S (Strix Halo). Both play self-play games inside the AMD pod (`configs/selfplay_amd.yaml`, `configs/selfplay_amd_strix.yaml`); the mixed batches leave them out because laptops can't reach the pod. Strix Halo numbers, from 5 self-play games with no errors: 7.3 s per call, 39.5 output tokens/s, about 138 s per game, $0/h (hackathon-provided GPU). Every game ended in a wolf win by parity on day 2, so these are short games.
 
 Closed models: `gemini-flash-lite` and `gemini-flash` through Google AI Studio, and `gpt-5-nano` and `gpt-5-mini` from OpenAI, which sit in at most 10 games each.
 

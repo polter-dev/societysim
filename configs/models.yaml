@@ -7,6 +7,12 @@
 #   Prices are USD per 1M tokens, only where LiteLLM's table is likely missing the model.
 #   HF ids, provider pins and prices come from router.huggingface.co/v1/models (live providers
 #   that support structured output). Gemini ids from ai.google.dev/gemini-api/docs/models.
+#   temperature: sent for every model except Gemini 3+ (`gemini/gemini-3*`, see
+#   client.sends_temperature). Google is removing temperature, top_p and top_k for those, so we
+#   don't send them and the model uses its default sampling. The `temperature` value on those
+#   entries is ignored (it still goes into the cache key).
+#   `doctor` probes every structured mode, not just the configured one. A mode that fails
+#   prints LiteLLM's "If you need to debug this error" line. That is expected, not a retry.
 
 providers:
   gemini: {concurrency: 2, rpm: 10}

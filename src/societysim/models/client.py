@@ -125,13 +125,25 @@ def response_format(spec: ModelSpec, response_model: type[BaseModel]) -> dict[st
     return None  # "none": the schema is in the prompt (prompts.build_messages)
 
 
+_GEMINI_VERSION = re.compile(r"^gemini/gemini-(\d+)")
+
+
+def sends_temperature(spec: ModelSpec) -> bool:
+    """False for Gemini 3+: Google is removing temperature (and top_p/top_k) and wants
+    sampling steered through the instructions. Those models keep their default temperature.
+    We never send top_p or top_k."""
+    m = _GEMINI_VERSION.match(spec.litellm_model)
+    return not (m and int(m.group(1)) >= 3)
+
+
 def request_kwargs(spec: ModelSpec, response_model: type[BaseModel]) -> dict[str, Any]:
     kwargs: dict[str, Any] = {
         "model": litellm_model_name(spec),
-        "temperature": spec.temperature,
         "max_tokens": spec.max_tokens,
         "drop_params": True,  # providers that lack a param (e.g. reasoning_effort) skip it
     }
+    if sends_temperature(spec):
+        kwargs["temperature"] = spec.temperature
     if spec.reasoning_effort is not None:
         # LiteLLM maps this per provider: OpenAI reasoning_effort, Gemini thinking budget
         # ("disable" gives Gemini a thinking budget of 0).

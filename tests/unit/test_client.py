@@ -16,6 +16,7 @@ from societysim.models.client import (
     estimate_cost,
     extract_json,
     litellm_model_name,
+    request_kwargs,
 )
 
 VOTE = {
@@ -155,6 +156,33 @@ async def test_per_model_settings_are_sent(monkeypatch, client):
     assert call["temperature"] == 0.2
     assert call["max_tokens"] == 333
     assert call["reasoning_effort"] == "minimal"
+
+
+@pytest.mark.parametrize(
+    ("litellm_model", "sent"),
+    [
+        ("gemini/gemini-3.8-flash", False),
+        ("gemini/gemini-3.5-flash-lite", False),
+        ("gemini/gemini-4.0-pro", False),
+        ("gemini/gemini-2.5-flash", True),
+        ("openai/gpt-5-nano", True),
+        ("hosted_vllm/Qwen/Qwen3-235B-A22B:deepinfra", True),
+    ],
+)
+def test_temperature_not_sent_to_gemini_3_plus(litellm_model, sent):
+    kw = request_kwargs(spec(litellm_model=litellm_model), VoteResponse)
+    assert ("temperature" in kw) is sent
+    assert not {"top_p", "top_k"} & kw.keys()
+
+
+async def test_gemini_3_call_omits_temperature(monkeypatch, client):
+    fake = mock(monkeypatch, reply(json.dumps(VOTE)))
+    result = await client.complete(
+        spec(litellm_model="gemini/gemini-3.8-flash", temperature=0.2), MESSAGES, VoteResponse
+    )
+    assert result.parsed is not None
+    assert "temperature" not in fake.calls[0]
+    assert fake.calls[0]["drop_params"] is True
 
 
 async def test_reasoning_effort_omitted_when_unset(monkeypatch, client):

@@ -87,6 +87,39 @@ def game_costs(path: Path) -> Counter[str] | None:
     return costs
 
 
+# Rough size of one seat's whole game, for dry-run cost estimates before any data exists.
+PRIOR_CALLS_PER_SEAT = 25
+PRIOR_INPUT_TOKENS = 2000
+PRIOR_OUTPUT_TOKENS = 400
+
+
+def prior_seat_cost(spec: ModelSpec) -> float:
+    """Price-based guess of one seat's cost in one game (USD)."""
+    from societysim.models.client import estimate_cost
+
+    return PRIOR_CALLS_PER_SEAT * estimate_cost(spec, PRIOR_INPUT_TOKENS, PRIOR_OUTPUT_TOKENS)
+
+
+def plan(cfg: BatchConfig, specs: Mapping[str, ModelSpec]) -> list[dict[str, Any]]:
+    """One row per game: id, seed, per-seat model and role, and a prior cost estimate."""
+    from societysim.engine.state import GameState
+
+    rows = []
+    for a in assign_games(cfg):
+        roles = GameState(a.game_config(cfg.game)).roles
+        rows.append(
+            {
+                "game_id": a.game_id,
+                "seed": a.seed,
+                "seats": [
+                    (seat, m, roles[seat].value) for seat, m in zip(roles, a.models, strict=True)
+                ],
+                "est_usd": sum(prior_seat_cost(specs[m]) for m in a.models),
+            }
+        )
+    return rows
+
+
 class BatchMismatch(Exception):
     """runs/<batch_id> holds games from a different batch config; the message is safe to print."""
 

@@ -111,12 +111,15 @@ def batch(
     registry: Annotated[Path, typer.Option("--registry", help="Model registry file.")] = Path(
         "configs/models.yaml"
     ),
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Print the game plan and cost estimate; run nothing.")
+    ] = False,
 ) -> None:
     """Play a batch of games in parallel into runs/<batch_id>/. Re-run to resume.
 
     Stops starting games when the budget would be exceeded; Ctrl-C stops cleanly.
     """
-    from societysim.batch.runner import BatchMismatch, run_batch
+    from societysim.batch.runner import BatchMismatch, plan, run_batch
     from societysim.config import BatchConfig, load_yaml
     from societysim.models.registry import load_registry
 
@@ -133,6 +136,18 @@ def batch(
     except KeyError as exc:
         typer.echo(exc.args[0])
         raise typer.Exit(1) from None
+
+    if dry_run:
+        rows = plan(cfg, specs)
+        for row in rows:
+            seats = " ".join(f"{seat}={model}/{role}" for seat, model, role in row["seats"])
+            typer.echo(f"{row['game_id']} seed={row['seed']} ${row['est_usd']:.4f} {seats}")
+        total = sum(row["est_usd"] for row in rows)
+        typer.echo(
+            f"{len(rows)} games, estimated ${total:.2f} (price-based guess) "
+            f"against a ${cfg.budget_usd:.2f} budget"
+        )
+        return
 
     client = None
     if agents is AgentMode.LLM:

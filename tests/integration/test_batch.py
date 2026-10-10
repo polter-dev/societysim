@@ -298,6 +298,20 @@ def test_cli_batch_scripted_and_resume(tmp_path, monkeypatch):
     assert "completed: 0 played, 3 skipped" in second.output
 
 
+def test_cli_batch_dry_run_prints_plan_and_writes_nothing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    path = write_config(tmp_path, n_games=3)
+    result = RUNNER.invoke(
+        app, ["batch", "--config", str(path), "--registry", str(REGISTRY), "--dry-run"]
+    )
+    assert result.exit_code == 0, result.output
+    lines = result.output.splitlines()
+    assert len(lines) == 4  # 3 games plus the total
+    assert lines[0].startswith("cli-g0000 seed=") and "p0=gemma4-26b/" in lines[0]
+    assert "wolf" in result.output and "3 games, estimated $" in lines[-1]
+    assert not (tmp_path / "runs").exists()
+
+
 def test_cli_batch_keyboard_interrupt_exits_130(tmp_path, monkeypatch):
     async def interrupted(*a, **k):
         raise KeyboardInterrupt

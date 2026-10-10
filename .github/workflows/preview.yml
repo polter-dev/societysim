@@ -96,7 +96,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-          URL:${{ steps.deploy.outputs.url }}
+          URL: ${{ steps.deploy.outputs.url }}
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           marker='<!-- societysim-preview -->'

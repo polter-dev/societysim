@@ -9,6 +9,7 @@ dependencies = [
     "httpx>=0.28",
     "jsonschema>=4.26",
     "litellm>=1.50",
+    "openskill>=6.2.0",
     "pydantic>=2.8",
     "python-dotenv>=1.0",
     "pyyaml>=6.0",

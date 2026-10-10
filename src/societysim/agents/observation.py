@@ -8,10 +8,13 @@ Two guards keep private information out:
 - every event passes through `visible()` before anything reads it;
 - rendering is a whitelist of public fields. `private_reasoning`, `suspicion` and narrator
   meta are never read, and unknown event types render nothing.
+Model-written text (statements, wolf chat) only reaches the page through `_quote()`, which
+keeps it on one line inside double quotes it cannot close, so it can't pass as engine text.
 From `state` only the viewer's own role, names, `alive`, the clock, the wolf partners (for a
 wolf) and the viewer's own Seer results are read. Revealed roles come from death events.
 """
 
+import unicodedata
 from collections.abc import Callable, Iterable, Sequence
 
 from societysim.agents.prompts import player
@@ -23,6 +26,10 @@ from societysim.roles import Phase, Role
 MAX_CHARS = 12_000
 LAST_WORDS = 25  # earlier days keep each player's last statement, cut to this many words
 OMITTED = "(Older history left out for length.)"
+# Per-quote cap: an 80-word statement is ~500 chars. Longer text is cut and ends in "...".
+MAX_QUOTE = 800
+# Quote marks a player could use to fake the end of their quote. Pi/Pf cover the rest.
+_QUOTE_MARKS = set('"\u201a\u201e\u301d\u301e\u301f\u275d\u275e')
 
 type Name = Callable[[str], str]
 
@@ -136,7 +143,7 @@ def _line(e: Event, name: Name) -> Iterable[str]:
         case EventType.PHASE_START:
             yield f"[{e.public_text}]"
         case EventType.WOLF_CHAT:
-            yield f"(wolf channel) {name(e.actor)}: {e.public_text}"
+            yield f"(wolf channel) {name(e.actor)}: {_quote(e.public_text)}"
         case EventType.WOLF_PROPOSAL:
             yield f"(wolf channel) {name(e.actor)} proposes killing {name(e.target)}."
         case EventType.NIGHT_KILL:
@@ -144,7 +151,7 @@ def _line(e: Event, name: Name) -> Iterable[str]:
         case EventType.DEATH_REVEAL:
             yield _death(e, name)
         case EventType.STATEMENT:
-            yield f'{name(e.actor)}: "{e.public_text}"'
+            yield f"{name(e.actor)}: {_quote(e.public_text)}"
         case EventType.ACCUSATION:
             yield f"  {name(e.actor)} accuses {name(e.target)}."
         case EventType.ROLE_CLAIM | EventType.SEER_CLAIM:
@@ -154,6 +161,31 @@ def _line(e: Event, name: Name) -> Iterable[str]:
         case EventType.ELIMINATION | EventType.NO_ELIMINATION:
             yield _vote_result(e, name)
         # Seer checks and Doctor protects are in the knowledge block; the rest is never shown.
+
+
+def _char(c: str) -> str:
+    cat = unicodedata.category(c)
+    if c in _QUOTE_MARKS or cat in ("Pi", "Pf"):
+        return "'"
+    if cat[0] == "C" or cat in ("Zl", "Zp"):  # control, zero-width, bidi, unassigned, newlines
+        return " "
+    return c
+
+
+def _quote(text: str | None, words: int | None = None) -> str:
+    """Model-written text as one line in double quotes it cannot forge or close.
+
+    NFKC folds look-alikes (fullwidth quotes), quote marks become ', control and format
+    characters become spaces, and all whitespace collapses to single spaces, so no fake
+    event lines. Cut to `words` words if given, then to MAX_QUOTE chars; a cut ends in "...".
+    """
+    text = "".join(map(_char, unicodedata.normalize("NFKC", text or "")))
+    parts = text.split()
+    text = " ".join(parts[:words])
+    cut = words is not None and len(parts) > words
+    if len(text) > MAX_QUOTE:
+        text, cut = text[:MAX_QUOTE].rstrip(), True
+    return f'"{text}{"..." if cut else ""}"'
 
 
 def _summary(day: int, evs: list[Event], name: Name) -> str:
@@ -177,9 +209,8 @@ def _summary(day: int, evs: list[Event], name: Name) -> str:
         elif e.type in (EventType.ROLE_CLAIM, EventType.SEER_CLAIM) and e.actor:
             said.setdefault(e.actor, []).append(_claim(e, name, "ed"))
     for actor in sorted(said):
-        words = last.get(actor, "").split()
-        quote = " ".join(words[:LAST_WORDS]) + ("..." if len(words) > LAST_WORDS else "")
-        parts = [*dict.fromkeys(said[actor]), f'last said: "{quote}"']  # dedupe, keep order
+        quote = _quote(last.get(actor), LAST_WORDS)
+        parts = [*dict.fromkeys(said[actor]), f"last said: {quote}"]  # dedupe, keep order
         lines.append(f"- {name(actor)}: " + "; ".join(parts))
 
     votes = [f"{name(e.actor)} -> {_vote(e, name)}" for e in evs if e.type is EventType.VOTE]

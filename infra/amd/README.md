@@ -9,7 +9,7 @@ What the script does, in order:
 3. Downloads the model and starts vLLM on `127.0.0.1:8000` with an API key and json_schema guided decoding (xgrammar, retried with outlines if the smoke test fails).
 4. If vLLM can't run on this GPU, it serves the same model with llama.cpp `llama-server` built for gfx120X, on the same port with the same key.
 5. Logs serving stats every minute to `~/amd-serve/logs/stats.log`.
-6. Starts the tunnel and prints the two lines for `.env`.
+6. Starts the tunnel over HTTP/2, waits for registration, and checks `/v1/models` through the public URL before printing the `.env` line.
 
 Re-running it is safe. Finished steps are skipped and a healthy server is reused.
 
@@ -86,11 +86,16 @@ Set these before `bash infra/amd/serve.sh`:
 | `AMD_MODEL` | `openai/gpt-oss-20b` | Another HF model for vLLM. Also add a matching `amd-*` entry with `litellm_model: openai/<that id>` and the same `api_base` and `api_key_env` as `amd-gpt-oss-20b`. It has to fit in 32 GB with room for the KV cache: Qwen3-32B in BF16 (about 64 GB) does not, Qwen3-8B or an AWQ/FP8 14B does. |
 | `AMD_GGUF_REPO`, `AMD_GGUF_FILE` | `ggml-org/gpt-oss-20b-GGUF`, `gpt-oss-20b-MXFP4.gguf` | Model for the llama.cpp fallback |
 | `AMD_TUNNEL` | `1` | `0` for no tunnel (run the games on the box itself, see below) |
+| `AMD_TUNNEL_PROTOCOL` | `http2` | Tunnel transport: `http2`, `quic`, or `auto`. Use `http2` when outbound UDP is blocked. |
 | `AMD_WORK` | `~/amd-serve` | Venvs, weights, logs |
 
 If vLLM failed once, later runs skip it and go straight to llama.cpp. Delete `~/amd-serve/vllm.failed` to try vLLM again.
 
 To run the games on the box without the tunnel: `AMD_TUNNEL=0 bash infra/amd/serve.sh`, then in the repo run `uv sync --frozen`, put `AMD_VLLM_BASE_URL=http://127.0.0.1:8000/v1` and the key in `.env`, and use the same `doctor` and `play` commands.
+
+## Troubleshooting
+
+An HTTP 530 or 000 from the public URL means the tunnel is not registered. Re-run `bash infra/amd/serve.sh`, wait for the public endpoint check to pass, then replace `AMD_VLLM_BASE_URL` in your laptop's `.env` with the new URL. Run `bash infra/amd/serve.sh status` on the AMD box to check local health, tunnel registration, and the current URL. If registration fails, inspect `~/amd-serve/logs/tunnel.log`; leave `AMD_TUNNEL_PROTOCOL=http2` when the pod blocks outbound UDP.
 
 ## How models.yaml reaches the server
 

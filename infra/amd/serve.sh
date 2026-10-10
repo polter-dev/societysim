@@ -25,6 +25,7 @@
 #   AMD_WORK           working dir for venvs, weights, logs (default ~/amd-serve)
 #   AMD_PORT           local port (default 8000)
 #   AMD_TUNNEL         1 = open a cloudflared quick tunnel (default), 0 = localhost only
+#   AMD_TUNNEL_PROTOCOL http2 | quic | auto (default http2; http2 works without outbound UDP)
 #   AMD_MAX_MODEL_LEN  context per request (default 16384)
 #   AMD_GPU_MEM_UTIL   vLLM --gpu-memory-utilization (default 0.90)
 #   AMD_START_TIMEOUT  seconds to wait for the server, download included (default 1800)
@@ -41,6 +42,7 @@ AMD_GGUF_FILE="${AMD_GGUF_FILE:-gpt-oss-20b-MXFP4.gguf}"
 AMD_BACKEND="${AMD_BACKEND:-auto}"
 AMD_PORT="${AMD_PORT:-8000}"
 AMD_TUNNEL="${AMD_TUNNEL:-1}"
+AMD_TUNNEL_PROTOCOL="${AMD_TUNNEL_PROTOCOL:-http2}"
 AMD_MAX_MODEL_LEN="${AMD_MAX_MODEL_LEN:-16384}"
 AMD_GPU_MEM_UTIL="${AMD_GPU_MEM_UTIL:-0.90}"
 AMD_START_TIMEOUT="${AMD_START_TIMEOUT:-1800}"
@@ -580,27 +582,46 @@ start_stats() { # the logger takes AMD_API_KEY from its env; cmd_up restarts it 
   log "Serving stats every ${AMD_STATS_INTERVAL}s -> $LOGS/stats.log (vLLM also logs throughput to $LOGS/server.log)"
 }
 
+validate_tunnel_protocol() {
+  case "$AMD_TUNNEL_PROTOCOL" in
+    http2 | quic | auto) ;;
+    *) die "AMD_TUNNEL_PROTOCOL must be http2, quic or auto" ;;
+  esac
+}
+
 start_tunnel() {
-  local cf="$AMD_WORK/bin/cloudflared" url="" code
+  local cf="$AMD_WORK/bin/cloudflared" url="" code registered=0
+  validate_tunnel_protocol
   if [ ! -x "$cf" ]; then
     log "Downloading cloudflared"
     curl -fL --retry 3 -o "$cf.tmp" "$CLOUDFLARED_URL" && chmod +x "$cf.tmp" && mv "$cf.tmp" "$cf"
   fi
   "$cf" --version
-  if alive "$AMD_WORK/tunnel.pid" && [ -s "$AMD_WORK/public_url" ]; then
+  if alive "$AMD_WORK/tunnel.pid" && [ -s "$AMD_WORK/public_url" ] &&
+    grep -q 'Registered tunnel connection' "$LOGS/tunnel.log" 2>/dev/null; then
     url=$(cat "$AMD_WORK/public_url")
     log "Tunnel already running: $url"
   else
-    log "Opening a cloudflared quick tunnel to $LOCAL"
+    kill_pidfile "$AMD_WORK/tunnel.pid"
     rm -f "$AMD_WORK/public_url"
-    spawn "$AMD_WORK/tunnel.pid" "$LOGS/tunnel.log" "$cf" tunnel --no-autoupdate --url "$LOCAL"
-    for _ in $(seq 60); do
+    log "Opening a cloudflared quick tunnel to $LOCAL"
+    spawn "$AMD_WORK/tunnel.pid" "$LOGS/tunnel.log" "$cf" tunnel --no-autoupdate \
+      --protocol "$AMD_TUNNEL_PROTOCOL" --url "$LOCAL"
+    for _ in $(seq 30); do
       url=$(grep -oE 'https://[-a-z0-9]+\.trycloudflare\.com' "$LOGS/tunnel.log" | head -1 || true)
-      [ -n "$url" ] && break
+      if grep -q 'Registered tunnel connection' "$LOGS/tunnel.log"; then
+        registered=1
+        [ -n "$url" ] && break
+      fi
       alive "$AMD_WORK/tunnel.pid" || break
       sleep 1
     done
-    [ -n "$url" ] || { tail -n 20 "$LOGS/tunnel.log"; die "cloudflared gave no URL"; }
+    if [ "$registered" != 1 ] || [ -z "$url" ]; then
+      kill_pidfile "$AMD_WORK/tunnel.pid"
+      rm -f "$AMD_WORK/public_url"
+      tail -n 20 "$LOGS/tunnel.log" >&2
+      die "cloudflared did not register a tunnel with a URL within 30s. UDP/QUIC may be blocked; keep AMD_TUNNEL_PROTOCOL=http2 and re-run serve.sh"
+    fi
     echo "$url" >"$AMD_WORK/public_url"
   fi
   echo "checking $url/v1/models from the public side (DNS can take a minute)"
@@ -609,7 +630,9 @@ start_tunnel() {
     [ "$code" = 200 ] && { echo "public endpoint OK"; return 0; }
     sleep 4
   done
-  warn "public URL answered $code; it may still be propagating. Check: bash $0 status"
+  kill_pidfile "$AMD_WORK/tunnel.pid"
+  rm -f "$AMD_WORK/public_url"
+  die "public URL did not return HTTP 200 from /v1/models (last result: ${code:-000}); check $LOGS/tunnel.log and re-run serve.sh"
 }
 
 summary() {
@@ -638,6 +661,7 @@ cmd_up() {
   touch "$LOGS/serve.log" && chmod 600 "$LOGS"/*.log
   exec > >(tee -a "$LOGS/serve.log") 2>&1
   log "serve.sh up: model=$AMD_MODEL backend=$AMD_BACKEND work=$AMD_WORK"
+  validate_tunnel_protocol
   api_key
   preflight
   base_venv
@@ -678,6 +702,7 @@ cmd_status() {
   done
   echo "backend $(cat "$AMD_WORK/backend" 2>/dev/null || echo none)"
   echo "health  $(healthy && echo ok || echo down)"
+  echo "registered $(alive "$AMD_WORK/tunnel.pid" && grep -q 'Registered tunnel connection' "$LOGS/tunnel.log" 2>/dev/null && echo yes || echo no)"
   echo "url     $([ -s "$AMD_WORK/public_url" ] && echo "$(cat "$AMD_WORK/public_url")/v1" || echo none)"
   [ -f "$LOGS/stats.log" ] && { echo "--- latest stats"; tail -n 20 "$LOGS/stats.log"; }
   return 0
@@ -698,10 +723,42 @@ cmd_stop() {
   echo "stopped"
 }
 
+# Offline regression check: a quick tunnel may print a URL without ever registering.
+test_tunnel_never_registers() (
+  AMD_WORK=$(mktemp -d)
+  AMD_TUNNEL_PROTOCOL=http2
+  trap 'rm -rf "$AMD_WORK"' EXIT
+  LOGS="$AMD_WORK/logs"
+  mkdir -p "$AMD_WORK/bin" "$LOGS"
+  printf '#!/usr/bin/env bash\necho mock-cloudflared\n' >"$AMD_WORK/bin/cloudflared"
+  chmod +x "$AMD_WORK/bin/cloudflared"
+  spawn() {
+    [[ " $* " == *" --protocol http2 "* ]] || die "mock: expected HTTP/2"
+    echo 'https://mock.trycloudflare.com' >"$2"
+    echo 123 >"$1"
+  }
+  alive() { return 1; }
+  kill_pidfile() { rm -f "$1"; }
+  sleep() { :; }
+  authcurl() { die "mock: public check ran before registration"; }
+  if (start_tunnel) >"$AMD_WORK/output" 2>&1; then
+    die "mock: a URL without registration was accepted"
+  fi
+  grep -q 'did not register a tunnel' "$AMD_WORK/output" || die "mock: missing registration error"
+  if grep -q 'checking https://mock.trycloudflare.com\|AMD_VLLM_BASE_URL=' "$AMD_WORK/output"; then
+    die "mock: unregistered URL was offered for use"
+  fi
+  grep -q 'https://mock.trycloudflare.com' "$LOGS/tunnel.log" || die "mock: missing URL in log"
+  [ ! -e "$AMD_WORK/public_url" ] || die "mock: public URL was saved"
+  [ ! -e "$AMD_WORK/tunnel.pid" ] || die "mock: tunnel pid was kept"
+  echo "tunnel registration mock: passed"
+)
+
 case "${1:-up}" in
   up) cmd_up ;;
   status) cmd_status ;;
   stop) cmd_stop ;;
   _stats) stats_loop ;;
+  _test_tunnel) test_tunnel_never_registers ;;
   *) die "usage: $0 [up|status|stop]" ;;
 esac

@@ -442,8 +442,8 @@ A visitor starts a game and plays one seat against the models, or watches an all
 server is `src/societysim/server/` (FastAPI, the `server` extra):
 `uv run --extra server uvicorn --factory societysim.server.app:create_app`. Request and response
 shapes are in `schema/play_api.schema.json` (`$defs`, plus `x-endpoints` mapping each endpoint
-to them). All bodies are JSON and closed: an unknown key is a 422. Errors are FastAPI's
-`{"detail": <string or list>}`.
+to them). All bodies are JSON and closed: an unknown key is a 422. Every error is
+`{"error": <code>, "message": <text>}` (`$defs.Error`); see "Errors and limits" below.
 
 | Endpoint | Auth | Request | Response |
 |---|---|---|---|
@@ -467,8 +467,8 @@ to them). All bodies are JSON and closed: an unknown key is a 422. Errors are Fa
 - Response: `{"game_id": "visitor-<16 hex>", "seat": "p0", "seat_token": "<43 chars>"}`;
   `seat` and `seat_token` are null for a watch-only game. The token is 256 random bits and the
   server keeps only its SHA-256, so it can't be shown again. Keep it for the rest of the game.
-- Errors: 422 bad setup (the detail names each problem), 429 or 403 from admission, 503 when play
-  is off or today's games are used up.
+- Errors: 422 bad setup (the message names each problem), 400 for a model outside the allowlist,
+  and the limits below (403, 429, 503).
 
 The other seats are LLM agents from `configs/models.yaml`. The game streams to Neon like
 `play --neon` and is logged to `runs/visitor/<game_id>.jsonl` with run_meta `agents: "llm"` and
@@ -495,9 +495,10 @@ an hour), 401 for a missing or wrong token (and for every token on a watch-only 
 | `pending_action.deadline` | number | Unix seconds |
 | `players` | list of `{seat, name, alive}` | Public |
 
-Nothing else is returned: no other seat's role, reasoning or suspicion. The Neon feed of a
-running game does hold all of that, so a play client must not show the live Neon events of the
-game its visitor is in until that game has ended.
+Nothing else is returned: no other seat's role, reasoning or suspicion. While a visitor game
+runs, Neon gets only its public events, with `private_reasoning` and `suspicion` removed (so `seq`
+has gaps and there is no `game_start`). Once the game reaches `game_end` the full log replaces
+them. A forfeited or failed game keeps the public-only rows.
 
 ### Moving: `POST /api/games/{id}/action`
 
@@ -530,6 +531,52 @@ timeouts in a row end the game as a forfeit: `status: "forfeit"`, the log stops 
 
 Visitor text reaches the models only through `observation.py`, as one line in double quotes it
 can't close or break out of, like every other player's speech.
+
+### Errors and limits
+
+Every error body is `{"error": "<code>", "message": "<text>"}`. Map on `error`; `message` is
+plain English the server wrote itself (never provider text, a stack trace or a key) and may change.
+
+| `error` | Status | When |
+|---|---|---|
+| `invalid_request` | 400, 422 | Bad body or setup; 400 for a model visitors may not use |
+| `unauthorized` | 401 | Missing or wrong seat token |
+| `bot_check_failed` | 403 | Turnstile token missing, wrong, or Cloudflare unreachable |
+| `forbidden` | 403 | Reserved |
+| `game_not_found` | 404 | Unknown game (or path) |
+| `not_your_turn` | 409 | No turn pending for your seat |
+| `payload_too_large` | 413 | Body over 16 KB (8 KB for a move) |
+| `rate_limited` | 429 | Too many requests from your IP; wait `Retry-After` seconds |
+| `active_game_exists` | 429 | Your IP already has a game running |
+| `too_many_games_today` | 429 | Your IP's games for this UTC day are used up; `Retry-After` is the time to midnight UTC |
+| `at_capacity` | 503 | All game slots are busy |
+| `budget_exhausted` | 503 | Today's spend cap is reached (or the spend ledger is unreachable) |
+| `play_disabled` | 503 | Play is switched off |
+| `internal_error` | 500 | A bug; nothing else is said |
+
+Limits, all set by env on the server (defaults in brackets):
+
+- `PLAY_RATE_PER_MIN` [120]: requests per minute per IP, token bucket. Poll `/me` at most once
+  a second.
+- `PLAY_MAX_ACTIVE_PER_IP` [1], `PLAY_MAX_GAMES_PER_IP_DAY` [5], `PLAY_MAX_CONCURRENT` [4]
+  running games in all. Watch-only games count the same.
+- `PLAY_MAX_GAME_MINUTES` [45]: a longer game is ended (`status: "failed"`).
+- `PLAY_DAILY_BUDGET_USD` [2.00]: model spend per UTC day, booked per call in Neon
+  (`visitor_spend`, not readable through the Data API). A game starts only if what is left
+  covers its estimate (the batch runner's price prior). If the cap is reached mid-game, the
+  remaining AI turns are played by scripted agents and the game finishes. `remaining_today` in
+  `/api/limits` is how many default games that leaves.
+- `PLAY_ALLOWED_MODELS` [qwen3-235b, llama4-maverick, gemma4-26b, gpt-oss-120b, deepseek-v3.1,
+  gemini-flash-lite, gpt-5-nano]: Basic mode uses the default lineup minus anything not allowed.
+  `PLAY_MAX_TOKENS` [2048] caps each call.
+- `PLAY_ENABLED=0` closes play at once (`/api/limits` says `play_enabled: false`).
+- `PLAY_TRUSTED_PROXIES` [none]: CIDRs whose `X-Forwarded-For` / `CF-Connecting-IP` are
+  believed. Otherwise the socket peer is the client.
+- CORS allows only `https://society-sim.us`, `https://www.society-sim.us`,
+  `https://societysim.pages.dev`, `https://$SPACE_HOST`, and `http://localhost:5173` in dev
+  mode, without credentials.
+- The server will not start without `TURNSTILE_SECRET_KEY` and `NEON_DATABASE_URL` unless
+  `PLAY_DEV_MODE=1` (local development only, which also skips Turnstile when its key is unset).
 
 ## Neon Data API
 

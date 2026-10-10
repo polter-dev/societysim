@@ -237,7 +237,8 @@ class EventLogger:
                     break
                 except asyncio.QueueFull:
                     q.get_nowait()
-        _, pending = await asyncio.wait(self._workers, timeout=timeout)
+        # asyncio.wait rejects an empty set, so skip it when there are no sinks
+        pending = (await asyncio.wait(self._workers, timeout=timeout))[1] if self._workers else ()
         for w in pending:  # ponytail: a stuck sink loses its backlog; fine for a log
             w.cancel()
         for sink in self._sinks:

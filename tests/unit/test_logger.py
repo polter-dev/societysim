@@ -88,3 +88,11 @@ async def test_slow_sink_does_not_block_and_drops(caplog):
             logger.log(**EV)  # sync; would hang if it waited on the sink
     assert "dropping" in caplog.text
     await logger.close(timeout=0.1)
+
+
+async def test_zero_sinks_lifecycle():
+    logger = EventLogger("g0", sinks=[])
+    await logger.start_game({}, seed=1, models=[])
+    assert logger.log(**EV).seq == 0
+    await logger.end_game(None)
+    await logger.close()

@@ -374,5 +374,31 @@ def report(
     typer.echo(f"wrote {out}")
 
 
+@app.command()
+def highlights(
+    batch: Annotated[Path, typer.Argument(help="Batch directory, e.g. runs/<batch>.")],
+    top: Annotated[int, typer.Option("--top", help="How many moments to keep.")] = 10,
+) -> None:
+    """Print the batch's best demo moments and write them to <batch>/highlights.json."""
+    from societysim.analysis.highlights import write_highlights
+
+    if not batch.is_dir():
+        typer.echo(f"not a directory: {batch}")
+        raise typer.Exit(1)
+    moments = write_highlights(batch, top)
+    typer.echo(
+        f"{'score':>5}  {'type':<20} {'game':<20} {'day':>3}  {'seq':<9} {'actor':<16} target"
+    )
+    for m in moments:
+        seq = f"{m['seq'][0]}-{m['seq'][1]}"
+        actor = f"{m['actor']} {m['actor_model']}"
+        target = f"{m['target']} {m['target_model']}" if m["target"] else "-"
+        typer.echo(
+            f"{m['score']:>5}  {m['type']:<20} {m['game_id']:<20} {m['day']:>3}  {seq:<9} "
+            f"{actor:<16} {target}\n       {m['description']}\n       {m['link']}"
+        )
+    typer.echo(f"wrote {batch / 'highlights.json'} ({len(moments)} moments)")
+
+
 if __name__ == "__main__":
     app()

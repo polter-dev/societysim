@@ -377,6 +377,7 @@ def test_top_pairs_need_five_votes_and_rank_by_follow_rate():
     assert "No lies were heard by another model." in lines
     assert "No truthful claims were heard." in lines
 
+
 async def test_index_and_report_for_a_ten_player_game(tmp_path):
     from functools import partial
 

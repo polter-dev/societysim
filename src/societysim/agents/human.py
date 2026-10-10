@@ -44,12 +44,12 @@ class HumanAgent:
         self,
         state: GameState,
         seat: str,
-        read: Callable[[str], str] = input,
-        write: Callable[[str], Any] = print,
+        read: Callable[[str], str] | None = None,  # default: input
+        write: Callable[[str], Any] | None = None,  # default: print
     ):
         cfg, role = state.config, state.roles[seat]
         self.system = system_prompt(seat, state.names[seat], role, cfg.rules, cfg.roles)
-        self.read, self.write = read, write
+        self.read, self.write = read or input, write or print
 
     async def act(self, turn: Turn) -> CompletionResult:
         # A daemon thread, not asyncio.to_thread: on Ctrl-C, asyncio.run would wait for a

@@ -119,6 +119,63 @@ def test_llm_mode_requires_provider_key_before_starting(tmp_path, monkeypatch):
     assert not (tmp_path / "runs").exists()
 
 
+def _answer(question: str) -> str:
+    """Scripted stdin for a human seat: the first option, nothing optional."""
+    if question.startswith(("statement", "message")):
+        return "I trust nobody yet."
+    if question.startswith(("vote", "target", "kill")):
+        return question.rsplit("(", 1)[1].split()[0].rstrip("):")
+    return ""  # accuse, claim, suspicion
+
+
+def test_human_seat_plays_against_llms_and_is_logged_as_human(tmp_path, monkeypatch):
+    from societysim.models import client as client_module
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOSTED_VLLM_API_KEY", "test-key")
+    monkeypatch.setattr("builtins.input", _answer)
+    clients = []
+
+    def fake_client(*, limits):
+        clients.append(FakeClient(players=[f"p{i}" for i in range(7)]))
+        return clients[-1]
+
+    monkeypatch.setattr(client_module, "LiteLLMClient", fake_client)
+    args = ["play", "--config", str(CONFIG), "--agents", "llm", "--human-seat", "p3"]
+    result = RUNNER.invoke(app, [*args, "--batch-id", "h"])
+    assert result.exit_code == 0, result.output
+    assert "You are playing Werewolf" in result.output
+    assert clients[0].calls  # the AI seats still go through the model client
+    log = tmp_path / "runs/h/h-s0.jsonl"
+    evs = events(log)
+    seats = evs[0]["meta"]["seats"]
+    assert seats["p3"]["model"] == "human"
+    assert {s["model"] for k, s in seats.items() if k != "p3"} == {"gemma4-26b"}
+    assert json.loads(log.with_suffix(".run_meta.json").read_text())["models"][3] == "human"
+    mine = [e for e in evs if e.get("actor") == "p3" and e.get("suspicion")]
+    assert mine
+    assert all(e["meta"]["suspicion_default"] is True for e in mine)
+    assert all(e["meta"]["usage"]["model"] == "human" for e in mine)
+    assert not any(e["meta"].get("suspicion_default") for e in evs if e.get("actor") != "p3")
+    assert not [e for e in evs if e["type"] == EventType.INVALID_OUTPUT and e["actor"] == "p3"]
+    assert evs[-1]["type"] == EventType.GAME_END
+
+
+def test_human_seat_stdin_eof_abandons_the_game(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    args = ["play", "--config", str(CONFIG), "--human-seat", "p0", "--batch-id", "h"]
+    result = RUNNER.invoke(app, args, input="")
+    assert result.exit_code == 130
+    assert "game abandoned" in result.output
+
+
+def test_human_seat_must_be_a_seat(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = RUNNER.invoke(app, ["play", "--config", str(CONFIG), "--human-seat", "p7"])
+    assert result.exit_code == 1
+    assert "--human-seat must be one of p0" in result.output
+
+
 @pytest.mark.live
 @pytest.mark.skipif(not os.environ.get("HF_TOKEN"), reason="HF_TOKEN is required")
 def test_real_hf_selfplay(tmp_path, monkeypatch):

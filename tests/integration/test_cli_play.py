@@ -119,6 +119,7 @@ def test_llm_mode_requires_provider_key_before_starting(tmp_path, monkeypatch):
     assert not (tmp_path / "runs").exists()
 
 
+@pytest.mark.live
 @pytest.mark.skipif(not os.environ.get("HF_TOKEN"), reason="HF_TOKEN is required")
 def test_real_hf_selfplay(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)

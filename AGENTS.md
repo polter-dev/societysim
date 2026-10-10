@@ -23,6 +23,7 @@ LLM agents from different providers play Werewolf. A deterministic Python engine
 uv sync --frozen                      # install (lockfile is committed)
 uv run ruff check && uv run ruff format --check
 uv run pytest
+SOCIETYSIM_LIVE=1 uv run pytest -m live   # deliberate paid API runs only; skipped otherwise
 uv run societysim --help
 # viewer (once viewer/ exists)
 cd viewer && npm ci && npm run build && npm test

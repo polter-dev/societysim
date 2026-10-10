@@ -45,3 +45,4 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 testpaths = ["tests"]
 pythonpath = ["tests"]
 asyncio_mode = "auto"
+markers = ["live: calls paid APIs; skipped unless SOCIETYSIM_LIVE=1"]

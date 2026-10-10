@@ -203,6 +203,7 @@ def test_claim_role_none_parses_as_no_claim():
     assert result.claim_role_confidence == 0.7
 
 
+@pytest.mark.live
 @pytest.mark.skipif(not os.environ.get("TYPESAFE_API_KEY"), reason="TYPESAFE_API_KEY unset")
 async def test_real_jev_on_fixture(tmp_path):
     results = {r.seq: r for r in await jev.classify_game(FIXTURE, cache_dir=tmp_path)}

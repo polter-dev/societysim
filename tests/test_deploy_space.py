@@ -9,6 +9,8 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "deploy-space.sh"
 FIXTURES = ROOT / "fixtures"
@@ -38,8 +40,13 @@ def _run(tmp_path: Path, *args: str, neon: bool = False, extra: dict | None = No
     if neon:
         env.update(VITE_NEON_DATA_API_URL="https://secret.example", VITE_NEON_ANON_KEY="k3y")
     env.update(extra or {})
+    # On Windows a bare "bash" resolves to the WSL launcher in System32 before PATH,
+    # so look it up on PATH (CI puts Git Bash first).
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash not found on PATH")
     return subprocess.run(
-        ["bash", str(SCRIPT), *args], capture_output=True, text=True, env=env, cwd=ROOT
+        [bash, str(SCRIPT), *args], capture_output=True, text=True, env=env, cwd=ROOT
     )
 
 

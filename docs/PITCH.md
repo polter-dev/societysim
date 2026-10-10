@@ -16,7 +16,7 @@ Times are cumulative.
 
 ### 0:00 to 0:20 Hook
 
-> Here is a line from one of our games. A wolf says "I'm the Seer, and I checked Ava: she's a wolf." He is not the Seer. His private notes, written the same turn, say so.
+> Here is a line from one of our games. A wolf says "I'm the Seer. I checked Ava last night and she is a wolf. Vote Ava today." His own notes that turn: claiming first makes Ava's counterclaim look desperate. The engine knows he's a wolf.
 
 That example is the hand-written sample game in `fixtures/sample_game.jsonl` (Finn; labels at seq 19 and 20 in `fixtures/sample_game.labels.jsonl`). It shows the shape of a real log but it is not model output, so don't call it one. `TODO(batch)`: swap in a real quote, its model name and seq numbers from the demo game.
 

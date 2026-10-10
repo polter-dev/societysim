@@ -14,6 +14,7 @@ from jsonschema import Draft202012Validator
 from societysim.analysis.highlights import write_highlights
 from societysim.analysis.labeler import label_batch
 from societysim.analysis.narrate import narrate
+from societysim.analysis.report import SCHEMA as REPORT_SCHEMA
 from societysim.analysis.report import write_report
 from societysim.batch.runner import run_batch
 from societysim.config import BatchConfig, ModelSpec
@@ -93,12 +94,14 @@ def test_highlight_links_and_narration_files(batch):
         assert (audio / clip["file"]).is_file()
 
 
-def test_schemas_share_the_documented_contract_version():
-    for name in STATIC:
-        v = schema(name)["x-contract-version"]
-        assert f"Contract version: {v}\n" in DOC, name
-    board = schema("leaderboard")["properties"]["schema"]["const"]
-    assert board == schema("leaderboard")["x-contract-version"]
+def test_one_contract_version_everywhere():
+    """CONTRACT_VERSION (gen-schema.sh), the doc and leaderboard.json's `schema` move together."""
+    versions = {schema(name)["x-contract-version"] for name in STATIC}
+    assert len(versions) == 1
+    (v,) = versions
+    assert f"Contract version: {v}\n" in DOC
+    assert v == REPORT_SCHEMA
+    assert schema("leaderboard")["properties"]["schema"]["const"] == v
 
 
 def test_doc_names_every_schema_file():

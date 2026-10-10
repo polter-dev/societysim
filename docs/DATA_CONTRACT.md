@@ -30,14 +30,15 @@ The viewer types should match these schemas. They can be generated the same way 
 - Events and labels carry `schema_version` on every line (1 or 2 today; the reader accepts both).
 - Static JSON files: one version for all of them, the **contract version** above. Each generated
   schema carries it as `"x-contract-version"`. `leaderboard.json` also carries it in-file as
-  `schema` (currently 1). The other files have no in-file version field: `index.json` and
+  `schema`, which always equals the contract version (currently 1). The other files have no in-file version field: `index.json` and
   `highlights.json` are bare lists, and we don't add a field just to carry a number.
 - Adding a field is not breaking. It still regenerates the schemas in the same PR (they reject
   unknown keys, so the contract tests fail until you do), and it updates this doc.
 - Renaming, removing or retyping a field, or changing what a value means, is breaking. Per
-  AGENTS.md hard rule 3 it needs its own ticket, a contract version bump (`CONTRACT_VERSION` in
-  `scripts/gen-schema.sh`, this doc, and `SCHEMA` in `analysis/report.py` if the leaderboard
-  changes), and regenerated schema files in the same PR.
+  AGENTS.md hard rule 3 it needs its own ticket, a contract version bump, and regenerated schema
+  files in the same PR. A bump changes all three together, whichever file broke:
+  `CONTRACT_VERSION` in `scripts/gen-schema.sh`, the version line at the top of this doc, and
+  `SCHEMA` in `analysis/report.py`. `tests/contract` fails if they disagree.
 - Neon: tables and views are versioned with this doc. Renaming or dropping a column exposed to
   `anonymous`, or changing a view's columns or their order, is breaking in the same way.
 
@@ -356,7 +357,7 @@ win.
 | Column | Type | Notes |
 |---|---|---|
 | `model` | text | |
-| `seat_games` | bigint | |
+| `seat_games` | bigint | Seats played, summed over games (a model can fill several seats in one game). Not a game count: it matches `seats` in `leaderboard.json`, not `games` |
 | `wins` | bigint | |
 | `win_rate` | numeric | 3 decimals, 0..1 |
 
@@ -389,7 +390,7 @@ status.
 
 ```
 GET {base}/games?select=game_id,models&order=started_at.desc.nullslast      game list
-GET {base}/games?select=game_id&status=eq.finished                          finished-game count
+GET {base}/games?select=game_id&status=eq.finished&or=(agents.is.null,agents.neq.scripted)   finished-game count
 GET {base}/events?select=event&game_id=eq.<id>&order=seq                    a whole game
 GET {base}/events?select=event&game_id=eq.<id>&seq=gt.<n>&order=seq         live poll after seq n
 GET {base}/labels?select=label&game_id=eq.<id>&order=idx                    a game's labels
@@ -397,6 +398,10 @@ GET {base}/leaderboard?select=model,seat_games,win_rate&order=win_rate.desc.null
 GET {base}/leaderboard_by_batch?select=*&batch_id=eq.<batch_id>
 GET {base}/lies_by_model?select=*&batch_id=eq.<batch_id>
 ```
+
+The finished-game count needs the `or=(agents.is.null,agents.neq.scripted)` filter to count the
+same games the views do. Without it, scripted games are counted while `leaderboard` leaves them
+out, and the count won't match the rows.
 
 Each returns a JSON array of row objects with the selected columns, for example
 `[{"event": {...}}]` or `[{"model": "a", "seat_games": 14, "win_rate": "0.571"}]`. URL-encode

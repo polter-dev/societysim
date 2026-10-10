@@ -25,6 +25,11 @@ describe("buildBeats", () => {
       [30, "death"],
     ]);
   });
+  it("exposes the seq range of each beat", () => {
+    expect(beats.find((b) => b.id === 18)).toMatchObject({ firstSeq: 18, lastSeq: 24 });
+    expect(beats.find((b) => b.id === 13)).toMatchObject({ firstSeq: 13, lastSeq: 16 });
+    expect(beats[0]).toMatchObject({ firstSeq: 0, lastSeq: 0 });
+  });
   it("folds the elimination into the vote beat and chat into its neighbour", () => {
     expect(beats.find((b) => b.id === 18)?.endIdx).toBe(24);
     expect(beats.find((b) => b.id === 1)?.endIdx).toBe(5);

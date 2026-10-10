@@ -71,6 +71,21 @@ export async function loadIndex(
   }
 }
 
+/** Clips whose seq is in [firstSeq, lastSeq] (a stepper beat), in index order, filtered by mode and toggles. */
+export function clipsForSeqRange(
+  index: NarrationIndex | null,
+  firstSeq: number,
+  lastSeq: number,
+  mode: Mode,
+  enabled: Enabled = DEFAULT_ENABLED,
+): Clip[] {
+  if (!index) return [];
+  const ok = allowedCategories(mode);
+  return index.clips.filter(
+    (c) => c.seq >= firstSeq && c.seq <= lastSeq && ok.includes(c.category) && enabled[c.category],
+  );
+}
+
 /** Clips that follow event `seq`, in index order, filtered by mode and toggles. */
 export function clipsForSeq(
   index: NarrationIndex | null,
@@ -78,9 +93,7 @@ export function clipsForSeq(
   mode: Mode,
   enabled: Enabled = DEFAULT_ENABLED,
 ): Clip[] {
-  if (!index) return [];
-  const ok = allowedCategories(mode);
-  return index.clips.filter((c) => c.seq === seq && ok.includes(c.category) && enabled[c.category]);
+  return clipsForSeqRange(index, seq, seq, mode, enabled);
 }
 
 /** URL of a clip given the index.json URL (clips sit beside it). */

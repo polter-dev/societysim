@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Mode } from "../scene/deriveScene";
 import {
   type Category,
-  clipsForSeq,
+  clipsForSeqRange,
   clipUrl,
   DEFAULT_ENABLED,
   type Enabled,
@@ -12,11 +12,14 @@ import {
 import { type AudioLike, createPlayer } from "./player";
 
 /**
- * Narration for the current step. `seq` is the seq of the event at the current step
- * (null when there is none). Each change of seq, mode or toggles stops the old clips first.
+ * Narration for the current step. `at` is one event seq, or `{ first, last }` (a stepper beat's
+ * firstSeq/lastSeq) to play every clip in the range; null when there is none.
+ * Each change of range, mode or toggles stops the old clips first.
  * `indexUrl` is the URL of `<game_id>.audio/index.json`, or null for no narration.
  */
-export function useNarration(indexUrl: string | null, seq: number | null, mode: Mode) {
+export function useNarration(indexUrl: string | null, at: number | { first: number; last: number } | null, mode: Mode) {
+  const first = at === null ? null : typeof at === "number" ? at : at.first;
+  const last = at === null ? null : typeof at === "number" ? at : at.last;
   const [on, setOn] = useState(false);
   const [enabled, setEnabled] = useState<Enabled>(DEFAULT_ENABLED);
   const [index, setIndex] = useState<NarrationIndex | null>(null);
@@ -41,9 +44,9 @@ export function useNarration(indexUrl: string | null, seq: number | null, mode: 
   }, [indexUrl]);
 
   useEffect(() => {
-    if (!on || seq === null) player.stop();
-    else player.play(clipsForSeq(index, seq, mode, enabled));
-  }, [on, seq, mode, enabled, index, player]);
+    if (!on || first === null || last === null) player.stop();
+    else player.play(clipsForSeqRange(index, first, last, mode, enabled));
+  }, [on, first, last, mode, enabled, index, player]);
   useEffect(() => player.stop, [player]);
 
   return {

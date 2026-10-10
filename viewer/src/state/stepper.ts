@@ -13,6 +13,9 @@ export type BeatKind =
 export interface Beat {
   /** Stable id: seq of the beat's first event. */
   id: number;
+  /** Seq of the first and last event in the beat; narration plays clips in this range. */
+  firstSeq: number;
+  lastSeq: number;
   kind: BeatKind;
   /** Index into `events` of the beat's last event; pass to deriveScene(events, endIdx, mode). */
   endIdx: number;
@@ -43,8 +46,11 @@ export function buildBeats(events: Event[]): Beat[] {
     if (isVote && !prevVote) kind = "vote_result";
     // the elimination (or tie) closes the vote beat it follows
     if (last?.kind === "vote_result" && (e.type === "elimination" || e.type === "no_elimination")) kind = undefined;
-    if (kind || !last) beats.push({ id: e.seq, kind: kind ?? "phase", endIdx: i });
-    else last.endIdx = i;
+    if (kind || !last) beats.push({ id: e.seq, firstSeq: e.seq, lastSeq: e.seq, kind: kind ?? "phase", endIdx: i });
+    else {
+      last.endIdx = i;
+      last.lastSeq = e.seq;
+    }
     prevVote = isVote;
   });
   return beats;

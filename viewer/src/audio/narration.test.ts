@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { clipsForSeq, clipUrl, DEFAULT_ENABLED, loadIndex, parseIndex } from "./narration";
+import { clipsForSeq, clipsForSeqRange, clipUrl, DEFAULT_ENABLED, loadIndex, parseIndex } from "./narration";
 import { type AudioLike, createPlayer } from "./player";
 
 const clip = (seq: number, category: string, file: string) => ({
@@ -122,5 +122,21 @@ describe("createPlayer", () => {
     p.stop();
     expect(made[0].pause).toHaveBeenCalled();
     expect(made[0].onended).toBeNull();
+  });
+});
+
+describe("clipsForSeqRange", () => {
+  const idx = parseIndex(raw);
+  it("returns clips from every seq in the range, in index order", () => {
+    expect(clipsForSeqRange(idx, 3, 4, "narrator").map((c) => c.file)).toEqual(["a.mp3", "e.mp3"]);
+    expect(clipsForSeqRange(idx, 4, 9, "narrator").map((c) => c.file)).toEqual(["e.mp3"]);
+    expect(clipsForSeqRange(idx, 0, 2, "narrator")).toEqual([]);
+  });
+  it("still hides wolf_chat and highlight in villager mode", () => {
+    const files = clipsForSeqRange(idx, 3, 4, "villager", all).map((c) => c.file);
+    expect(files).toEqual(["a.mp3", "b.mp3", "e.mp3"]);
+  });
+  it("handles a null index", () => {
+    expect(clipsForSeqRange(null, 0, 9, "narrator")).toEqual([]);
   });
 });

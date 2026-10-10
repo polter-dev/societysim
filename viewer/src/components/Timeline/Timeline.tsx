@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { type Mode } from "../../scene/deriveScene";
 import type { Event, Label } from "../../types/events";
-import { buildTimelineGroups, type MarkerKind } from "./markers";
+import { buildTimelineGroups } from "./markers";
 import { indexForSeq, stepSeq } from "./seq";
 import { useSeqParam } from "./useSeqParam";
 
@@ -14,12 +14,6 @@ export interface TimelineProps {
 }
 
 const EMPTY_LABELS: Label[] = [];
-const markerColor: Record<MarkerKind, string> = {
-  kill: "#b42318",
-  vote: "#175cd3",
-  lie: "#9333aa",
-};
-
 export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqChange }: TimelineProps) {
   const [seq, setSeq] = useSeqParam(events);
   const [playing, setPlaying] = useState(false);
@@ -127,9 +121,9 @@ export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqCha
                 title={marker.title}
                 aria-label={`${marker.title}, event ${marker.seq}`}
                 data-label-type={marker.labelType}
-                style={{ color: markerColor[marker.kind], marginLeft: 4 }}
+                style={{ color: marker.appearance.color, marginLeft: 4 }}
               >
-                {marker.kind === "kill" ? "✝" : marker.kind === "vote" ? "●" : "!"}
+                {marker.appearance.glyph}
               </button>
             ))}
           </div>

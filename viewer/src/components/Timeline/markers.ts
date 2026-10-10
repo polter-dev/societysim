@@ -3,10 +3,34 @@ import type { Event, Label, LabelType, Phase } from "../../types/events";
 
 export type MarkerKind = "kill" | "vote" | "lie";
 
+interface MarkerAppearance {
+  glyph: string;
+  color: string;
+}
+
+export const MARKER_APPEARANCE = {
+  kill: { glyph: "✝", color: "#b42318" },
+  vote: { glyph: "●", color: "#175cd3" },
+  false_role_claim: { glyph: "R", color: "#9333aa" },
+  false_report: { glyph: "S", color: "#b54708" },
+  bussing: { glyph: "B", color: "#b42318" },
+  hidden_knowledge: { glyph: "K", color: "#6941c6" },
+  mis_elimination: { glyph: "X", color: "#475467" },
+} satisfies Record<"kill" | "vote" | LabelType, MarkerAppearance>;
+
+const LABEL_TITLES: Record<LabelType, string> = {
+  false_role_claim: "False role claim",
+  false_report: "False report",
+  bussing: "Bussing",
+  hidden_knowledge: "Hidden knowledge",
+  mis_elimination: "Villager voted out",
+};
+
 export interface TimelineMarker {
   seq: number;
   kind: MarkerKind;
   title: string;
+  appearance: MarkerAppearance;
   labelType?: LabelType;
 }
 
@@ -40,9 +64,9 @@ export function buildTimelineGroups(
     }
     group.endSeq = event.seq;
     if ((event.type === "death_reveal" || event.type === "elimination") && event.target) {
-      group.markers.push({ seq: event.seq, kind: "kill", title: `${event.type === "elimination" ? "Elimination" : "Death"}: ${event.target}` });
+      group.markers.push({ seq: event.seq, kind: "kill", title: `${event.type === "elimination" ? "Elimination" : "Death"}: ${event.target}`, appearance: MARKER_APPEARANCE.kill });
     } else if (event.type === "vote") {
-      group.markers.push({ seq: event.seq, kind: "vote", title: `Vote: ${event.actor ?? "unknown"} → ${event.target ?? "abstain"}` });
+      group.markers.push({ seq: event.seq, kind: "vote", title: `Vote: ${event.actor ?? "unknown"} → ${event.target ?? "abstain"}`, appearance: MARKER_APPEARANCE.vote });
     }
   }
 
@@ -53,7 +77,10 @@ export function buildTimelineGroups(
       byKey.get(`${event.day}:${event.phase}`)?.markers.push({
         seq: event.seq,
         kind: "lie",
-        title: `Lie: ${label.actor} (${label.label.replaceAll("_", " ")})`,
+        title: label.label === "mis_elimination"
+          ? `${LABEL_TITLES.mis_elimination}: vote by ${label.actor}`
+          : `${LABEL_TITLES[label.label]}: ${label.actor}`,
+        appearance: MARKER_APPEARANCE[label.label],
         labelType: label.label,
       });
     }

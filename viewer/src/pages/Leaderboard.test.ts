@@ -2,7 +2,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { type Board, type BoardRow, LeaderboardTable } from "./Leaderboard";
+import LeaderboardPage, { type Board, type BoardRow, GlobalSection, LeaderboardTable } from "./Leaderboard";
 
 const row = (over: Partial<BoardRow>): BoardRow => ({
   model: "m",
@@ -61,5 +61,23 @@ describe("LeaderboardTable profile links", () => {
     );
     expect(html).toContain('<th scope="row"><a href="?page=model&amp;model=alpha">alpha</a></th>');
     expect(renderToStaticMarkup(createElement(LeaderboardTable, { board }))).not.toContain("<a ");
+  });
+});
+
+describe("Leaderboard page global board", () => {
+  it("mounts the global board, even before the model table loads", () => {
+    const html = renderToStaticMarkup(
+      createElement(LeaderboardPage, { leaderboardUrl: "x.json", metricsUrl: "y.json", globalBoard: true }),
+    );
+    expect(html).toContain("Loading leaderboard...");
+    expect(html).toContain("Global rankings");
+    expect(html).toContain('class="global-leaderboard"');
+    expect(html).toContain("Loading the leaderboard");
+  });
+
+  it("without Neon vars it explains and renders no board", () => {
+    const html = renderToStaticMarkup(createElement(GlobalSection, { enabled: false }));
+    expect(html).toContain("need live data");
+    expect(html).not.toContain("global-leaderboard");
   });
 });

@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { GlobalLeaderboard } from "../components/GlobalLeaderboard/GlobalLeaderboard";
+import { useGlobalBoard } from "../data/globalBoard";
 import { fetchJson } from "../data/staticSource";
 
 /** leaderboard.json from `societysim report` (shape documented in analysis/report.py). */
@@ -106,6 +108,30 @@ export function LeaderboardTable({
 }
 
 /**
+ * Best detectors and best liars across every finished game, visitor games included (#344, #366).
+ * Reads the Neon views global_detectors / global_liars, which only count finished games. With no
+ * Neon vars there is no static copy of this board, so it says so and makes no request.
+ */
+export function GlobalSection({ enabled }: { enabled: boolean }) {
+  return (
+    <section aria-labelledby="global-rankings" className="global-rankings">
+      <h2 id="global-rankings">Global rankings</h2>
+      {enabled ? (
+        <LiveGlobalBoard />
+      ) : (
+        <p>The global rankings need live data, which this build doesn't have. The model table above is from the published batch.</p>
+      )}
+    </section>
+  );
+}
+
+// Separate component so the polling hook only runs when Neon is configured.
+function LiveGlobalBoard() {
+  const { board, error } = useGlobalBoard();
+  return <GlobalLeaderboard board={board} error={error} />;
+}
+
+/**
  * Loads leaderboard.json, plus metrics.json for OpenSkill by side when it is there.
  * `loadBoard` (the Neon leaderboard view) is tried first; the static files are the fallback.
  */
@@ -114,11 +140,14 @@ export default function LeaderboardPage({
   metricsUrl,
   loadBoard,
   profileHref,
+  globalBoard = false,
 }: {
   leaderboardUrl: string;
   metricsUrl: string;
   loadBoard?: () => Promise<Board>;
   profileHref?: (model: string) => string;
+  /** True when the build has the Neon URLs; mounts the global detectors/liars board. */
+  globalBoard?: boolean;
 }) {
   const [board, setBoard] = useState<Board | null>(null);
   const [bySide, setBySide] = useState<BySide>({});
@@ -136,7 +165,16 @@ export default function LeaderboardPage({
     else fromFiles();
   }, [leaderboardUrl, metricsUrl, loadBoard]);
 
-  if (error) return <p role="alert">Could not load the leaderboard: {error}</p>;
-  if (!board) return <p>Loading leaderboard...</p>;
-  return <LeaderboardTable board={board} bySide={bySide} profileHref={profileHref} />;
+  return (
+    <>
+      {error ? (
+        <p role="alert">Could not load the leaderboard: {error}</p>
+      ) : !board ? (
+        <p>Loading leaderboard...</p>
+      ) : (
+        <LeaderboardTable board={board} bySide={bySide} profileHref={profileHref} />
+      )}
+      <GlobalSection enabled={globalBoard} />
+    </>
+  );
 }

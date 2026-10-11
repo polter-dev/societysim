@@ -68,6 +68,7 @@ createRoot(document.getElementById("root")!).render(
             metricsUrl={sibling("metrics.json")}
             loadBoard={neon?.loadBoard}
             profileHref={profileHref}
+            globalBoard={Boolean(VITE_NEON_DATA_API_URL && VITE_NEON_AUTH_URL)}
           />
         ) : page === "research" ? (
           <ResearchPage metricsUrl={sibling("metrics.json")} />

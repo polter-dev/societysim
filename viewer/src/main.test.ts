@@ -61,3 +61,13 @@ describe("main.tsx global rankings gate", () => {
     expect(props?.globalBoard).toBe(false);
   });
 });
+
+describe("main.tsx model page heading", () => {
+  it("shows the short model name with the full id in title", async () => {
+    vi.doMock("./components/ModelProfile/ModelProfile", () => ({ default: () => null }));
+    await loadMain("?page=model&model=gemini-flash", false);
+    const h1 = document.querySelector("h1")!;
+    expect(h1.textContent).toBe("SocietySim Gemini Flash");
+    expect(h1.getAttribute("title")).toBe("gemini-flash");
+  });
+});

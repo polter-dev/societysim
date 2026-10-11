@@ -30,6 +30,11 @@ on conflict (game_id) do update set
     batch_id = excluded.batch_id, status = 'running', winner = null, ended_at = null,
     models = excluded.models, started_at = excluded.started_at, agents = excluded.agents
 """
+# sync_game: a re-sync with no known start time keeps the one already on the row (#497).
+_SYNC_GAME = _INSERT_GAME.replace(
+    "started_at = excluded.started_at,",
+    "started_at = coalesce(excluded.started_at, games.started_at),",
+)
 _INSERT_EVENT = """
 insert into events (game_id, seq, day, phase, type, actor, schema_version, event)
 values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
@@ -424,12 +429,16 @@ async def sync_game(path: Path, conn: Any, chunk: int = 500) -> dict[str, int] |
     start_meta = events[0]["meta"] if events[0]["type"] == "game_start" else {}
     models = public_seats(start_meta)
     end = next((e for e in reversed(events) if e["type"] == "game_end"), None)
-    started = start_meta.get("ts")
+    started = None
     agents = None
     meta_path = batch_dir / f"{path.stem}.run_meta.json"
     if meta_path.is_file():
         with contextlib.suppress(OSError, ValueError, AttributeError):
-            agents = json.loads(read_text_lenient(meta_path)).get("agents")
+            run_meta = json.loads(read_text_lenient(meta_path))
+            agents = run_meta.get("agents")
+            started = run_meta.get("started_at")
+    # The engine writes no meta.ts, so run_meta is the real start time (#497).
+    started = started or start_meta.get("ts")
     rows = [event_row(e) for e in events]
     winner = end["meta"].get("winner") if end else None
     labels_path = batch_dir / f"{path.stem}.labels.jsonl"
@@ -438,7 +447,7 @@ async def sync_game(path: Path, conn: Any, chunk: int = 500) -> dict[str, int] |
     # and readers never see it half-written.
     async with conn.transaction():
         await conn.execute(
-            _INSERT_GAME,
+            _SYNC_GAME,
             gid,
             batch_dir.name,
             json.dumps(models),

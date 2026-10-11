@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 import asyncpg
@@ -680,6 +681,56 @@ async def test_resync_replaces_events_and_drops_extra_labels(tmp_path):
     ep.write_text("\n".join(ep.read_text(encoding="utf-8").splitlines()[:5]) + "\n")
     await sync_batch(batch, conn)
     assert sorted(k[1] for k in conn.events) == list(range(5))
+
+
+def _games_insert(conn: FakeConn) -> tuple[str, tuple]:
+    return next((s, a) for s, a in conn.executed if "insert into games" in s)
+
+
+def _drop_game_start_ts(batch: Path) -> None:
+    ep = batch / "fixture-0001.jsonl"
+    lines = ep.read_text(encoding="utf-8").splitlines()
+    first = json.loads(lines[0])
+    first["meta"].pop("ts")  # the engine never writes it
+    lines[0] = json.dumps(first)
+    ep.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+async def test_sync_game_takes_started_at_from_run_meta(tmp_path):
+    batch = _batch(tmp_path)
+    _drop_game_start_ts(batch)
+    (batch / "fixture-0001.run_meta.json").write_text(
+        '{"started_at": "2026-10-10T09:30:00+00:00"}', encoding="utf-8"
+    )
+    conn = FakeConn()
+    await sync_batch(batch, conn)
+    assert _games_insert(conn)[1][3] == datetime(2026, 10, 10, 9, 30, tzinfo=UTC)
+
+
+async def test_sync_game_falls_back_to_game_start_ts(tmp_path):
+    conn = FakeConn()
+    await sync_batch(_batch(tmp_path), conn)  # fixture has meta.ts and no run_meta
+    assert _games_insert(conn)[1][3] == datetime(2026, 10, 10, 12, 0, tzinfo=UTC)
+
+
+async def test_resync_without_a_start_time_keeps_the_stored_one(tmp_path):
+    batch = _batch(tmp_path)
+    _drop_game_start_ts(batch)
+    conn = FakeConn()
+    await sync_batch(batch, conn)
+    sql, args = _games_insert(conn)
+    assert args[3] is None  # nothing to write, so the upsert must not null the column
+    assert "started_at = coalesce(excluded.started_at, games.started_at)" in sql
+
+
+async def test_start_game_still_resets_started_at():
+    conn = FakeConn()
+
+    async def connect():
+        return conn
+
+    await NeonSink("b1", connect=connect).start_game({"game_id": "g1", "models": []})
+    assert "started_at = excluded.started_at" in _games_insert(conn)[0]
 
 
 async def test_delete_games_reports_unknown_ids(tmp_path):

@@ -15,7 +15,9 @@ from fakes import FakeClient  # noqa: E402
 
 from societysim.agents.llm_agent import llm_agents  # noqa: E402
 from societysim.agents.scripted import RandomAgent  # noqa: E402
+from societysim.models.client import Usage  # noqa: E402
 from societysim.models.registry import load_registry  # noqa: E402
+from societysim.server import manager as play_manager  # noqa: E402
 from societysim.server.app import create_app, play_api_json_schema  # noqa: E402
 from societysim.server.manager import Settings  # noqa: E402
 from societysim.setup import REGISTRY  # noqa: E402
@@ -153,7 +155,10 @@ def p0(events, type_):
 
 async def test_health_and_limits(make_client):
     async with make_client() as c:
-        assert (await c.get("/api/health")).json() == {"ok": True}
+        assert (await c.get("/api/health")).json() == {
+            "ok": True,
+            "providers_ready": play_manager.providers_ready(),
+        }
         limits = (await c.get("/api/limits")).json()
         assert limits["play_enabled"] is True and limits["remaining_today"] > 0
     async with make_client(play_enabled=False) as c:
@@ -390,3 +395,32 @@ async def test_play_api_schema_is_current_and_valid(make_client):
         check("ActionBody", move(me["pending_action"]))
         with pytest.raises(jsonschema.ValidationError):
             check("StartGame", {"setup": {}, "extra": 1})
+
+
+def test_play_keys_map_to_provider_names_and_win():
+    env = {"PLAY_OPENAI_API_KEY": "play-o", "OPENAI_API_KEY": "broad", "PLAY_HF_TOKEN": "play-h"}
+    play_manager.map_play_keys(env)
+    assert env["OPENAI_API_KEY"] == "play-o" and env["HF_TOKEN"] == "play-h"
+    assert "GEMINI_API_KEY" not in env
+    assert play_manager.providers_ready(env) == {
+        "openai": True,
+        "huggingface": True,
+        "gemini": False,
+    }
+
+
+async def test_health_reports_providers_ready(make_client, monkeypatch):
+    for name in ("OPENAI_API_KEY", "HF_TOKEN", "GEMINI_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("PLAY_GEMINI_API_KEY", "g")
+    async with make_client() as c:
+        ready = (await c.get("/api/health")).json()["providers_ready"]
+    assert ready == {"openai": False, "huggingface": False, "gemini": True}
+
+
+def test_auth_failure_logged_without_key(caplog):
+    err = "AuthenticationError: missing or invalid API key for gpt; set OPENAI_API_KEY in .env"
+    r = play_manager.CompletionResult(parsed=None, raw="", error=err, usage=Usage(model="gpt"))
+    with caplog.at_level("WARNING"):
+        play_manager.scrub(r)
+    assert "missing or invalid API key for gpt" in caplog.text

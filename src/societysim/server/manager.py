@@ -81,10 +81,40 @@ class Settings:
     play: PlayConfig = field(default_factory=PlayConfig.from_env)  # limits (#281)
 
 
+# Restricted visitor-play keys -> the names litellm and models/client.py API_KEY_ENV read.
+PLAY_KEYS = {
+    "PLAY_OPENAI_API_KEY": ("openai", "OPENAI_API_KEY"),
+    "PLAY_HF_TOKEN": ("huggingface", "HF_TOKEN"),
+    "PLAY_GEMINI_API_KEY": ("gemini", "GEMINI_API_KEY"),
+}
+
+
+def map_play_keys(env: dict[str, str] | None = None) -> None:
+    """Copies each PLAY_* key onto its provider name. PLAY_* wins when both are set, so the
+    server uses the restricted play keys, not a broader key left in the environment."""
+    env = os.environ if env is None else env
+    for play, (_, name) in PLAY_KEYS.items():
+        if env.get(play):
+            env[name] = env[play]
+
+
+def providers_ready(env: Mapping[str, str] | None = None) -> dict[str, bool]:
+    env = os.environ if env is None else env
+    return {provider: bool(env.get(name)) for _, (provider, name) in PLAY_KEYS.items()}
+
+
+def startup_check() -> None:
+    """Maps the play keys and logs one line per provider: presence only, never the value."""
+    map_play_keys()
+    for provider, ready in providers_ready().items():
+        log.info("provider %s: key %s", provider, "present" if ready else "MISSING")
+
+
 @cache
 def _registry():
     from societysim.models.registry import load_registry
 
+    map_play_keys()
     reg = load_registry(REGISTRY)
     reg.apply_env()
     return reg
@@ -128,6 +158,8 @@ def scrub(result: CompletionResult) -> CompletionResult:
         error = TIMED_OUT
     else:
         error = CALL_FAILED
+        if "missing or invalid API key" in result.error:  # message names the model, not the key
+            log.warning("model auth failure: %s", result.error)
     return result.model_copy(update={"error": error, "raw": security.redact(result.raw)})
 
 

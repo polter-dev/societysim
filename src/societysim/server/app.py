@@ -22,6 +22,7 @@ from societysim.agents.prompts import Action
 from societysim.agents.schemas import StatementAction, TargetAction, VoteAction, WolfChatAction
 from societysim.roles import Phase, Role, SeatId, Winner
 from societysim.server import admission, alerts, security
+from societysim.server import manager as manager_mod
 from societysim.server.ledger import Ledger
 from societysim.server.manager import GameManager, HumanReasoning, Session, Settings, Status
 from societysim.server.security import Error, PlayError
@@ -94,6 +95,7 @@ class Limits(_Strict):
 
 class Health(_Strict):
     ok: Literal[True] = True
+    providers_ready: dict[str, bool]  # key present per provider; never the key itself
 
 
 class ActionBody(_Strict):
@@ -114,6 +116,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     except Exception as exc:
         alerts.send(f"Play server failed to start: {type(exc).__name__}")  # type only
         raise
+    manager_mod.startup_check()
     ledger = Ledger(play.daily_budget_usd, persistent=settings.neon)
     watch = alerts.Alerts()
     ledger.on_spend = watch.spend
@@ -147,7 +150,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/health")
     async def health() -> Health:
-        return Health()
+        return Health(providers_ready=manager_mod.providers_ready())
 
     @app.get("/api/limits")
     async def limits(request: Request) -> Limits:

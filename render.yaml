@@ -11,6 +11,8 @@ services:
     numInstances: 1 # game state is in memory: never scale out or autoscale
     healthCheckPath: /api/health
     envVars:
+      # The server maps PLAY_* onto OPENAI_API_KEY / HF_TOKEN / GEMINI_API_KEY at startup and
+      # PLAY_* wins over a plain provider var. /api/health shows providers_ready per provider.
       - key: PLAY_OPENAI_API_KEY
         sync: false
       - key: PLAY_HF_TOKEN

@@ -222,8 +222,18 @@
           "default": true,
           "title": "Ok",
           "type": "boolean"
+        },
+        "providers_ready": {
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "title": "Providers Ready",
+          "type": "object"
         }
       },
+      "required": [
+        "providers_ready"
+      ],
       "title": "Health",
       "type": "object"
     },

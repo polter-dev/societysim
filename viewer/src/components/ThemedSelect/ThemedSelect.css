@@ -1,0 +1,32 @@
+/* Restyle by overriding these on :root (the list is portaled to <body>, so set them there, not on a parent). */
+:root{--ts-ink:#eee4bc;--ts-ink-strong:#fff0c5;--ts-muted:#b4bba0;--ts-gold:#c9a24f;--ts-gold-deep:#8b6e27;--ts-focus:#ffe89f;--ts-marble:#0b3f2c;--ts-marble-deep:#04251e;--ts-font:Georgia,'Times New Roman',serif}
+
+.themed-select{display:inline-flex;min-width:0}
+.themed-select__trigger{display:flex;align-items:center;justify-content:flex-end;gap:.55em;width:100%;min-width:0;padding:4px 0;border:0;background:none;color:var(--ts-ink-strong);font:inherit;font-variant:normal;cursor:pointer;text-align:right;outline-offset:3px;-webkit-tap-highlight-color:transparent}
+.themed-select__trigger:disabled{opacity:.65;cursor:default}
+.themed-select__trigger:focus-visible{outline:2px solid var(--ts-focus)}
+.themed-select__value{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.themed-select__chevron{flex:none;width:.42em;height:.42em;border:solid var(--ts-gold);border-width:0 1.5px 1.5px 0;rotate:45deg;translate:0 -.15em;transition:rotate .2s,translate .2s}
+.themed-select__trigger[aria-expanded=true] .themed-select__chevron{rotate:225deg;translate:0 .1em}
+
+.themed-select__list{position:fixed;z-index:1000;box-sizing:border-box;margin:0;padding:10px 6px;list-style:none;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--ts-gold-deep) transparent;
+  font:400 clamp(15px,1.05vw,20px)/1.2 var(--ts-font);font-variant:small-caps;color:var(--ts-ink);
+  background:radial-gradient(ellipse at 25% 15%,#ffffff0d,transparent 45%),linear-gradient(118deg,transparent 46%,#7fbf8a14 47.5%,transparent 49%),linear-gradient(64deg,transparent 70%,#7fbf8a10 71%,transparent 72.5%),radial-gradient(ellipse at 35% 30%,var(--ts-marble),var(--ts-marble-deep) 85%);
+  border:1px solid var(--ts-gold);border-radius:10px;
+  box-shadow:inset 0 0 0 3px var(--ts-marble-deep),inset 0 0 0 4px #c9a24f66,0 14px 30px -6px #000c,0 4px 10px #0008;
+  transform-origin:top right;animation:themed-select-in .16s cubic-bezier(.16,1,.3,1)}
+.themed-select__list--up{transform-origin:bottom right;animation-name:themed-select-in-up}
+.themed-select__option{display:flex;align-items:center;gap:.6em;min-height:2.1em;padding:.3em 1em .3em .5em;border-radius:6px;cursor:pointer;white-space:nowrap;letter-spacing:.02em;transition:background-color .12s,color .12s}
+.themed-select__option.is-active{color:var(--ts-ink-strong);background:linear-gradient(90deg,#c9a24f40,#c9a24f12 70%,transparent);box-shadow:inset 0 0 0 1px #ffe89f55}
+.themed-select__option[aria-selected=true]{color:var(--ts-focus)}
+.themed-select__option[aria-disabled=true]{color:var(--ts-muted);opacity:.55;cursor:not-allowed;font-style:italic}
+.themed-select__option[aria-disabled=true].is-active{background:none;box-shadow:none}
+.themed-select__check{flex:none;width:1em;display:grid;place-items:center}
+.themed-select__option[aria-selected=true] .themed-select__check::before{content:'';width:.32em;height:.62em;border:solid var(--ts-gold);border-width:0 2px 2px 0;rotate:45deg;translate:0 -.1em}
+.themed-select__avatar{flex:none;display:grid;place-items:center;width:1.7em;height:1.7em;border-radius:50%;overflow:hidden;border:1px solid var(--ts-gold);background:var(--ts-marble-deep);color:var(--ts-ink-strong);font-size:.85em;font-variant:normal}
+.themed-select__avatar img{width:100%;height:100%;object-fit:cover}
+.themed-select__label{min-width:0;overflow:hidden;text-overflow:ellipsis}
+@media(pointer:coarse){.themed-select__option{min-height:44px}}
+@keyframes themed-select-in{from{opacity:0;transform:translateY(-6px) scaleY(.96)}}
+@keyframes themed-select-in-up{from{opacity:0;transform:translateY(6px) scaleY(.96)}}
+@media(prefers-reduced-motion:reduce){.themed-select__list{animation:none}.themed-select__chevron{transition:none}}

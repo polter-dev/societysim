@@ -5,6 +5,8 @@ import { allowedModels } from '../play/allowed';
 import { playEnabled } from '../play/config';
 import { useTurnstile } from '../play/useTurnstile';
 import type { Limits } from '../play/types';
+import { avatarFor } from '../data/models';
+import { ThemedSelect } from '../components/ThemedSelect/ThemedSelect';
 import back from './assets/modes/back.png';
 import rules from './assets/advanced/rules.png';
 import ai from './assets/advanced/ai.png';
@@ -68,6 +70,7 @@ export default function AdvancedSetup({ catalogUrl, schemaUrl, href, go = (url: 
   const models = state.seats.slice(0,state.nPlayers).filter(m => m !== HUMAN);
   const defaultLineup = state.seats.slice(0,state.nPlayers).every((model,i) => model === HUMAN || model === defaults[i]);
   const selectedModel = defaultLineup ? '__default' : models.every(m => m === models[0]) ? models[0] : '__custom';
+  const modelOptions = catalog.models.map(m => ({value:m.name,label:`${modelLabel(m)}${m.available ? '' : ' (unavailable)'}`,disabled:!m.available,title:m.unavailable_reason ?? undefined,icon:avatarFor(m.name)}));
   const update = (patch: Partial<SetupState>) => setState(s => ({ ...s, ...patch }));
 
   const submit = async () => {
@@ -90,18 +93,17 @@ export default function AdvancedSetup({ catalogUrl, schemaUrl, href, go = (url: 
       <form onSubmit={e => { e.preventDefault(); void submit(); }}>
         <div className="advanced-columns">
           <fieldset><legend><img src={rules} alt="Game rules" /></legend>
-            <label className="advanced-row"><span>Seats</span><select aria-label="Seats" value={state.nPlayers} onChange={e => setState(s => setNPlayers(s, Number(e.target.value), catalog))}>{Array.from({length:MAX_PLAYERS-MIN_PLAYERS+1},(_,i) => <option key={i} value={MIN_PLAYERS+i}>{MIN_PLAYERS+i}</option>)}</select></label>
-            <label className="advanced-row"><span>Werewolves</span><select aria-label="Werewolves" value={state.nWolves} onChange={e => update({nWolves:Number(e.target.value)})}>{Array.from({length:maxWolves(state.nPlayers)},(_,i) => <option key={i} value={i+1}>{i+1}</option>)}</select></label>
+            <label className="advanced-row"><span>Seats</span><ThemedSelect label="Seats" value={String(state.nPlayers)} onChange={v => setState(s => setNPlayers(s, Number(v), catalog))} options={Array.from({length:MAX_PLAYERS-MIN_PLAYERS+1},(_,i) => ({value:String(MIN_PLAYERS+i),label:String(MIN_PLAYERS+i)}))} /></label>
+            <label className="advanced-row"><span>Werewolves</span><ThemedSelect label="Werewolves" value={String(state.nWolves)} onChange={v => update({nWolves:Number(v)})} options={Array.from({length:maxWolves(state.nPlayers)},(_,i) => ({value:String(i+1),label:String(i+1)}))} /></label>
             <label className="advanced-row"><span>Seer</span><input className="advanced-toggle" type="checkbox" role="switch" aria-label="Seer" checked={state.seer} onChange={e => update({seer:e.target.checked})} /></label>
             <label className="advanced-row"><span>Doctor</span><input className="advanced-toggle" type="checkbox" role="switch" aria-label="Doctor" checked={state.doctor} onChange={e => update({doctor:e.target.checked})} /></label>
           </fieldset>
           <fieldset><legend><img src={ai} alt="AI configuration" /></legend>
-            <label className="advanced-row"><span>Model selection</span><select aria-label="Model selection" disabled={!assets} value={selectedModel} onChange={e => {
-              const model = e.target.value;
+            <label className="advanced-row"><span>Model selection</span><ThemedSelect label="Model selection" disabled={!assets} value={selectedModel} onChange={model => {
               setState(s => ({ ...s, seats:s.seats.map((m,i) => m === HUMAN ? HUMAN : model === '__default' ? defaults[i] : model) }));
-            }}><option value="__default">{assets ? 'Default lineup' : 'Loading models…'}</option><option value="__custom" disabled>Custom lineup</option>{catalog.models.map(m => <option key={m.name} value={m.name} disabled={!m.available} title={m.unavailable_reason ?? undefined}>{modelLabel(m)}{m.available ? '' : ' (unavailable)'}</option>)}</select></label>
-            <label className="advanced-row"><span>Your seat</span><select aria-label="Your seat" value={human ?? ''} onChange={e => setState(s => setHumanSeat(s,e.target.value ? Number(e.target.value.slice(1)) : null,catalog))}><option value="">None — watch</option>{Array.from({length:state.nPlayers},(_,i) => <option key={i} value={seatId(i)}>Seat {i+1}</option>)}</select></label>
-            {assets && <details className="advanced-lineup"><summary>Customize each AI seat</summary><div>{state.seats.slice(0,state.nPlayers).map((model,i) => model === HUMAN ? <p key={i}>Seat {i+1} · You</p> : <label key={i}>Seat {i+1}<select aria-label={`Model for seat ${i+1}`} value={model} onChange={e => setState(s => ({ ...s, seats:s.seats.map((m,k) => k === i ? e.target.value : m) }))}>{catalog.models.map(m => <option key={m.name} value={m.name} disabled={!m.available}>{modelLabel(m)}{m.available ? '' : ' (unavailable)'}</option>)}</select></label>)}</div></details>}
+            }} options={[{value:'__default',label:assets ? 'Default lineup' : 'Loading models…'},{value:'__custom',label:'Custom lineup',disabled:true},...modelOptions]} /></label>
+            <label className="advanced-row"><span>Your seat</span><ThemedSelect label="Your seat" value={human ?? ''} onChange={v => setState(s => setHumanSeat(s,v ? Number(v.slice(1)) : null,catalog))} options={[{value:'',label:'None — watch'},...Array.from({length:state.nPlayers},(_,i) => ({value:seatId(i),label:`Seat ${i+1}`}))]} /></label>
+            {assets && <details className="advanced-lineup"><summary>Customize each AI seat</summary><div>{state.seats.slice(0,state.nPlayers).map((model,i) => model === HUMAN ? <p key={i}>Seat {i+1} · You</p> : <label key={i}>Seat {i+1}<ThemedSelect label={`Model for seat ${i+1}`} value={model} onChange={v => setState(s => ({ ...s, seats:s.seats.map((m,k) => k === i ? v : m) }))} options={modelOptions} /></label>)}</div></details>}
           </fieldset>
         </div>
         <div className="advanced-feedback" aria-live="polite">

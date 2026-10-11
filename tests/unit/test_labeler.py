@@ -330,3 +330,21 @@ def test_jev_accusing_a_dead_fellow_wolf_is_not_bussing():
             e.target = "p5"
     dead = label_game(events, jev)
     assert not [k for k in _keys(dead) if k[0] == "bussing" and k[3] == "jev"]
+
+
+def test_unfinished_game_is_not_sent_to_jev_but_still_labelled(tmp_path, capsys):
+    lines = FIXTURE.read_text(encoding="utf-8").splitlines()
+    cut = [x for x in lines if x and '"game_end"' not in x]
+    assert len(cut) == len(lines) - 1
+    (tmp_path / "fixture-0001.jsonl").write_text("\n".join(cut) + "\n", encoding="utf-8")
+    seen = []
+
+    def jev_for(events):
+        seen.append(events[0].game_id)
+        return {}
+
+    label_batch(tmp_path, jev_for=jev_for)
+
+    assert seen == []
+    assert "Jev skipped for 1 unfinished games" in capsys.readouterr().out
+    assert (tmp_path / "fixture-0001.labels.jsonl").exists()

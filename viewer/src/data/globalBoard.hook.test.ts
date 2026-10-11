@@ -9,6 +9,7 @@ import { useGlobalBoard, type GlobalBoard, type GlobalBoardState } from "./globa
 const board = (n: number): GlobalBoard => ({
   detectors: [{ model: `m${n}`, village_games: n, suspicion_gap: 0.5, votes: 1, wolf_vote_rate: 1, ranked: true }],
   liars: [],
+  failed: [],
 });
 
 describe("useGlobalBoard", () => {

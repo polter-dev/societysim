@@ -68,12 +68,19 @@ describe("loadGlobalBoard", () => {
     expect(board.liars[0]).toMatchObject({ model: "y", survival_rate: 0.833 });
   });
 
-  it("throws on an HTTP error", async () => {
-    vi.stubGlobal("fetch", async (url: string) =>
-      url.endsWith("/token/anonymous")
-        ? new Response(JSON.stringify({ token: "jwt", expires_at: new Date(Date.now() + 3_600_000).toISOString() }))
-        : new Response("no", { status: 503 }),
-    );
-    await expect(loadGlobalBoard()).rejects.toThrow("HTTP 503");
+  it.each([
+    ["global_liars", "liars"],
+    ["global_detectors", "detectors"],
+  ] as const)("a failing %s view fails only its own tab", async (broken, tab) => {
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url === `${AUTH}/token/anonymous`)
+        return new Response(JSON.stringify({ token: "jwt", expires_at: new Date(Date.now() + 3_600_000).toISOString() }));
+      if (url.includes(broken)) return new Response("no", { status: 503 });
+      return new Response(JSON.stringify(url.includes("global_detectors") ? DETECTORS : LIARS));
+    });
+    const board = await loadGlobalBoard();
+    expect(board.failed).toEqual([tab]);
+    expect(board[tab]).toEqual([]);
+    expect(board[tab === "liars" ? "detectors" : "liars"].length).toBeGreaterThan(0);
   });
 });

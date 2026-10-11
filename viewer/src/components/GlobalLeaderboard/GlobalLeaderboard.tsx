@@ -23,9 +23,11 @@ export function GlobalLeaderboard({ board, error = null, initialTab = "detectors
           </button>
         ))}
       </div>
-      {error && <p role="alert">Couldn't refresh the leaderboard: {error}</p>}
+      {error && <p role="alert">Couldn't refresh the leaderboard right now.</p>}
       {!board ? (
         !error && <p>Loading the leaderboard…</p>
+      ) : board.failed.includes(tab) ? (
+        <p role="alert">Couldn't load the {tab} right now.</p>
       ) : tab === "detectors" ? (
         <Table rows={board.detectors} columns={DETECTOR_COLUMNS} caption="Best wolf detectors, as villagers" />
       ) : (

@@ -23,6 +23,7 @@ const board: GlobalBoard = {
       ranked: true,
     },
   ],
+  failed: [],
 };
 
 const render = (props: Partial<React.ComponentProps<typeof GlobalLeaderboard>> = {}) =>
@@ -45,9 +46,22 @@ describe("GlobalLeaderboard", () => {
 
   it("loading, empty and error states", () => {
     expect(render({ board: null })).toContain("Loading the leaderboard");
-    expect(render({ board: { detectors: [], liars: [] } })).toContain("No finished games yet.");
+    expect(render({ board: { detectors: [], liars: [], failed: [] } })).toContain("No finished games yet.");
     const failed = render({ error: "HTTP 503" });
     expect(failed).toContain('role="alert"');
     expect(failed).toContain("<td>0.45</td>"); // the last board stays up
+  });
+
+  it("a failed tab shows a plain error and the other tab still renders", () => {
+    const liarsDown = { ...board, liars: [], failed: ["liars" as const] };
+    const d = render({ board: liarsDown });
+    expect(d).toContain("<td>0.45</td>");
+    expect(d).not.toContain('role="alert"');
+    const l = render({ board: liarsDown, initialTab: "liars" });
+    expect(l).toContain("load the liars right now");
+    expect(l).not.toContain("503");
+    const detectorsDown = { ...board, detectors: [], failed: ["detectors" as const] };
+    expect(render({ board: detectorsDown })).toContain("load the detectors right now");
+    expect(render({ board: detectorsDown, initialTab: "liars" })).toContain("83%");
   });
 });

@@ -28,6 +28,8 @@ export interface LiarRow {
 export interface GlobalBoard {
   detectors: DetectorRow[];
   liars: LiarRow[];
+  /** Tabs whose view failed to load; their rows are empty. */
+  failed: BoardTab[];
 }
 
 export type BoardTab = "detectors" | "liars";
@@ -93,8 +95,13 @@ async function get(path: string): Promise<Raw[]> {
 }
 
 export async function loadGlobalBoard(): Promise<GlobalBoard> {
-  const [detectors, liars] = await Promise.all([get("global_detectors?select=*"), get("global_liars?select=*")]);
-  return { detectors: sortDetectors(detectors.map(parseDetector)), liars: sortLiars(liars.map(parseLiar)) };
+  // Each view loads on its own: one failing must not blank the other tab.
+  const [d, l] = await Promise.allSettled([get("global_detectors?select=*"), get("global_liars?select=*")]);
+  return {
+    detectors: d.status === "fulfilled" ? sortDetectors(d.value.map(parseDetector)) : [],
+    liars: l.status === "fulfilled" ? sortLiars(l.value.map(parseLiar)) : [],
+    failed: [d.status === "rejected" && "detectors", l.status === "rejected" && "liars"].filter((x): x is BoardTab => !!x),
+  };
 }
 
 // --- display: the columns each tab shows, so the component only renders --------------------

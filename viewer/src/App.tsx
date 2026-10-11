@@ -59,12 +59,13 @@ export function Game({events, labels, idx, mode, selected, onSelect, onSeqChange
   </>;
 }
 /** Owns step state (?step=, arrow keys) and narration for one loaded game; deriveScene stays the source of the scene. */
-export function Replay({events, labels, mode, selected, onSelect, audioUrl = null, live = false, atEnd = false}: Omit<GameProps, 'idx'> & {audioUrl?: string | null; live?: boolean; atEnd?: boolean}) {
+/** `narrationOn`: the narration switch, held by the caller so it survives a remount (a live game's full log replacing its public one). */
+export function Replay({events, labels, mode, selected, onSelect, audioUrl = null, live = false, atEnd = false, narrationOn}: Omit<GameProps, 'idx'> & {audioUrl?: string | null; live?: boolean; atEnd?: boolean; narrationOn?: readonly [boolean, (on: boolean) => void]}) {
   // before useStepper reads the URL: ?seq= highlight links become ?step=. A watched-live game opens at its latest beat.
   useState(() => {if(!(live || atEnd) || new URLSearchParams(window.location.search).has('seq')) normalizeStepUrl(events[0].seq);});
   const st = useStepper(events, live); // live: polled events append; a stepped-back reader stays put
   const beat = st.state.beats[st.state.pos];
-  const n = useNarration(audioUrl, beat ? {first: beat.firstSeq, last: beat.lastSeq} : null, mode, events); // no own audio: narrator lines from the phrase bank
+  const n = useNarration(audioUrl, beat ? {first: beat.firstSeq, last: beat.lastSeq} : null, mode, events, narrationOn); // no own audio: narrator lines from the phrase bank
   const idx = eventIdx(st.state);
   const step: StepControlsProps = {pos: st.state.pos, count: st.state.beats.length, live: st.state.live, atLatest: st.atLatest, newCount: st.newCount,
     onPrev: () => st.dispatch({type: 'prev'}), onNext: () => st.dispatch({type: 'next'}), onLive: st.goLive};
@@ -79,6 +80,7 @@ export default function App({source}: {source?: GameSource} = {}) {
  const [loadId, setLoadId] = useState(0);
  const [mode, setMode] = useState<Mode>(() => modeFromSearch(window.location.search));
  const [selected, setSelected] = useState<string | null>(null);
+ const narrationOn = useState(false); // here, not in Replay: Replay remounts when a live game's full log lands
  const loadVersion = useRef(0);
  const show = (parsed: LoadedGame, audio: string | null = null) => {setLog(parsed);setAudioUrl(audio);setLoadId(n => n + 1);setSelected(null);setLoadError(null);};
  useEffect(() => {
@@ -116,5 +118,5 @@ export default function App({source}: {source?: GameSource} = {}) {
  {loadError && <p role="alert">Could not load log: {loadError}</p>}
  {log && log.errors.length > 0 && <details open><summary role="alert">{log.errors.length} bad line(s) skipped</summary><ul>{log.errors.map(b => <li key={b.line}>line {b.line}: {b.error}</li>)}</ul></details>}
  {!log && (gameParam ? <p role="status">Loading the game…</p> : <><p>Open a recorded game log or choose a game from Games.</p><p>{picker}<a className="open-log__games" href={gamesHref}>Browse games</a></p></>)}{log && !events.length && <p role="status">This file has no valid game events.</p>}</div>
- {log?.finishing && <p className="live-finishing" role="status">Finishing up…</p>}{events.length > 0 && <Replay key={`${loadId}${log?.partial ? 'p' : ''}`} live={!!log?.live} atEnd={!!log?.watchedLive} events={events} labels={gameLabels} mode={mode} selected={selected} onSelect={setSelected} audioUrl={audioUrl}/>}</main>;
+ {log?.finishing && <p className="live-finishing" role="status">Finishing up…</p>}{events.length > 0 && <Replay key={`${loadId}${log?.partial ? 'p' : ''}`} live={!!log?.live} atEnd={!!log?.watchedLive} events={events} labels={gameLabels} mode={mode} selected={selected} onSelect={setSelected} audioUrl={audioUrl} narrationOn={narrationOn}/>}</main>;
 }

@@ -176,6 +176,21 @@ describe("Replay narration", () => {
     expect(played).toContain("wolf.mp3");
   });
 
+  it("keeps narration on when the caller remounts Replay (a live game's full log landing)", async () => {
+    let on = false;
+    const setOn = (v: boolean) => { on = v; };
+    const render = (k: string) =>
+      act(() => root.render(createElement(Replay, { key: k, events, labels: [], mode: "villager", selected: null, onSelect: () => {}, audioUrl: INDEX, narrationOn: [on, setOn] as const })));
+    render("1p");
+    await flush();
+    act(() => void (box.querySelector(".narration-controls input") as HTMLInputElement).click());
+    expect(on).toBe(true);
+    render("1p");
+    render("2"); // remount with a new key
+    await flush();
+    expect(box.querySelector<HTMLInputElement>(".narration-controls input")?.checked).toBe(true);
+  });
+
   it("shows a disabled narration toggle when the game has no audio", async () => {
     vi.stubGlobal("fetch", async () => ({ ok: false }));
     mount();

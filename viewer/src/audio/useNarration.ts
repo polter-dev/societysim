@@ -20,16 +20,19 @@ import { type AudioLike, createPlayer } from "./player";
  * `indexUrl` is the URL of `<game_id>.audio/index.json` (a game's own audio), or null.
  * Without a usable own index, `events` (a replay or a live game) get narrator lines from the
  * shared phrase bank (bank.ts).
+ * `control`: an outside [on, setOn] pair, so the switch survives a remount of the caller.
  */
 export function useNarration(
   indexUrl: string | null,
   at: number | { first: number; last: number } | null,
   mode: Mode,
   events: Event[] = [],
+  control?: readonly [boolean, (on: boolean) => void],
 ) {
   const first = at === null ? null : typeof at === "number" ? at : at.first;
   const last = at === null ? null : typeof at === "number" ? at : at.last;
-  const [on, setOn] = useState(false);
+  const local = useState(false);
+  const [on, setOn] = control ?? local;
   const [enabled, setEnabled] = useState<Enabled>(DEFAULT_ENABLED);
   // undefined while the game's own index loads; null when there is none
   const [own, setOwn] = useState<NarrationIndex | null | undefined>(indexUrl ? undefined : null);

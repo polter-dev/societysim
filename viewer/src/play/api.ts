@@ -3,6 +3,7 @@
 import type { ActionBody, Limits, Me, StartGame, StartedGame } from "./types";
 
 export const TOKEN_PREFIX = "societysim.seat_token.";
+export const WATCH_PREFIX = "societysim.watch_token.";
 
 export class PlayError extends Error {
   constructor(
@@ -81,6 +82,28 @@ export const clearToken = (gameId: string) => {
   }
 };
 
+export const saveWatchToken = (gameId: string, token: string) => {
+  try {
+    sessionStorage.setItem(WATCH_PREFIX + gameId, token);
+  } catch {
+    /* storage blocked: the table is only released when the game ends */
+  }
+};
+export const loadWatchToken = (gameId: string): string | null => {
+  try {
+    return sessionStorage.getItem(WATCH_PREFIX + gameId);
+  } catch {
+    return null;
+  }
+};
+export const clearWatchToken = (gameId: string) => {
+  try {
+    sessionStorage.removeItem(WATCH_PREFIX + gameId);
+  } catch {
+    /* ignore */
+  }
+};
+
 async function call<T>(path: string, init: { method?: string; body?: unknown; token?: string | null } = {}): Promise<T> {
   const headers: Record<string, string> = {};
   if (init.body !== undefined) headers["Content-Type"] = "application/json";
@@ -114,6 +137,7 @@ async function call<T>(path: string, init: { method?: string; body?: unknown; to
 export async function startGame(body: StartGame): Promise<StartedGame> {
   const g = await call<StartedGame>("/api/games", { method: "POST", body });
   if (g.seat_token) saveToken(g.game_id, g.seat_token);
+  if (g.watch_token) saveWatchToken(g.game_id, g.watch_token);
   return g;
 }
 export const getMe = (gameId: string) =>
@@ -130,6 +154,31 @@ export const leaveGame = (gameId: string) =>
     method: "POST",
     token: loadToken(gameId),
   });
+/** Stop watching: frees the table and the IP's slot. The watch token works on /leave only. */
+export const leaveWatch = async (gameId: string) => {
+  const token = loadWatchToken(gameId);
+  if (!token) return;
+  try {
+    await call<{ accepted: true }>(`/api/games/${encodeURIComponent(gameId)}/leave`, { method: "POST", token });
+  } finally {
+    clearWatchToken(gameId);
+  }
+};
+/** Best-effort leave on pagehide. Watch games only: a seated player must survive a refresh. */
+export function leaveWatchOnUnload(gameId: string) {
+  const token = loadWatchToken(gameId);
+  if (!token || loadToken(gameId)) return;
+  try {
+    // sendBeacon can't set an Authorization header, so use fetch keepalive.
+    void fetch(`${baseUrl()}/api/games/${encodeURIComponent(gameId)}/leave`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      keepalive: true,
+    }).catch(() => undefined);
+  } catch {
+    /* best effort */
+  }
+}
 export const getLimits = () => call<Limits>("/api/limits");
 
 export type PlayStatus =

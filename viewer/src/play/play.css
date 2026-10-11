@@ -674,3 +674,13 @@
   font: 13px/1.5 system-ui, sans-serif;
   color: #faedd0;
 }
+
+/* Watch games: a slim bar, so the anchored table layout is untouched */
+.your-turn--watch {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 12px;
+}
+.your-turn--watch .your-turn__leave {
+  margin-top: 0;
+}

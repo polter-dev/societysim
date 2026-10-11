@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { PlayStart } from "../components/PlayStart/PlayStart";
 import { YourTurnPanel } from "../components/YourTurnPanel/YourTurnPanel";
 import { playEnabled } from "../play/config";
-import { loadToken } from "../play/api";
+import { leaveWatch, leaveWatchOnUnload, loadToken, loadWatchToken } from "../play/api";
 import { usePlayStatus } from "../play/usePlayStatus";
 import { useHumanSeat } from "../play/useHumanSeat";
 import { useLiveEvents } from "../play/liveEvents";
@@ -123,7 +123,29 @@ function Dock({ gameId }: { gameId: string }) {
  * Your-turn panel above the live table. Shown only in the browser tab that started the game as a
  * player (its seat token is in sessionStorage); spectators and watch-only visitors never get it.
  */
-export function PlayDock({ gameId }: { gameId: string | null }) {
-  if (!gameId || !playEnabled() || !loadToken(gameId)) return null;
-  return <Dock gameId={gameId} />;
+export function PlayDock({ gameId, modesHref = "?page=modes", go = (url) => window.location.assign(url) }: { gameId: string | null; modesHref?: string; go?: (url: string) => void }) {
+  if (!gameId || !playEnabled()) return null;
+  if (loadToken(gameId)) return <Dock gameId={gameId} />;
+  if (loadWatchToken(gameId)) return <WatchBar gameId={gameId} modesHref={modesHref} go={go} />;
+  return null;
+}
+
+/** Stop-watching control for a watch game. Also sends a best-effort leave when the page is closed. */
+function WatchBar({ gameId, modesHref, go }: { gameId: string; modesHref: string; go: (url: string) => void }) {
+  useEffect(() => {
+    const onHide = () => leaveWatchOnUnload(gameId);
+    window.addEventListener("pagehide", onHide);
+    return () => window.removeEventListener("pagehide", onHide);
+  }, [gameId]);
+  const stop = async () => {
+    await leaveWatch(gameId).catch(() => undefined);
+    go(modesHref);
+  };
+  return (
+    <section className="your-turn your-turn--watch" aria-label="Watching">
+      <button type="button" className="your-turn__abstain your-turn__leave" onClick={() => void stop()}>
+        Stop watching
+      </button>
+    </section>
+  );
 }

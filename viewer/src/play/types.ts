@@ -14,6 +14,7 @@ export interface StartedGame {
   game_id: string;
   seat: string | null;
   seat_token: string | null;
+  watch_token?: string | null;
 }
 export interface PendingAction {
   kind: PendingKind;

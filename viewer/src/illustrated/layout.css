@@ -1,0 +1,153 @@
+/* Game screen (#440): the replay and live play pages fill the window like a game screen. Every
+   region is anchored to the viewport and nothing scrolls with the page:
+
+     | nav, file, View                     ambience |          |
+     | Agents |     day counter     | Game events |  Your    |
+     |        |       table         |             |  turn    |
+     | bottom bar: steps, timeline, pop-ups        |          |
+
+   The table region's size sets --apx, one pixel of the table artwork (table2.png, 1672 x 941).
+   The art, its candles and the seat box (TABLE_BOX = 800 art px in Table.tsx) all scale by it, so
+   the seats stay on the painted chairs. Seats, medallions and plates need 760 x 720 art px. */
+:root{
+  --gs-gap:clamp(6px,.5vw,12px);
+  --gs-top:clamp(44px,4.6dvh,56px);
+  --gs-counter:clamp(38px,6dvh,80px);
+  --gs-bar:clamp(84px,10.5dvh,124px);
+  --gs-turn:0px;
+  /* table region height, then the width the table would use at that height */
+  --gs-th:calc(100dvh - var(--gs-top) - var(--gs-counter) - var(--gs-bar) - 2 * var(--gs-gap));
+  /* side panels take what the table leaves, within bounds */
+  --gs-side:clamp(206px,calc((100vw - var(--gs-turn) - 760 * var(--gs-th) / 720 - 2 * var(--gs-gap)) / 2),18vw);
+  --gs-left:var(--gs-side);
+  --gs-right:var(--gs-side);
+  --gs-tw:calc(100vw - var(--gs-left) - var(--gs-right) - var(--gs-turn) - 2 * var(--gs-gap));
+  --gs-tx:calc(var(--gs-left) + var(--gs-gap));
+  --gs-ty:calc(var(--gs-top) + var(--gs-counter) + var(--gs-gap));
+  --gs-cx:calc(var(--gs-tx) + var(--gs-tw) / 2);
+  --gs-cy:calc(var(--gs-ty) + var(--gs-th) / 2);
+  --apx:min(var(--gs-tw) / 760,var(--gs-th) / 720);
+  --gs-ink:#f2e7ba;
+  --gs-panel:#03271eee;
+  --gs-line:#ac8b45;
+}
+/* The your-turn panel gets its own column; a collapsed Agents panel leaves a thin rail. */
+:root:has(.play-replay .your-turn){--gs-turn:clamp(268px,21vw,420px)}
+:root:has(.illustrated-shell.agents-collapsed){--gs-left:44px}
+
+@media (min-width:1001px){
+  html:has(.illustrated-shell),body:has(.illustrated-shell){height:100%;overflow:hidden}
+
+  /* --- top chrome: compact, themed, off the art --------------------------------------------- */
+  body:has(.illustrated-shell) .site-nav{position:fixed;z-index:6;left:var(--gs-gap);top:calc((var(--gs-top) - 32px) / 2);height:32px;margin:0;max-width:calc(100vw - var(--gs-turn) - 360px)}
+  .replay-app .replay-tools{position:fixed;z-index:6;top:calc((var(--gs-top) - 32px) / 2);right:calc(var(--gs-turn) + 2 * var(--gs-gap) + 44px);left:auto;height:32px;margin:0;padding:0 4px 0 6px;width:auto;max-width:none;display:flex;align-items:center;gap:8px;background:var(--gs-panel);border:1px solid var(--gs-line);border-radius:8px;box-sizing:border-box;font-size:12px}
+  .replay-app .replay-tools>p{margin:0;display:flex;align-items:center;gap:8px;white-space:nowrap}
+  /* Loading, empty and error notes drop below the chrome row instead of stretching it. */
+  .replay-app .replay-tools>:is([role=alert],[role=status],details,p:not(:first-of-type)){position:absolute;top:calc(100% + 6px);right:0;margin:0;padding:6px 10px;width:max-content;max-width:40vw;background:var(--gs-panel);border:1px solid var(--gs-line);border-radius:8px}
+  .illustrated-shell .motion-toggle{position:absolute;z-index:6;top:calc((var(--gs-top) - 44px) / 2);right:calc(var(--gs-turn) + var(--gs-gap));left:auto}
+
+  /* --- day counter: top of the table column --------------------------------------------------- */
+  .illustrated-shell .day-counter{position:absolute;top:var(--gs-top);left:var(--gs-cx);height:var(--gs-counter);width:auto;max-width:var(--gs-tw);aspect-ratio:1611/258;transform:translateX(-50%)}
+  .illustrated-shell .day-counter>span{inset:44% 18% 12%;font-size:clamp(12px,calc(var(--gs-counter) * .3),26px);white-space:nowrap}
+
+  /* --- the art: cover layer behind everything, the table layer aligned to the table region --- */
+  .illustrated-shell .scene-art-plane{left:calc(var(--gs-cx) - 836 * var(--apx));top:calc(var(--gs-cy) - 470.5 * var(--apx));width:calc(1672 * var(--apx));height:calc(941 * var(--apx));transform:none;background:url("./assets/new/table2.png") 0 0/100% 100% no-repeat;
+    -webkit-mask:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent),linear-gradient(transparent,#000 6%,#000 94%,transparent);-webkit-mask-composite:source-in;mask:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent),linear-gradient(transparent,#000 6%,#000 94%,transparent);mask-composite:intersect}
+  .illustrated-shell .forest-scene::after{content:'';position:absolute;inset:0;background:#02140f66;pointer-events:none;z-index:-1}
+
+  /* --- table region ---------------------------------------------------------------------------- */
+  .replay-app .replay-table{position:fixed;z-index:1;left:var(--gs-tx);top:var(--gs-ty);width:var(--gs-tw);height:var(--gs-th);pointer-events:none}
+  .replay-app .replay-table>div{position:absolute!important;left:50%;top:50%;translate:-50% -50%;width:calc(800 * var(--apx))!important;max-width:none!important}
+
+  /* --- side panels: the frame art is 9-sliced, so corners and crests keep their shape --------- */
+  .illustrated-shell .roster,.illustrated-shell .event-roster{position:absolute;top:calc(var(--gs-top) - var(--gs-gap));bottom:var(--gs-bar);height:auto;aspect-ratio:auto;margin:0;box-sizing:border-box;border-style:solid;z-index:2}
+  .illustrated-shell .roster{--s:calc(var(--gs-side) / 780);left:0;width:var(--gs-side);border-width:calc(228 * var(--s)) calc(132 * var(--s)) calc(200 * var(--s));border-image:url("./assets/new/agent%20menu-1.png") 228 132 200 fill/1/0 stretch}
+  .illustrated-shell .event-roster{--s:calc(var(--gs-right) / 698);right:var(--gs-turn);width:var(--gs-right);border-width:calc(208 * var(--s)) calc(118 * var(--s)) calc(170 * var(--s));border-image:url("./assets/new/event%20menu.png") 208 118 170 fill/1/0 stretch}
+  .illustrated-shell :is(.roster,.event-roster) .panel-art{display:none}
+  .illustrated-shell :is(.roster,.event-roster) .panel-content{position:absolute;inset:0;padding:0 2px}
+  .illustrated-shell :is(.roster,.event-roster) .panel-content h2{margin:0 0 clamp(4px,1dvh,12px);font:700 clamp(14px,2.1dvh,26px) Georgia,serif;letter-spacing:.04em;white-space:nowrap}
+
+  /* Agents: all ten fit without scrolling from 1366 x 768 up. Sizes follow the height. */
+  .illustrated-shell .agent-list{flex:1;display:flex;flex-direction:column;justify-content:space-between;gap:0;overflow:hidden auto;scrollbar-width:none;padding:0}
+  .illustrated-shell .agent-list>li{flex:none}
+  .illustrated-shell .roster .agent-button{margin:0;gap:clamp(5px,.5vw,10px);padding:clamp(1px,.25dvh,4px) 2px}
+  .illustrated-shell .roster .agent-button .medallion{flex:none;width:clamp(26px,4.3dvh,58px)!important;height:auto!important}
+  .illustrated-shell .agent-button strong{font:700 clamp(12px,1.65dvh,19px)/1.15 Georgia,serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .illustrated-shell .agent-button small{margin:1px 0 0;font-size:clamp(10px,1.3dvh,14px);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal}
+  .illustrated-shell .agent-button[data-alive=false] strong{text-decoration:line-through;text-decoration-thickness:1px}
+
+  /* Game events: the history is the one panel that scrolls. */
+  .illustrated-shell .event-list{flex:1;overflow:auto;scrollbar-width:thin;scrollbar-color:#c9a24f #0b2a1d;padding-right:2px}
+  /* The card art is 5:1; a little taller leaves room for two lines. */
+  .illustrated-shell .event-list .decision-card{margin:0 0 clamp(3px,.6dvh,8px);min-height:0;aspect-ratio:4}
+  .illustrated-shell .event-list .decision-card>span{inset:16% 8% 16% 26%;gap:1px}
+  .illustrated-shell .event-list .decision-notes>span{bottom:28%}
+  .illustrated-shell .event-list .decision-card strong{font-size:clamp(10px,1.3dvh,14px);line-height:1.1}
+  .illustrated-shell .event-list .decision-card small{font-size:clamp(8px,1dvh,11px);line-height:1.1}
+
+  /* Collapse arrow on the Agents panel's edge; collapsed, the panel slides off and leaves a rail. */
+  .illustrated-shell .roster-toggle{left:calc(var(--gs-left) - 22px);top:calc(var(--gs-top) + (100dvh - var(--gs-top) - var(--gs-bar)) / 2);width:clamp(30px,2.6vw,48px);height:clamp(52px,7dvh,84px)}
+  .illustrated-shell.agents-collapsed .roster-toggle{left:4px}
+  .illustrated-shell.agents-collapsed:before{top:var(--gs-top);bottom:var(--gs-bar);width:40px}
+
+  /* --- bottom bar ------------------------------------------------------------------------------ */
+  .replay-app .replay-bar{position:fixed;z-index:4;left:var(--gs-gap);right:calc(var(--gs-turn) + var(--gs-gap));bottom:var(--gs-gap);height:calc(var(--gs-bar) - var(--gs-gap));box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:6px 10px;color:var(--gs-ink);background:var(--gs-panel);border:1px solid var(--gs-line);border-radius:12px;font:12px system-ui,sans-serif}
+  .replay-app .replay-bar .replay-controls{position:static;flex:1;min-width:0;width:auto;max-height:none;margin:0;padding:0;overflow:visible;background:none;border:0;display:flex;flex-wrap:nowrap;align-items:center;gap:12px;font-size:12px}
+  .replay-app .replay-bar .replay-controls>section{flex:1;min-width:0}
+  .replay-app .replay-bar .step-controls{flex:none;gap:6px}
+  .replay-app .replay-bar .step-controls :is(.step-prev,.step-next){width:32px;height:32px;font-size:12px}
+  .replay-app .replay-bar .step-controls .step-label{min-width:6.5em;font-size:13px}
+  .replay-app .replay-bar .step-controls .step-live{min-height:32px;padding:0 10px;font-size:12px}
+  .replay-app .replay-bar section[aria-label='Game timeline']>div{gap:8px!important;flex-wrap:nowrap!important}
+  .replay-app .replay-bar section[aria-label='Game timeline']>div>label:last-of-type{flex:1 1 auto!important;min-width:80px;white-space:nowrap}
+  .replay-app .replay-bar section[aria-label='Game timeline'] button{padding:3px 8px;font-size:12px}
+  .replay-app .replay-bar .themed-select--field .themed-select__trigger.themed-select__trigger{min-height:28px;padding:0 8px;font-size:13px}
+  /* Timeline markers: one strip, swiped or tabbed sideways; no scrollbar of its own. */
+  .replay-app .replay-bar nav[aria-label='Timeline markers']{flex-wrap:nowrap!important;gap:6px!important;margin-top:4px!important;overflow-x:auto;scrollbar-width:none}
+  .replay-app .replay-bar nav[aria-label='Timeline markers']::-webkit-scrollbar{display:none}
+  .replay-app .replay-bar nav[aria-label='Timeline markers']>div{flex:none;padding:1px 4px!important;border-color:#ac8b4566!important;white-space:nowrap}
+  .replay-app .replay-bar nav[aria-label='Timeline markers'] button{padding:1px 6px;font-size:11px;text-transform:capitalize}
+  /* Pop-ups: summaries stacked at the bar's end; open, they rise over the table. One at a time. */
+  .replay-app .replay-pops{flex:none;display:flex;flex-direction:column;justify-content:center;gap:4px}
+  .replay-app .replay-pop{position:static;width:auto;margin:0;padding:0;background:none;border:0;font-size:12px}
+  .replay-app .replay-pop>summary{padding:3px 10px;border:1px solid #ac8b4599;border-radius:999px;background:#123c2e;cursor:pointer;white-space:nowrap;list-style:none}
+  .replay-app .replay-pop>summary::-webkit-details-marker{display:none}
+  .replay-app .replay-pop[open]>summary{background:#82692c;border-color:#e3c576}
+  .replay-app .replay-pop__body{position:absolute;right:0;bottom:calc(100% + 6px);width:min(560px,100%);max-height:calc(100dvh - var(--gs-top) - var(--gs-bar) - 2 * var(--gs-gap));box-sizing:border-box;display:flex;flex-direction:column;gap:8px;padding:10px 12px;overflow:auto;scrollbar-width:thin;background:#03271ef7;border:1px solid var(--gs-line);border-radius:12px;box-shadow:0 12px 30px #000a}
+  .replay-app .replay-chat .replay-pop__body{overflow:hidden}
+  .replay-app .replay-chat section[aria-label='Chat log']{flex:1 1 auto;min-height:0;max-height:none!important}
+  .replay-app .replay-pop .narration-controls{border:0;padding:0}
+
+  /* --- end of game: the reveal sits over the table, scrolling inside if long ------------------ */
+  .replay-app .game-reveal{position:fixed;z-index:5;left:var(--gs-cx);top:var(--gs-ty);translate:-50% 0;width:min(var(--gs-tw),760px);max-height:var(--gs-th);margin:0;overflow:auto;scrollbar-width:thin}
+
+  /* --- your turn: its own full-height column --------------------------------------------------- */
+  .play-replay .your-turn.your-turn{position:fixed;z-index:8;top:var(--gs-gap);right:var(--gs-gap);bottom:var(--gs-gap);width:calc(var(--gs-turn) - 2 * var(--gs-gap));max-height:none;margin:0;overflow:auto;scrollbar-width:thin;display:flex;flex-direction:column;gap:clamp(4px,.8dvh,10px);padding:clamp(10px,1.4dvh,18px);font-size:clamp(12px,1.5dvh,15px);line-height:1.4}
+  .play-replay .your-turn>*{margin:0}
+  .play-replay .your-turn h3{font-size:clamp(16px,2.4dvh,24px);margin:0 0 2px}
+  .play-replay .your-turn h3 small{font-size:.7em;font-weight:400;color:#e9d9a4}
+  .play-replay .your-turn p{margin:0}
+  .play-replay .your-turn .your-turn__role{padding-bottom:clamp(4px,.8dvh,10px);margin:0}
+  .play-replay .your-turn .your-turn__private{flex:0 1 auto;min-height:3.2em;max-height:clamp(64px,16dvh,220px);font-size:.92em;padding:6px 8px}
+  .play-replay .your-turn .your-turn__form{gap:clamp(5px,1dvh,12px)}
+  .play-replay .your-turn .your-turn__form textarea{min-height:clamp(44px,8dvh,96px);padding:6px}
+  .play-replay .your-turn .your-turn__form fieldset{padding:4px 6px 6px}
+  .play-replay .your-turn .your-turn__pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:4px}
+  .play-replay .your-turn .your-turn__pick legend{padding:0 4px}
+  .play-replay .your-turn :is(.your-turn__player,.your-turn__abstain){margin:0;padding:4px 6px;display:flex;align-items:center;gap:6px;font-size:.92em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .play-replay .your-turn .your-turn__abstain{grid-column:1/-1}
+  .play-replay .your-turn .your-turn__suspicion fieldset{display:flex;align-items:center;gap:4px;margin:2px 0;padding:2px 6px;border:0}
+  .play-replay .your-turn .your-turn__suspicion legend{float:left;flex:1;padding:0}
+  .play-replay .your-turn .your-turn__suspicion button{margin:0;padding:2px 6px;font-size:.85em}
+  .play-replay .your-turn .your-turn__form button[type=submit]{padding:7px;font-size:.95em}
+}
+
+/* Chrome controls at every width: the file picker is a themed button, the ambience toggle an icon. */
+.replay-app .file-button{display:inline-flex;align-items:center;height:28px;padding:0 10px;border:1px solid #a88a46;border-radius:6px;background:#123c2e;color:#fff0c2;font:600 12px system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.replay-app .file-button:hover{filter:brightness(1.2)}
+.replay-app .file-button:has(input:focus-visible){outline:3px solid #ffe499;outline-offset:3px}
+.replay-app .replay-tools label:has(.themed-select){display:inline-flex;align-items:center;gap:6px}
+.replay-app .replay-tools .themed-select--field .themed-select__trigger.themed-select__trigger{min-height:28px;padding:0 8px;font-size:13px}
+.illustrated-shell .motion-toggle{display:grid;place-items:center;padding:0;border-radius:50%;font-size:12px;background:#03271eee}
+.illustrated-shell .motion-toggle svg{width:14px;height:14px;fill:currentColor}
+.illustrated-shell .motion-toggle[aria-pressed=true]{background:#82692c}

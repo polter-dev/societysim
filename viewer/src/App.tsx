@@ -40,11 +40,17 @@ export function Game({events, labels, idx, mode, selected, onSelect, onSeqChange
   const [playing, setPlaying] = useState(false); // autoplay: chat stays out of the live regions
   return <>
     <div className="replay-table"><LabelPopups scene={scene} labels={labels} mode={mode} playing={playing}><Table scene={scene} selected={selected} onSelect={onSelect}/><Arrows scene={scene}/><Speech scene={scene} playing={playing}/></LabelPopups></div>
-    <details className="replay-chat"><summary>Discussion and vote tally</summary><Tally scene={scene}/><ChatLog scene={scene}/></details>
     <IllustratedInspector scene={scene} mode={mode} selected={selected} close={() => onSelect(null)}/>
     <EndReveal events={events} labels={labels} idx={idx} mode={mode}/>
-    <details className="replay-spotwolf"><summary>Spot the wolf</summary><SpotWolfPanel key={events[0]?.game_id} events={events} idx={idx}/></details>
-    <div className="replay-controls">{step?.live && <LiveBadge newCount={step.newCount}/>}{step && <StepControls {...step}/>}{narration && <NarrationControls available={narration.available} mode={mode} on={narration.on} enabled={narration.enabled} onToggle={narration.onToggle} onCategory={narration.onCategory}/>}<Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} seq={seq} onSeek={onSeek} onPlayingChange={setPlaying}/></div>
+    {/* The bottom bar: stepping and the timeline, then pop-ups that open upward over the table. */}
+    <div className="replay-bar">
+      <div className="replay-controls">{step?.live && <LiveBadge newCount={step.newCount}/>}{step && <StepControls {...step}/>}<Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} seq={seq} onSeek={onSeek} onPlayingChange={setPlaying}/></div>
+      <div className="replay-pops">
+        <details className="replay-pop replay-chat" name="replay-pop"><summary>Discussion and votes</summary><div className="replay-pop__body"><Tally scene={scene}/><ChatLog scene={scene}/></div></details>
+        <details className="replay-pop replay-spotwolf" name="replay-pop"><summary>Spot the wolf</summary><div className="replay-pop__body"><SpotWolfPanel key={events[0]?.game_id} events={events} idx={idx}/></div></details>
+        {narration && <details className="replay-pop replay-narration" name="replay-pop"><summary>Narration</summary><div className="replay-pop__body"><NarrationControls available={narration.available} mode={mode} on={narration.on} enabled={narration.enabled} onToggle={narration.onToggle} onCategory={narration.onCategory}/></div></details>}
+      </div>
+    </div>
     {/* Fixed overlay, so its place here only sets focus order: table and controls first, then the long Agents and Game events panels. */}
     <IllustratedShell scene={scene} onSelect={onSelect}/>
   </>;
@@ -98,7 +104,7 @@ export default function App({source}: {source?: GameSource} = {}) {
  const onFile = async (file?: File) => {if(!file) return;const version = ++loadVersion.current;try {setLabels([]);const parsed = parseLog(await file.text());if(loadVersion.current === version) {clearStepUrl();show(parsed);}} catch(err) {setLoadError(err instanceof Error ? err.message : String(err));}};
  const events = log?.events ?? [];
  const gameLabels = labels.filter(l => l.game_id === events[0]?.game_id);
- return <main className="replay-app"><div className="replay-tools"><h1>SocietySim viewer</h1><p><input type="file" accept=".jsonl" aria-label="Open a game log (.jsonl)" onChange={e => onFile(e.target.files?.[0])}/>{log && <ModeToggle mode={mode} onChange={changeMode}/>}</p>
+ return <main className="replay-app"><div className="replay-tools"><h1>SocietySim viewer</h1><p><label className="file-button">Open log<input type="file" className="visually-hidden" accept=".jsonl" aria-label="Open a game log (.jsonl)" onChange={e => onFile(e.target.files?.[0])}/></label>{log && <ModeToggle mode={mode} onChange={changeMode}/>}</p>
  {loadError && <p role="alert">Could not load log: {loadError}</p>}
  {log && log.errors.length > 0 && <details open><summary role="alert">{log.errors.length} bad line(s) skipped</summary><ul>{log.errors.map(b => <li key={b.line}>line {b.line}: {b.error}</li>)}</ul></details>}
  {!log && (new URLSearchParams(window.location.search).has('game') && !loadError ? <p role="status">Loading the game…</p> : <p>Open a recorded game log or choose a game from Games.</p>)}{log && !events.length && <p role="status">This file has no valid game events.</p>}</div>

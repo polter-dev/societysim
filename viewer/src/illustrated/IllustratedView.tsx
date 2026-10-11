@@ -10,6 +10,7 @@ import { seatLabel } from '../components/Table/Table';
 import './scenery.css';
 import './inspector.css';
 import './viewer.css';
+import { modelName } from '../data/modelNames';
 
 export function IllustratedShell({ scene, onSelect }: { scene: Scene; onSelect: (id: string) => void }) {
   const label = useModelLabel();
@@ -26,11 +27,11 @@ export function IllustratedShell({ scene, onSelect }: { scene: Scene; onSelect: 
     <p className="visually-hidden" role="status">{phaseText}</p>
     <section id="agent-roster" className="roster" aria-label="Agents" inert={collapsed} aria-hidden={collapsed}>
       <img className="panel-art" src={art('new/agent menu-1.png')} alt=""/>
-      <div className="panel-content"><h2>Agents</h2><ul className="agent-list">{scene.players.map(p => <li key={p.id}><button className="agent-button" data-alive={p.alive} aria-label={seatLabel(p, label(p.model))} aria-haspopup="dialog" onClick={() => onSelect(p.id)}><AvatarMedallion model={p.model} label={label(p.model)} alive={p.alive}/><span><strong>{p.name}</strong><small>{label(p.model)}</small><small>{p.alive ? '● Alive' : '† Eliminated'}</small></span></button></li>)}</ul></div>
+      <div className="panel-content"><h2>Agents</h2><ul className="agent-list">{scene.players.map(p => <li key={p.id}><button className="agent-button" data-alive={p.alive} aria-label={seatLabel(p, label(p.model))} aria-haspopup="dialog" onClick={() => onSelect(p.id)}><AvatarMedallion model={p.model} label={label(p.model)} alive={p.alive}/><span><strong>{p.name}</strong><small title={label(p.model)}>{modelName(p.model)}</small></span></button></li>)}</ul></div>
     </section>
     <button className="roster-toggle" aria-expanded={!collapsed} aria-controls="agent-roster" aria-label={collapsed ? 'Expand agents' : 'Collapse agents'} onClick={() => setCollapsed(!collapsed)}><img src={art(`new/Arrow_${collapsed ? 'Right' : 'Left'} 1.png`)} alt=""/></button>
     <section className="event-roster" aria-label="Game events"><img className="panel-art" src={art('new/event menu.png')} alt=""/><div className="panel-content"><h2>Game events</h2><ol className="event-list">{[...scene.log].reverse().map(e => {const item = eventPresentation(e, scene);return <li key={e.seq}><button className={`decision-card ${item.image === '10_notes.png' ? 'decision-notes' : ''}`} style={{backgroundImage:`url("${art(`inspector/${item.image}`)}")`}} aria-haspopup="dialog" onClick={() => setEventSeq(e.seq)}><span><small>{e.phase === 'night' ? 'Night' : 'Day'} {e.day} · {item.actor}</small><strong>{item.title}</strong><small>{item.text}</small></span></button></li>})}</ol></div></section>
-    <button className="motion-toggle" onClick={() => setPaused(!paused)}>{paused ? 'Resume ambience' : 'Pause ambience'}</button>
+    <button className="motion-toggle" aria-pressed={paused} title={paused ? 'Resume ambience' : 'Pause ambience'} onClick={() => setPaused(!paused)}><svg viewBox="0 0 14 14" aria-hidden="true">{paused ? <path d="M3 1.5v11l9-5.5z"/> : <path d="M2.5 1.5h3v11h-3zM8.5 1.5h3v11h-3z"/>}</svg><span className="visually-hidden">Pause ambience</span></button>
     {event && <EventDetails key={`${event.seq}-${scene.log.length}`} event={event} scene={scene} close={() => setEventSeq(null)}/>}
   </div>;
 }

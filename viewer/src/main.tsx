@@ -17,6 +17,8 @@ import "./pages/pages.css";
 import "./a11y.css";
 import "./play/play.css";
 import "./controls.css";
+// Last, so the game-screen layout wins over the older page rules it replaces.
+import "./illustrated/layout.css";
 
 // Routes: ?game=<id> or ?log=<url> or ?page=replay -> replay, ?page=leaderboard,
 // ?page=model&model=<name> -> model profile, else the game index.
@@ -59,9 +61,9 @@ const style = { fontFamily: "system-ui, sans-serif", padding: 16, maxWidth: 1100
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {baseError && <p role="alert">Could not use batch base: {baseError}</p>}
-    {!home && !modes && !advanced && <nav aria-label="Pages" style={{ ...style, paddingBottom: 0 }}>
-      <a href={href({})}>Home</a> | <a href={href({page:"games"})}>Games</a> | <a href={href({ page: "leaderboard" })}>Leaderboard</a> | <a href={href({ page: "research" })}>Research</a> |{" "}
-      <a href={href({ page: "new" })}>New game</a> | <PlayNavLink href={href({ page: "modes" })} /> |{" "}
+    {!home && !modes && !advanced && <nav aria-label="Pages" className="site-nav">
+      <a href={href({})}>Home</a><a href={href({page:"games"})}>Games</a><a href={href({ page: "leaderboard" })}>Leaderboard</a><a href={href({ page: "research" })}>Research</a>
+      <a href={href({ page: "new" })}>New game</a><PlayNavLink href={href({ page: "modes" })} />
       <a href={href({ page: "replay" })}>Open a log file</a>
     </nav>}
     {home ? <LandingPage href={href}/> : modes ? <ModeSelection href={href}/> : advanced ? <AdvancedSetup href={href} catalogUrl={sibling("models_catalog.json")} schemaUrl={sibling("devui/schema/game_setup.schema.json")}/> : replay ? (

@@ -2,6 +2,7 @@ import type { Phase } from "../../types/events";
 import type { PlayerView, Scene } from "../../scene/deriveScene";
 import { AvatarMedallion } from "../AvatarMedallion/AvatarMedallion";
 import { useModelLabel } from "../ModelAvatar/ModelAvatar";
+import { modelName } from "../../data/modelNames";
 import "./Table.css";
 
 /**
@@ -75,7 +76,7 @@ function Seat({ p, i, n, model, selected, speaking, onSelect }: SeatProps) {
             </span>
           </span>
           <span className="seat-model" title={model}>
-            {model}
+            {modelName(p.model)}
           </span>
         </span>
       </button>
@@ -94,9 +95,8 @@ export function Table({
   selected?: string | null;
   onSelect?: (seat: string) => void;
 }) {
-  const label = useModelLabel();
-  // The plate shows the display name alone; the provider would not fit.
-  const model = (id: string) => label(id).split(" · ")[0];
+  // The plate shows the short name (modelNames.ts); the full catalog label is its title and the seat's name.
+  const model = useModelLabel();
   return (
     <section className="round-table" aria-label={`Table, day ${scene.day}, ${scene.phase}`} data-tint={tintFor(scene.phase)}>
       <ul>

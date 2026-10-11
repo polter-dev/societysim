@@ -310,6 +310,49 @@ class DeceptionMatrix(_Out):
     baseline: dict[ClaimKind, dict[str, DeceptionBaseline]]  # kind -> listener model
 
 
+class HumanSeats(_Out):
+    seats: int
+    wins: int
+    draws: int
+    losses: int
+    win_rate: Num
+    win_ci: CI
+
+
+class HumanFlow(DeceptionBaseline):
+    """deception_matrix counts summed by direction, plus `caught`: next vote for the liar."""
+
+    caught: int
+    comparisons: int
+    moved: int
+    belief_shift_rate: Num
+    belief_shift_ci: CI
+    catch_rate: Num
+    catch_ci: CI
+
+
+class HumanFlows(_Out):
+    human_to_model: HumanFlow
+    model_to_human: HumanFlow
+    model_to_model: HumanFlow
+
+
+class HumanFlowsBySource(_Out):
+    self_tag: HumanFlows
+    jev: HumanFlows
+
+
+class Humans(_Out):
+    """Humans vs models (#305): visitor seats against the AI seats. Counts only, no handles."""
+
+    exploratory: bool
+    games: int
+    seats: int
+    by_role: dict[Group, HumanSeats]
+    models_by_role: dict[Group, HumanSeats]
+    lies: HumanFlowsBySource
+
+
 class PairRow(DeceptionCell):
     """One deception_matrix cell seen from one side: `model` is the other model."""
 
@@ -363,6 +406,7 @@ class Metrics(_Out):
     by_group: dict[Group, GroupStats]
     openskill: OpenSkill
     deception_matrix: DeceptionMatrix
+    humans: Humans
     summary: Summary
     speed: dict[str, Speed]
     profiles: dict[str, ModelProfile]
@@ -849,6 +893,67 @@ def _deception(dm: dict, present: set[str]) -> list[str]:
     )
 
 
+FLOW_TEXT = {
+    "human_to_model": "Human lies, model listeners",
+    "model_to_human": "Model lies, human listeners",
+    "model_to_model": "Model lies, model listeners (whole batch)",
+}
+
+
+def _ci(ci) -> str:
+    return "n/a" if not ci else f"{_pct(ci[0])} to {_pct(ci[1])}"
+
+
+def _humans(h: dict, present: set[str]) -> list[str]:
+    lines = ["## Humans vs models (exploratory)", ""]
+    if not h["games"]:
+        return lines + ["No visitor games yet.", ""]
+    lines += [
+        f"{_n(h['games'], 'visitor game')}, {_n(h['seats'], 'human seat')}. Human seats are "
+        "never ranked. Model seats here are the AI seats in the same games.",
+        "",
+    ]
+    by_role, models = h["by_role"], h["models_by_role"]
+    lines += _table(
+        ["Role", "Human seats", "Human win rate", "95% CI", "Model seats", "Model win rate"],
+        [
+            [
+                grp,
+                str(by_role[grp]["seats"]) if grp in by_role else "0",
+                _pct(by_role[grp]["win_rate"]) if grp in by_role else "n/a",
+                _ci(by_role[grp]["win_ci"]) if grp in by_role else "n/a",
+                str(models[grp]["seats"]) if grp in models else "0",
+                _pct(models[grp]["win_rate"]) if grp in models else "n/a",
+            ]
+            for grp in sorted({*by_role, *models})
+        ],
+    )
+    lines += [
+        "Lies by direction, the deception matrix's counts summed. 'Voted as lie implied' is the "
+        "matrix's vote rule; 'Caught' is a next vote for the liar. Correlation, not cause.",
+        "",
+    ]
+    for src in LABEL_SOURCES:
+        lines += [f"### {src}", ""]
+        if src not in present:
+            lines += [f"No {src} labels.", ""]
+            continue
+        lines += _table(
+            ["Direction", "Heard", "Voted as lie implied", "Caught", "Belief shift"],
+            [
+                [
+                    FLOW_TEXT[f],
+                    str(c["heard"]),
+                    _follow(c),
+                    f"{_pct(c['catch_rate'])} (n={c['voters']})",
+                    f"{_pct(c['belief_shift_rate'])} (n={c['comparisons']})",
+                ]
+                for f, c in h["lies"][src].items()
+            ],
+        )
+    return lines
+
+
 def _speed(speed: dict) -> list[str]:
     def secs(x):
         return "n/a" if x is None else f"{x / 1000:.1f} s"
@@ -1025,6 +1130,8 @@ def render_markdown(
     lines += _table(["Model", "Accusations", "Voters", "Followed"], prow)
     if "deception_matrix" in metrics:
         lines += _deception(metrics["deception_matrix"], present)
+    if "humans" in metrics:
+        lines += _humans(metrics["humans"], present)
     lines += [
         "## Cost and reliability",
         "",

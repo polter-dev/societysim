@@ -462,6 +462,291 @@
       "title": "GroupStats",
       "type": "object"
     },
+    "HumanFlow": {
+      "additionalProperties": false,
+      "description": "deception_matrix counts summed by direction, plus `caught`: next vote for the liar.",
+      "properties": {
+        "heard": {
+          "type": "integer"
+        },
+        "voters": {
+          "type": "integer"
+        },
+        "followed": {
+          "type": "integer"
+        },
+        "vote_follow_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "vote_follow_ci": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "caught": {
+          "type": "integer"
+        },
+        "comparisons": {
+          "type": "integer"
+        },
+        "moved": {
+          "type": "integer"
+        },
+        "belief_shift_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "belief_shift_ci": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "catch_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "catch_ci": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "heard",
+        "voters",
+        "followed",
+        "vote_follow_rate",
+        "vote_follow_ci",
+        "caught",
+        "comparisons",
+        "moved",
+        "belief_shift_rate",
+        "belief_shift_ci",
+        "catch_rate",
+        "catch_ci"
+      ],
+      "title": "HumanFlow",
+      "type": "object"
+    },
+    "HumanFlows": {
+      "additionalProperties": false,
+      "properties": {
+        "human_to_model": {
+          "$ref": "#/$defs/HumanFlow"
+        },
+        "model_to_human": {
+          "$ref": "#/$defs/HumanFlow"
+        },
+        "model_to_model": {
+          "$ref": "#/$defs/HumanFlow"
+        }
+      },
+      "required": [
+        "human_to_model",
+        "model_to_human",
+        "model_to_model"
+      ],
+      "title": "HumanFlows",
+      "type": "object"
+    },
+    "HumanFlowsBySource": {
+      "additionalProperties": false,
+      "properties": {
+        "self_tag": {
+          "$ref": "#/$defs/HumanFlows"
+        },
+        "jev": {
+          "$ref": "#/$defs/HumanFlows"
+        }
+      },
+      "required": [
+        "self_tag",
+        "jev"
+      ],
+      "title": "HumanFlowsBySource",
+      "type": "object"
+    },
+    "HumanSeats": {
+      "additionalProperties": false,
+      "properties": {
+        "seats": {
+          "type": "integer"
+        },
+        "wins": {
+          "type": "integer"
+        },
+        "draws": {
+          "type": "integer"
+        },
+        "losses": {
+          "type": "integer"
+        },
+        "win_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "win_ci": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "seats",
+        "wins",
+        "draws",
+        "losses",
+        "win_rate",
+        "win_ci"
+      ],
+      "title": "HumanSeats",
+      "type": "object"
+    },
+    "Humans": {
+      "additionalProperties": false,
+      "description": "Humans vs models (#305): visitor seats against the AI seats. Counts only, no handles.",
+      "properties": {
+        "exploratory": {
+          "type": "boolean"
+        },
+        "games": {
+          "type": "integer"
+        },
+        "seats": {
+          "type": "integer"
+        },
+        "by_role": {
+          "additionalProperties": {
+            "$ref": "#/$defs/HumanSeats"
+          },
+          "propertyNames": {
+            "enum": [
+              "all",
+              "wolf",
+              "village",
+              "seer",
+              "doctor",
+              "villager"
+            ]
+          },
+          "type": "object"
+        },
+        "models_by_role": {
+          "additionalProperties": {
+            "$ref": "#/$defs/HumanSeats"
+          },
+          "propertyNames": {
+            "enum": [
+              "all",
+              "wolf",
+              "village",
+              "seer",
+              "doctor",
+              "villager"
+            ]
+          },
+          "type": "object"
+        },
+        "lies": {
+          "$ref": "#/$defs/HumanFlowsBySource"
+        }
+      },
+      "required": [
+        "exploratory",
+        "games",
+        "seats",
+        "by_role",
+        "models_by_role",
+        "lies"
+      ],
+      "title": "Humans",
+      "type": "object"
+    },
     "LieRate": {
       "additionalProperties": false,
       "properties": {
@@ -1409,6 +1694,9 @@
     "deception_matrix": {
       "$ref": "#/$defs/DeceptionMatrix"
     },
+    "humans": {
+      "$ref": "#/$defs/Humans"
+    },
     "summary": {
       "$ref": "#/$defs/Summary"
     },
@@ -1434,6 +1722,7 @@
     "by_group",
     "openskill",
     "deception_matrix",
+    "humans",
     "summary",
     "speed",
     "profiles"

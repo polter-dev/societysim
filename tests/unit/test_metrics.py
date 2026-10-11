@@ -695,6 +695,34 @@ def test_fake_seer_report_belief_tracks_the_reported_player():
     assert (d["comparisons"], d["moved"], d["followed"]) == (2, 1, 0)
 
 
+def _villager_claims(says: str, silent: str) -> GameData:
+    """p1 (model B) tags villager on a statement with text `silent`, p2 (C) on one with `says`."""
+    seats = {"p0": (W, "A"), "p1": (V, "B"), "p2": (V, "C"), "p3": (V, "D"), "p4": (V, "E")}
+    events = [
+        _start(seats),
+        _ev(1, 1, EventType.STATEMENT, "p1").model_copy(update={"public_text": silent}),
+        _ev(2, 1, EventType.ROLE_CLAIM, "p1", statement_seq=1, role=Role.VILLAGER),
+        _ev(3, 1, EventType.STATEMENT, "p2").model_copy(update={"public_text": says}),
+        _ev(4, 1, EventType.ROLE_CLAIM, "p2", statement_seq=3, role=Role.VILLAGER),
+        *(_ev(5 + i, 1, EventType.VOTE, f"p{i}", "p0") for i in range(5)),
+        _ev(10, 1, EventType.GAME_END, winner="villagers"),
+    ]
+    return GameData(events, [])
+
+
+def test_villager_tag_with_no_claim_in_the_text_is_no_truthful_claim():
+    # p1's text claims nothing, so only p2's "I'm a villager" is a truthful role claim: its
+    # listeners are p1, p3, p4. Counting p1's tag too would add model C as a listener and a
+    # second claim for B, D and E (#605).
+    base = deception_matrix([_villager_claims("I'm just a plain villager.", "Vote Ava.")])
+    assert _hvf(base["baseline"]["role_claim"]) == {"B": (1, 1, 1), "D": (1, 1, 1), "E": (1, 1, 1)}
+
+
+def test_no_villager_claim_in_any_text_leaves_no_role_claim_baseline():
+    g = _villager_claims("Hugo was a villager.", "We can't lose another villager.")
+    assert "role_claim" not in deception_matrix([g])["baseline"]
+
+
 def _self_play_ten() -> GameData:
     """10 seats, 3 wolves, one model. Wolf p0 busses fellow wolf p1."""
     roles = [W, W, W, S, D, V, V, V, V, V]

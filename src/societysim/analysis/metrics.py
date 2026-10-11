@@ -38,7 +38,7 @@ from pathlib import Path
 
 from openskill.models import PlackettLuce
 
-from societysim.analysis.labeler import read_log
+from societysim.analysis.labeler import _SAYS_VILLAGER, read_log
 from societysim.logging.events import Event, EventType, Label, LabelType
 from societysim.logging.textio import read_text_lenient
 from societysim.models.client import is_provider_failure
@@ -526,7 +526,9 @@ def _truthful_claims(
 ) -> Iterator[tuple[str, Event, set[str], Callable[[str | None], bool]]]:
     """(kind, event, named, follows) for every claim in the log that told the truth.
 
-    role_claim: the claimed role is the speaker's role; follows = did not vote the speaker.
+    role_claim: the claimed role is the speaker's role; follows = did not vote the speaker. A
+    villager self-tag counts only when the statement says it (the labeler's rule, #596): models
+    tag `villager` on statements that claim nothing, and those are no truthful claim.
     seer_wolf / seer_clear: the real seer reported a player's true side; follows as for a
     false_report (voted the reported wolf; voted neither the cleared player nor the seer).
     accusation: a non-wolf accused only real wolves (all targets of one statement together);
@@ -534,6 +536,7 @@ def _truthful_claims(
     """
     roles = game.roles
     wolves = {p for p, r in roles.items() if r is Role.WOLF}
+    text = {e.seq: e.public_text or "" for e in game.events if e.type is EventType.STATEMENT}
     accused: dict[tuple[str, int], set[str]] = defaultdict(set)
     first: dict[tuple[str, int], Event] = {}
     for e in game.events:
@@ -541,6 +544,10 @@ def _truthful_claims(
         if not a:
             continue
         if e.type is EventType.ROLE_CLAIM and e.meta.role is roles.get(a):
+            if e.meta.role is Role.VILLAGER and not _SAYS_VILLAGER.search(
+                text.get(e.meta.statement_seq, "")
+            ):
+                continue
             yield "role_claim", e, {a}, lambda v, a=a: v is not None and v != a
         elif (
             e.type is EventType.SEER_CLAIM

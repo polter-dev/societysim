@@ -38,9 +38,9 @@ All from `runs/mixed_v2_10p/report/report.md` (100 ten-player games, 2 wolves ea
 
 - Win rate: villagers won 62, wolves 38. gemini-flash won 65% of its seats (95% CI 57% to 73%): 68% as wolf, 65% as villager. Next are llama4-maverick 61% (52% to 68%) and gemini-flash-lite 59% (51% to 67%). The intervals overlap, so say "led", not "beat".
 - Skill rating (OpenSkill ordinal): gemini-flash 33.01, llama4-maverick 22.49, gemini-flash-lite 22.30, gemma4-26b 18.65, qwen3-235b 15.52, deepseek-v3.1 11.73, gpt-oss-120b 8.01. The report gives one ordinal per model, not one per side.
-- Lies: 1,129 self-tagged lies in 4,702 statements (24%). gemini-flash-lite lied most among the 100-game models (32%), gpt-oss-120b least (14%). gemini-flash's lies moved 45% of the suspicions they targeted (n=943), the highest; gpt-oss-120b's moved 16% (n=383).
-- Does lying win? Overall, 57% of votes went the way a lie implied, against a 59% no-lie base rate, so not on average. gemini-flash is the exception: 73% against its 65% base.
-- Who fools whom: in most liar-listener cells the listener followed the lie less often than it followed true claims of the same kind. Example: when gpt-oss-120b lied, deepseek-v3.1 followed 26% of 69 votes, against 81% after true claims. All 13 cells above baseline have gpt-5-mini or gpt-5-nano as the liar or the listener, and those two models played only 12 games each, so that is a small sample (for example qwen3-235b followed gpt-5-mini's lies 19 of 19 times, against 78%).
+- Lies: 356 self-tagged lies in 4,702 statements (8%). llama4-maverick lied most among the 100-game models (12%), gpt-oss-120b least (2%). gemini-flash's lies moved 52% of the suspicions they targeted (n=253), the highest of the 100-game models; gpt-oss-120b's moved 43% (n=56).
+- Does lying win? Overall, 40% of votes went the way a lie implied, against a 71% no-lie base rate, so no. No 100-game model beats its own base; gemini-flash comes closest, 66% against 75%.
+- Who fools whom: in most liar-listener cells the listener followed the lie less often than it followed true claims of the same kind. Example: when llama4-maverick lied, qwen3-235b followed 36% of 84 votes, against 65% after true claims. All 12 cells above baseline have gpt-5-mini or gpt-5-nano as the liar or the listener, and those two models played only 12 games each, so that is a small sample (for example qwen3-235b followed gpt-5-mini's lies 4 of 4 times, against 90%).
 - Detection AUC (0.5 is chance): gemini-flash 0.77, gemini-flash-lite 0.75, deepseek-v3.1 0.73, llama4-maverick 0.72, gemma4-26b 0.70, qwen3-235b 0.69, gpt-oss-120b 0.65.
 - Human seat against models: no visitor games yet, so say nothing.
 
@@ -82,10 +82,10 @@ Demo game: https://society-sim.us/?game=mixed_v2_10p-g0043&seq=49&mode=narrator.
    - Seats and roles rotate. No Claude models play.
    - On screen: the model table in the README or `configs/models.yaml`.
 6. **Results: who lies best, who catches lies**
-   - gemini-flash leads: 65% win rate (57% to 73%), OpenSkill 33.01, lies moved 45% of targeted suspicions, detection AUC 0.77. Villagers won 62 of 100.
+   - gemini-flash leads: 65% win rate (57% to 73%), OpenSkill 33.01, lies moved 52% of targeted suspicions (highest of the 100-game models), detection AUC 0.77. Villagers won 62 of 100.
    - On screen: report charts from `runs/<batch>/report/`, or the leaderboard page.
 7. **Results: who fools whom**
-   - Most cells sit below the listener's true-claim baseline: lies were followed less than truths. Example: gpt-oss-120b lying to deepseek-v3.1, 26% (n=69) against 81%.
+   - Most cells sit below the listener's true-claim baseline: lies were followed less than truths. Example: llama4-maverick lying to qwen3-235b, 36% (n=84) against 65%.
    - On screen: the deception matrix from the report.
 8. **Live: watch a lie work**
    - Narrator view, inspector, label pop-up, the vote it moved, narration playing in the viewer.
@@ -126,7 +126,7 @@ We don't use scripted games for any result. Scripted bots test the engine and gi
 The engine knows every role, so a false role claim or a false seer report is false by construction. The model's own scratchpad is a second signal, and the Jev classifier covers statements that are harder to check. The raw log stays untouched; labels go in a separate file.
 
 **Isn't the sample too small?**
-For some questions, yes. The 10-player batch is 100 games, and most liar-listener cells have 50 to 200 votes, but the GPT-5 models played only 12 games each and their cells have 1 to 23 votes. Win-rate intervals are about 16 points wide. That is why the report gives 95% confidence intervals and a true-claim baseline, and why we call the lie results exploratory.
+For some questions, yes. The 10-player batch is 100 games, but only 21 of the 49 liar-listener cells between the 100-game models have 50 or more votes (the range is 5 to 84), and the GPT-5 models played only 12 games each, so their cells have 1 to 9 votes. Win-rate intervals are about 16 points wide. That is why the report gives 95% confidence intervals and a true-claim baseline, and why we call the lie results exploratory.
 
 **Why 10 players?**
 Scripted 7-player games last 2.65 days with 20.5 statements. At 10 players it is 4.38 days and 53.4 statements, about 2.6 times the votes, so each pair of models gets more chances to lie and be judged. The headline results are 10-player.

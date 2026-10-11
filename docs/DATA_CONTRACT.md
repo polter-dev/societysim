@@ -213,6 +213,7 @@ Top level:
 | `openskill` | object | `overall`, `wolf`, `village`: model -> Rating. `wolf_side`: `{overall, sided}` Rating, same as `leaderboard.json`'s `wolf_side_advantage`. The viewer's `BySide` reads `wolf` and `village` |
 | `deception_matrix` | object | Who fools whom, see below. Exploratory |
 | `humans` | object | Humans vs models from visitor games, see below. Exploratory |
+| `role_skill` | object | Doctor saves and seer hits per model against chance, see below |
 | `summary` | object | Headline numbers, see below |
 | `speed` | model -> Speed | |
 | `profiles` | model -> ModelProfile | One per leaderboard row, for the model profile page. See below |
@@ -278,6 +279,22 @@ their results show. It holds counts and rates only, never a seat id, name or gam
   `catch_ci`. All counts are 0 and rates null when nothing was heard. A human listener's
   suspicion is null or partial in the log, so `comparisons` for `model_to_human` can stay low.
 
+`role_skill` (added for #719; additive, so the contract version stays 1): `{doctor, seer}`, each
+`{models: {model: Stats}, all: Stats}`. `all` sums every model; human seats are in neither. Only
+models that played the role have an entry, so a batch with no doctor decisions has `models: {}`
+and `all` zeros with null rates.
+- Doctor Stats: `nights` (one per `doctor_save` event), `saves` (that night's `night_kill` hit
+  the protected player, so nobody died of the protect), `self_protects`, `fallbacks`
+  (integers); `save_rate`, `chance_rate` (number | null); `save_ci` (Wilson 95% `[lo, hi]` |
+  null). `chance_rate` is the mean over nights of 1 / living players, the doctor included.
+- Seer Stats: `checks` (one per `seer_check` event), `wolves_found` (the checked player is a
+  wolf), `fallbacks`; `hit_rate`, `chance_rate`, `hit_ci` as above. `chance_rate` is the mean
+  over checks of living wolves / living players other than the seer. Living is read from
+  `death_reveal` and `elimination` events before the decision.
+- A decision with `meta.fallback` (the engine picked at random) is counted in `fallbacks` only,
+  never in `nights`, `checks` or the rates. The chance rates ignore what the player knew (the
+  doctor's no-repeat rule, wolves a seer already found): they are a yardstick, not a test.
+
 `summary`: `games`, `unfinished_games`, `cost_usd`, `input_tokens`, `output_tokens`,
 `wolf_wins`, `village_wins`, `draws`, `wolf_win_share`, `village_win_share` (number | null),
 `lies` (source -> `{lies, statements, lie_rate, lie_success}`), `top_openskill`
@@ -327,6 +344,10 @@ art is in the repo.
    "median_latency_ms": 1610.0, "voice": {"voice_id": "cgSgspJ2msm6clMCkdW9", "fallback": false},
    "fools": {"self_tag": [{"model": "deepseek-v3.1", "heard": 2, "voters": 2, "followed": 2, "vote_follow_rate": 1.0, "...": "..."}], "jev": []},
    "fooled_by": {"self_tag": [], "jev": []}}},
+ "role_skill": {"doctor": {"models": {"a": {"nights": 3, "saves": 1, "self_protects": 1, "fallbacks": 0, "save_rate": 0.33,
+                                            "save_ci": [0.06, 0.79], "chance_rate": 0.17}}, "all": {"...": "..."}},
+                "seer": {"models": {"a": {"checks": 2, "wolves_found": 1, "fallbacks": 0, "hit_rate": 0.5,
+                                          "hit_ci": [0.09, 0.91], "chance_rate": 0.3}}, "all": {"...": "..."}}},
  "humans": {"exploratory": true, "games": 0, "seats": 0, "by_role": {}, "models_by_role": {},
    "lies": {"self_tag": {"human_to_model": {"heard": 0, "voters": 0, "followed": 0, "caught": 0, "comparisons": 0, "moved": 0,
      "vote_follow_rate": null, "vote_follow_ci": null, "belief_shift_rate": null, "belief_shift_ci": null, "catch_rate": null, "catch_ci": null},

@@ -775,6 +775,99 @@ def humans_vs_models(games: list[GameData], pairs: Counter | None = None) -> dic
     }
 
 
+# --- role skill: doctor saves and seer checks against chance ---------------------------------
+
+SKILL_KEYS = ("n", "hits", "self_protects", "chance_sum", "fallbacks")
+
+
+def game_role_skill(game: GameData) -> Counter:
+    """Raw doctor / seer counts for one game: [(role, model, key)] over SKILL_KEYS.
+
+    Doctor, one `n` per doctor_save event: `hits` when the night's night_kill (same day) hit
+    the protected player, so nobody died of the protect; `self_protects` when the doctor
+    protected itself; `chance_sum` adds 1 / living players (the doctor included) at that
+    point of the night. Seer, one `n` per seer_check: `hits` when the checked player is a
+    wolf; `chance_sum` adds living wolves / living others. Living = every seat minus the
+    death_reveal / elimination events before the check, which is what the players could see.
+
+    A decision with meta.fallback is the engine's random pick, not the model's: it counts
+    under `fallbacks` and in nothing else. Human seats are skipped.
+    """
+    events, roles, models = game.events, game.roles, game.models
+    kills = {e.day: e.target for e in events if e.type is EventType.NIGHT_KILL}
+    out: Counter = Counter()
+    for e in events:
+        if e.type not in (EventType.DOCTOR_SAVE, EventType.SEER_CHECK) or not e.actor:
+            continue
+        model = models.get(e.actor)
+        if model is None or model == HUMAN or not e.target:
+            continue
+        doctor = e.type is EventType.DOCTOR_SAVE
+        key = ("doctor" if doctor else "seer", model)
+        if e.meta.fallback:
+            out[(*key, "fallbacks")] += 1
+            continue
+        living = [s for s in roles if s not in _dead_before(events, e.seq)]
+        out[(*key, "n")] += 1
+        if doctor:
+            out[(*key, "hits")] += kills.get(e.day) == e.target
+            out[(*key, "self_protects")] += e.target == e.actor
+            out[(*key, "chance_sum")] += 1 / len(living)
+        else:
+            others = [s for s in living if s != e.actor]
+            out[(*key, "hits")] += roles.get(e.target) is Role.WOLF
+            out[(*key, "chance_sum")] += (
+                sum(roles[s] is Role.WOLF for s in others) / len(others) if others else 0.0
+            )
+    return out
+
+
+def _skill_stats(c: Counter, role: str, model: str | None) -> dict:
+    """Stats for one (role, model), or for the role over every model when `model` is None."""
+    tot = {
+        k: sum(v for (r, m, kk), v in c.items() if r == role and kk == k and model in (None, m))
+        for k in SKILL_KEYS
+    }
+    n, hits = tot["n"], tot["hits"]
+    rate = _ratio(hits, n)
+    ci, chance = wilson(hits, n), _ratio(tot["chance_sum"], n)
+    if role == "doctor":
+        return {
+            "nights": n,
+            "saves": hits,
+            "self_protects": tot["self_protects"],
+            "fallbacks": tot["fallbacks"],
+            "save_rate": rate,
+            "save_ci": ci,
+            "chance_rate": chance,
+        }
+    return {
+        "checks": n,
+        "wolves_found": hits,
+        "fallbacks": tot["fallbacks"],
+        "hit_rate": rate,
+        "hit_ci": ci,
+        "chance_rate": chance,
+    }
+
+
+def role_skill(games: list[GameData]) -> dict:
+    """Doctor and seer skill per model, with the chance rate to read it against. Exploratory:
+    a chance baseline ignores what the player knew (the doctor's no-repeat rule, a seer who
+    already found a wolf), so it is a yardstick, not a test."""
+    counts: Counter = Counter()
+    for g in games:
+        counts.update(game_role_skill(g))
+    out: dict = {}
+    for role in ("doctor", "seer"):
+        names = sorted({m for (r, m, _k) in counts if r == role})
+        out[role] = {
+            "models": {m: _skill_stats(counts, role, m) for m in names},
+            "all": _skill_stats(counts, role, None),
+        }
+    return out
+
+
 def _groups(role: Role) -> tuple[str, ...]:
     return ("all", "wolf") if role is Role.WOLF else ("all", "village", role.value)
 
@@ -959,4 +1052,5 @@ def compute_metrics(games: list[GameData], unfinished: int = 0) -> dict:
         "openskill": _without_human(openskill_ratings(games)),
         "deception_matrix": deception_matrix(games, counts),
         "humans": humans_vs_models(games, counts[0]),
+        "role_skill": role_skill(games),
     }

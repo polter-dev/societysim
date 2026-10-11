@@ -365,6 +365,42 @@ class Humans(_Out):
     lies: HumanFlowsBySource
 
 
+class DoctorStats(_Out):
+    nights: int
+    saves: int
+    self_protects: int
+    fallbacks: int
+    save_rate: Num
+    save_ci: CI
+    chance_rate: Num
+
+
+class SeerStats(_Out):
+    checks: int
+    wolves_found: int
+    fallbacks: int
+    hit_rate: Num
+    hit_ci: CI
+    chance_rate: Num
+
+
+class DoctorSkill(_Out):
+    models: dict[str, DoctorStats]
+    all: DoctorStats
+
+
+class SeerSkill(_Out):
+    models: dict[str, SeerStats]
+    all: SeerStats
+
+
+class RoleSkill(_Out):
+    """Doctor saves and seer hits per model against a chance rate. Human seats are left out."""
+
+    doctor: DoctorSkill
+    seer: SeerSkill
+
+
 class PairRow(DeceptionCell):
     """One deception_matrix cell seen from one side: `model` is the other model."""
 
@@ -419,6 +455,7 @@ class Metrics(_Out):
     openskill: OpenSkill
     deception_matrix: DeceptionMatrix
     humans: Humans
+    role_skill: RoleSkill
     summary: Summary
     speed: dict[str, Speed]
     profiles: dict[str, ModelProfile]
@@ -1012,6 +1049,42 @@ def _humans(h: dict, present: set[str]) -> list[str]:
     return lines
 
 
+def _role_skill(rs: dict) -> list[str]:
+    def row(name: str, c: dict, role: str) -> list[str]:
+        if role == "doctor":
+            n, k, rate, ci = c["nights"], c["saves"], c["save_rate"], c["save_ci"]
+            extra = [str(c["self_protects"])]
+        else:
+            n, k, rate, ci = c["checks"], c["wolves_found"], c["hit_rate"], c["hit_ci"]
+            extra = []
+        return [name, str(n), str(k), *extra, _pct(rate), _ci(ci), _pct(c["chance_rate"])]
+
+    lines = [
+        "## Doctor and Seer",
+        "",
+        "How often a protect stopped the night kill (Doctor) and a check landed on a wolf "
+        "(Seer), next to the rate a random pick would have had. Chance: 1 over the living "
+        "players for the Doctor, living wolves over living others for the Seer, averaged over "
+        "every decision. It ignores what the player knew, so read it as a yardstick. Fallback "
+        "turns (the engine picked at random) and human seats are not counted.",
+        "",
+    ]
+    for role, title, head in (
+        ("doctor", "Doctor", ["Model", "Nights", "Saves", "Self-protects"]),
+        ("seer", "Seer", ["Model", "Checks", "Wolves found"]),
+    ):
+        stats = rs[role]
+        lines += [f"### {title}", ""]
+        if not stats["models"]:
+            lines += [f"No {title} decisions yet.", ""]
+            continue
+        rate = "Save rate" if role == "doctor" else "Hit rate"
+        rows = [row(m, c, role) for m, c in stats["models"].items()]
+        rows.append(row("All models", stats["all"], role))
+        lines += _table([*head, rate, "95% CI", "Chance"], rows)
+    return lines
+
+
 def _speed(speed: dict) -> list[str]:
     def secs(x):
         return "n/a" if x is None else f"{x / 1000:.1f} s"
@@ -1195,6 +1268,8 @@ def render_markdown(
     lines += _table(["Model", "Accusations", "Voters", "Followed"], prow)
     if "deception_matrix" in metrics:
         lines += _deception(metrics["deception_matrix"], present)
+    if "role_skill" in metrics:
+        lines += _role_skill(metrics["role_skill"])
     if "humans" in metrics:
         lines += _humans(metrics["humans"], present)
     lines += [

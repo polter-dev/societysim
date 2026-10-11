@@ -24,6 +24,7 @@ from societysim.analysis.metrics import (
     load_batch,
     load_game,
     openskill_ratings,
+    role_skill,
     wilson,
 )
 from societysim.config import GameConfig
@@ -1164,3 +1165,74 @@ def test_load_game_reads_jev_coverage_from_the_batch_cache(game, tmp_path):
     (cache / game.game_id / f"{stmts[7]}.json").write_text("not json", encoding="utf-8")
     got = load_game(batch / FIXTURE.name).jev_read
     assert got == frozenset(stmts[:5] + [stmts[6]])
+
+
+# --- doctor and seer skill ---------------------------------------------------------------------
+
+SKILL_SEATS = {
+    "p0": (W, "A"),
+    "p1": (W, "B"),
+    "p2": (S, "C"),
+    "p3": (D, "D"),
+    "p4": (V, "E"),
+    "p5": (V, "E"),
+    "p6": (V, "E"),
+}
+
+
+def _skill_game(doctor_model: str = "D") -> GameData:
+    """7 seats, 3 nights. Doctor p3 (model D): saves p4 on night 1, protects itself and misses on
+    night 2 (p6 dies), saves p4 on night 3. Seer p2 (model C): finds wolf p0 on night 1, clears
+    p6 on night 2, and night 3's check is a fallback (not counted). p5 is voted out on day 1."""
+    seats = {**SKILL_SEATS, "p3": (D, doctor_model)}
+    events = [
+        _start(seats),
+        _ev(1, 1, EventType.SEER_CHECK, "p2", "p0", result="wolf"),
+        _ev(2, 1, EventType.NIGHT_KILL, None, "p4"),
+        _ev(3, 1, EventType.DOCTOR_SAVE, "p3", "p4", saved=True),  # kill p4 == protect p4
+        _ev(4, 1, EventType.ELIMINATION, None, "p5"),
+        _ev(5, 2, EventType.SEER_CHECK, "p2", "p6", result="not_wolf"),
+        _ev(6, 2, EventType.NIGHT_KILL, None, "p6"),
+        _ev(7, 2, EventType.DOCTOR_SAVE, "p3", "p3", saved=False),  # self-protect, p6 dies
+        _ev(8, 2, EventType.DEATH_REVEAL, None, "p6"),
+        _ev(9, 3, EventType.SEER_CHECK, "p2", "p1", result="wolf", fallback=True),
+        _ev(10, 3, EventType.NIGHT_KILL, None, "p4"),
+        _ev(11, 3, EventType.DOCTOR_SAVE, "p3", "p4", saved=True),
+        _ev(12, 3, EventType.GAME_END, winner="villagers"),
+    ]
+    return GameData(events, [])
+
+
+def test_doctor_skill_counts_saves_self_protects_and_chance():
+    d = role_skill([_skill_game()])["doctor"]
+    got = d["models"]["D"]
+    assert (got["nights"], got["saves"], got["self_protects"], got["fallbacks"]) == (3, 2, 1, 0)
+    assert got["save_rate"] == pytest.approx(2 / 3)
+    # living players with the doctor: 7 on night 1, 6 on night 2 (p5 voted out), 5 on night 3
+    assert got["chance_rate"] == pytest.approx((1 / 7 + 1 / 6 + 1 / 5) / 3)
+    assert got["save_ci"] == pytest.approx(wilson(2, 3))
+    assert d["all"] == got
+
+
+def test_seer_skill_counts_hits_misses_and_leaves_fallbacks_out():
+    s = role_skill([_skill_game()])["seer"]
+    got = s["models"]["C"]
+    assert (got["checks"], got["wolves_found"], got["fallbacks"]) == (2, 1, 1)
+    assert got["hit_rate"] == pytest.approx(0.5)
+    # living others: 6 on night 1, 5 on night 2; both wolves alive each time
+    assert got["chance_rate"] == pytest.approx((2 / 6 + 2 / 5) / 2)
+    assert got["hit_ci"] == pytest.approx(wilson(1, 2))
+
+
+def test_role_skill_skips_human_seats_and_is_in_compute_metrics():
+    human = _skill_game(doctor_model="human")
+    assert "human" not in role_skill([human])["doctor"]["models"]
+    assert role_skill([human])["doctor"]["all"]["nights"] == 0
+    assert compute_metrics([_skill_game()])["role_skill"] == role_skill([_skill_game()])
+
+
+def test_role_skill_sums_games_and_has_no_rate_without_decisions():
+    two = role_skill([_skill_game(), _skill_game()])["doctor"]["models"]["D"]
+    assert (two["nights"], two["saves"]) == (6, 4)
+    empty = role_skill([])["seer"]
+    assert empty["models"] == {} and empty["all"]["hit_rate"] is None

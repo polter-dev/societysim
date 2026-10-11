@@ -308,6 +308,94 @@
       "title": "DetectionDay",
       "type": "object"
     },
+    "DoctorSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "models": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DoctorStats"
+          },
+          "type": "object"
+        },
+        "all": {
+          "$ref": "#/$defs/DoctorStats"
+        }
+      },
+      "required": [
+        "models",
+        "all"
+      ],
+      "title": "DoctorSkill",
+      "type": "object"
+    },
+    "DoctorStats": {
+      "additionalProperties": false,
+      "properties": {
+        "nights": {
+          "type": "integer"
+        },
+        "saves": {
+          "type": "integer"
+        },
+        "self_protects": {
+          "type": "integer"
+        },
+        "fallbacks": {
+          "type": "integer"
+        },
+        "save_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "save_ci": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "chance_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "nights",
+        "saves",
+        "self_protects",
+        "fallbacks",
+        "save_rate",
+        "save_ci",
+        "chance_rate"
+      ],
+      "title": "DoctorStats",
+      "type": "object"
+    },
     "GroupStats": {
       "additionalProperties": false,
       "properties": {
@@ -1336,6 +1424,108 @@
       "title": "Rating",
       "type": "object"
     },
+    "RoleSkill": {
+      "additionalProperties": false,
+      "description": "Doctor saves and seer hits per model against a chance rate. Human seats are left out.",
+      "properties": {
+        "doctor": {
+          "$ref": "#/$defs/DoctorSkill"
+        },
+        "seer": {
+          "$ref": "#/$defs/SeerSkill"
+        }
+      },
+      "required": [
+        "doctor",
+        "seer"
+      ],
+      "title": "RoleSkill",
+      "type": "object"
+    },
+    "SeerSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "models": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SeerStats"
+          },
+          "type": "object"
+        },
+        "all": {
+          "$ref": "#/$defs/SeerStats"
+        }
+      },
+      "required": [
+        "models",
+        "all"
+      ],
+      "title": "SeerSkill",
+      "type": "object"
+    },
+    "SeerStats": {
+      "additionalProperties": false,
+      "properties": {
+        "checks": {
+          "type": "integer"
+        },
+        "wolves_found": {
+          "type": "integer"
+        },
+        "fallbacks": {
+          "type": "integer"
+        },
+        "hit_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hit_ci": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "chance_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "checks",
+        "wolves_found",
+        "fallbacks",
+        "hit_rate",
+        "hit_ci",
+        "chance_rate"
+      ],
+      "title": "SeerStats",
+      "type": "object"
+    },
     "SideAdvantage": {
       "additionalProperties": false,
       "description": "The wolf-side dummy player's rating per pool; {} when no game had a winner.",
@@ -1730,6 +1920,9 @@
     "humans": {
       "$ref": "#/$defs/Humans"
     },
+    "role_skill": {
+      "$ref": "#/$defs/RoleSkill"
+    },
     "summary": {
       "$ref": "#/$defs/Summary"
     },
@@ -1756,6 +1949,7 @@
     "openskill",
     "deception_matrix",
     "humans",
+    "role_skill",
     "summary",
     "speed",
     "profiles"

@@ -581,6 +581,24 @@ def test_reliability_table_and_leaderboard_carry_the_three_rates(tmp_path):
     Metrics.model_validate(metrics)
 
 
+def test_role_skill_in_report_md_and_metrics(tmp_path):
+    out = write_report(_batch(tmp_path))
+    metrics = json.loads((out / "metrics.json").read_text())
+    Metrics.model_validate(metrics)
+    # fixture: doctor gpt-oss-120b protects p1 (the kill) on night 1, then misses twice, with 7,
+    # 7 and 5 players alive; seer qwen3-235b finds wolves p2 and p5 with 2 of 6 others wolves
+    doc = metrics["role_skill"]["doctor"]["models"]["gpt-oss-120b"]
+    assert (doc["nights"], doc["saves"], doc["self_protects"]) == (3, 1, 0)
+    assert doc["chance_rate"] == pytest.approx((1 / 7 + 1 / 7 + 1 / 5) / 3)
+    seer = metrics["role_skill"]["seer"]["models"]["qwen3-235b"]
+    assert (seer["checks"], seer["wolves_found"]) == (2, 2)
+    assert seer["chance_rate"] == pytest.approx(2 / 6)
+    md = (out / "report.md").read_text(encoding="utf-8")
+    section = md.split("## Doctor and Seer")[1].split("## Cost and reliability")[0]
+    assert "| gpt-oss-120b | 3 | 1 | 0 | 33% |" in section
+    assert "| qwen3-235b | 2 | 2 | 100% |" in section
+
+
 def _add_mirror_jev(batch: Path) -> None:
     """Jev labels for sample_game that agree with its self-tags."""
     labels = batch / "sample_game.labels.jsonl"

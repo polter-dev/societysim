@@ -90,6 +90,14 @@ def test_deception_matrix_is_populated_so_its_schema_check_means_something(batch
     assert any(c["vote_follow_ci"] for c in cells) and any(c["baseline_rate"] for c in cells)
 
 
+def test_role_skill_is_populated_so_its_schema_check_means_something(batch):
+    rs = json.loads((batch / STATIC["metrics"]).read_text())["role_skill"]
+    assert rs["doctor"]["all"]["nights"] and rs["seer"]["all"]["checks"]
+    assert rs["doctor"]["models"] and rs["seer"]["models"]
+    assert rs["doctor"]["all"]["save_ci"] and rs["seer"]["all"]["hit_ci"]
+    assert 0 < rs["doctor"]["all"]["chance_rate"] < 1 and 0 < rs["seer"]["all"]["chance_rate"] < 1
+
+
 def test_index_file_paths_resolve_from_the_batch_dir(batch):
     for entry in json.loads((batch / STATIC["index"]).read_text()):
         assert (batch / entry["file"]).is_file()

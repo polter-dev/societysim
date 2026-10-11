@@ -497,7 +497,12 @@ class JevFailed(Exception):
 @app.command()
 def label(
     batch_dir: Path,
-    no_jev: bool = typer.Option(False, "--no-jev", help="Skip Jev and the agreement table."),
+    no_jev: bool = typer.Option(
+        False,
+        "--no-jev",
+        help="Make no Jev calls. Jev labels still come from the cache; statements without a "
+        "cache entry get none.",
+    ),
     jev_cache: Annotated[
         Path | None,
         typer.Option("--jev-cache", help="Jev response cache. Default: BATCH_DIR/.cache/jev."),
@@ -509,11 +514,17 @@ def label(
     BATCH_DIR/.cache/jev) and write the self-tag vs Jev agreement table to
     BATCH_DIR/agreement.json. If Jev fails (bad key, no connection, malformed response),
     the automatic labels are still written and no agreement table is left behind.
+
+    Without the key, or with --no-jev, no call is ever made, but Jev labels and the
+    agreement table are still built from every statement already in the cache. Statements
+    with no cache entry get no Jev label; the output counts them. If nothing is cached,
+    the labels are written without Jev and agreement.json is removed.
     """
     import httpx
 
     from societysim.analysis import jev
     from societysim.analysis.labeler import jev_verdicts, label_batch
+    from societysim.logging.events import EventType
 
     if not batch_dir.is_dir():
         _echo(f"not a directory: {batch_dir}")
@@ -528,10 +539,52 @@ def label(
         _echo(f"Jev skipped ({why}); no self-tag vs Jev agreement")
 
     load_dotenv()
-    if no_jev or not os.environ.get("TYPESAFE_API_KEY"):
-        without_jev("--no-jev" if no_jev else "TYPESAFE_API_KEY not set")
-        return
     cache = jev_cache.resolve() if jev_cache else jev.cache_dir_for(batch_dir)
+    if no_jev or not os.environ.get("TYPESAFE_API_KEY"):
+        why = "--no-jev" if no_jev else "TYPESAFE_API_KEY not set"
+        hits, misses = [0], [0]
+
+        def no_network(request: httpx.Request) -> httpx.Response:
+            raise AssertionError("label made a Jev call without a key or with --no-jev")
+
+        def cached_jev_for(events):
+            start = next(e for e in events if e.type is EventType.GAME_START)
+            stmts = [e for e in events if e.type is EventType.STATEMENT]
+            cached = [e for e in stmts if (cache / e.game_id / f"{e.seq}.json").is_file()]
+            hits[0] += len(cached)
+            misses[0] += len(stmts) - len(cached)
+            if not cached:
+                return {}
+            client = httpx.AsyncClient(transport=httpx.MockTransport(no_network))
+            try:
+                got = asyncio.run(
+                    jev.classify_events([start, *cached], cache_dir=cache, client=client)
+                )
+            except (KeyError, TypeError, ValueError):  # a cache file that doesn't parse
+                raise JevFailed("malformed cached response") from None
+            return jev_verdicts(got)
+
+        try:
+            label_batch(batch_dir, jev_for=cached_jev_for)
+        except JevFailed as e:
+            without_jev(f"{why}; cache unusable, {e}")
+            return
+        if not hits[0]:
+            without_jev(why)
+            if misses[0]:
+                _echo(f"{misses[0]} statements have no cached Jev response in {cache}")
+            return
+        n_labels = sum(
+            line.count('"source":"jev"')
+            for p in batch_dir.glob("*.labels.jsonl")
+            for line in p.read_text(encoding="utf-8").splitlines()
+        )
+        _echo(
+            f"Jev from cache only ({why}, no calls): {n_labels} Jev labels from "
+            f"{hits[0]} cached statements; {misses[0]} statements had no cache entry in "
+            f"{cache} and were skipped"
+        )
+        return
 
     def jev_for(events):
         try:

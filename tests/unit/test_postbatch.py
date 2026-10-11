@@ -5,7 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from societysim.analysis import postbatch
+from societysim.analysis import jev, postbatch
+from societysim.analysis.labeler import read_log
+from societysim.logging.events import EventType
 
 FIX = Path(__file__).parents[2] / "fixtures"
 
@@ -114,3 +116,39 @@ def test_demo_block_runs_jev_line_when_jev_ran(tmp_path):
     batch = _batch(tmp_path)
     postbatch.main([str(batch)])
     assert "Jev skipped" not in postbatch.demo_block(batch, None, jev=True)
+
+
+def _fake_jev_cache(batch: Path) -> None:
+    """A complete Jev cache for the fixture: Elif (p4) claims Seer, everyone else nothing."""
+    events = read_log(FIX / "sample_game.jsonl")
+    start = next(e for e in events if e.type is EventType.GAME_START)
+    names = {seat: s.name for seat, s in start.meta.seats.items()}
+    for stmt in (e for e in events if e.type is EventType.STATEMENT):
+        answers = {}
+        for key, q in jev.build_request(stmt, names)["questions"].items():
+            if q["type"] == "noul":
+                answers[key] = {"type": "noul", "noul": 0.1}
+                continue
+            want = {"claim_role": "seer" if stmt.actor == "p4" else "none"}.get(key)
+            choice = want if want in q["criteria"] else next(iter(q["criteria"]))
+            answers[key] = {"type": "choice", "choice": choice, "confidence": 0.9}
+        path = jev.cache_dir_for(batch) / stmt.game_id / f"{stmt.seq}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"answers": answers}), encoding="utf-8")
+
+
+def test_postbatch_without_jev_keeps_jev_labels_of_a_fully_cached_batch(
+    tmp_path, capfd, monkeypatch
+):
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    batch = _batch(tmp_path)
+    _fake_jev_cache(batch)
+
+    postbatch.main([str(batch)])  # no --jev: label runs with --no-jev
+
+    out = capfd.readouterr().out
+    labels = (batch / "fixture-0001.labels.jsonl").read_text()
+    assert '"source":"jev"' in labels
+    assert (batch / "agreement.json").exists()
+    assert "Jev from cache only" in out
+    assert "Jev skipped" not in out

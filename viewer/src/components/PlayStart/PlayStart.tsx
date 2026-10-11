@@ -8,7 +8,6 @@ import type { GameSetupJson, SetupAssets } from "../../settings/setup";
 import { SetupForm } from "../SetupForm/SetupForm";
 import { art } from "../../illustrated/assets";
 
-const seal = art("inspector/10_notes.png");
 const night = art("inspector/06_night.png");
 
 export function PlayStart({
@@ -126,11 +125,8 @@ export function PlayStart({
           <li data-state={busy ? "current" : "waiting"}>Enter the village</li>
         </ol>
       </div>}
-      <div className={isGate ? "play-gate-seal" : undefined}>
-        {isGate && seal && <img src={seal} alt="" />}
-        <div ref={widget} className="play-start__turnstile" />
-      </div>
-      {isGate && limits && !busy && !error && !paused && !none && !token && <p className="play-start__status" role="status">Checking you in… Complete the bot check to join the village.</p>}
+      {/* Invisible unless Cloudflare needs the visitor to interact; it must stay in the DOM so a challenge can appear. */}
+      <div ref={widget} className="play-start__turnstile" />
       {limits && (
         <p className="play-start__limits">
           {paused ? "Play is paused right now." : `${limits.remaining_today} games left today.`}

@@ -70,6 +70,9 @@ it("shows verification progress before starting and switches to server loading a
   fetchMock.mockImplementation(async (url: string) => url.endsWith("/limits") ? new Response(JSON.stringify({ play_enabled: true, remaining_today: 5 })) : new Promise(() => {}));
   await act(async () => root.render(createElement(PlayStart, { onStarted: vi.fn(), modeLocked: true, autoStart: true })));
   expect(box.textContent).toContain("Your invitation awaits");
+  expect(box.textContent).not.toMatch(/bot check to join|Checking you in/i);
+  expect(box.querySelector(".play-gate-seal, .play-start--gate img:not(.play-arrival__art)")).toBeNull();
+  expect(box.querySelector(".play-start__turnstile")).not.toBeNull(); // stays mounted so Cloudflare can show a challenge
   expect(box.querySelectorAll('.play-arrival__steps [data-state="current"]')[0]?.textContent).toBe("Bot check");
   expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/start"))).toBe(false);
   await act(async () => verify("verified"));

@@ -1,7 +1,8 @@
-/* The gate between mode choice and the table: night counter, a dealt hand of banners, the bot check in the notes seal. */
+/* The gate between mode choice and the table: night counter, a dealt hand of banners. The bot check is invisible unless Cloudflare asks for a click. */
 
 .play-gate.landing-page {
   overflow: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -99,36 +100,11 @@
   color: #f6edd4;
 }
 
-.play-gate-seal {
+.play-start--gate .play-start__turnstile {
   order: 2;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: min(560px, 92vw);
-  aspect-ratio: 888 / 197;
-  min-height: 80px;
-  margin: 10px auto 0;
-  filter: drop-shadow(0 10px 16px #000a);
-}
-
-.play-gate-seal > img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  pointer-events: none;
-}
-
-.play-gate-seal .play-start__turnstile {
-  position: relative;
-  z-index: 2;
   display: flex;
   justify-content: center;
-  align-items: center;
-  width: 100%;
-  height: 100%;
+  margin: 8px 0 0;
 }
 
 .play-start--gate .play-start__status,

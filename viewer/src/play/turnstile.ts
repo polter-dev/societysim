@@ -44,6 +44,7 @@ export function getTurnstileToken(
       if (removed) return reject(new Error("cancelled"));
       id = t.render(el, {
         sitekey: siteKey,
+        appearance: "interaction-only", // hidden unless Cloudflare needs the visitor to click
         callback: (value: string) => { if (!removed) { onToken?.(value); resolve(value); } },
         "error-callback": () => { if (!removed) onToken?.(null); reject(new Error("Turnstile check failed.")); },
         "expired-callback": () => { if (!removed) onToken?.(null); reject(new Error("Turnstile check expired.")); },

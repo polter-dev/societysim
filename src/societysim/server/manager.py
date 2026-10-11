@@ -251,16 +251,10 @@ class GameManager:
         self._neon_up = True  # False from the first failure until Neon is back
         self._neon_task: asyncio.Task | None = None  # the one background retry loop
         self._neon_on_ready: Callable[[], Awaitable[bool]] | None = None
-        self._started: tuple[str, dict[str, int]] = ("", {})  # (UTC day, client -> games)
-
-    def _started_counts(self) -> dict[str, int]:
-        today = time.strftime("%Y-%m-%d", time.gmtime())
-        if self._started[0] != today:
-            self._started = (today, {})
-        return self._started[1]
 
     def started_today(self, client: str) -> int:
-        return self._started_counts().get(client, 0)
+        """Games this client IP started today; kept in the ledger, so a restart keeps it."""
+        return self.ledger.started_today(client)
 
     async def prepare_neon(self, on_ready: Callable[[], Awaitable[bool]] | None = None) -> None:
         """Create the Neon tables, then call `on_ready` (the ledger load; kept for later calls).
@@ -356,8 +350,7 @@ class GameManager:
         session.client, session.calls = client, calls
         session.task = asyncio.create_task(self._run(session))
         self.games[game_id] = session
-        counts = self._started_counts()
-        counts[client] = counts.get(client, 0) + 1
+        self.ledger.count_start(client)
         return session, token
 
     async def _run(self, session: Session) -> None:

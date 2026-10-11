@@ -120,6 +120,17 @@ create table if not exists visitor_spend (
 create index if not exists visitor_spend_day_idx on visitor_spend (day);
 alter table visitor_spend enable row level security;
 
+-- Visitor games started per client per UTC day (#382), so PLAY_MAX_GAMES_PER_IP_DAY holds across
+-- restarts. client_hash is an HMAC-SHA256 of the client IP keyed with PLAY_IP_SALT, never the IP.
+-- The server deletes earlier days' rows when it loads. Server-only, like visitor_spend.
+create table if not exists visitor_starts (
+    day         date not null,
+    client_hash text not null,
+    games       integer not null,
+    primary key (day, client_hash)
+);
+alter table visitor_starts enable row level security;
+
 -- What the Data API's anonymous role reads instead of events (#323), with the same columns. A
 -- finished game reads in full. Any other (running, or failed, which batch resume reruns with the
 -- same game_id and seed, so the same roles): only its public events, with private_reasoning and
@@ -323,6 +334,7 @@ begin
         grant select on leaderboard_by_batch, lies_by_model to anonymous;
         grant select on global_detectors, global_liars to anonymous;
         revoke all on visitor_spend from anonymous;
+        revoke all on visitor_starts from anonymous;  -- hashed client IPs (#382)
         revoke all on finished_seats, finished_suspicion from anonymous;  -- internal (#344)
     end if;
     if exists (select 1 from pg_roles where rolname = 'authenticated') then

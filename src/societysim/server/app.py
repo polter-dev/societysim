@@ -117,7 +117,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         alerts.send(f"Play server failed to start: {type(exc).__name__}")  # type only
         raise
     manager_mod.startup_check()
-    ledger = Ledger(play.daily_budget_usd, persistent=settings.neon)
+    ledger = Ledger(play.daily_budget_usd, persistent=settings.neon, ip_salt=play.ip_salt)
     watch = alerts.Alerts()
     ledger.on_spend = watch.spend
     ledger.game_estimate_usd = admission.default_estimate(play.allowed_models)

@@ -43,7 +43,7 @@ DEFAULT_ALLOWED = frozenset(
         "gpt-5-nano",
     }
 )
-_SECRET_NAME = re.compile(r"(_KEY|_TOKEN|DATABASE_URL|WEBHOOK_URL)$")
+_SECRET_NAME = re.compile(r"(_KEY|_TOKEN|_SALT|DATABASE_URL|WEBHOOK_URL)$")
 
 type Network = ipaddress.IPv4Network | ipaddress.IPv6Network
 
@@ -128,6 +128,7 @@ class PlayConfig:
 
     dev_mode: bool = False  # PLAY_DEV_MODE=1: no Turnstile or Neon needed, localhost CORS
     turnstile_secret: str = field(default="", repr=False)  # TURNSTILE_SECRET_KEY
+    ip_salt: str = field(default="", repr=False)  # PLAY_IP_SALT: keys the stored per-IP counts
     rate_per_min: int = 120  # PLAY_RATE_PER_MIN: requests per minute per client IP
     max_active_per_ip: int = 1  # PLAY_MAX_ACTIVE_PER_IP
     max_games_per_ip_day: int = 5  # PLAY_MAX_GAMES_PER_IP_DAY (UTC day)
@@ -158,6 +159,7 @@ class PlayConfig:
         return cls(
             dev_mode=env.get("PLAY_DEV_MODE") == "1",
             turnstile_secret=env.get("TURNSTILE_SECRET_KEY", ""),
+            ip_salt=env.get("PLAY_IP_SALT", ""),
             rate_per_min=_env_int(env, "PLAY_RATE_PER_MIN", cls.rate_per_min),
             max_active_per_ip=_env_int(env, "PLAY_MAX_ACTIVE_PER_IP", cls.max_active_per_ip),
             max_games_per_ip_day=_env_int(

@@ -652,3 +652,25 @@
   .play-start__status[role="status"]::before,
   .advanced-feedback [role="status"]::before { animation: none; }
 }
+
+/* Hidden reasoning: wrap long lines, keep paragraph breaks, scroll inside a bounded box (#588). */
+.game-reveal__reasoning-scroll {
+  max-height: min(50dvh, 420px);
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  margin-top: 8px;
+  padding-right: 6px;
+  min-width: 0;
+}
+.game-reveal__reasoning-scroll:focus-visible { outline: 3px solid #ffe499; outline-offset: 2px; }
+.game-reveal__reasoning-block { min-width: 0; }
+.game-reveal__reasoning-block pre,
+.game-reveal__reasoning-block p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
+  margin: 4px 0 10px;
+  font: 13px/1.5 system-ui, sans-serif;
+  color: #faedd0;
+}

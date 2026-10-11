@@ -39,7 +39,8 @@ class CompletionResult(BaseModel):
     raw: str  # raw model text, kept for invalid_output events
     error: str | None = None  # parse or provider error; set whenever parsed is None
     # True when the provider failed (5xx, 429, timeout, connection) and the client's own
-    # retries ran out. The model never answered, so this is not an invalid reply.
+    # retries ran out, or the call could not be made (bad or missing API key, unset endpoint).
+    # The model never answered, so this is not an invalid reply.
     provider_error: bool = False
     usage: Usage
 
@@ -83,15 +84,24 @@ HF_ROUTER_HOST = "router.huggingface.co"
 
 
 def limit_key(spec: ModelSpec) -> str:
-    """Which provider limit a model counts against. `hosted_vllm/` models whose endpoint is the
-    HF router share the `huggingface` limit, since both routes hit router.huggingface.co."""
-    if spec.provider != "hosted_vllm":
-        return spec.provider
+    """Which provider limit a model counts against. A model with its own `api_base` (a
+    self-hosted server) gets a limit per endpoint, `<provider>@<host[:port]>`, so it never
+    shares slots, rpm or timeout with the provider's hosted models or with another server.
+    `hosted_vllm/` models whose endpoint is the HF router share the `huggingface` limit, since
+    both routes hit router.huggingface.co."""
     try:
-        base = spec.resolved_api_base() or os.environ.get("HOSTED_VLLM_API_BASE", "")
-    except ValueError:
+        base = spec.resolved_api_base()
+    except ValueError:  # unset ${VAR}: the call fails before any request; keep keys apart
+        return f"{spec.provider}@{spec.api_base}"
+    if spec.provider == "hosted_vllm":
+        base = base or os.environ.get("HOSTED_VLLM_API_BASE", "")
+    url = urlparse(base or "")
+    if url.hostname == HF_ROUTER_HOST and spec.provider in ("hosted_vllm", "huggingface"):
+        return "huggingface"
+    if spec.api_base is None:
         return spec.provider
-    return "huggingface" if urlparse(base).hostname == HF_ROUTER_HOST else spec.provider
+    host = f"{url.hostname}:{url.port}" if url.port else url.hostname or base
+    return f"{spec.provider}@{host}"
 
 
 class _Limiter:
@@ -161,6 +171,10 @@ def request_kwargs(spec: ModelSpec, response_model: type[BaseModel]) -> dict[str
         "model": litellm_model_name(spec),
         "max_tokens": spec.max_tokens,
         "drop_params": True,  # providers that lack a param (e.g. reasoning_effort) skip it
+        # LiteLLM's OpenAI-compatible routes build an OpenAI SDK client that retries twice on
+        # its own. Our loop in LiteLLMClient.complete is the only retry: it counts attempts and
+        # takes an rpm token for each, so the SDK must send exactly one request per attempt.
+        "max_retries": 0,
     }
     if sends_temperature(spec):
         kwargs["temperature"] = spec.temperature
@@ -256,15 +270,32 @@ _MISSING_CREDS = re.compile(r"api[_ ]key|credentials|auth(?:entication|orization
 def _is_auth_error(e: Exception) -> bool:
     import litellm
 
-    if isinstance(e, litellm.exceptions.AuthenticationError):
+    if isinstance(
+        e, litellm.exceptions.AuthenticationError | litellm.exceptions.PermissionDeniedError
+    ):
         return True
-    return getattr(e, "status_code", None) is None and bool(_MISSING_CREDS.search(str(e)))
+    status = getattr(e, "status_code", None)
+    return status in (401, 403) or (status is None and bool(_MISSING_CREDS.search(str(e))))
 
 
 def _auth_message(spec: ModelSpec, e: Exception) -> str:
     """Names the env var to set. Never includes the provider's text, which may echo a key."""
     var = spec.api_key_env or API_KEY_ENV.get(spec.provider, f"{spec.provider.upper()}_API_KEY")
     return f"{type(e).__name__}: missing or invalid API key for {spec.name}; set {var} in .env"
+
+
+# What every call-could-not-be-made error says: our config (key, endpoint), not the provider.
+_CONFIG_ERROR = re.compile(r"missing (?:or invalid )?API (?:key|base) for ")
+
+
+def is_config_failure(result: CompletionResult) -> bool:
+    """True when the call failed on our side (bad or missing API key, unset endpoint): every
+    later call to this model fails the same way, so a batch should stop rather than retry."""
+    return (
+        result.provider_error
+        and not result.raw
+        and bool(result.error and _CONFIG_ERROR.search(result.error))
+    )
 
 
 class LiteLLMClient:
@@ -309,9 +340,13 @@ class LiteLLMClient:
 
         try:
             kwargs = request_kwargs(model, response_model)
-        except ValueError as e:
+        except ValueError as e:  # missing key or endpoint env var: our config, not the model
             return CompletionResult(
-                parsed=None, raw="", error=str(e), usage=Usage(model=model.name, attempts=0)
+                parsed=None,
+                raw="",
+                error=str(e),
+                provider_error=True,
+                usage=Usage(model=model.name, attempts=0),
             )
         key = limit_key(model)
         limiter = self._limiter(key)
@@ -341,7 +376,11 @@ class LiteLLMClient:
             usage.latency_ms = round(latency * 1000)
             if _is_auth_error(error):  # fail fast: retrying a bad key never helps
                 return CompletionResult(
-                    parsed=None, raw="", error=_auth_message(model, error), usage=usage
+                    parsed=None,
+                    raw="",
+                    error=_auth_message(model, error),
+                    provider_error=True,  # not the model's reply: no corrected-JSON retry
+                    usage=usage,
                 )
             timed_out = isinstance(error, TimeoutError | litellm.exceptions.Timeout)
             transient = timed_out or _transient(error)

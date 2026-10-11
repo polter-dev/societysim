@@ -30,7 +30,13 @@ from societysim.logging.events import EventType
 from societysim.logging.sinks.jsonl import JsonlSink
 from societysim.logging.sinks.neon import Connect, NeonSink
 from societysim.logging.textio import read_text_lenient
-from societysim.models.client import CompletionResult, ModelClient, is_provider_failure
+from societysim.models.client import (
+    CompletionResult,
+    ModelClient,
+    is_config_failure,
+    is_provider_failure,
+    limit_key,
+)
 from societysim.orchestrator import run_game
 
 log = logging.getLogger(__name__)
@@ -51,15 +57,19 @@ PROVIDER_DOWN_AFTER = 10
 class ProviderDown(Exception):
     """A model's provider stopped answering. The message names the model, never a key or URL."""
 
-    def __init__(self, model: str, error: str):
+    def __init__(self, model: str, error: str, config: bool = False):
         error = re.sub(r"https?://\S+", "<url>", error)
         error = re.sub(r"[A-Za-z0-9_\-]{24,}", "<redacted>", error)[:200]
-        super().__init__(f"{model}: {PROVIDER_DOWN_AFTER} calls in a row failed; last: {error}")
+        why = (
+            "the call cannot be made" if config else f"{PROVIDER_DOWN_AFTER} calls in a row failed"
+        )
+        super().__init__(f"{model}: {why}; last: {error}")
 
 
 class MeteredClient:
-    """Wraps a ModelClient: adds up cost, caps in-flight calls per provider and raises
-    ProviderDown once a model fails PROVIDER_DOWN_AFTER calls in a row with no tokens."""
+    """Wraps a ModelClient: adds up cost, caps in-flight calls per provider limit
+    (client.limit_key) and raises ProviderDown once a model fails PROVIDER_DOWN_AFTER calls in a
+    row with no tokens, or at once when the call cannot be made (bad or missing API key)."""
 
     def __init__(
         self,
@@ -78,11 +88,12 @@ class MeteredClient:
     async def complete(
         self, model: ModelSpec, messages: list[dict[str, Any]], response_model: type[BaseModel]
     ) -> CompletionResult:
-        cap = self._caps.get(model.provider)
+        key = limit_key(model)
+        cap = self._caps.get(key)
         if cap is None:
             result = await self.inner.complete(model, messages, response_model)
         else:
-            sem = self._sems.setdefault(model.provider, asyncio.Semaphore(cap))
+            sem = self._sems.setdefault(key, asyncio.Semaphore(cap))
             async with sem:
                 result = await self.inner.complete(model, messages, response_model)
         self.spent += result.usage.cost_usd
@@ -92,6 +103,8 @@ class MeteredClient:
             self.on_spend()
         if result.usage.input_tokens or result.usage.output_tokens:
             self.failures[model.name] = 0  # it answered, even if the answer was bad JSON
+        elif is_config_failure(result):  # a bad key fails every call; don't burn ten games' turns
+            raise ProviderDown(model.name, result.error or "", config=True)
         elif result.error:
             self.failures[model.name] += 1
             if self.failures[model.name] >= PROVIDER_DOWN_AFTER:

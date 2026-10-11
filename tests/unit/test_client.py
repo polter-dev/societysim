@@ -2,19 +2,25 @@
 
 import asyncio
 import json
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
 
+import httpx
 import litellm
 import pytest
 
 from societysim.agents.schemas import VoteResponse
 from societysim.config import ModelSpec
 from societysim.models.client import (
+    CompletionResult,
     LiteLLMClient,
     ProviderLimit,
+    Usage,
     _Limiter,
     estimate_cost,
     extract_json,
+    is_config_failure,
     is_provider_failure,
     limit_key,
     litellm_model_name,
@@ -307,6 +313,52 @@ async def test_retries_exhausted_returns_error(monkeypatch, sleeps):
     assert result.provider_error
 
 
+def test_sdk_retries_are_off_so_our_loop_is_the_only_retry():
+    for model in ["openai/gpt-x", "openai/openai/gpt-oss-20b", "gemini/g", "hosted_vllm/o/m"]:
+        assert request_kwargs(spec(litellm_model=model), VoteResponse)["max_retries"] == 0
+
+
+class Always503(BaseHTTPRequestHandler):
+    """An OpenAI-compatible server that is always down, counting the requests it gets."""
+
+    hits = 0
+
+    def do_POST(self):
+        type(self).hits += 1
+        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        body = b'{"error": {"message": "down", "type": "server_error"}}'
+        self.send_response(503)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
+
+
+async def test_openai_route_sends_one_http_request_per_attempt(monkeypatch):
+    """#422: the OpenAI SDK's own retries turned each attempt into 3 requests (local server)."""
+    Always503.hits = 0
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Always503)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    monkeypatch.setenv("LOCAL_TEST_KEY", "test-key")
+    model = spec(
+        litellm_model="openai/openai/gpt-oss-20b",
+        api_base=f"http://127.0.0.1:{server.server_address[1]}/v1",
+        api_key_env="LOCAL_TEST_KEY",
+    )
+    try:
+        result = await LiteLLMClient(max_retries=1, backoff_s=0).complete(
+            model, MESSAGES, VoteResponse
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert result.provider_error and result.usage.attempts == 2
+    assert Always503.hits == 2
+
+
 def test_is_provider_failure_reads_reason_or_legacy_error_text():
     assert is_provider_failure("provider", None)
     assert is_provider_failure(None, "ServiceUnavailableError: HuggingfaceException - busy")
@@ -407,6 +459,68 @@ async def test_hosted_vllm_auth_error_names_hf_token(monkeypatch, client):
     assert "HOSTED_VLLM_API_KEY" not in result.error
 
 
+def status_error(status: int) -> Exception:
+    """A provider error that is only recognisable by its HTTP status."""
+    err = litellm.exceptions.APIError(status, "denied", llm_provider="openai", model="gpt-x")
+    assert not isinstance(err, litellm.exceptions.AuthenticationError)
+    return err
+
+
+@pytest.mark.parametrize(
+    "err",
+    [
+        litellm.exceptions.AuthenticationError("bad key", llm_provider="openai", model="gpt-x"),
+        litellm.exceptions.PermissionDeniedError(
+            "no access",
+            llm_provider="openai",
+            model="gpt-x",
+            response=httpx.Response(403, request=httpx.Request("POST", "http://test")),
+        ),
+        status_error(401),
+        status_error(403),
+        RuntimeError("The api_key client option must be set"),
+    ],
+    ids=["AuthenticationError", "PermissionDenied", "401", "403", "missing-key"],
+)
+async def test_auth_failure_is_a_config_provider_error_not_an_invalid_reply(
+    monkeypatch, client, sleeps, err
+):
+    """#424: a bad key is our config, not the model's reply. One call, no retry, provider path."""
+    fake = mock(monkeypatch, err, reply(json.dumps(VOTE)))
+    result = await client.complete(spec(), MESSAGES, VoteResponse)
+
+    assert len(fake.calls) == 1 and sleeps.delays == []
+    assert result.provider_error
+    assert is_config_failure(result)
+    assert "missing or invalid API key for m" in result.error  # server/manager.py matches this
+
+
+async def test_missing_key_or_base_env_is_a_config_provider_error(monkeypatch, client):
+    monkeypatch.delenv("AMD_VLLM_BASE_URL", raising=False)
+    monkeypatch.delenv("AMD_API_KEY", raising=False)
+    fake = mock(monkeypatch)
+    for model in [
+        spec(api_base="${AMD_VLLM_BASE_URL}", api_key_env="AMD_API_KEY"),
+        spec(api_key_env="AMD_API_KEY"),
+    ]:
+        result = await client.complete(model, MESSAGES, VoteResponse)
+        assert result.provider_error and is_config_failure(result)
+    assert fake.calls == []
+
+
+def test_config_failure_needs_a_provider_error_with_no_reply():
+    usage = Usage(model="m")
+    err = "missing API key for m; set X in .env"
+    config = CompletionResult(parsed=None, raw="", error=err, provider_error=True, usage=usage)
+    assert is_config_failure(config)
+    # a model reply quoting the phrase is still the model's invalid output
+    assert not is_config_failure(CompletionResult(parsed=None, raw="{}", error=err, usage=usage))
+    outage = "ServiceUnavailableError: 503"
+    assert not is_config_failure(
+        CompletionResult(parsed=None, raw="", error=outage, provider_error=True, usage=usage)
+    )
+
+
 # --- rate limits --------------------------------------------------------------------------
 
 
@@ -468,7 +582,46 @@ def test_limit_key(monkeypatch):
     assert limit_key(spec(litellm_model="huggingface/org/model")) == "huggingface"
     assert limit_key(spec()) == "openai"
     own = spec(litellm_model="hosted_vllm/org/model", api_base="https://my.box/v1")
-    assert limit_key(own) == "hosted_vllm"  # its own endpoint keeps its own limit
+    assert limit_key(own) == "hosted_vllm@my.box"  # its own endpoint keeps its own limit
+
+
+def test_self_hosted_models_get_a_limit_per_endpoint(monkeypatch):
+    """#423: the AMD servers on the openai/ route used to share OpenAI's limit and timeout."""
+    from societysim.models.registry import load_registry
+
+    monkeypatch.setenv("AMD_VLLM_BASE_URL", "https://x.trycloudflare.com/v1")
+    monkeypatch.delenv("AMD_LLAMACPP_BASE_URL", raising=False)
+    reg = load_registry("configs/models.yaml")
+    reg.apply_env()
+    names = ["gpt-5-nano", "amd-gpt-oss-20b", "amd-strix-gpt-oss-20b"]
+    keys = {n: limit_key(reg.get(n)) for n in names}
+    assert keys["gpt-5-nano"] == "openai"
+    assert keys["amd-gpt-oss-20b"] == "openai@x.trycloudflare.com"
+    assert keys["amd-strix-gpt-oss-20b"] == "openai@127.0.0.1:8000"
+    c = LiteLLMClient(limits=reg.limits())
+    assert len({id(c._limiter(k)) for k in keys.values()}) == 3
+    monkeypatch.delenv("UNSET_TEST_BASE_URL", raising=False)
+    assert limit_key(spec(api_base="${UNSET_TEST_BASE_URL}")) != "openai"
+
+
+async def test_slow_self_hosted_calls_do_not_hold_openai_slots(monkeypatch):
+    monkeypatch.setenv("AMD_API_KEY", "test-key")
+    client = LiteLLMClient(limits={"openai": ProviderLimit(concurrency=1, rpm=10_000)})
+    amd_started, release = asyncio.Event(), asyncio.Event()
+
+    async def fake(**kw):
+        if "api_base" in kw:  # the self-hosted model: hangs until released
+            amd_started.set()
+            await release.wait()
+        return reply(json.dumps(VOTE))
+
+    monkeypatch.setattr(litellm, "acompletion", fake)
+    amd = spec(api_base="http://127.0.0.1:8000/v1", api_key_env="AMD_API_KEY")
+    slow = asyncio.create_task(client.complete(amd, MESSAGES, VoteResponse))
+    await amd_started.wait()
+    fast = await asyncio.wait_for(client.complete(spec(), MESSAGES, VoteResponse), 1)
+    release.set()
+    assert fast.parsed is not None and (await slow).parsed is not None
 
 
 async def test_token_bucket_waits_for_refill():

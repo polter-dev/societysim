@@ -46,6 +46,30 @@ def test_advanced_controls_accept_comboboxes_and_native_selects():
     assert "select[aria-label]" in smoke.SEL_ADVANCED_CONTROLS
 
 
+def test_no_route_loads_the_auto_starting_play_page():
+    # bare ?page=play defaults to basic mode and starts a paid visitor game; only advanced is safe
+    for r in smoke.ROUTES:
+        if "page=play" in r.query:
+            assert "mode=advanced" in r.query, r.name
+    assert next(r for r in smoke.ROUTES if r.name == "modes").query == "?page=modes"
+    assert "play" not in {r.name for r in smoke.ROUTES}
+
+
+def test_is_play_write_blocks_writes_to_api_and_allows_reads():
+    w = smoke.is_play_write
+    assert w("POST", "https://play.test/api/games")
+    assert w("post", "https://society-sim.us/api/games")
+    assert w("PUT", "https://play.test/api/games/g1/action")
+    assert w("PATCH", "https://play.test/api/x")
+    assert w("DELETE", "https://play.test/api/games/g1")
+    assert not w("GET", "https://play.test/api/health")
+    assert not w("GET", "https://play.test/api/limits")
+    assert not w("OPTIONS", "https://play.test/api/games")
+    # not the play API: Turnstile and analytics POSTs are none of the guard's business
+    assert not w("POST", "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b")
+    assert not w("POST", "https://s.test/apiary")
+
+
 def test_routes_only_use_known_context_values():
     for r in smoke.ROUTES:
         used = {n for n in ("game", "step", "model") if "{" + n + "}" in r.query}
@@ -122,7 +146,11 @@ def _seats(leak, step: bool = False) -> str:
     )
 
 
-def _page(query: dict, leak: bool) -> str:
+POST_SCRIPT = "<script>fetch('/api/games',{method:'POST',body:'{}'}).catch(()=>{})</script>"
+LIMITS_SCRIPT = "<script>fetch('/api/limits')</script>"
+
+
+def _page(query: dict, leak) -> str:
     page, step = query.get("page", [""])[0], query.get("step")
     if "game" in query:
         body = "<h1>SocietySim viewer</h1>" + _seats(leak, bool(step)).replace(
@@ -144,6 +172,7 @@ def _page(query: dict, leak: bool) -> str:
                 for i in range(4)
             )
             + "<button aria-label='Start simulation' disabled></button></form></main>"
+            + (POST_SCRIPT if leak == "post" else "")
         )
     elif page == "play":
         body = "<h1>SocietySim play</h1><section class='play-coming-soon'>coming soon</section>"
@@ -155,6 +184,7 @@ def _page(query: dict, leak: bool) -> str:
                 f"<a href='?page=play&mode={m}'>{m}</a>" for m in ("basic", "watch", "advanced")
             )
             + "</nav></main>"
+            + LIMITS_SCRIPT
         )
     elif page == "games":
         body = "<h1>SocietySim games</h1><main><table><tr><td><a href='?game=g1'>g1</a></td></tr></table></main>"
@@ -165,7 +195,7 @@ def _page(query: dict, leak: bool) -> str:
     return f"<!doctype html><html><body><main>{body}</main></body></html>"
 
 
-def _serve(leak: bool):
+def _serve(leak, hits: list | None = None):
     files = {
         "/index.json": json.dumps([{"game_id": "g1", "file": "g1.jsonl"}]),
         "/leaderboard.json": json.dumps({"models": [{"model": "m1"}]}),
@@ -179,9 +209,19 @@ def _serve(leak: bool):
     }
 
     class H(BaseHTTPRequestHandler):
+        def do_POST(self):  # the guard must keep every write from getting here
+            if hits is not None:
+                hits.append(("POST", self.path))
+            self.send_response(200)
+            self.end_headers()
+
         def do_GET(self):
             u = urlsplit(self.path)
-            if u.path in files:
+            if hits is not None and u.path.startswith("/api/"):
+                hits.append(("GET", self.path))
+            if u.path.startswith("/api/"):
+                data, kind = "{}", "application/json"
+            elif u.path in files:
                 data, kind = files[u.path], "application/json"
             else:
                 data, kind = _page(parse_qs(u.query), leak), "text/html"
@@ -208,8 +248,8 @@ def browser_ready():
         pytest.skip(f"no chromium: {str(e).splitlines()[0]}")
 
 
-def _run(leak: bool):
-    srv = _serve(leak)
+def _run(leak, hits: list | None = None):
+    srv = _serve(leak, hits)
     try:
         return smoke.run(f"http://127.0.0.1:{srv.server_port}/", timeout_ms=5000, channel=CHANNEL)
     finally:
@@ -230,9 +270,28 @@ def test_run_passes_on_a_healthy_site(browser_ready):
         "research",
         "model profile",
         "new game",
-        "play",
         "spot the wolf",
+        "guard",
     }
+    assert "play" not in {r.page for r in results}
+
+
+def test_guard_lets_reads_through_and_reports_zero_writes(browser_ready):
+    hits: list = []
+    results = {(r.page, r.check): r for r in _run(leak=False, hits=hits)}
+    assert results["guard", "no play API writes"].ok
+    assert ("GET", "/api/limits") in hits  # the modes page's read-only call got through
+    assert not [h for h in hits if h[0] != "GET"]
+
+
+def test_guard_aborts_a_page_that_posts_and_fails_the_run(browser_ready, capsys):
+    hits: list = []
+    failed = [r for r in _run(leak="post", hits=hits) if not r.ok]
+    assert ("guard", "no play API writes") in [(r.page, r.check) for r in failed]
+    guard = next(r for r in failed if r.page == "guard")
+    assert "POST" in guard.detail and "/api/games" in guard.detail
+    assert [h for h in hits if h[0] == "POST"] == []  # aborted before it reached the server
+    assert "SMOKE GUARD TRIPPED" in capsys.readouterr().err
 
 
 def test_mid_game_hidden_info_checks_run_and_pass(browser_ready):

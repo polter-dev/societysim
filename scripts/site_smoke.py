@@ -3,21 +3,22 @@
     uv run --extra smoke python -m playwright install chromium   # once
     uv run --extra smoke python scripts/site_smoke.py [BASE_URL] [--json] [--channel chrome]
 
-Read-only: only GETs and clicks on the page (no form submits, no play API calls, no secrets).
+Read-only: only GETs and clicks on the page (no form submits, no secrets). A guard in the browser
+context aborts every POST/PUT/PATCH/DELETE to the play API (/api/...) and fails the run if one was
+attempted, so no selector change can start a paid visitor game. Never load ?page=play without
+mode=advanced: the basic mode auto-starts a game.
 Pages and selectors are in ROUTES below; routes and query params come from viewer/src/main.tsx.
-Exits 1 if any check fails. The play page passes when it shows "coming soon", the offline notice
-or the play start screen; --strict-play fails on anything but the start screen.
+Exits 1 if any check fails. --strict-play is kept for the Site smoke workflow and does nothing now.
 """
 
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
 import re
 import sys
 from dataclasses import asdict, dataclass
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 DEFAULT_BASE = "https://society-sim.us/"
 ROLE_WORDS = re.compile(r"\b(werewolf|wolf|wolves|seer|doctor|villager)\b", re.I)
@@ -25,6 +26,10 @@ ROLE_WORDS = re.compile(r"\b(werewolf|wolf|wolves|seer|doctor|villager)\b", re.I
 IGNORED_404 = re.compile(r"/favicon\.ico$|\.audio/index\.json$")
 # The Turnstile widget on the play page logs its own noise from challenges.cloudflare.com.
 THIRD_PARTY = re.compile(r"challenges\.cloudflare\.com|cloudflareinsights\.com")
+# The play server's API, on any host. Reads stay allowed; anything that writes is aborted.
+PLAY_API_PATH = re.compile(r"/api(/|$)")
+PLAY_API_GLOB = "**/api/**"
+READ_ONLY_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 # key element per page: (selector, what it is). The replay and its deep links share one.
 SEL_H1 = "main h1"
@@ -45,11 +50,6 @@ SEL_MODES = "[data-testid='mode-selection'], main.mode-selection"
 SEL_MODE_CARDS = "[data-testid='mode-cards'] a, nav.mode-cards a"
 SEL_ADVANCED_CONTROLS = "form [role='combobox'][aria-label], form select[aria-label]"
 SEL_ADVANCED = "[data-testid='advanced-setup'], main.advanced-screen"
-PLAY_STATES = {
-    "section.play-coming-soon": "coming soon",
-    "section.play-offline": "offline",
-    "section.play-start": "play UI",
-}
 
 
 @dataclass
@@ -70,6 +70,8 @@ class Route:
 
 
 ROUTES = [
+    # The nav's Play link is the mode picker ("modes"). Never add a bare ?page=play route: its
+    # default (basic) auto-starts a real paid game. ?page=play&mode=advanced does not.
     # the bare URL is the illustrated landing page; the game index moved to ?page=games
     Route("landing", "", "society sim", SEL_LANDING),
     Route("modes", "?page=modes", "choose your fate", SEL_MODES),
@@ -89,7 +91,6 @@ ROUTES = [
     Route("research", "?page=research", "research", ".deception-matrix"),
     Route("model profile", "?page=model&model={model}", "{model}", "main h2", ("model",)),
     Route("new game", "?page=new", "new game", "form.setup-form"),
-    Route("play", "?page=play", "play", ", ".join(PLAY_STATES)),
     Route("spot the wolf", "?game={game}", "", "details.replay-spotwolf", ("game",)),
 ]
 
@@ -110,6 +111,13 @@ def ignorable_console_error(text: str, url: str | None) -> bool:
     if THIRD_PARTY.search(url or "") or text.startswith("%c%d"):
         return True
     return text.startswith("Failed to load resource") and bool(IGNORED_404.search(url or ""))
+
+
+def is_play_write(method: str, url: str) -> bool:
+    """True for a request that would change play-server state: a non-read method on /api/..."""
+    return method.upper() not in READ_ONLY_METHODS and bool(
+        PLAY_API_PATH.search(urlsplit(url).path)
+    )
 
 
 def pick_context(index: list, leaderboard: dict, log_text: str) -> dict[str, str]:
@@ -174,9 +182,7 @@ def table(results: list[Result]) -> str:
 # ---- browser ---------------------------------------------------------------------------------
 
 
-def run(
-    base: str, *, channel: str | None = None, timeout_ms: int = 20_000, strict_play: bool = False
-) -> list[Result]:
+def run(base: str, *, channel: str | None = None, timeout_ms: int = 20_000) -> list[Result]:
     from playwright.sync_api import Error as PwError
     from playwright.sync_api import sync_playwright
 
@@ -191,6 +197,19 @@ def run(
         browser = pw.chromium.launch(headless=True, channel=channel)
         ctx = browser.new_context()
         ctx.set_default_timeout(timeout_ms)
+
+        # hard guard: nothing in this run may write to the play API, whatever a selector clicks
+        blocked: list[str] = []
+
+        def guard(route) -> None:
+            req = route.request
+            if is_play_write(req.method, req.url):
+                blocked.append(f"{req.method} {req.url}")
+                route.abort()
+            else:
+                route.continue_()
+
+        ctx.route(PLAY_API_GLOB, guard)
 
         # data files: plain GETs, then the context for routes comes from them
         fetched: dict[str, str] = {}
@@ -255,17 +274,27 @@ def run(
                 got = page.locator(SEL_H1).first.inner_text()
                 add(route.name, "heading", want in got.lower(), got)
 
-            extra(page, route, values, add, strict_play, log_text)
+            extra(page, route, values, add, log_text)
             page.wait_for_timeout(500)  # let late fetches and effects throw
             add(route.name, "console", not errors, "; ".join(errors[:3]) or "no errors")
             page.close()
         browser.close()
+    add(
+        "guard",
+        "no play API writes",
+        not blocked,
+        "; ".join(blocked[:3]) or "0 POST/PUT/PATCH/DELETE to /api attempted",
+    )
+    if blocked:
+        print(
+            f"SMOKE GUARD TRIPPED: a page tried to write to the play API ({len(blocked)} "
+            f"request(s), all aborted): {'; '.join(blocked[:3])}",
+            file=sys.stderr,
+        )
     return out
 
 
-def extra(
-    page, route: Route, values: dict[str, str], add, strict_play: bool, log_text: str = ""
-) -> None:
+def extra(page, route: Route, values: dict[str, str], add, log_text: str = "") -> None:
     n = route.name
     if n == "landing":
         # the Play button leads to the mode picker; read-only, so only the link target is checked
@@ -322,20 +351,6 @@ def extra(
             "setup json",
             page.locator("pre.setup-json").inner_text().strip().startswith("{"),
             "preview",
-        )
-    elif n == "play":
-        # the start screen shows while the play server is still being probed; wait for the verdict
-        from playwright.sync_api import Error as PwError
-
-        down = ", ".join(s for s, v in PLAY_STATES.items() if v != "play UI")
-        with contextlib.suppress(PwError):
-            page.locator(down).first.wait_for(state="visible", timeout=8000)
-        state = next((v for s, v in PLAY_STATES.items() if page.locator(s).count()), "unknown")
-        add(
-            n,
-            "state",
-            state in ("coming soon", "play UI") or (state == "offline" and not strict_play),
-            state,
         )
     elif n == "spot the wolf":
         page.locator("details.replay-spotwolf > summary").click()
@@ -415,7 +430,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--timeout", type=float, default=20, help="seconds to wait for each element")
     ap.add_argument(
-        "--strict-play", action="store_true", help="fail unless the play start screen is up"
+        "--strict-play",
+        action="store_true",
+        help="ignored; kept so the Site smoke workflow still runs",
     )
     args = ap.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -423,7 +440,6 @@ def main(argv: list[str] | None = None) -> int:
         args.base_url,
         channel=args.channel,
         timeout_ms=int(args.timeout * 1000),
-        strict_play=args.strict_play,
     )
     if args.json:
         print(json.dumps([asdict(r) for r in results], indent=2))

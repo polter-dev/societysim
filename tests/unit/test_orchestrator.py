@@ -333,6 +333,21 @@ async def test_statement_truncation_and_self_tags():
     assert (tags[3].target, tags[3].meta.result, tags[3].meta.night) == (a, "wolf", 1)
 
 
+async def test_wolf_message_truncated_to_word_cap():
+    game = new_game()
+    wolf, other = seats(game, Role.WOLF)
+    target = [s for s in game.state.seats if game.state.roles[s] is not Role.WOLF][0]
+    long = {"message": " ".join(["word"] * 100), "proposed_target": target}
+    game.agents[wolf].scripts["wolf_chat"] = [reply(others(game, wolf), long)] * 2
+    await game.night()
+
+    first, second = of(game, EventType.WOLF_CHAT)[:2]
+    assert first.actor == wolf and len(first.public_text.split()) == 80
+    assert first.meta.truncated is True
+    assert second.actor == other and second.public_text == "go"
+    assert second.meta.truncated is None
+
+
 async def test_full_game_is_deterministic_and_complete():
     async def play(seed, wolves):
         config = GameConfig(seed=seed, models=["fake"], roles=RoleCounts(wolves=wolves))

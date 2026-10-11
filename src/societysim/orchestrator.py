@@ -225,7 +225,14 @@ class Game:
                 fields = {"round": rnd, "fallback": reply.fallback, **reply.fields()}
                 if not lone:  # a lone wolf has no message; its proposal carries the reply
                     text = reply.response.action.message if reply.response else SILENT
-                    self.emit(EventType.WOLF_CHAT, V.WOLVES, actor=wolf, public_text=text, **fields)
+                    self.emit(
+                        EventType.WOLF_CHAT,
+                        V.WOLVES,
+                        actor=wolf,
+                        public_text=text,
+                        truncated=reply.truncated or None,
+                        **fields,
+                    )
                     fields = {"round": rnd, "fallback": reply.fallback}
                 self.emit(EventType.WOLF_PROPOSAL, V.WOLVES, actor=wolf, target=target, **fields)
         return proposals
@@ -335,12 +342,13 @@ class Game:
         return "; ".join(errors) or None
 
     def _truncate(self, response: BaseModel) -> tuple[BaseModel, bool]:
-        """Cut statement text to the word cap; longer text is truncated, not rejected."""
+        """Cut statement text and wolf messages to the word cap; longer is cut, not rejected."""
         cap = self.state.config.rules.max_statement_words
-        text = getattr(response.action, "text", None)  # only statements have text
+        field = "text" if hasattr(response.action, "text") else "message"
+        text = getattr(response.action, field, None)  # statements and wolf_chat only
         if text is None or len(words := text.split()) <= cap:
             return response, False
-        action = response.action.model_copy(update={"text": " ".join(words[:cap])})
+        action = response.action.model_copy(update={field: " ".join(words[:cap])})
         return response.model_copy(update={"action": action}), True
 
     def _settle(self, seat: str, reply: Reply) -> str | None:

@@ -35,7 +35,7 @@ Every line has all of these keys. Empty ones are `null`.
 |---|---|---|---|---|
 | `game_start` | setup | narrator | – | `seed`, `seats: {p0: {name, model, color, role}, …}` |
 | `phase_start` | any | public | – | `public_text` is a heading like "Night 2" |
-| `wolf_chat` | night | wolves | wolf → – | `round`, `usage`; `public_text` is the message |
+| `wolf_chat` | night | wolves | wolf → – | `round`, `usage`, `truncated`; `public_text` is the message |
 | `wolf_proposal` | night | wolves | wolf → proposed victim | `round` |
 | `night_kill` | night | wolves | – → victim | `method: consensus \| plurality \| tiebreak`, `tally` of final proposals |
 | `seer_check` | night | seer | Seer → checked player | `result: wolf \| not_wolf`, `usage` |

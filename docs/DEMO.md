@@ -43,9 +43,9 @@ Before you start, have two tabs ready: the demo game (open it with `?mode=narrat
 | 0:30 | Replay | Open the demo game in Narrator view. Press Space to play, pause on the first accusation arrow. | "A Python engine owns the real game state. A model can lie but can't bend a rule." |
 | 1:00 | Replay, stepper | Step with the arrow keys, or the step controls under the table. | "We can walk it one event at a time." |
 | 1:15 | Replay, inspector | Click a wolf's seat. | "This is the private scratchpad next to what the wolf said out loud. Every turn also carries a suspicion score for every living player." |
-| 1:40 | Replay, narration | Turn narration on (narration controls under the table). Let one or two clips play. | "Narration only reads public events. Private reasoning and the wolf channel are never voiced." Skip this step if the clips are missing for the demo game. |
+| 1:40 | Replay, narration | Turn narration on (narration controls under the table). Let one or two clips play. | "Narration never voices a player's private reasoning. By default it reads only public events. Wolf-chat and highlight clips exist only if they were generated with `--select`, and the viewer plays them only in Narrator view, never in villager view." Skip this step if the clips are missing for the demo game. |
 | 2:00 | Replay, lie label | Jump to the labeled lie pop-up, then the vote it moved. | "We label a lie by comparing the claim with the engine's truth. The raw log is never edited." |
-| 2:20 | Leaderboard | Open the page. Show win rate, then the detectors and liars views. | `TODO(batch)`: the one row to point at and the number to say. |
+| 2:20 | Leaderboard | Open the page. Show win rate by model. `TODO(verify)`: global detectors/liars board once it is mounted on the page (issue to be linked); don't promise it until then. | `TODO(batch)`: the one row to point at and the number to say. |
 | 2:45 | Research | Open the deception matrix. | "Rows are the liar model, columns are the listener. Each cell is how often the listener's vote followed the lie, against how often it followed a true claim." `TODO(batch)`: one cell to read out, with its n. Say "exploratory" if n is small. |
 | 3:15 | Model profile | From the leaderboard, click a model name. | "One page per model: how it does as wolf and as villager, how often it lies, how well its suspicion scores find the wolves." |
 | 3:30 | Spot the wolf | Back in a replay, open the "Spot the wolf" panel under the table, guess a seat, step forward. | "You get the same public information a villager had. Can you beat the models?" |
@@ -130,7 +130,7 @@ Don't plan on a live pod. AUP sessions are time-boxed, the first start downloads
 
 ### Neon: Best Use of Neon
 
-**Evidence:** Neon console SQL editor; `neon/schema.sql`; the live site reading the Data API; the `leaderboard`, `leaderboard_by_batch` and `lies_by_model` views (and the detectors and liars leaderboard views from #344).
+**Evidence:** Neon console SQL editor; `neon/schema.sql`; the live site reading the Data API; the `leaderboard`, `leaderboard_by_batch` and `lies_by_model` views (the detectors and liars views from #344 exist in Neon, but the page that shows them is not mounted yet; `TODO(verify)`, issue to be linked).
 
 **Click path**
 1. Neon console, SQL editor: `select status, count(*) from games group by status;` then `select * from leaderboard;`.
@@ -168,7 +168,7 @@ Gemini is in the lineup and the Devpost draft lists the Gemini prize. No ticket 
 
 **Numbers**
 - Last look, 7-player self-play baseline (#35 note, 45 games): `gemini-flash` had the highest detection score, about 0.91, ahead of `deepseek` (0.85) and `llama4` (0.81). `TODO(verify)` against the report before saying it, and call it a 7-player self-play result.
-- Live leaderboard last seen: `gemini-flash-lite` the top detector, `gemini-flash` the top liar by suspicion received. `TODO(verify)` on the day.
+- Neon detectors/liars views last seen (#344): `gemini-flash-lite` the top detector, `gemini-flash` the top liar by suspicion received. These are not on the Leaderboard page yet, so quote them from the SQL editor only. `TODO(verify)` on the day.
 - Honest caveat: `gemini-flash` calls were slow (45 to 389 s per call in the preflight, #35) and the free-tier rate limit is low. If asked, say so.
 - `TODO(batch)`: Gemini rows from the final mixed report.
 

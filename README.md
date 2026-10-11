@@ -59,7 +59,9 @@ From the game logs we build:
 
 ## Results
 
-TODO(batch): results table from `runs/<batch>/report/` (win rate, skill rating, lie rate and lie success, detection AUC per model). Tracked in #37.
+<!-- results:start -->
+No results yet. After a batch has a report, run `python scripts/readme_results.py runs/<batch>` to fill this in.
+<!-- results:end -->
 
 ## Tech stack
 

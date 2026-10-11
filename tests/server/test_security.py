@@ -900,3 +900,11 @@ def test_client_ip_keeps_ipv4_mapped_addresses_distinct():
     ip = security.client_ip
     assert ip(scope("::ffff:1.2.3.4"), ()) == "1.2.3.4"
     assert ip(scope("::ffff:5.6.7.8"), ()) == "5.6.7.8"
+
+
+async def test_refused_start_does_not_burn_the_turnstile_token(make_client, turnstile):
+    c = make_client(play=play(turnstile_secret="ts-secret", max_concurrent=1))
+    await start(c, turnstile_token="good")
+    assert len(turnstile) == 1
+    err(await c.post("/api/games", json={"turnstile_token": "good"}), 503, "at_capacity")
+    assert len(turnstile) == 1  # refused on capacity before siteverify

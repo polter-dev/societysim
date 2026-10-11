@@ -115,4 +115,15 @@ describe("useHumanSeat", () => {
     await act(async () => void (await vi.advanceTimersByTimeAsync(5000)));
     expect(fetchMock.mock.calls.length).toBe(n);
   });
+
+  it.each([404, 401])("stops polling after a %i and says the game is gone", async (status) => {
+    await flush();
+    fetchMock.mockImplementation(async () => new Response("{}", { status }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(1000)));
+    await flush();
+    expect(h.current.gone).toBe(true);
+    const n = fetchMock.mock.calls.length;
+    await act(async () => void (await vi.advanceTimersByTimeAsync(60000)));
+    expect(fetchMock.mock.calls.length).toBe(n);
+  });
 });

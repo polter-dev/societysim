@@ -12,6 +12,7 @@ export function useHumanSeat(gameId: string | null, pollMs = POLL_MS) {
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [gone, setGone] = useState(false);
   const inflight = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -21,13 +22,15 @@ export function useHumanSeat(gameId: string | null, pollMs = POLL_MS) {
       setMe(await getMe(gameId));
       setError(null);
     } catch (e) {
+      // 401/404: the game was pruned or the seat token is dead; polling again can't fix that.
+      if (e instanceof PlayError && (e.status === 401 || e.status === 404)) setGone(true);
       setError(e instanceof PlayError ? e.message : "Something went wrong.");
     } finally {
       inflight.current = false;
     }
   }, [gameId]);
 
-  const over = me !== null && me.status !== "running";
+  const over = gone || (me !== null && me.status !== "running");
   useEffect(() => {
     if (!gameId || over) return;
     void refresh();
@@ -70,6 +73,7 @@ export function useHumanSeat(gameId: string | null, pollMs = POLL_MS) {
 
   return {
     me,
+    gone,
     pending,
     error,
     errors,

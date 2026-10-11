@@ -22,7 +22,7 @@ export const BY_CODE: Record<string, string> = {
   at_capacity: "The server is full right now. Try again in a few minutes, or watch a replay.",
   bot_check_failed: "Couldn't verify you're human. Please retry the check.",
   forbidden: "You can't start a game from here. Watch a replay instead.",
-  budget_exhausted: "Today's budget is used up. Watch a replay instead.",
+  budget_exhausted: "Today's play budget is used up. Try again tomorrow or watch replays.",
   play_disabled: "Play is paused right now. Watch a replay instead.",
   invalid_request: "That request wasn't valid. Check your settings and try again.",
   not_your_turn: "It's not your turn.",
@@ -159,8 +159,8 @@ export async function probePlay(timeoutMs = 5000): Promise<PlayStatus> {
     if (typeof b.play_enabled !== "boolean" || typeof b.remaining_today !== "number") return offline;
     const limits = b as unknown as Limits;
     if (!limits.play_enabled) return { kind: "closed", code: "play_disabled", message: BY_CODE.play_disabled };
-    if (limits.remaining_today <= 0)
-      return { kind: "closed", code: "too_many_games_today", message: BY_CODE.too_many_games_today };
+    if (limits.remaining_today <= 0) // the ledger's count: the budget, not a per-IP limit
+      return { kind: "closed", code: "budget_exhausted", message: BY_CODE.budget_exhausted };
     return { kind: "online", limits };
   } catch {
     return offline;

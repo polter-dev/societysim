@@ -57,6 +57,12 @@ class WebHumanAgent:
         try:
             parsed = await asyncio.wait_for(self._replies.get(), self.timeout)
         except TimeoutError:
+            if not self._replies.empty():  # a move was accepted (200) as the clock ran out
+                parsed = self._replies.get_nowait()
+                self.timeouts = 0
+                return CompletionResult(
+                    parsed=parsed, raw=parsed.model_dump_json(), usage=Usage(model=MODEL)
+                )
             self.timeouts += 1
             if self.timeouts >= self.max_timeouts:
                 raise Forfeit(f"{self.timeouts} turns in a row timed out") from None

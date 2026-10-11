@@ -34,7 +34,7 @@ afterEach(() => {
 });
 
 function render(pending: PendingAction) {
-  const seat = { me: me(pending), pending, error: null, errors: [], busy: false, secondsLeft: 30, submit, refresh: vi.fn() };
+  const seat = { me: me(pending), gone: false, pending, error: null, errors: [], busy: false, secondsLeft: 30, submit, refresh: vi.fn() };
   act(() => root.render(createElement(YourTurnPanel, { seat })));
 }
 const button = (text: string, scope: ParentNode = box) => {

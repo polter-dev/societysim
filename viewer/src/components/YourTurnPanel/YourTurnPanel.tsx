@@ -48,6 +48,12 @@ export function YourTurnPanel({ seat }: { seat: Seat }) {
   const key = pending ? `${pending.kind}:${pending.deadline}` : "";
   useEffect(() => { setDraft({}); if (key) setSent(false); }, [key]);
 
+  if (seat.gone) {
+    const q = new URLSearchParams(window.location.search);
+    const next = new URLSearchParams({ page: "games" });
+    for (const k of ["base", "index"]) if (q.has(k)) next.set(k, q.get(k)!);
+    return <section className="your-turn" role="status">This game has ended or expired. <a href={`?${next}`}>Watch replays</a></section>;
+  }
   if (!me) return <section className="your-turn">{seat.error ?? "Loading your seat..."}</section>;
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const needsText = pending?.kind === "statement" || pending?.kind === "wolf_chat";

@@ -448,3 +448,25 @@ def test_auth_failure_logged_without_key(caplog):
     with caplog.at_level("WARNING"):
         play_manager.scrub(r)
     assert "missing or invalid API key for gpt" in caplog.text
+
+
+async def test_move_accepted_as_the_clock_runs_out_is_not_dropped():
+    from pydantic import BaseModel
+
+    from societysim.server.web_agent import WebHumanAgent
+
+    class Reply(BaseModel):
+        x: int = 1
+
+    class Stuck(asyncio.Queue):  # the reply is queued (200) but the waiting get() never sees it
+        async def get(self):
+            await asyncio.Event().wait()
+
+    agent = WebHumanAgent(timeout=0.05)
+    agent._replies = Stuck()
+    task = asyncio.create_task(agent.act(object()))
+    await asyncio.sleep(0.01)
+    agent.submit(Reply())  # accepted
+    result = await task
+    assert result.error is None and result.parsed == Reply()
+    assert agent.timeouts == 0

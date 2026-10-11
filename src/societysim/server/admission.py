@@ -107,11 +107,7 @@ async def check_start(request: Request, setup: GameSetup) -> Admission:
         raise PlayError(503, "play_disabled", "Play is switched off right now; watch a replay")
     ip = security.client_ip(request, play.trusted_proxies, play.client_ip_header)
 
-    if play.turnstile_secret:
-        token = getattr(request.state, "turnstile_token", "")
-        if not await security.verify_turnstile(token, ip, play.turnstile_secret, play.hostnames()):
-            raise PlayError(403, "bot_check_failed", "Bot check failed; reload and try again")
-    elif not play.dev_mode:  # check_startup prevents this; fail closed anyway
+    if not play.turnstile_secret and not play.dev_mode:  # check_startup prevents this
         raise PlayError(403, "bot_check_failed", "Bot check unavailable")
 
     setup = allowed_setup(setup, play.allowed_models)
@@ -120,7 +116,20 @@ async def check_start(request: Request, setup: GameSetup) -> Admission:
             await manager.prepare_neon()
         await ledger.load(manager.neon_connect)
 
-    # No awaits from here to the game's start.
+    # Cheap refusals first, so a refused start doesn't burn the visitor's Turnstile token.
+    _check_limits(manager, ip, setup)
+    if play.turnstile_secret:
+        token = getattr(request.state, "turnstile_token", "")
+        if not await security.verify_turnstile(token, ip, play.turnstile_secret, play.hostnames()):
+            raise PlayError(403, "bot_check_failed", "Bot check failed; reload and try again")
+        _check_limits(manager, ip, setup)  # siteverify awaited: state may have moved
+    return Admission(client=ip, setup=setup)
+
+
+def _check_limits(manager, ip: str, setup: GameSetup) -> None:
+    """Capacity, per-IP and budget checks. Synchronous, so nothing changes between the last
+    call and the game's start."""
+    play, ledger = manager.settings.play, manager.ledger
     if not ledger.ready:
         raise PlayError(503, "budget_exhausted", BUDGET_MESSAGE)
     running = [s for s in manager.games.values() if s.status == "running"]
@@ -137,4 +146,3 @@ async def check_start(request: Request, setup: GameSetup) -> Admission:
         )
     if ledger.remaining_usd() < estimate_usd(setup):
         raise PlayError(503, "budget_exhausted", BUDGET_MESSAGE)
-    return Admission(client=ip, setup=setup)

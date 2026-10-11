@@ -40,7 +40,7 @@ describe("probePlay", () => {
     fetchMock.mockImplementation(() => json({ play_enabled: false, remaining_today: 3 }));
     expect((await probePlay()).kind).toBe("closed");
     fetchMock.mockImplementation(() => json({ play_enabled: true, remaining_today: 0 }));
-    expect(await probePlay()).toMatchObject({ kind: "closed", code: "too_many_games_today" });
+    expect(await probePlay()).toMatchObject({ kind: "closed", code: "budget_exhausted" });
   });
   it("is online with limits", async () => {
     fetchMock.mockImplementation(() => json({ play_enabled: true, remaining_today: 4 }));

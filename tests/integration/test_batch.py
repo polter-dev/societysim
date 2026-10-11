@@ -517,9 +517,10 @@ def test_cli_batch_dry_run_prints_plan_and_writes_nothing(tmp_path, monkeypatch)
     )
     assert result.exit_code == 0, result.output
     lines = result.output.splitlines()
-    assert len(lines) == 4  # 3 games plus the total
+    assert "3 games, estimated $" in lines[3]  # 3 games, then the total, then the pair table
+    assert lines[4] == "games per (wolf model, listener model):"
     assert lines[0].startswith("cli-g0000 seed=") and "p0=gemma4-26b/" in lines[0]
-    assert "wolf" in result.output and "3 games, estimated $" in lines[-1]
+    assert "wolf gemma4-26b:" in result.output
     assert not (tmp_path / "runs").exists()
 
 

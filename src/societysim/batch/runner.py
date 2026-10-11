@@ -38,6 +38,7 @@ from societysim.models.client import (
     limit_key,
 )
 from societysim.orchestrator import run_game
+from societysim.roles import Role
 
 log = logging.getLogger(__name__)
 
@@ -193,6 +194,20 @@ def plan(
             }
         )
     return rows
+
+
+MIN_PAIR_GAMES = 5  # the deception matrix needs n >= 5 games per (wolf model, listener model)
+
+
+def pair_games(rows: list[dict[str, Any]]) -> Counter[tuple[str, str]]:
+    """Games per (wolf model, listener model) in a plan: one count per game for each such pair.
+    A listener is any non-wolf seat's model; a model on both sides counts against itself."""
+    pairs: Counter[tuple[str, str]] = Counter()
+    for row in rows:
+        wolves = {m for _, m, role in row["seats"] if role == Role.WOLF}
+        others = {m for _, m, role in row["seats"] if role != Role.WOLF}
+        pairs.update((w, o) for w in wolves for o in others)
+    return pairs
 
 
 REPLACE_BACKOFF = (0.05, 0.1, 0.2, 0.4, 0.8, 0.4)  # seconds; about 2 s in all

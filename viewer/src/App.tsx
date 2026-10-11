@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { EndReveal } from './play/EndReveal';
 import { useNarration } from './audio/useNarration';
 import { Arrows } from './components/Arrows/Arrows';
@@ -38,6 +38,15 @@ export interface GameProps {
   /** Seq range of the current stepper beat; label pop-ups show for any event inside it. */
   beatRange?: {first: number; last: number};
 }
+/** Escape closes the open bottom-bar pop-up and puts focus back on its summary (#702). */
+function closePop(e: KeyboardEvent<HTMLElement>) {
+  if (e.key !== 'Escape' || e.defaultPrevented) return;
+  const pop = (e.target as HTMLElement).closest('details[open]');
+  if (!pop) return;
+  e.preventDefault();
+  pop.removeAttribute('open');
+  pop.querySelector('summary')?.focus();
+}
 export function Game({events, labels, idx, mode, selected, onSelect, onSeqChange, step, seq, onSeek, onStep, narration, beatRange}: GameProps) {
   const scene = deriveScene(events, idx, mode);
   const [playing, setPlaying] = useState(false); // autoplay: chat stays out of the live regions
@@ -48,7 +57,7 @@ export function Game({events, labels, idx, mode, selected, onSelect, onSeqChange
     {/* The bottom bar: stepping and the timeline, then pop-ups that open upward over the table. */}
     <div className="replay-bar">
       <div className="replay-controls">{step?.live && <LiveBadge newCount={step.newCount}/>}{step && <StepControls {...step}/>}<Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} seq={seq} onSeek={onSeek} onStep={onStep} onPlayingChange={setPlaying} narrationIdle={narration?.whenIdle}/></div>
-      <div className="replay-pops">
+      <div className="replay-pops" onKeyDown={closePop}>
         <details className="replay-pop replay-chat" name="replay-pop"><summary>Logs</summary><div className="replay-pop__body"><Tally scene={scene}/><ChatLog scene={scene}/></div></details>
         <details className="replay-pop replay-spotwolf" name="replay-pop"><summary>Spot the wolf</summary><div className="replay-pop__body"><SpotWolfPanel key={events[0]?.game_id} events={events} idx={idx}/></div></details>
         {narration && <details className="replay-pop replay-narration" name="replay-pop"><summary>Narration</summary><div className="replay-pop__body"><NarrationControls available={narration.available} mode={mode} on={narration.on} enabled={narration.enabled} onToggle={narration.onToggle} onCategory={narration.onCategory}/></div></details>}

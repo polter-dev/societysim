@@ -11,6 +11,15 @@ describe('landing page',()=>{
  it('does not claim a fixed allowance or availability when the server is unknown',()=>{
   for(const kind of ['loading','unavailable','unconfigured'] as const){const labels=landingStatus({kind});expect(labels.games).not.toMatch(/5 games/i);expect(labels.server).not.toBe('Play available');}
  });
+ it('links Leaderboard and Research from the front page itself, outside the dialog',()=>{
+  vi.stubEnv('VITE_PLAY_API_URL','');
+  const html=renderToStaticMarkup(createElement(LandingPage,{href:extra=>'?'+new URLSearchParams({base:'https://batch.test/',...extra})}));
+  const links=[...html.matchAll(/<a [^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/g)].map(m=>[m[2],m[1].replace(/&amp;/g,'&')]);
+  const base='base=https%3A%2F%2Fbatch.test%2F';
+  expect(links).toContainEqual(['Leaderboard',`?${base}&page=leaderboard`]);
+  expect(links).toContainEqual(['Research',`?${base}&page=research`]);
+  expect(html).toContain('page=modes');
+ });
  it('renders an accessible menu and preserves the selected batch on Play',()=>{
   vi.stubEnv('VITE_PLAY_API_URL','');
   const html=renderToStaticMarkup(createElement(LandingPage,{href:extra=>'?'+new URLSearchParams({base:'https://batch.test/',...extra})}));

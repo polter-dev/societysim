@@ -4,10 +4,19 @@ import {describe,expect,it} from 'vitest';
 import fixture from '../../../fixtures/sample_game.jsonl?raw';
 import {parseLog} from '../data/parse';
 import {deriveScene} from '../scene/deriveScene';
-import {eventPresentation,playerStatistics} from './presentation';
+import {eventPresentation,playerStatistics,eventIcon} from './presentation';
 import {IllustratedShell,IllustratedInspector} from './IllustratedView';
 const events=parseLog(fixture).events;
 describe('illustrated replay data',()=>{
+ it('uses public event types and phase for detail illustrations',()=>{
+  expect(eventIcon({...events[0],type:'seer_check'})).toBe('investigation');
+  expect(eventIcon({...events[0],type:'doctor_save'})).toBe('protection');
+  expect(eventIcon({...events[0],type:'vote'})).toBe('voting');
+  expect(eventIcon({...events[0],type:'night_kill'})).toBe('werewolf');
+  expect(eventIcon({...events[0],type:'death_reveal'})).toBe('werewolf');
+  expect(eventIcon({...events[0],type:'phase_start',phase:'night'})).toBe('night');
+  expect(eventIcon({...events[0],type:'statement',phase:'day'})).toBe('day');
+ });
  it('renders the logged roster, including a tenth seat without prototype agents',()=>{
   const start=events.find(e=>e.type==='game_start')!;
   const seats={...start.meta.seats!,p7:{name:'Actual Seven',model:'logged-model',color:'#123456',role:'villager' as const},p8:{name:'Actual Eight',model:'logged-model',color:'#123456',role:'villager' as const},p9:{name:'Actual Nine',model:'logged-model',color:'#123456',role:'villager' as const}};
@@ -36,3 +45,4 @@ describe('illustrated replay data',()=>{
   expect(render('villager')).not.toContain(reason);
  });
 });
+

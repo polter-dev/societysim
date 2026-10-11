@@ -22,3 +22,5 @@ body{margin:0;background:#031b17;color:#efe5bd}a{color:#eacb75}.batch-source{dis
   .event-detail-board .detail-participants{top:24.8%;height:32.2%}
   .event-detail-board .detail-participants h3{height:3.5cqw;min-height:0;font-size:1.65cqw;line-height:1;margin:0;padding-left:17%}
 }
+.detail-event-icon{position:absolute;left:10%;top:24%;width:13%;height:20%;object-fit:contain;pointer-events:none}
+@media(max-width:600px){.detail-event-icon{position:static;display:block;width:100px;height:120px;margin:0 auto}}

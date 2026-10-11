@@ -1,6 +1,14 @@
 import type { Event } from '../types/events';
 import type { Scene } from '../scene/deriveScene';
 
+export function eventIcon(event: Event): string {
+  if (event.type === 'seer_check' || event.type === 'seer_claim') return 'investigation';
+  if (event.type === 'doctor_save') return 'protection';
+  if (['vote', 'elimination', 'no_elimination'].includes(event.type)) return 'voting';
+  if (event.type.startsWith('wolf') || event.type === 'night_kill' || event.type === 'death_reveal') return 'werewolf';
+  return event.phase === 'night' ? 'night' : 'day';
+}
+
 export function eventPresentation(event: Event, scene: Scene) {
   const name = (id: string | null) => scene.players.find(p => p.id === id)?.name ?? id ?? 'Village';
   const title = event.type.replaceAll('_', ' ');

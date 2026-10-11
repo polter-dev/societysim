@@ -103,4 +103,11 @@ describe("LeaderboardTable ranking (#395)", () => {
     expect(html.indexOf("zeta")).toBeLessThan(html.indexOf("alpha"));
     expect(html).toContain("overflow-x:auto");
   });
+
+  it("shows the short model name with the full id on hover", () => {
+    const b = { ...board, models: [row({ model: "llama4-maverick", win_rate: 0.5 })] };
+    const html = renderToStaticMarkup(createElement(LeaderboardTable, { board: b }));
+    expect(html).toContain('title="llama4-maverick"');
+    expect(html).toContain("Llama 4 Maverick");
+  });
 });

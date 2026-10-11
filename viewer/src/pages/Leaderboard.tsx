@@ -58,8 +58,8 @@ export function LeaderboardTable({
   profileHref?: (model: string) => string;
 }) {
   const catalogLabel = useModelLabel();
-  // Catalog label once loaded; otherwise the short display name instead of the raw id.
-  const label = (m: string) => { const l = catalogLabel(m); return l === m ? modelName(m) : l; };
+  // Short name in the row; the catalog's long name (or the id) on hover.
+  const label = modelName;
   const side = board.wolf_side_advantage?.overall;
   const byOpenSkill = board.models.some((r) => r.openskill);
   // Rank follows the metric the caption names, whatever order the file was written in.
@@ -96,7 +96,7 @@ export function LeaderboardTable({
           {rows.map((r, i) => (
             <tr key={r.model}>
               <td>{i + 1}</td>
-              <th scope="row"><ModelAvatar model={r.model} label={label(r.model)} size={28} /> {profileHref ? <a href={profileHref(r.model)}>{label(r.model)}</a> : label(r.model)}</th>
+              <th scope="row" title={catalogLabel(r.model)}><ModelAvatar model={r.model} label={label(r.model)} size={28} /> {profileHref ? <a href={profileHref(r.model)}>{label(r.model)}</a> : label(r.model)}</th>
               <td>{r.games ?? "n/a"}</td>
               <td>{r.seats ?? "n/a"}</td>
               <td>

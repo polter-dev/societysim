@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ModelAvatar, useModelLabel } from "../ModelAvatar/ModelAvatar";
+import { modelName } from "../../data/modelNames";
 import { BOARD_TABS, DETECTOR_COLUMNS, LIAR_COLUMNS, type BoardTab, type Column, type GlobalBoard } from "../../data/globalBoard";
 
 export interface GlobalLeaderboardProps {
@@ -38,7 +39,7 @@ export function GlobalLeaderboard({ board, error = null, initialTab = "detectors
 }
 
 function Table<T extends { model: string; ranked: boolean }>({ rows, columns, caption }: { rows: T[]; columns: Column<T>[]; caption: string }) {
-  const label = useModelLabel();
+  const catalogLabel = useModelLabel();
   if (rows.length === 0) return <p>No finished games yet.</p>;
   return (
     <table role="tabpanel">
@@ -57,9 +58,9 @@ function Table<T extends { model: string; ranked: boolean }>({ rows, columns, ca
           <tr key={r.model} data-ranked={r.ranked}>
             {columns.map((c, i) =>
               i === 0 ? (
-                <th key={c.label} scope="row">
-                  {c.label === "Model" && <ModelAvatar model={r.model} label={label(r.model)} size={28} />}{" "}
-                  {c.label === "Model" ? label(r.model) : c.value(r)}
+                <th key={c.label} scope="row" title={c.label === "Model" ? catalogLabel(r.model) : undefined}>
+                  {c.label === "Model" && <ModelAvatar model={r.model} label={modelName(r.model)} size={28} />}{" "}
+                  {c.label === "Model" ? modelName(r.model) : c.value(r)}
                 </th>
               ) : (
                 <td key={c.label}>{c.value(r)}</td>

@@ -151,13 +151,16 @@ main.info-page:has(> .games-page) > .batch-source {
 }
 
 .games-table tbody tr {
-  transition: background-color 120ms ease-out, box-shadow 120ms ease-out;
+  transition: background-color 120ms ease-out;
 }
 
-/* Hover and keyboard focus light the whole row and mark it with a gold edge. */
+/* Hover and keyboard focus light the whole row and mark it with a gold edge (on the cell: rows take no shadow). */
 .games-table tbody tr:is(:hover, :has(a:focus-visible)) {
-  background: rgb(18 60 46 / 75%);
-  box-shadow: inset 3px 0 0 var(--accent-gold);
+  background: #0f4a35;
+}
+
+.games-table tbody tr:is(:hover, :has(a:focus-visible)) > :first-child {
+  box-shadow: inset 4px 0 0 var(--accent-gold);
 }
 
 /* Game id: the link into the replay, kept on one line. */

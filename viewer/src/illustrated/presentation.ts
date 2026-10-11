@@ -1,12 +1,21 @@
 import type { Event } from '../types/events';
 import type { Scene } from '../scene/deriveScene';
 
+const CLAIM_ROLES: Record<string, string> = { seer: 'the Seer', doctor: 'the Doctor', villager: 'a Villager', werewolf: 'a Werewolf' };
+
+/** Claimed role comes only from the public event's meta.role, never the speaker's true role. */
+function claimText(event: Event) {
+  const role: unknown = event.meta.role;
+  const label = typeof role === 'string' ? CLAIM_ROLES[role] : undefined;
+  return label ? `Claims to be ${label}` : 'Claims a role';
+}
+
 export function eventPresentation(event: Event, scene: Scene) {
   const name = (id: string | null) => scene.players.find(p => p.id === id)?.name ?? id ?? 'Village';
   const title = event.type.replaceAll('_', ' ');
   const image = event.type === 'seer_check' ? '04_investigation.png' : event.type === 'doctor_save' ? '03_protection.png' : event.type === 'vote' ? '07_vote.png' : event.type.startsWith('wolf') || event.type === 'night_kill' ? '02_werewolf.png' : event.type === 'statement' ? '01_discussion.png' : '10_notes.png';
   return { title, image, actor: name(event.actor), target: event.target ? name(event.target) : null,
-    text: event.public_text ?? (event.target ? `${name(event.actor)} → ${name(event.target)}` : title),
+    text: event.public_text ?? (event.type === 'role_claim' ? claimText(event) : null) ?? (event.target ? `${name(event.actor)} → ${name(event.target)}` : title),
     result: event.meta.result ?? (event.type === 'doctor_save' ? event.meta.saved ? 'Target saved' : 'Protection did not stop a kill' : event.meta.winner ? `${event.meta.winner} won` : event.meta.reason ?? null) };
 }
 

@@ -199,6 +199,21 @@ def phase_prompt(
 Reply with the JSON object only."""
 
 
+UNPARSED = "it was not a valid JSON object in the required format"
+
+
+def retry_prompt(prompt: str, error: str) -> str:
+    """The original prompt plus why the last reply was rejected.
+
+    error must be a rules error built from seat ids and public names only, or UNPARSED. Raw
+    provider or parser text must never come in here: it can echo anything (hard rule 2).
+    """
+    return (
+        f"{prompt}\n\nYour previous reply was rejected: {error}\n"
+        "Reply again with a corrected JSON object."
+    )
+
+
 def schema_prompt(response_model: type[BaseModel]) -> str:
     """JSON schema text for models with `structured: none` (no response_format support)."""
     schema = json.dumps(response_model.model_json_schema(), separators=(",", ":"))

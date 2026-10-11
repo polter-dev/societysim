@@ -197,3 +197,10 @@ def test_system_prompt_shows_suspicion_list_example():
     text = _system()
     assert '"suspicion": [{"player": "p1", "p": 0.2}, {"player": "p4", "p": 0.7}]' in text
     assert "never an object keyed by id" in text
+
+
+def test_retry_prompt_appends_error_after_original():
+    from societysim.agents.prompts import UNPARSED, retry_prompt
+
+    out = retry_prompt("ORIGINAL", UNPARSED)
+    assert out.startswith("ORIGINAL") and UNPARSED in out and "Reply again" in out

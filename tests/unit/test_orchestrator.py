@@ -324,3 +324,44 @@ async def test_model_without_color_gets_default():
     game = await run_game(GameConfig(models=["fake"]), FakeAgent, [], "g", colors={"fake": None})
     seats = game.events[0].meta.seats
     assert {seat.color for seat in seats.values()} == {DEFAULT_COLOR}
+
+
+async def test_retry_prompt_hides_raw_parse_error():
+    game = new_game()
+    doctor = seats(game, Role.DOCTOR)[0]
+    game.agents[doctor].scripts["doctor"] = [
+        "not json",
+        reply(others(game, doctor), {"target": doctor}),
+    ]
+
+    await game.night()
+
+    first, retry = (t.prompt for t in game.agents[doctor].turns[:2])
+    extra = retry[len(first) :]
+    assert (
+        "Invalid JSON" not in extra
+        and "pydantic" not in extra
+        and "not a valid JSON object" in extra
+    )
+    [invalid] = of(game, EventType.INVALID_OUTPUT)
+    assert "Invalid JSON" in invalid.meta.error  # the log keeps the real error
+
+
+async def test_retry_error_names_no_roles_and_caps_echo():
+    game = new_game()
+    seer = seats(game, Role.SEER)[0]
+    wolf = seats(game, Role.WOLF)[0]
+    rest = others(game, seer)
+    junk = "wolf-" * 40
+    game.agents[seer].scripts["seer"] = [
+        reply(rest, {"target": junk}),
+        reply(rest, {"target": wolf}),
+    ]
+
+    await game.night()
+
+    first, retry = (t.prompt for t in game.agents[seer].turns[:2])
+    extra = retry[len(first) :].lower()
+    assert junk not in extra and len(extra) < 400
+    for role in Role:
+        assert f"is a {role.value}" not in extra and f"is the {role.value}" not in extra

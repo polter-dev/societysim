@@ -21,7 +21,7 @@ from pydantic import BaseModel
 
 from societysim.agents.base import AgentFactory, Turn
 from societysim.agents.observation import observe
-from societysim.agents.prompts import Action, phase_prompt, player
+from societysim.agents.prompts import UNPARSED, Action, phase_prompt, player, retry_prompt
 from societysim.agents.schemas import ABSTAIN
 from societysim.config import GameConfig
 from societysim.engine.engine import (
@@ -282,19 +282,17 @@ class Game:
         for _ in range(2):
             result = await self.agents[seat].act(turn)
             usage = _add(usage, result.usage)
+            shown = None  # what the model is told; the log keeps the full error
             if result.parsed is None:
                 error = result.error or "reply could not be parsed"
+                shown = UNPARSED
             else:
-                error = self._invalid(turn, result.parsed)
+                error = shown = self._invalid(turn, result.parsed)
             if error is None:
                 response, truncated = self._truncate(result.parsed)
                 return Reply(turn, response, usage, failures, truncated)
             failures.append((result.raw, error))
-            turn = replace(
-                turn,
-                prompt=f"{prompt}\n\nYour previous reply was rejected: {error}\n"
-                "Reply again with a corrected JSON object.",
-            )
+            turn = replace(turn, prompt=retry_prompt(prompt, shown))
         return Reply(turn, None, usage, failures)
 
     def _invalid(self, turn: Turn, parsed: Any) -> str | None:
@@ -302,7 +300,9 @@ class Game:
         st = self.state
 
         def names(seats: Sequence[str]) -> str:
-            return ", ".join(player(s, st.names[s]) if s in st.names else repr(s) for s in seats)
+            return ", ".join(
+                player(s, st.names[s]) if s in st.names else repr(s[:20]) for s in seats
+            )
 
         errors = []
         rated = [e.player for e in parsed.private_reasoning.suspicion]
@@ -323,7 +323,9 @@ class Game:
                     f"seer_report needs a player id as target and a night from 1 to {st.day}"
                 )
         elif (choice := getattr(act, _CHOICE[turn.action])) not in turn.targets:
-            errors.append(f"{choice!r} is not allowed; choose one of {names(turn.targets)}")
+            errors.append(
+                f"{str(choice)[:20]!r} is not allowed; choose one of {names(turn.targets)}"
+            )
         return "; ".join(errors) or None
 
     def _truncate(self, response: BaseModel) -> tuple[BaseModel, bool]:

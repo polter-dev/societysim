@@ -24,3 +24,15 @@
 @media(prefers-reduced-motion:reduce){.roster,.roster-toggle{transition:none!important}.day-counter,.day-counter img,.day-counter>span,.agents-collapsed:before{animation:none!important}}
 .roster{animation:none}
 
+/* Ambient light sits above the table painting, below the interactive game UI. */
+.forest-scene{pointer-events:none}
+.forest-scene .scene-art-plane{z-index:0}
+.forest-scene .table-light{z-index:1;background:radial-gradient(ellipse at 50% 55%,#ffba3f18,transparent 62%);pointer-events:none}
+.forest-scene .firefly{z-index:2;min-width:4px;min-height:4px;background:#fff3b0;box-shadow:0 0 5px 2px #ffe69dbb,0 0 18px 5px #ffc75a55;pointer-events:none;animation-name:forest-firefly-drift}
+@keyframes forest-firefly-drift{
+  0%{opacity:.15;transform:translate(-12px,12px) scale(.7)}
+  30%{opacity:.85;transform:translate(8px,-8px) scale(1)}
+  65%{opacity:.45;transform:translate(-6px,-35px) scale(.8)}
+  100%{opacity:.9;transform:translate(24px,-58px) scale(1.1)}
+}
+@media(prefers-reduced-motion:reduce){.forest-scene .firefly{animation:none!important;opacity:.35}.forest-scene .table-light{animation:none!important}}

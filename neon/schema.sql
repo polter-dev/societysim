@@ -121,7 +121,10 @@ alter table visitor_spend enable row level security;
 -- What the Data API's anonymous role reads instead of events (#323), with the same columns. A
 -- finished game reads in full. Any other (running, or failed, which batch resume reruns with the
 -- same game_id and seed, so the same roles): only its public events, with private_reasoning and
--- suspicion set to null, so the live site can't spoil roles.
+-- suspicion set to null, so the live site can't spoil roles. meta.usage (token counts, cost,
+-- latency, attempts, cache hit) and meta.ts go too (#387): wolves, the seer and the doctor get
+-- longer prompts, so per-call sizes and timings would give their roles away. Keep this list in
+-- step with LIVE_HIDDEN_META in logging/sinks/neon.py.
 -- The view runs with its owner's (the writer's) rights; security_barrier stops a caller's
 -- filters from being evaluated on hidden rows first.
 create or replace view events_public with (security_barrier) as
@@ -134,7 +137,8 @@ select e.game_id,
        e.schema_version,
        case when g.status = 'finished'
             then e.event
-            else e.event || jsonb_build_object('private_reasoning', null, 'suspicion', null) end
+            else ((e.event || jsonb_build_object('private_reasoning', null, 'suspicion', null))
+                  #- '{meta,usage}' #- '{meta,ts}') end
            as event
 from events e
 join games g on g.game_id = e.game_id

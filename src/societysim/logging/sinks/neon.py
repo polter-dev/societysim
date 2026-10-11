@@ -47,6 +47,18 @@ _END_GAME = "update games set status = $2, winner = $3, ended_at = now() where g
 
 Connect = Callable[[], Awaitable[Any]]
 
+# Per-call metadata a live (public-only) feed leaves out (#387): wolves, the seer and the doctor
+# get longer prompts, so token counts, cost and timings would give their roles away. Same list as
+# the events_public view in neon/schema.sql.
+LIVE_HIDDEN_META = ("usage", "ts")
+
+
+def live_redact(event: Event) -> Event:
+    """A public event as anyone may see it while the game runs: no private reasoning, no
+    suspicion, no LIVE_HIDDEN_META."""
+    meta = event.meta.model_copy(update=dict.fromkeys(LIVE_HIDDEN_META))
+    return event.model_copy(update={"private_reasoning": None, "suspicion": None, "meta": meta})
+
 
 def event_row(event: dict[str, Any]) -> tuple:
     """Row for the events table from an event dict (the full event goes in as jsonb)."""
@@ -111,8 +123,8 @@ class NeonSink:
     `flush_after` seconds (so a slow LLM game shows up live), and on end_game / close.
 
     `public_only` (visitor games, #281): the live feed gets only public events, without
-    private reasoning or suspicion, since the Data API is readable by anyone, the visitor
-    included. The full log goes in afterwards with `sync_game`.
+    private reasoning, suspicion or per-call metadata (`live_redact`), since the Data API is
+    readable by anyone, the visitor included. The full log goes in afterwards with `sync_game`.
     """
 
     def __init__(
@@ -179,7 +191,7 @@ class NeonSink:
             if self.public_only:
                 if event.visibility != Visibility.PUBLIC:
                     return
-                event = event.model_copy(update={"private_reasoning": None, "suspicion": None})
+                event = live_redact(event)
             self._pending.append(event_row(event.model_dump(mode="json")))
             if len(self._pending) > self._max_pending:
                 del self._pending[: len(self._pending) - self._max_pending]

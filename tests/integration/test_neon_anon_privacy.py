@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from societysim.logging.sinks.neon import apply_schema, event_row, label_row
+from societysim.logging.sinks.neon import LIVE_HIDDEN_META, apply_schema, event_row, label_row
 
 asyncpg = pytest.importorskip("asyncpg")
 
@@ -174,7 +174,8 @@ async def test_unfinished_game_reads_public_events_without_private_fields(db, gi
     for row, original in zip(rows, public, strict=True):
         ev = _event(row)
         assert ev["private_reasoning"] is None and ev["suspicion"] is None
-        assert ev == {**original, "private_reasoning": None, "suspicion": None}
+        meta = {k: v for k, v in original["meta"].items() if k not in LIVE_HIDDEN_META}
+        assert ev == {**original, "private_reasoning": None, "suspicion": None, "meta": meta}
     # Filters on the hidden rows' columns find nothing.
     hidden = await _as_anon(
         db,
@@ -184,6 +185,26 @@ async def test_unfinished_game_reads_public_events_without_private_fields(db, gi
         gid,
     )
     assert hidden == []
+
+
+# #387: longer role prompts mean bigger input token counts, so usage would name the wolves.
+async def test_per_call_meta_hidden_until_finished(db):
+    def q(key):
+        return (
+            f"select count(*) filter (where event -> 'meta' -> '{key}' is not null) as n"
+            " from events_public where game_id = $1"
+        )
+
+    for key in LIVE_HIDDEN_META:
+        for gid in ("g-run", "g-fail"):
+            assert (await _as_anon(db, q(key), gid))[0]["n"] == 0, (key, gid)
+        assert (await _as_anon(db, q(key), "g-done"))[0]["n"] > 0, key
+    tokens = await _as_anon(
+        db,
+        "select event -> 'meta' -> 'usage' ->> 'input_tokens' as n from events_public"
+        " where game_id = 'g-run'",
+    )
+    assert tokens and all(r["n"] is None for r in tokens)
 
 
 async def test_finished_game_reads_in_full(db):

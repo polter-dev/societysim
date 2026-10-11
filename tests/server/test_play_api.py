@@ -48,6 +48,17 @@ def play_env(monkeypatch):
         monkeypatch.delenv(name, raising=False)
     for name, value in OPEN_LIMITS.items():
         monkeypatch.setenv(name, value)
+    # create_app maps PLAY_* onto the provider names in os.environ; setenv records each var
+    # (even when unset) so monkeypatch restores it and nothing leaks into later tests.
+    for name in (
+        "OPENAI_API_KEY",
+        "HF_TOKEN",
+        "GEMINI_API_KEY",
+        "PLAY_OPENAI_API_KEY",
+        "PLAY_HF_TOKEN",
+        "PLAY_GEMINI_API_KEY",
+    ):
+        monkeypatch.setenv(name, "")
 
 
 @pytest.fixture(autouse=True)
@@ -410,8 +421,6 @@ def test_play_keys_map_to_provider_names_and_win():
 
 
 async def test_health_reports_providers_ready(make_client, monkeypatch):
-    for name in ("OPENAI_API_KEY", "HF_TOKEN", "GEMINI_API_KEY"):
-        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("PLAY_GEMINI_API_KEY", "g")
     async with make_client() as c:
         ready = (await c.get("/api/health")).json()["providers_ready"]

@@ -520,6 +520,7 @@ to them). All bodies are JSON and closed: an unknown key is a 422. Every error i
 | `POST /api/games` | none (Turnstile token in the body) | `StartGame` | `StartedGame` |
 | `GET /api/games/{id}/me` | seat token | | `Me` |
 | `POST /api/games/{id}/action` | seat token | `ActionBody` | `{"accepted": true}` |
+| `POST /api/games/{id}/leave` | seat token | | `{"accepted": true}` |
 | `GET /api/limits` | none | | `{"play_enabled": bool, "remaining_today": int, "client_ip_hint": str, "allowed_models": [str]}` (model ids visitors may use, sorted) |
 | `GET /api/health` | none | | `{"ok": true, "providers_ready": {"<provider>": bool}}` (a key is present for that provider; never the key) |
 
@@ -595,6 +596,20 @@ Same auth. The body holds the `action` shape a model sends for `pending_action.k
   over `others`, a valid `seer_report`.
 - Errors: 409 when no turn is pending for you (including a second move for the same turn), 422
   for a bad reply (the detail says why; the turn stays open), 413 for a body over 8 KB.
+
+### Leaving: `POST /api/games/{id}/leave`
+
+Send `Authorization: Bearer <seat_token>` with no body. The visitor gives up their seat and the
+game ends now as a forfeit: `status: "forfeit"` on `/me`, the log stops without `game_end`,
+run_meta gets `forfeit: true`, and Neon marks the game `failed` (same as the timeout forfeit
+below). Model calls in flight are cancelled and the calls already made are still booked. The
+game stops counting toward the per-IP active limit at once, so the visitor can start a new one;
+the daily count is not refunded.
+
+- Response: `{"accepted": true}` (200). Calling it again, or on a game that already ended, is a
+  200 no-op and leaves the status as it was.
+- Errors: 404 for an unknown game, 401 for a missing or wrong token, a token from another game,
+  or any token on a watch-only game.
 
 ### Timeouts
 

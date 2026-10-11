@@ -259,6 +259,7 @@ def play_api_json_schema() -> dict[str, Any]:
                 "request": "ActionBody",
                 "response": "Accepted",
             },
+            "POST /api/games/{id}/leave": {"auth": "seat_token", "response": "Accepted"},
             "GET /api/limits": {"response": "Limits"},
             "GET /api/health": {"response": "Health"},
         },

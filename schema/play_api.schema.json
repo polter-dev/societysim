@@ -16,6 +16,10 @@
       "request": "ActionBody",
       "response": "Accepted"
     },
+    "POST /api/games/{id}/leave": {
+      "auth": "seat_token",
+      "response": "Accepted"
+    },
     "GET /api/limits": {
       "response": "Limits"
     },

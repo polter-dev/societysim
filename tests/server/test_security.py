@@ -863,6 +863,18 @@ async def test_leave_ends_the_game_and_frees_the_ip_slot(make_client, tmp_path):
     assert c.manager.started_today(session.client) == 2  # leaving doesn't refund a daily game
 
 
+async def test_leave_refuses_another_games_token_and_watch_only(make_client):
+    c = make_client(play=play())
+    mine, other = await start(c), await start(c)
+    url = f"/api/games/{mine['game_id']}/leave"
+    err(await c.post(url, headers=auth(other["seat_token"])), 401, "unauthorized")
+    assert c.manager.games[mine["game_id"]].status == "running"
+    watch = await start(c, watch_only=True)
+    url = f"/api/games/{watch['game_id']}/leave"
+    err(await c.post(url, headers=auth(mine["seat_token"])), 401, "unauthorized")
+    assert c.manager.games[watch["game_id"]].status == "running"
+
+
 async def test_leave_books_calls_in_flight(make_client, monkeypatch, costly):
     """p0 is a wolf (seed 7) and leaves on night 1 while the Seer's and Doctor's slow calls
     run: they are cancelled and their worst-case holds booked, as for a forfeit."""

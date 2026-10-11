@@ -9,6 +9,7 @@ import { SetupForm } from "../SetupForm/SetupForm";
 import { art } from "../../illustrated/assets";
 
 const seal = art("inspector/10_notes.png");
+const night = art("inspector/06_night.png");
 
 export function PlayStart({
   onStarted,
@@ -116,6 +117,15 @@ export function PlayStart({
           allowed={allowed}
           onChange={(setup, valid) => setAdv({ setup, valid })} />
       )}
+      {isGate && <div className="play-arrival">
+        {night && <img className="play-arrival__art" src={night} alt="" />}
+        <h2>{error ? "A moment before we begin" : busy ? "The village is waking" : !limits ? "Opening the village gates" : !token ? "Your invitation awaits" : "Ready to enter"}</h2>
+        <ol className="play-arrival__steps" aria-label="Joining progress">
+          <li data-state={limits ? "done" : "current"}>Availability</li>
+          <li data-state={token || busy ? "done" : limits ? "current" : "waiting"}>Bot check</li>
+          <li data-state={busy ? "current" : "waiting"}>Enter the village</li>
+        </ol>
+      </div>}
       <div className={isGate ? "play-gate-seal" : undefined}>
         {isGate && seal && <img src={seal} alt="" />}
         <div ref={widget} className="play-start__turnstile" />

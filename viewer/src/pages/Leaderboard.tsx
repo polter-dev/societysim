@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { ModelAvatar, useModelLabel } from "../components/ModelAvatar/ModelAvatar";
 import { GlobalLeaderboard } from "../components/GlobalLeaderboard/GlobalLeaderboard";
 import { useGlobalBoard } from "../data/globalBoard";
@@ -7,26 +7,7 @@ import { fetchJson } from "../data/staticSource";
 import { art } from "../illustrated/assets";
 import "./Leaderboard.css";
 
-/** Inspector banners, in rank order, so the first rows wear the village, the seer, and the doctor. */
-const ROW_BANNERS = [
-  "inspector/01_discussion.png",
-  "inspector/04_investigation.png",
-  "inspector/03_protection.png",
-  "inspector/07_vote.png",
-  "inspector/02_werewolf.png",
-  "inspector/06_night.png",
-  "inspector/05_group.png",
-  "inspector/08_relationship.png",
-  "inspector/10_notes.png",
-  "inspector/09_attack.png",
-];
-
 const dayCounter = art("new/day_counter-v2.png");
-
-function rowStyle(index: number): CSSProperties | undefined {
-  const url = art(ROW_BANNERS[index % ROW_BANNERS.length]);
-  return url ? ({ "--row-art": `url("${url}")` } as CSSProperties) : undefined;
-}
 
 /** leaderboard.json from `societysim report` (shape documented in analysis/report.py). */
 export interface Rating {
@@ -118,7 +99,7 @@ export function LeaderboardTable({
             </thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={r.model} style={rowStyle(i)}>
+                <tr key={r.model}>
                   <td className="leaderboard-rank" data-rank={i + 1}><span>{i + 1}</span></td>
                   <th scope="row" title={catalogLabel(r.model)}><ModelAvatar model={r.model} label={label(r.model)} size={40} /> {profileHref ? <a href={profileHref(r.model)}>{label(r.model)}</a> : label(r.model)}</th>
                   <td>{r.games ?? "n/a"}</td>

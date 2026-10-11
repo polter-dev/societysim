@@ -64,6 +64,19 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
+it("shows verification progress before starting and switches to server loading after the token", async () => {
+  let verify: (token: string) => void = () => {};
+  (globalThis as { turnstile?: unknown }).turnstile = { render: (_el: unknown, opts: { callback: (token: string) => void }) => { verify = opts.callback; return "waiting"; } };
+  fetchMock.mockImplementation(async (url: string) => url.endsWith("/limits") ? new Response(JSON.stringify({ play_enabled: true, remaining_today: 5 })) : new Promise(() => {}));
+  await act(async () => root.render(createElement(PlayStart, { onStarted: vi.fn(), modeLocked: true, autoStart: true })));
+  expect(box.textContent).toContain("Your invitation awaits");
+  expect(box.querySelectorAll('.play-arrival__steps [data-state="current"]')[0]?.textContent).toBe("Bot check");
+  expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/start"))).toBe(false);
+  await act(async () => verify("verified"));
+  expect(box.textContent).toContain("The village is waking");
+  expect(box.querySelector('.play-arrival__steps [data-state="current"]')?.textContent).toBe("Enter the village");
+});
+
 const settle = async () => {
   for (let i = 0; i < 5; i++) await act(async () => void (await Promise.resolve()));
 };

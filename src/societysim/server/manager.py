@@ -50,6 +50,7 @@ from societysim.setup import REGISTRY, GameSetup, setup_errors
 
 log = logging.getLogger(__name__)
 
+PLAY_ATTEMPTS = 2  # requests per model call: one retry for a timeout or provider error
 MAX_TEXT = 280  # statement text and wolf chat message, after control characters are stripped
 NEON_SCHEMA_LOCK = 453_000_001  # pg_advisory_xact_lock key around the startup schema apply
 KEEP_FINISHED_S = 3600  # how long an ended game stays readable through /me
@@ -137,7 +138,13 @@ def _client():
     from societysim.models.client import LiteLLMClient
 
     litellm.suppress_debug_info = True  # its help banner can print provider error text
-    return LiteLLMClient(limits=_registry().limits())  # one client, so rate limits are shared
+    # One client, so rate limits are shared. At most PLAY_ATTEMPTS requests per call, which
+    # the ledger's hold covers (worst_case below), so a failed call never books past it.
+    return LiteLLMClient(
+        limits=_registry().limits(),
+        max_retries=PLAY_ATTEMPTS - 1,
+        timeout_retries=PLAY_ATTEMPTS - 1,
+    )
 
 
 def llm_agents_for(
@@ -177,9 +184,9 @@ class MeteredAgent:
     """Books each model call in the ledger. The call's worst-case cost is held first; if it
     doesn't fit in what is left today, a scripted agent answers instead (no spend), so the
     game still finishes. The hold settles to the real cost, or stays if the call never
-    returns. A call that failed (the client reports $0 for a timeout) books the worst case
-    for each attempt it made, so it is never under-counted. Failed calls are scrubbed of
-    provider text."""
+    returns. The hold covers every attempt the client may make (PLAY_ATTEMPTS), and a call
+    that failed books all of it, so a failed call is never under-counted and never books
+    more than it held. Failed calls are scrubbed of provider text."""
 
     def __init__(
         self,
@@ -207,8 +214,8 @@ class MeteredAgent:
         try:
             result = scrub(await self.inner.act(turn))
             cost = result.usage.cost_usd
-            if result.error is not None:  # a timed-out or failed attempt may still be billed:
-                cost = max(cost, held / 1e9 * result.usage.attempts)  # its worst case each
+            if result.error is not None:  # the client reports $0 for a timeout, but the
+                cost = None  # provider may still bill it: book the whole hold
             return result
         finally:  # also when cancelled: then the hold is what gets booked
             await self.ledger.settle(self.game_id, held, cost)
@@ -492,7 +499,7 @@ def _metered(
 
         def worst_case(prompt: str) -> float:
             prompt_bytes = system_bytes + len(prompt.encode())
-            return admission.call_worst_case(model, prompt_bytes, max_tokens)
+            return PLAY_ATTEMPTS * admission.call_worst_case(model, prompt_bytes, max_tokens)
 
         fallback = RandomAgent(state, s)
         return MeteredAgent(inner, fallback, ledger, game_id, worst_case, calls)

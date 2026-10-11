@@ -106,11 +106,14 @@ class Ledger:
                 total = await asyncio.wait_for(conn.fetchval(_TODAY, self._day), self.timeout)
                 await asyncio.wait_for(conn.execute(_PRUNE_STARTS, self._day), self.timeout)
                 rows = await asyncio.wait_for(conn.fetch(_STARTS, self._day), self.timeout)
-            self.spent_nanos = max(self.spent_nanos, nanos(float(total or 0)))
-            for row in rows:
-                key = row["client_hash"]
-                self.starts[key] = max(self.starts.get(key, 0), int(row["games"]))
-            self.ready = True
+                # Bookings made during the reads above queued rows: write those too, and open
+                # with no await in between, so nothing is left unwritten once ready.
+                await self._write_unsaved(conn)
+                self.spent_nanos = max(self.spent_nanos, nanos(float(total or 0)))
+                for row in rows:
+                    key = row["client_hash"]
+                    self.starts[key] = max(self.starts.get(key, 0), int(row["games"]))
+                self.ready = True
         except Exception as exc:  # the message may hold the DSN: log the type only
             log.warning("visitor ledger unavailable (%s); no visitor games", type(exc).__name__)
             await self._drop()

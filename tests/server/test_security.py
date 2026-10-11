@@ -439,6 +439,7 @@ class FakeNeon:
         self.down = False
         self.fail_writes = 0  # the next N ledger writes fail
         self.lands = False  # ...after the row was written (a reply lost to a timeout)
+        self.during_read = None  # awaited while the ledger reads the start counts
 
     async def connect(self):
         if self.down:
@@ -483,6 +484,8 @@ class FakeConn:
 
     async def fetch(self, sql, *args):
         assert "from visitor_starts where day = $1" in sql
+        if self.db.during_read:
+            await self.db.during_read()
         rows = self.db.starts.items()
         return [{"client_hash": k, "games": n} for (day, k), n in rows if day == args[0]]
 
@@ -560,6 +563,21 @@ async def test_failed_spend_write_fails_closed_and_recovers(monkeypatch):
     await ledger.close()
 
 
+async def test_booking_during_the_reload_is_written_before_it_opens():
+    db = FakeNeon()
+    ledger = Ledger(2.0, persistent=True, ip_salt=SALT)
+    assert await ledger.load(db.connect)
+    ledger.ready = False  # as after a failed write
+
+    async def booked_meanwhile():  # a running game's call settles while load() reads
+        await ledger.settle("g1", 0, 0.05)
+
+    db.during_read = booked_meanwhile
+    assert await ledger.load(db.connect)
+    assert not ledger.unsaved and [r[2] for r in db.spend] == [0.05]
+    await ledger.close()
+
+
 async def test_spend_row_that_landed_before_the_error_is_not_counted_twice():
     db = FakeNeon()
     ledger = Ledger(2.0, persistent=True, ip_salt=SALT)
@@ -617,23 +635,37 @@ async def test_failed_start_count_write_refuses_games_until_written(make_client)
     assert list(db.starts.values()) == [2]
 
 
-async def test_failed_call_books_its_worst_case_per_attempt():
-    """A timed-out call reports $0 (models/client.py), but the provider may still bill it:
-    the ledger books the hold for each attempt, never $0."""
-    ledger, calls = Ledger(1.0), set()
+async def test_failed_call_books_its_hold_and_never_more(monkeypatch):
+    """A timed-out call reports $0 (models/client.py), but the provider may still bill each
+    attempt. The play client makes at most PLAY_ATTEMPTS requests, the hold covers that many
+    worst cases, and a failed call books exactly the hold: never $0, never more (#382)."""
+    import litellm
 
-    class Hangs:
-        async def act(self, turn):
-            usage = Usage(model="qwen3-235b", attempts=2, cost_usd=0.0)
-            return CompletionResult(parsed=None, raw="", error="Timeout: took 90 s", usage=usage)
+    cfg = GameConfig(n_players=7, models=["qwen3-235b"] * 7)
+    with mock.patch.dict(
+        os.environ, {k: "test-key" for k in SECRETS if k.endswith(("_KEY", "_TOKEN"))}
+    ):
+        make, _ = llm_agents_for(cfg, max_tokens=300)
+        client = manager_module._client()
+        monkeypatch.setattr(client, "backoff_s", 0.0)
+        sent = []
 
-    state = GameState(GameConfig(n_players=7, models=["qwen3-235b"] * 7))
-    agent = MeteredAgent(Hangs(), RandomAgent(state, "p1"), ledger, "g", lambda _: 0.0011, calls)
-    turn = Turn(action="vote", prompt="vote", others=["p2"], targets=["p2"])
-    result = await agent.act(turn)
+        async def hangs(**kw):
+            sent.append(kw)
+            raise TimeoutError
+
+        monkeypatch.setattr(litellm, "acompletion", hangs)
+        ledger, calls = Ledger(1.0), set()
+        state = GameState(cfg)
+        agent = manager_module._metered(make, ledger, "g", calls, 300)(state, "p1")
+        turn = Turn(action="vote", prompt="vote", others=["p2"], targets=["p2"])
+        held = agent.worst_case(turn.prompt)
+        result = await agent.act(turn)
     assert result.error == manager_module.TIMED_OUT
-    assert ledger.games["g"] == pytest.approx(0.0022)
-    assert ledger.spent_usd() == pytest.approx(0.0022)
+    assert len(sent) == manager_module.PLAY_ATTEMPTS == 2
+    one = admission.call_worst_case("qwen3-235b", len(agent.inner.system) + 4, 300)
+    assert held == pytest.approx(2 * one) and held > 0
+    assert ledger.games["g"] == pytest.approx(held) and ledger.spent_nanos == nanos(held)
 
 
 async def test_game_across_midnight_is_not_booked_twice(monkeypatch):
@@ -677,7 +709,7 @@ class CostlyAgent:
             await asyncio.sleep(self.delay)
         except asyncio.CancelledError:
             CostlyAgent.log["cancelled"] += 1
-            CostlyAgent.log["held"] += worst
+            CostlyAgent.log["held"] += manager_module.PLAY_ATTEMPTS * worst  # the hold
             raise
         result = await self.inner.act(turn)
         CostlyAgent.log["done"] += 1

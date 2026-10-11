@@ -278,3 +278,23 @@ def test_viewer_html_has_site_wide_card():
     for needle in ("og:title", "og:description", "og:image", "twitter:card", "twitter:image"):
         assert needle in text
     assert 'content="https://society-sim.us/og/card.png"' in text
+
+
+def test_out_reencodes_cp1252_logs_to_utf8(tmp_path):
+    batch = _batch(tmp_path)
+    text = "He said “wolf” — then ran."
+    old = batch / "old_game.jsonl"
+    old_bytes = (json.dumps({"public_text": text}, ensure_ascii=False) + "\n").encode("cp1252")
+    old.write_bytes(old_bytes)
+    with pytest.raises(UnicodeDecodeError):
+        old_bytes.decode("utf-8")
+    good = (batch / "sample_game.jsonl").read_bytes()
+    out = tmp_path / "site"
+    r = _run(tmp_path, "--out", str(out), str(batch))
+    assert r.returncode == 0, r.stderr
+    for staged in (out / "old_game.jsonl", out / "data" / "old_game.jsonl"):
+        assert json.loads(staged.read_bytes().decode("utf-8"))["public_text"] == text
+    # UTF-8 logs are byte-identical; raw logs in the batch are untouched
+    assert (out / "sample_game.jsonl").read_bytes() == good
+    assert (out / "data" / "sample_game.jsonl").read_bytes() == good
+    assert old.read_bytes() == old_bytes

@@ -119,6 +119,8 @@ for f in index.json leaderboard.json metrics.json; do
   [[ -s "$stage/$f" ]] || { echo "error: staged site has no $f at its root" >&2; exit 1; }
 done
 ls "$stage"/*.jsonl >/dev/null 2>&1 || { echo "error: staged site has no game .jsonl at its root" >&2; exit 1; }
+# Logs from before #230 are cp1252; the viewer reads UTF-8. Fix the staged copies only (runs/ is never touched).
+uv run --frozen --project "$root" python "$root/scripts/reencode_logs.py" "$stage"
 # The settings screen's model list (docs/DATA_CONTRACT.md, "Game setup"). Availability is
 # whatever this machine sees (environment and .env), e.g. AMD only while its pod URL is set.
 uv run --frozen --project "$root" societysim catalog --out "$stage" --registry "$root/configs/models.yaml" >/dev/null

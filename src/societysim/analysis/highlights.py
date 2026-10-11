@@ -22,13 +22,22 @@ Ordering: score (high first), then game id, then first seq. Links are viewer que
 """
 
 import json
+import re
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from societysim.analysis.metrics import SOURCES, SUCCESS_TYPES, GameData, lie_success, load_batch
-from societysim.logging.events import Event, EventType, Label
+from societysim.analysis.metrics import (
+    SOURCES,
+    SUCCESS_TYPES,
+    GameData,
+    _claim_target,
+    _tagged,
+    lie_success,
+    load_batch,
+)
+from societysim.logging.events import Event, EventType, Label, LabelType
 from societysim.roles import Role, SeatId
 
 RESOLUTIONS = (EventType.ELIMINATION, EventType.NO_ELIMINATION)
@@ -95,6 +104,21 @@ def _name(g: GameData, seat: str | None, role: str = "") -> str:
     return f"{seats[seat].name} ({tag})" if seat in seats else str(seat)
 
 
+def _lie_fields(g: GameData, lb: Label) -> tuple[str | None, str | None, Role | None]:
+    """(target, result, claimed role) of a lie. A self-tag label sits on the tag event, which
+    carries them. A Jev label sits on the statement, so they come from the label detail, else
+    from the actor's only self-tag of that kind in the statement (None where neither says)."""
+    src = g.by_seq[lb.source_seq]
+    if lb.source != "jev":
+        return src.target, src.meta.result, src.meta.role
+    if lb.label is LabelType.FALSE_ROLE_CLAIM:
+        if m := re.search(r"claimed (\w+);", lb.detail or ""):
+            return None, None, Role(m[1])
+        tags = _tagged(g, lb, EventType.ROLE_CLAIM)
+        return None, None, tags[0].meta.role if len(tags) == 1 else None
+    return (*_claim_target(g, lb), None)
+
+
 def lie_moments(g: GameData) -> list[dict]:
     best: dict[tuple, dict] = {}  # (liar, label type, day) -> the moment kept
     repeats: dict[tuple, int] = {}
@@ -111,6 +135,7 @@ def lie_moments(g: GameData) -> list[dict]:
         expected = r["base_followed"] / r["base_voters"] * r["voters"] if r["base_voters"] else 0
         score = r["followed"] + r["moved"] - expected
         src = by_seq[lb.source_seq]
+        target, result, role = _lie_fields(g, lb)
         end = _day_end(g, src.day)
         if not r["followed"] or score <= 0 or end is None:
             continue
@@ -128,13 +153,13 @@ def lie_moments(g: GameData) -> list[dict]:
             src.day,
             (lb.source_seq, end.seq),
             lb.actor,
-            src.target,
+            target,
             score,
             desc,
         )
         # the same claim repeated in a day's discussion rounds is one moment, not one per round
         # (a different target, result or claimed role is a different lie)
-        key = (lb.actor, lb.label, src.day, src.target, src.meta.result, src.meta.role)
+        key = (lb.actor, lb.label, src.day, target, result, role)
         repeats[key] = repeats.get(key, 0) + 1
         old = best.get(key)
         if old is None or (-m["score"], m["seq"][0]) < (-old["score"], old["seq"][0]):

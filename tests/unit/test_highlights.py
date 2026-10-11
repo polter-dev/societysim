@@ -12,9 +12,11 @@ from societysim.analysis.highlights import (
     role_action_moments,
     wolf_survival_moments,
 )
+from societysim.analysis.labeler import JevReport, JevVerdict, label_game
 from societysim.analysis.metrics import GameData, load_game
 from societysim.cli import app
 from societysim.logging.events import EventMeta, Label, LabelType
+from societysim.roles import Role
 
 ROOT = Path(__file__).parents[2]
 FIXTURE = ROOT / "fixtures/sample_game.jsonl"
@@ -271,3 +273,48 @@ def test_cli_out_writes_elsewhere(tmp_path):
     assert res.exit_code == 0, res.output
     assert len(json.loads(out.read_text())) == 6
     assert not (FIXTURE.parent / "highlights.json").exists()
+
+
+def _jev_only(extra: dict[int, JevVerdict]) -> GameData:
+    """Fixture without Finn's day-1 self-tags (seq 18-20), labeled by Jev alone."""
+    events = [e for e in game().events if e.seq not in (18, 19, 20)]
+    jev = {e.seq: JevVerdict() for e in events if e.type.value == "statement"}
+    jev.update(extra)
+    return GameData(events, [lb for lb in label_game(events, jev) if lb.source == "jev"])
+
+
+def test_jev_only_role_claims_of_different_roles_are_two_moments():
+    h = _jev_only({17: JevVerdict(claim_role=Role.SEER), 36: JevVerdict(claim_role=Role.DOCTOR)})
+    ms = [m for m in lie_moments(h) if "false role claim" in m["description"]]
+    assert len(ms) == 2
+    assert any("claimed seer" in m["description"] for m in ms)
+    assert any("claimed doctor" in m["description"] for m in ms)
+    assert all("Said" not in m["description"] for m in ms)
+
+
+def test_jev_only_reports_on_different_players_are_two_moments_with_targets():
+    h = _jev_only(
+        {
+            17: JevVerdict(
+                claim_role=Role.SEER, seer_report=JevReport(target="p0", result="not_wolf")
+            ),
+            36: JevVerdict(
+                claim_role=Role.SEER, seer_report=JevReport(target="p6", result="not_wolf")
+            ),
+        }
+    )
+    ms = [m for m in lie_moments(h) if "false report" in m["description"]]
+    assert sorted(m["target"] for m in ms) == ["p0", "p6"]
+    assert all("Said" not in m["description"] for m in ms)
+
+
+def test_jev_only_same_report_twice_in_a_day_is_still_one_moment():
+    report = JevReport(target="p0", result="wolf")
+    h = _jev_only(
+        {
+            17: JevVerdict(claim_role=Role.SEER, seer_report=report),
+            36: JevVerdict(claim_role=Role.SEER, seer_report=report),
+        }
+    )
+    (m,) = [m for m in lie_moments(h) if "false report" in m["description"]]
+    assert m["target"] == "p0" and "Said 2 times that day." in m["description"]

@@ -4,7 +4,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TOKEN_PREFIX, WATCH_PREFIX, startGame } from "../play/api";
-import { PlayDock } from "./Play";
+import { PlayDock, PlayNavLink } from "./Play";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -26,8 +26,9 @@ const render = async (el: Parameters<Root["render"]>[0]) => {
 const leaves = () => fetchMock.mock.calls.filter(([u]) => String(u).endsWith("/leave"));
 
 beforeEach(() => {
+  window.history.replaceState(null, "", "/?game=w1");
   vi.stubEnv("VITE_PLAY_API_URL", "https://play.example.test");
-  fetchMock = vi.fn(async () => new Response(JSON.stringify({ accepted: true })));
+  fetchMock = vi.fn(async (u: string) => new Response(JSON.stringify(String(u).endsWith("/api/limits") ? { play_enabled: true, remaining_today: 5 } : { accepted: true })));
   vi.stubGlobal("fetch", fetchMock);
   box = document.createElement("div");
   document.body.appendChild(box);
@@ -52,7 +53,7 @@ describe("stop watching", () => {
   it("button calls /leave with the watch token and returns to the mode picker", async () => {
     sessionStorage.setItem(WATCH_PREFIX + "w1", "wt");
     const go = vi.fn();
-    await render(createElement(PlayDock, { gameId: "w1", go }));
+    await render(createElement(PlayNavLink, { href: "?page=modes", go }));
     expect(box.textContent).toContain("Stop watching");
     box.querySelector<HTMLButtonElement>("button.watch-stop")!.click();
     await settle();
@@ -64,10 +65,10 @@ describe("stop watching", () => {
   });
 
   it("still returns to the picker when /leave fails", async () => {
-    fetchMock.mockImplementation(async () => new Response("{}", { status: 500 }));
+    fetchMock.mockImplementation(async (u: string) => (String(u).endsWith("/api/limits") ? new Response(JSON.stringify({ play_enabled: true, remaining_today: 5 })) : new Response("{}", { status: 500 })));
     sessionStorage.setItem(WATCH_PREFIX + "w1", "wt");
     const go = vi.fn();
-    await render(createElement(PlayDock, { gameId: "w1", go }));
+    await render(createElement(PlayNavLink, { href: "?page=modes", go }));
     box.querySelector<HTMLButtonElement>("button.watch-stop")!.click();
     await settle();
     expect(go).toHaveBeenCalledWith("?page=modes");
@@ -75,7 +76,7 @@ describe("stop watching", () => {
 
   it("a reload (pagehide) never leaves: neither watch nor seated", async () => {
     sessionStorage.setItem(WATCH_PREFIX + "w1", "wt");
-    await render(createElement(PlayDock, { gameId: "w1" }));
+    await render(createElement(PlayNavLink, { href: "?page=modes" }));
     window.dispatchEvent(new Event("pagehide"));
     expect(leaves()).toHaveLength(0);
     expect(sessionStorage.getItem(WATCH_PREFIX + "w1")).toBe("wt");
@@ -85,6 +86,8 @@ describe("stop watching", () => {
     sessionStorage.setItem(TOKEN_PREFIX + "g1", "tok");
     sessionStorage.setItem(WATCH_PREFIX + "g1", "wt");
     fetchMock.mockImplementation(async () => new Response(JSON.stringify(me)));
+    window.history.replaceState(null, "", "/?game=g1");
+    await render(createElement(PlayNavLink, { href: "?page=modes" }));
     await render(createElement(PlayDock, { gameId: "g1" }));
     window.dispatchEvent(new Event("pagehide"));
     expect(leaves()).toHaveLength(0);

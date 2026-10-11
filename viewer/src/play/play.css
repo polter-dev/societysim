@@ -675,26 +675,27 @@
   color: #faedd0;
 }
 
-/* Watch games: a small floating control, so the anchored table layout keeps its full size */
-.watch-stop {
-  position: fixed;
-  top: 14px;
-  left: 648px; /* in the top bar's gap: right of the site nav, left of View and the ambience toggle */
-  z-index: 20;
+/* Watch games: a top-nav item, so it flows with the other controls at any width */
+.site-nav .watch-stop {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 8px 12px;
   background: #2a1413;
   color: #fad1cb;
   border: 1px solid #7b3630;
   border-radius: 8px;
-  padding: 6px 12px;
-  font: 600 13px system-ui, sans-serif;
+  font: 600 14px system-ui, sans-serif;
+  white-space: nowrap;
   cursor: pointer;
   transition: all 0.15s ease;
 }
-.watch-stop:hover {
+.site-nav .watch-stop:hover {
   background: #3e1b19;
   border-color: #b04941;
 }
-.watch-stop:focus-visible {
+.site-nav .watch-stop:focus-visible {
   outline: 3px solid #ffe499;
   outline-offset: 3px;
 }

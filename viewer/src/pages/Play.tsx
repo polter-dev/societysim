@@ -22,12 +22,15 @@ const CAST = [
 ];
 
 /** Nav entry: a link when play is on, a disabled "coming soon" label when it is not. */
-export function PlayNavLink({ href }: { href: string }) {
+export function PlayNavLink({ href, go = (url) => window.location.assign(url) }: { href: string; go?: (url: string) => void }) {
   const status = usePlayStatus();
   if (playEnabled() && status.kind === "offline")
     return <span aria-disabled="true" title={status.message}>Play (offline)</span>;
   return playEnabled() ? (
-    <a className="play-nav" href={href}>Play</a>
+    <>
+      <a className="play-nav" href={href}>Play</a>
+      <WatchStop modesHref={href} go={go} />
+    </>
   ) : (
     <span className="play-nav" aria-disabled="true" title="Playing from the website is coming soon">Play (coming soon)</span>
   );
@@ -123,15 +126,18 @@ function Dock({ gameId }: { gameId: string }) {
  * Your-turn panel above the live table. Shown only in the browser tab that started the game as a
  * player (its seat token is in sessionStorage); spectators and watch-only visitors never get it.
  */
-export function PlayDock({ gameId, modesHref = "?page=modes", go = (url) => window.location.assign(url) }: { gameId: string | null; modesHref?: string; go?: (url: string) => void }) {
-  if (!gameId || !playEnabled()) return null;
-  if (loadToken(gameId)) return <Dock gameId={gameId} />;
-  if (loadWatchToken(gameId)) return <WatchBar gameId={gameId} modesHref={modesHref} go={go} />;
-  return null;
+export function PlayDock({ gameId }: { gameId: string | null }) {
+  if (!gameId || !playEnabled() || !loadToken(gameId)) return null;
+  return <Dock gameId={gameId} />;
 }
 
-/** Stop-watching control for a watch game. Only the explicit button leaves: a reload keeps the game (#411). */
-function WatchBar({ gameId, modesHref, go }: { gameId: string; modesHref: string; go: (url: string) => void }) {
+/**
+ * "Stop watching" for a watch game, as one more item in the top nav so it flows with the other
+ * controls. Only the explicit button leaves: a reload keeps the game (#411).
+ */
+function WatchStop({ modesHref, go }: { modesHref: string; go: (url: string) => void }) {
+  const gameId = new URLSearchParams(window.location.search).get("game");
+  if (!gameId || loadToken(gameId) || !loadWatchToken(gameId)) return null;
   const stop = async () => {
     await leaveWatch(gameId).catch(() => undefined);
     go(modesHref);

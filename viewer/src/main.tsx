@@ -56,7 +56,6 @@ const profileModel = page === "model" ? params.get("model") : null;
 const profileHref = (model: string) => href({ page: "model", model });
 const title =
   profileModel ?? { leaderboard: "leaderboard", research: "research", new: "new game", play: "play" }[page ?? ""] ?? "games";
-const style = { fontFamily: "system-ui, sans-serif", padding: 16, maxWidth: 1100 };
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -72,7 +71,7 @@ createRoot(document.getElementById("root")!).render(
         <App source={source} />
       </div>
     ) : (
-      <main style={style} className="info-page">
+      <main className={profileModel || page === "new" || page === "play" ? "info-page info-page--text" : "info-page"}>
         <h1>SocietySim {title}</h1>
         <form method="get" className="batch-source"><label>Published batch base URL <input name="base" type="url" required defaultValue={dataBase.href} /></label><button type="submit">Load batch</button></form>
         {profileModel ? (

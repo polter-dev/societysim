@@ -1,5 +1,11 @@
 /* Colours come from the design tokens in ../controls.css (mirror of docs/design/tokens.css). */
-.info-page{min-height:100svh;box-sizing:border-box;padding:56px 16px 16px;background:var(--night-panel);color:var(--text-primary);font-family:var(--font-body)}
+/* Page frame (#542): one emerald background under the whole window (nav included), content centred in a column.
+   Data pages (games, leaderboard, research) run up to 1680px; text and form pages (.info-page--text) 1100px.
+   The background sits on the canvas, so short pages need no min-height and never scroll. */
+html:has(.info-page){min-height:100%}
+body:has(.info-page){background:radial-gradient(ellipse 90% 70% at 50% 0%,#0b3f2c,var(--night-panel) 70%) no-repeat var(--night-panel)}
+.info-page{--page-max:1680px;padding:16px max(16px,(100% - var(--page-max)) / 2);color:var(--text-primary);font-family:var(--font-body)}
+.info-page--text{--page-max:1100px}
 .info-page h1,.info-page h2{font-family:var(--font-heading)}
 .info-page a{color:var(--text-primary)}
 .info-page input,.info-page select,.info-page button{background:var(--night-surface);color:var(--text-primary);border:1px solid var(--accent-gold);border-radius:var(--radius-control);padding:5px}

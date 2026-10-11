@@ -2,20 +2,7 @@
    pages.css loads after this file and styles `.info-page table/th/td` at (0,1,1), so table rules here carry
    at least two classes or (0,1,2) to win. Focus rings come from a11y.css (#414), the checkbox from controls.css (#415). */
 
-/* main.tsx caps every info page at 1100px on the left. Here the emerald page runs full width and the
-   content column centres, so a 2560px window gets neither a marooned column nor 2500px rows.
-   !important beats that inline max-width. */
-main.info-page:has(> .games-page) {
-  max-width: none !important;
-  background: radial-gradient(ellipse 90% 70% at 50% 0%, #0b3f2c, var(--night-panel) 70%) var(--night-panel);
-}
-
-main.info-page:has(> .games-page) > * {
-  box-sizing: border-box;
-  max-width: 1680px;
-  margin-inline: auto;
-}
-
+/* The page frame (full-width emerald background, centred 1680px column) is the shared .info-page rule in pages.css (#542). */
 main.info-page:has(> .games-page) > h1 {
   display: flex;
   align-items: center;

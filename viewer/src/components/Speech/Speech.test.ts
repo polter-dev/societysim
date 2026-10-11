@@ -21,6 +21,16 @@ describe("Speech bubble on the fixture", () => {
     expect(html).toContain(`top:${50 + (y - 50) / 2}%`);
   });
 
+  it("grows the bubble from its anchor toward the center, away from the speaker's seat and plate", () => {
+    for (const [idx, seat] of [[15, 4], [21, 1]] as const) {
+      const { x, y } = seatPosition(seat, 7);
+      const [tx, ty] = /translate\((-?\d+)%, (-?\d+)%\)/.exec(render(idx, "villager"))!.slice(1).map(Number);
+      // translate(-50%, -50%) centers it on the anchor; further negative pushes it left/up, toward the center.
+      expect(Math.sign(tx + 50)).toBe(-Math.sign(x - 50));
+      expect(Math.sign(ty + 50)).toBe(-Math.sign(y - 50));
+    }
+  });
+
   it("keeps the bubble through the statement's self-tag events, then moves to the next speaker", () => {
     expect(render(19, "villager")).toContain('data-speaker="p5"'); // role_claim after p5's statement
     expect(render(21, "villager")).toContain('data-speaker="p1"');

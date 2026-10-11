@@ -106,8 +106,8 @@
   .illustrated-shell .event-list .decision-notes>span{bottom:28%}
   /* Text follows the height, or the card width (cqw of the panel) where that gives more, as on
      ultrawide screens; the card width caps it so narrow, tall windows don't overflow the card. */
-  .illustrated-shell .event-list .decision-card strong{font-size:max(10px,min(max(1.3dvh,6.3cqw),8.3cqw));line-height:1.1}
-  .illustrated-shell .event-list .decision-card small{font-size:max(8px,min(max(1dvh,4.85cqw),6.3cqw));line-height:1.1}
+  .illustrated-shell .event-list .decision-card strong{font-size:min(max(10px,1.3dvh,6.3cqw),8.3cqw);line-height:1.1}
+  .illustrated-shell .event-list .decision-card small{font-size:min(max(8px,1dvh,4.85cqw),6.3cqw);line-height:1.1}
 
   /* Collapse arrow on the Agents panel's edge; collapsed, the panel slides off and leaves a rail. */
   .illustrated-shell .roster-toggle{left:calc(var(--gs-left) - 22px);top:calc(var(--gs-top) + (100dvh - var(--gs-top) - var(--gs-bar)) / 2);width:clamp(30px,2.6vw,48px);height:clamp(52px,7dvh,84px)}

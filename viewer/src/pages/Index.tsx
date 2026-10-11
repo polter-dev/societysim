@@ -61,7 +61,7 @@ export function GameList({ games, href, showWinners = false }: ListProps) {
                   "n/a"
                 )}
               </td>
-              <td>{g.days ?? "n/a"}</td>
+              <td>{g.days ?? "—"}</td>
               <td>
                 <span className="games-winner" data-winner={kind}>
                   {winner}

@@ -47,6 +47,12 @@ function fakeNeon(games: Record<string, GameRow>) {
         return json(all.filter(([, g]) => g.status === "finished" && g.agents !== "scripted").map(([g]) => ({ game_id: g })));
       return json(all.map(([g, v]) => ({ game_id: g, models: v.models, status: v.status, winner: v.winner ?? null })));
     }
+    if (table === "events_public" && p.get("type") === "eq.game_end")
+      return json(
+        Object.entries(games)
+          .filter(([, g]) => g.status === "finished")
+          .map(([g, v]) => ({ game_id: g, day: v.rows.find((e) => e.type === "game_end")?.day })),
+      );
     if (table === "events_public") {
       let rows = games[id!]?.rows ?? [];
       const after = p.get("seq")?.replace(/^gt\./, "");
@@ -108,7 +114,9 @@ describe("neonSource, finished games", () => {
       models: [...new Set(MODELS)].sort(),
       live: false,
       winner: "wolves",
+      days: full.find((e) => e.type === "game_end")!.day,
     });
+    expect(games.find((g) => g.id === "g2")).not.toHaveProperty("days");
   });
 
   it("builds the board from the leaderboard view and counts finished non-scripted games", async () => {

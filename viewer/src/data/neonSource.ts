@@ -102,18 +102,25 @@ export function neonSource(): NeonSource {
 
   return {
     // Ids, models, status and the winner of finished games only (a running game's stays hidden;
-    // roles stay in the database). `games` has no day count, so days stay undefined.
-    listGames: async () =>
-      (await get<{ game_id: string; models: unknown; status: string | null; winner: string | null }>(
-        "games?select=game_id,models,status,winner&order=started_at.desc.nullslast",
-      )).map(
+    // roles stay in the database). `games` has no day count, so days come from each finished
+    // game's public game_end row.
+    listGames: async () => {
+      const [rows, ends] = await Promise.all([
+        get<{ game_id: string; models: unknown; status: string | null; winner: string | null }>(
+          "games?select=game_id,models,status,winner&order=started_at.desc.nullslast",
+        ),
+        get<{ game_id: string; day: number }>("events_public?select=game_id,day&type=eq.game_end").catch(() => []),
+      ]);
+      const days = new Map(ends.map((e) => [e.game_id, e.day]));
+      return rows.map(
         (g): GameSummary => ({
           id: g.game_id,
           models: modelNames(g.models),
           live: g.status === "running",
-          ...(g.status === "finished" && { winner: g.winner ?? null }),
+          ...(g.status === "finished" && { winner: g.winner ?? null, days: days.get(g.game_id) }),
         }),
-      ),
+      );
+    },
 
     loadGame: async (id): Promise<LoadedGame> => {
       const row = await gameRow(id);

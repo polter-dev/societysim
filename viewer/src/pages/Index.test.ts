@@ -26,6 +26,11 @@ describe("GameList", () => {
     expect(html).toContain("<td>3</td>");
   });
 
+  it("shows a dash, not n/a, when days are unknown", () => {
+    const html = renderToStaticMarkup(createElement(GameList, { games: [{ id: "g8", live: true }], href: () => "" }));
+    expect(html).toContain("<td>—</td>");
+  });
+
   it("shows display names with the raw ids on hover", () => {
     const html = renderToStaticMarkup(
       createElement(GameList, { games: [{ id: "g7", models: ["llama4-maverick", "gemini-flash"] }], href: () => "" }),

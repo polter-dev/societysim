@@ -37,7 +37,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from societysim.analysis.labeler import read_log
 from societysim.config import RuleFlags, load_yaml
-from societysim.engine.state import NAMES
+from societysim.engine.state import NAME_POOLS
 from societysim.logging.events import Event, EventMeta, EventType, Visibility
 from societysim.roles import Phase, Role
 
@@ -164,7 +164,7 @@ def bank_lines(max_days: int = RuleFlags().max_days) -> set[tuple[str, str]]:
     lines |= {line(EventType.GAME_END, winner=w) for w in ("villagers", "wolves", "draw")}
     for day in range(1, max_days + 1):
         lines |= {line(EventType.PHASE_START, p, day) for p in (Phase.NIGHT, Phase.DAY, Phase.VOTE)}
-    for name in NAMES:
+    for name in sorted({n for pool in NAME_POOLS.values() for n in pool}):
         for role in (None, *Role):
             lines.add(line(EventType.ELIMINATION, name=name, role=role))
             if role != Role.WOLF:

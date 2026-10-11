@@ -21,7 +21,7 @@ from societysim.analysis.narrate import (
     narrate,
     narrator_line,
 )
-from societysim.engine.state import NAMES
+from societysim.engine.state import NAME_POOLS, NAMES
 from societysim.logging.events import Event, EventMeta, Visibility
 
 ROOT = Path(__file__).parents[2]
@@ -169,9 +169,12 @@ def test_voices_yaml():
     assert len(set(VOICES.models.values())) == len(VOICES.models)  # one voice per model
 
 
-def test_bank_covers_every_narrator_line_and_fits_the_free_tier():
+def test_bank_covers_every_narrator_line_for_every_name():
     lines = bank_lines()
-    assert sum(len(t) for _, t in lines) < 5_000  # free tier is 10k characters a month
+    # every name in every pool (#400), so visitor games narrate too; about 12k characters
+    assert sum(len(t) for _, t in lines) < 15_000
+    names = {n for pool in NAME_POOLS.values() for n in pool}
+    assert all(any(n in t for _, t in lines) for n in names)
     events = read_log(FIXTURE)
     names = {s: seat.name for s, seat in events[0].meta.seats.items()}
     assert {narrator_line(e, names) for e in events} - {None} <= lines
@@ -179,7 +182,7 @@ def test_bank_covers_every_narrator_line_and_fits_the_free_tier():
 
 def test_bank_reuse_makes_no_calls(log: Path, bank: Path):
     calls: list[httpx.Request] = []
-    todo = build_bank(bank, max_chars=10_000, yes=True, voices=VOICES, client=fake_client(calls))
+    todo = build_bank(bank, max_chars=20_000, yes=True, voices=VOICES, client=fake_client(calls))
     assert len(calls) == len(todo) == len(bank_lines())
     index = json.loads((bank / "index.json").read_text())
     assert len(index["clips"]) == len(calls)
@@ -199,7 +202,7 @@ def test_bank_reuse_makes_no_calls(log: Path, bank: Path):
 
 def test_narrator_miss_is_added_to_the_bank(log: Path, bank: Path, tmp_path: Path):
     calls: list[httpx.Request] = []
-    narrate(log, max_chars=10_000, bank=bank, voices=VOICES, client=fake_client(calls))
+    narrate(log, max_chars=20_000, bank=bank, voices=VOICES, client=fake_client(calls))
     assert len(calls) == len({c.content for c in calls}) > 0  # each line once
     other = tmp_path / "other"
     other.mkdir()
@@ -210,7 +213,7 @@ def test_narrator_miss_is_added_to_the_bank(log: Path, bank: Path, tmp_path: Pat
 
 
 def test_selected_clips_are_generated_and_cached(log: Path, bank: Path):
-    build_bank(bank, max_chars=10_000, yes=True, voices=VOICES, client=fake_client([]))
+    build_bank(bank, max_chars=20_000, yes=True, voices=VOICES, client=fake_client([]))
     calls: list[httpx.Request] = []
     index = narrate(
         log, max_chars=100_000, select=("speech",), bank=bank, voices=VOICES,
@@ -238,7 +241,7 @@ def test_highlight_clips(log: Path, bank: Path):
     hl = [{"game_id": "fixture-0001", "seq": [11, 13], "description": "Dev saved Ben."}]
     hl.append({"game_id": "other", "seq": [1, 2], "description": "Not this game."})
     (log.parent / "highlights.json").write_text(json.dumps(hl))
-    index = narrate(log, max_chars=10_000, select=("highlight",), bank=bank, voices=VOICES,
+    index = narrate(log, max_chars=20_000, select=("highlight",), bank=bank, voices=VOICES,
                     client=fake_client([]))  # fmt: skip
     clips = index["clips"]
     h = [c for c in clips if c["category"] == "highlight"]
@@ -270,7 +273,7 @@ def test_dry_runs_print_estimates_without_calls(log: Path, bank: Path, capsys, n
 
 
 def test_dry_run_counts_bank_hits(log: Path, bank: Path, capsys):
-    build_bank(bank, max_chars=10_000, yes=True, voices=VOICES, client=fake_client([]))
+    build_bank(bank, max_chars=20_000, yes=True, voices=VOICES, client=fake_client([]))
     main([str(log), "--dry-run", "--bank", str(bank), "--select", "speech"])
     out = capsys.readouterr().out
     assert "fixture-0001: " in out and ", 13 from the bank, " in out

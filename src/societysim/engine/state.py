@@ -14,8 +14,8 @@ NAME_POOLS: dict[Presentation, tuple[str, ...]] = {
     "masculine": ("Ben", "Dev", "Finn", "Hugo", "Jude", "Karl", "Leo", "Milo", "Omar", "Theo"),
     "neutral": ("Ash", "Blair", "Casey", "Drew", "Eden", "Jules", "Kai", "Quinn", "Remy", "Sky"),
 }
-# The names before #400, all still in the pools. analysis/narrate.py pre-renders narrator lines for
-# these only, to fit the TTS free tier; other names are voiced when first needed.
+# The names before #400, all still in the pools.
+# (analysis/narrate.py pre-renders narrator lines for every name in NAME_POOLS.)
 NAMES = ("Ava", "Ben", "Cleo", "Dev", "Elif", "Finn", "Gia", "Hugo", "Iris", "Jude")
 # During night N, state.day is N; day N keeps the same value.
 type NightNumber = int

@@ -1,0 +1,696 @@
+{
+  "model_id": "eleven_flash_v2_5",
+  "output_format": "mp3_44100_64",
+  "clips": [
+    {
+      "file": "009f2be4e106e725f16bea80f0b7113ad2e91590.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Jude, a villager."
+    },
+    {
+      "file": "0265b90a19a22fe7f36377c3000775c7fb724b3f.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Hugo, a villager, was found dead."
+    },
+    {
+      "file": "04d4d5af0d9c7fa861bfe04ebb696e7bcbfa53d4.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 6. The village wakes."
+    },
+    {
+      "file": "04db29f4b5fd984f29fd514854624246578ce3a6.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "Night 5. The village sleeps."
+    },
+    {
+      "file": "050e4d14dea8804dbb320f724e24cecfa1922d7b.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Ben, the Seer, was found dead."
+    },
+    {
+      "file": "06a9ed41c5bb3ea60c69a898e12ff17f9fa46f86.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 4. Time to vote."
+    },
+    {
+      "file": "07419ec9895ebe779c42a782c241eedee1398b04.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Elif was found dead."
+    },
+    {
+      "file": "0838e314501b2db65bbab781456cb295b5baaf16.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Cleo was found dead."
+    },
+    {
+      "file": "0bc374487e65d5397babda500f76691ce1719cba.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Ben, the Doctor, was found dead."
+    },
+    {
+      "file": "0e02ef3d51a70da3ef8408388159efd2cba44b2e.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "Nobody died last night."
+    },
+    {
+      "file": "0f231881237fe49bd12bdb66b203bb1dd9f37928.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Finn, the Doctor."
+    },
+    {
+      "file": "105ff074732e5c43eeb1d834fe08bbfe9d603702.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Finn, the Seer, was found dead."
+    },
+    {
+      "file": "10a81bc060266e57259e49e8a31eeb0f2825b5a9.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Jude, the Seer, was found dead."
+    },
+    {
+      "file": "131174e6b53a80bec105e9ae9e11355428c0eb1e.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Jude, the Seer."
+    },
+    {
+      "file": "176a44b0e6359396fa41f6392e6eb998df0591ab.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Ava, the Seer, was found dead."
+    },
+    {
+      "file": "1bd42269341cc707467f165e8bb263de951decc9.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Ava, a wolf."
+    },
+    {
+      "file": "1d9ea04d7aa9536cdec9529391282e91092bdf8e.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Nobody is eliminated."
+    },
+    {
+      "file": "2232f379b388c2ddcab189bcb5f2ea655ddcf444.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 5. Time to vote."
+    },
+    {
+      "file": "247db9f4472fbf3f8376c9c6f29021a2ca0c4741.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Dev."
+    },
+    {
+      "file": "25eeea524b1463d15657e94964833ab2bb797fa0.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 5. The village wakes."
+    },
+    {
+      "file": "26e8718e671d230c1c5b99b7fc57900b808c5065.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Gia, the Seer, was found dead."
+    },
+    {
+      "file": "28556388895fe803b328e35bccab8d3f91237619.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Elif, the Seer, was found dead."
+    },
+    {
+      "file": "2da113cab32de3948c371731280887742fd0736b.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The wolves win. They now match the village."
+    },
+    {
+      "file": "33876232c376670172d2f241305f9a1133ead40c.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Cleo, a villager."
+    },
+    {
+      "file": "3b4ded0ce04dd91694099365f53c530848b6744c.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Iris."
+    },
+    {
+      "file": "3bf20ec07097493b501a035bb391fe64916ec814.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "Night 4. The village sleeps."
+    },
+    {
+      "file": "3c28e64e935ae38dfc8ffd82fe7df91b48957d5e.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 1. The village wakes."
+    },
+    {
+      "file": "3c67f5d733bf17628bac2338ebb08410f94e6f98.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 2. Time to vote."
+    },
+    {
+      "file": "3c97c858eba0695f6059d7079a2a154b4bb0b77b.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Hugo, a wolf."
+    },
+    {
+      "file": "3d1b9dac15f87e90a141a9f4c270174fef1cf78e.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Elif, the Doctor, was found dead."
+    },
+    {
+      "file": "3e484b531aa57a45757e468832b340d2e0a1799c.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 6. Time to vote."
+    },
+    {
+      "file": "3f54108a8c3285ff2cd3e4ed6486736714b20be0.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Finn, a villager."
+    },
+    {
+      "file": "417602bf3a191ef7192ce5908ef7470b13ae3238.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Ben, a villager."
+    },
+    {
+      "file": "41d2d9580da83e2e4bc660b3996806287d4fe09d.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Elif, the Doctor."
+    },
+    {
+      "file": "4692e83d660a8c3013c4f6dc863ccdfcb05f08f5.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Gia, the Seer."
+    },
+    {
+      "file": "47e9693bd72a18b71323b5fff5ecd2dd8e55dd9e.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Ava, the Doctor."
+    },
+    {
+      "file": "495a0894ae10a4fe2d98028da216992f59199236.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village wins. Every wolf is dead."
+    },
+    {
+      "file": "4d2e7a03aa6e594895489a45135af24358fe4260.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Dev, a wolf."
+    },
+    {
+      "file": "4eddc391d51f4cec445a78e36c31078b1ed8df67.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Finn was found dead."
+    },
+    {
+      "file": "4feae53f92cd6b30bb09f11047fd43d653533f28.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 3. The village wakes."
+    },
+    {
+      "file": "506487174541b64bd9ce6b22e71754b0dddb6837.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "Night 6. The village sleeps."
+    },
+    {
+      "file": "50bb2dbe1551c36d70df0374a53a1afb08132c82.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 1. Time to vote."
+    },
+    {
+      "file": "50fc4a646ee1ddc0ce96abc6eb86db56a92e7e92.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Finn."
+    },
+    {
+      "file": "5444a250d46e605eff5b7a96788157e49c43ab66.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The vote is tied. Nobody is eliminated."
+    },
+    {
+      "file": "5742b62824d126a822d4dc16bb8b9886f8d922ff.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Gia, a villager, was found dead."
+    },
+    {
+      "file": "583937545ce00ce49c3589e0d82838aa3887aa2a.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Ava, the Seer."
+    },
+    {
+      "file": "585d7bf75d1e7fbed32e3a17ae140f61fb0ad78d.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Ava, the Doctor, was found dead."
+    },
+    {
+      "file": "5a90676c2f524ebcc6ead95066a1cb3e96e6247f.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Cleo, the Doctor, was found dead."
+    },
+    {
+      "file": "5aa887873e7f8e49b2c9797484c5dce56dd080f0.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Iris, the Seer, was found dead."
+    },
+    {
+      "file": "5eb6f9a8edc27da499995f2a943cf8667d1c6411.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "Night 2. The village sleeps."
+    },
+    {
+      "file": "60e14cf5d5007613bec073b734c65de42b67b6f9.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Ava, a villager."
+    },
+    {
+      "file": "613f88f6d8e8bdc64b6440c0f0012517fc362ab4.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Dev was found dead."
+    },
+    {
+      "file": "67dcd3e41f4172cf8aeeadcf4ae019b4f138675f.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Hugo, the Seer."
+    },
+    {
+      "file": "68ee3a0cb891fdc25db2de30b11df66dea86a4db.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Gia, the Doctor."
+    },
+    {
+      "file": "69e2f501cd0daa493e91d31afbc055edd000a079.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Hugo, the Seer, was found dead."
+    },
+    {
+      "file": "71aaafcd10aaedcb524afd0b6800eb08297c983a.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Jude was found dead."
+    },
+    {
+      "file": "754f9ab738f2cc6c4c7f26d3dc592bb5590bf34c.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Gia, a villager."
+    },
+    {
+      "file": "7a3044a78f19041902a85d6e3dd42f9f6a3ee909.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Iris was found dead."
+    },
+    {
+      "file": "7ecf02ba7c58fe3f2ac5a5f628229490e429503a.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 4. The village wakes."
+    },
+    {
+      "file": "7ff4219e902d47bfad369a8c6a7fde315d29c857.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Jude, a villager, was found dead."
+    },
+    {
+      "file": "865dac16be4bf785da35851a4a482e0bfac54cf5.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Cleo."
+    },
+    {
+      "file": "88314a649c215047a68ce43f1081c8bb4049d83c.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 3. Time to vote."
+    },
+    {
+      "file": "8afa66e01010684d41fd7f369bf748baf8bdc68b.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Hugo was found dead."
+    },
+    {
+      "file": "8ba205209f4f206b388c451eb72c4c2e743b97c9.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Dev, a villager, was found dead."
+    },
+    {
+      "file": "8c3199964957724011eb2e564cffd2ea8d8949dc.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Gia was found dead."
+    },
+    {
+      "file": "8de29943fad0047bd5b8b497d856750b8ea04fe3.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Jude, the Doctor."
+    },
+    {
+      "file": "90e4217419a7ba95afe3257f92d1edfca1ac519a.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Finn, a wolf."
+    },
+    {
+      "file": "91f9625702bbe64980b11eb2eb472e8bf0dff6f0.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Cleo, the Doctor."
+    },
+    {
+      "file": "93415f083029c6b5c651859896e2f762379a20b5.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Dev, the Seer, was found dead."
+    },
+    {
+      "file": "93cabca485622cdea26e69f9cbf7c565998bd7af.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Ava."
+    },
+    {
+      "file": "95f6f05e631221941ec2088507c971c938c741a4.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Jude."
+    },
+    {
+      "file": "9e5d0ddd450f7b75ba0b73ae85c801432165dc7e.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Time is up. The game is a draw."
+    },
+    {
+      "file": "a121405ec056c10df92beb479e0f25f0534f8c65.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Cleo, the Seer, was found dead."
+    },
+    {
+      "file": "a25952e8204a90f356bb2ff857c15c4a0fd06568.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Hugo, the Doctor."
+    },
+    {
+      "file": "a88535b52ad305fd9ca6d34793efe6f6f2830e7c.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Hugo."
+    },
+    {
+      "file": "aa442ef6c8ee2ba22da08f842a7c922d2937b9ec.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Hugo, the Doctor, was found dead."
+    },
+    {
+      "file": "ab6b6f017d28d5952badf199795b7490d315bbc5.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Elif, a villager."
+    },
+    {
+      "file": "ad0ec8843353e7ea96f034e02d235523912ed257.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Cleo, a wolf."
+    },
+    {
+      "file": "b0b415e91aafe1d9b1cab1df0bd87e3077a55c9c.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Ava was found dead."
+    },
+    {
+      "file": "b254857bfcfa86354d26d3119a8d1b2579ff81b8.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Ben, the Doctor."
+    },
+    {
+      "file": "b2769d052c70f6137b73ad6f0c17b78b32fdf306.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Dev, the Doctor, was found dead."
+    },
+    {
+      "file": "b348dc307d6be0d9eabddf7c75adb67ca5eb9ed7.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Iris, the Doctor, was found dead."
+    },
+    {
+      "file": "b3ca845d3209cd9b3192bf8c041d65e682eb6ba3.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Ben."
+    },
+    {
+      "file": "b454fb80b6b3604938348f4b48c54aa9999172c0.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Dev, a villager."
+    },
+    {
+      "file": "b4b0147f61057234b3408ffb8ce7200421a528a6.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Cleo, the Seer."
+    },
+    {
+      "file": "b4cb88ad7ef43b322b377da5a7e1725fc4fbf31e.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Ben was found dead."
+    },
+    {
+      "file": "b4e12d4f0ecc9991227223fe2b6d57efb2b5fb21.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Ben, a villager, was found dead."
+    },
+    {
+      "file": "b69e52e6993be3a2f55bcf72327ffd6191effbfa.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Gia, a wolf."
+    },
+    {
+      "file": "b71249461d93d299765c977f85d8306f9099ed46.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Ben, the Seer."
+    },
+    {
+      "file": "b7bc0994bdd1fd65f3e5d0416918e4e5fd37e4e5.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Iris, a villager, was found dead."
+    },
+    {
+      "file": "b9a413330945953db4cf2a43fcad2588424aa773.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Cleo, a villager, was found dead."
+    },
+    {
+      "file": "bb6d580c4b68d35b41c6899ef728ceb4f509fa23.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 2. The village wakes."
+    },
+    {
+      "file": "c27ca0c1984731b0e3587efc1a9b8bd6cef9e59e.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "Night 1. The village sleeps."
+    },
+    {
+      "file": "c2bf97cb9c7a26d80ea33a6eee09a0fd68676c4e.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Ben, a wolf."
+    },
+    {
+      "file": "c412fe08d6e13e231cfc6cb3ecd60223c9ec1909.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Ava, a villager, was found dead."
+    },
+    {
+      "file": "c4c60acd3932e0160b87a8a53a8cf144f17700e5.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Iris, the Seer."
+    },
+    {
+      "file": "c5ba776b4b0f86454e3f582060f4e983feac9d7d.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Iris, a wolf."
+    },
+    {
+      "file": "ca41d36a16b29fccdd9a8da2c336f06c21c088c3.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Gia."
+    },
+    {
+      "file": "cae9b59309e6e0cf94fef927d4e39e190a83d2d6.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Finn, the Doctor, was found dead."
+    },
+    {
+      "file": "cd5181ea0d9adb373fd2442c7d69873924140520.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Everyone abstained. Nobody is eliminated."
+    },
+    {
+      "file": "cf63a48f8d9d5de84554e5c176205f8c3fdf1ff2.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "Night 3. The village sleeps."
+    },
+    {
+      "file": "d09754e44f0668e402d80425ad37b67827fccf61.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Elif, a villager, was found dead."
+    },
+    {
+      "file": "d5e3d6c00d5343c9442cc477a52d5187c4c2efd4.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Gia, the Doctor, was found dead."
+    },
+    {
+      "file": "daa373fc17e7f8fd99e1bb6ceac765d88129aabd.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Elif."
+    },
+    {
+      "file": "e08a76cfe833283a0c7d786317dd7ad8e4c4bad0.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Elif, a wolf."
+    },
+    {
+      "file": "e1becaf73aa068808c1114eb81395a9ff8d6aaaa.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Iris, a villager."
+    },
+    {
+      "file": "e362b0a90704f9714564d2ae625c382d96626691.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Elif, the Seer."
+    },
+    {
+      "file": "e6ccff2f491393ce8f398c935469463b3c2bba47.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Jude, the Doctor, was found dead."
+    },
+    {
+      "file": "e99c8873882b40ca23bd434c961fd2ea299336c7.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Dev, the Seer."
+    },
+    {
+      "file": "e9b80266bcf1a91ed60711e0fdaecb63fdf328d1.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Jude, a wolf."
+    },
+    {
+      "file": "eab7539d3f1c82c6abc759276f74f0bab87ac4d8.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Iris, the Doctor."
+    },
+    {
+      "file": "ed9aea015b621a4e7b34f2d8c1271c00f247e52e.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Hugo, a villager."
+    },
+    {
+      "file": "ee30089adc6168f70b2f323927e1b21c3fd44809.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Dev, the Doctor."
+    },
+    {
+      "file": "eedb73217c21ed1a201a365809ced84315f57b8b.mp3",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Finn, a villager, was found dead."
+    },
+    {
+      "file": "f4cb4fc4de18654fe8d6e7655e561a88bb642275.mp3",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Finn, the Seer."
+    }
+  ]
+}

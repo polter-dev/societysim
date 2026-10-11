@@ -64,7 +64,7 @@ export function Replay({events, labels, mode, selected, onSelect, audioUrl = nul
   useState(() => {if(!(live || atEnd) || new URLSearchParams(window.location.search).has('seq')) normalizeStepUrl(events[0].seq);});
   const st = useStepper(events, live); // live: polled events append; a stepped-back reader stays put
   const beat = st.state.beats[st.state.pos];
-  const n = useNarration(audioUrl, beat ? {first: beat.firstSeq, last: beat.lastSeq} : null, mode);
+  const n = useNarration(audioUrl, beat ? {first: beat.firstSeq, last: beat.lastSeq} : null, mode, events); // no own audio: narrator lines from the phrase bank
   const idx = eventIdx(st.state);
   const step: StepControlsProps = {pos: st.state.pos, count: st.state.beats.length, live: st.state.live, atLatest: st.atLatest, newCount: st.newCount,
     onPrev: () => st.dispatch({type: 'prev'}), onNext: () => st.dispatch({type: 'next'}), onLive: st.goLive};

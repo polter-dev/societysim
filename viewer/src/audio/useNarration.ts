@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Mode } from "../scene/deriveScene";
+import type { Event } from "../types/events";
+import { BANK_INDEX_URL, bankIndex, loadBankFiles } from "./bank";
 import {
   type Category,
   clipsForSeqRange,
@@ -14,17 +16,29 @@ import { type AudioLike, createPlayer } from "./player";
 /**
  * Narration for the current step. `at` is one event seq, or `{ first, last }` (a stepper beat's
  * firstSeq/lastSeq) to play every clip in the range; null when there is none.
- * Each change of range, mode or toggles stops the old clips first.
- * `indexUrl` is the URL of `<game_id>.audio/index.json`, or null for no narration.
+ * Each change of range, mode, toggles or of the range's clips stops the old clips first.
+ * `indexUrl` is the URL of `<game_id>.audio/index.json` (a game's own audio), or null.
+ * Without a usable own index, `events` (a replay or a live game) get narrator lines from the
+ * shared phrase bank (bank.ts).
  */
-export function useNarration(indexUrl: string | null, at: number | { first: number; last: number } | null, mode: Mode) {
+export function useNarration(
+  indexUrl: string | null,
+  at: number | { first: number; last: number } | null,
+  mode: Mode,
+  events: Event[] = [],
+) {
   const first = at === null ? null : typeof at === "number" ? at : at.first;
   const last = at === null ? null : typeof at === "number" ? at : at.last;
   const [on, setOn] = useState(false);
   const [enabled, setEnabled] = useState<Enabled>(DEFAULT_ENABLED);
-  const [index, setIndex] = useState<NarrationIndex | null>(null);
-  const urlRef = useRef(indexUrl);
-  urlRef.current = indexUrl;
+  // undefined while the game's own index loads; null when there is none
+  const [own, setOwn] = useState<NarrationIndex | null | undefined>(indexUrl ? undefined : null);
+  const [bank, setBank] = useState<NarrationIndex | null>(null);
+  const useOwn = own != null && own.clips.length > 0;
+  const index = useOwn ? own : own !== undefined ? bank : null;
+  const baseUrl = useOwn ? indexUrl : BANK_INDEX_URL;
+  const urlRef = useRef(baseUrl);
+  urlRef.current = baseUrl;
   const player = useMemo(
     () =>
       createPlayer(
@@ -36,17 +50,34 @@ export function useNarration(indexUrl: string | null, at: number | { first: numb
 
   useEffect(() => {
     let live = true;
-    setIndex(null);
-    if (indexUrl) loadIndex(indexUrl).then((i) => live && setIndex(i));
+    setOwn(indexUrl ? undefined : null);
+    if (indexUrl) loadIndex(indexUrl).then((i) => live && setOwn(i));
     return () => {
       live = false;
     };
   }, [indexUrl]);
 
+  const needBank = own !== undefined && !useOwn && events.length > 0;
   useEffect(() => {
-    if (!on || first === null || last === null) player.stop();
-    else player.play(clipsForSeqRange(index, first, last, mode, enabled));
-  }, [on, first, last, mode, enabled, index, player]);
+    if (!needBank) return;
+    let live = true;
+    loadBankFiles()
+      .then((files) => bankIndex(events, files))
+      .then((i) => live && setBank(i));
+    return () => {
+      live = false;
+    };
+  }, [needBank, events]);
+
+  const clips = first === null || last === null ? [] : clipsForSeqRange(index, first, last, mode, enabled);
+  // A live game rebuilds the bank index as events arrive: replay only when this beat's clips change.
+  const clipsKey = clips.map((c) => `${c.seq}:${c.file}`).join(",");
+  const clipsRef = useRef(clips);
+  clipsRef.current = clips;
+  useEffect(() => {
+    if (!on || first === null) player.stop();
+    else player.play(clipsRef.current);
+  }, [on, first, clipsKey, player]);
   useEffect(() => player.stop, [player]);
 
   return {

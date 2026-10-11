@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { defaultState, HUMAN, humanSeat, loadSetupAssets, MAX_PLAYERS, MIN_PLAYERS, maxWolves, modelLabel, restrictCatalog, schemaErrors, seatId, setHumanSeat, setNPlayers, toSetupJson, validate, type SetupAssets, type SetupState } from '../settings/setup';
+import { defaultState, HUMAN, humanSeat, loadSetupAssets, MAX_PLAYERS, MIN_PLAYERS, maxWolves, restrictCatalog, schemaErrors, seatId, setHumanSeat, setNPlayers, toSetupJson, validate, type SetupAssets, type SetupState } from '../settings/setup';
 import { getLimits, PlayError, startGame } from '../play/api';
 import { allowedModels } from '../play/allowed';
 import { playEnabled } from '../play/config';
 import { useTurnstile } from '../play/useTurnstile';
 import type { Limits } from '../play/types';
 import { avatarFor } from '../data/models';
+import { modelName } from '../data/modelNames';
 import { ThemedSelect } from '../components/ThemedSelect/ThemedSelect';
 import back from './assets/modes/back.png';
 import rules from './assets/advanced/rules.png';
@@ -70,7 +71,7 @@ export default function AdvancedSetup({ catalogUrl, schemaUrl, href, go = (url: 
   const models = state.seats.slice(0,state.nPlayers).filter(m => m !== HUMAN);
   const defaultLineup = state.seats.slice(0,state.nPlayers).every((model,i) => model === HUMAN || model === defaults[i]);
   const selectedModel = defaultLineup ? '__default' : models.every(m => m === models[0]) ? models[0] : '__custom';
-  const modelOptions = catalog.models.map(m => ({value:m.name,label:`${modelLabel(m)}${m.available ? '' : ' (unavailable)'}`,disabled:!m.available,title:m.unavailable_reason ?? undefined,icon:avatarFor(m.name)}));
+  const modelOptions = catalog.models.filter(m => !(import.meta.env.PROD && m.name === 'mock')).map(m => ({value:m.name,label:`${modelName(m.name)}${m.available ? '' : ' (unavailable)'}`,disabled:!m.available,title:m.unavailable_reason ?? m.name,icon:avatarFor(m.name)}));
   const update = (patch: Partial<SetupState>) => setState(s => ({ ...s, ...patch }));
 
   const submit = async () => {

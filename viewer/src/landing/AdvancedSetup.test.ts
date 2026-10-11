@@ -26,3 +26,14 @@ it('clamps wolves and moves an out-of-range human seat when seats decrease',asyn
 it('uses watch_only when no human seat is selected',async()=>{await render();await change('Your seat','');await act(async()=>{(box.querySelector('[aria-label="Start simulation"]') as HTMLButtonElement).click();});await settle();const request=vi.mocked(startGame).mock.calls[0][0];expect(request.watch_only).toBe(true);expect(request.setup.human_seat).toBeUndefined();expect(request.setup.seats!.some(s=>s.model==='human')).toBe(false);});
 it('has no seed field and preserves friendly API errors',async()=>{await render();expect(box.querySelector('[aria-label="Seed"]')).toBeNull();vi.mocked(startGame).mockRejectedValueOnce(new PlayError(403,'Couldn’t verify you’re human. Please retry the check.'));await act(async()=>{(box.querySelector('[aria-label="Start simulation"]') as HTMLButtonElement).click();});await settle();expect(box.textContent).toContain('verify you’re human');});
 it('does not start until the verification and availability checks succeed',async()=>{vi.mocked(getLimits).mockResolvedValue({play_enabled:true,remaining_today:0});await render();expect((box.querySelector('[aria-label="Start simulation"]') as HTMLButtonElement).disabled).toBe(true);expect(startGame).not.toHaveBeenCalled();});
+it('shows short model names with the full id in the title and hides mock in production',async()=>{
+  const catalog={...assets.catalog,models:[model('llama4-maverick'),model('mock'),model('b')],default_lineup:['llama4-maverick','b']};
+  vi.mocked(loadSetupAssets).mockResolvedValue({...assets,catalog});
+  vi.stubEnv('PROD',true);
+  await render();
+  await act(async()=>(box.querySelector('[aria-label="Model selection"]') as HTMLButtonElement).click());
+  const opt=document.querySelector('[role=option][data-value="llama4-maverick"]') as HTMLElement;
+  expect(opt.textContent).toContain('Llama 4 Maverick');expect(opt.textContent).not.toMatch(/test|llama4-maverick/);
+  expect(document.querySelector('[role=option][data-value="mock"]')).toBeNull();
+  vi.stubEnv('PROD',false);
+});

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { DECEPTION_SOURCES, DEFAULT_MIN_N, belowThreshold } from "../../data/deception";
-import { ModelAvatar, useModelLabel } from "../ModelAvatar/ModelAvatar";
+import { ModelAvatar } from "../ModelAvatar/ModelAvatar";
+import { modelName } from "../../data/modelNames";
 import { type ModelProfile as Profile, type PairRow, loadModelProfile } from "../../data/models";
 
 const pct = (x: number | null | undefined) => (x == null ? "n/a" : `${Math.round(x * 100)}%`);
@@ -23,7 +24,7 @@ function Pairs({ rows, other, caption, minN }: { rows: PairRow[]; other: string;
       <tbody>
         {rows.map((r) => (
           <tr key={r.model} data-below-threshold={belowThreshold(r, minN) || undefined}>
-            <th scope="row">{r.model}</th>
+            <th scope="row" title={r.model}>{modelName(r.model)}</th>
             <td>
               {pct(r.vote_follow_rate)}
               {r.vote_follow_ci && ` (${pct(r.vote_follow_ci[0])} to ${pct(r.vote_follow_ci[1])})`}
@@ -45,12 +46,11 @@ export interface ModelProfileProps {
 
 /** Unstyled model profile. Style via the class names and data attributes. */
 export function ModelProfile({ profile: p, minN = DEFAULT_MIN_N }: ModelProfileProps) {
-  const label = useModelLabel();
   return (
     <article className="model-profile" data-model={p.model}>
       <header>
-        <ModelAvatar model={p.model} label={label(p.model)} size={96} />
-        <h2>{label(p.model)}</h2>
+        <ModelAvatar model={p.model} label={modelName(p.model)} size={96} />
+        <h2 title={p.model}>{modelName(p.model)}</h2>
       </header>
       <dl>
         <dt>Games</dt>
@@ -82,11 +82,6 @@ export function ModelProfile({ profile: p, minN = DEFAULT_MIN_N }: ModelProfileP
         </dd>
         <dt>Median latency</dt>
         <dd>{secs(p.median_latency_ms)}</dd>
-        <dt>Narration voice</dt>
-        <dd data-voice-id={p.voice.voice_id}>
-          {p.voice.voice_id}
-          {p.voice.fallback && " (default voice)"}
-        </dd>
       </dl>
       <section className="model-deception" data-exploratory="true">
         <h3>Who it fools, who fools it (exploratory)</h3>
@@ -97,8 +92,8 @@ export function ModelProfile({ profile: p, minN = DEFAULT_MIN_N }: ModelProfileP
         {DECEPTION_SOURCES.map((s) => (
           <div key={s} data-source={s}>
             <h4>{s}</h4>
-            <Pairs rows={p.fools[s]} other="Listener" caption={`Who ${p.model} fools (${s})`} minN={minN} />
-            <Pairs rows={p.fooled_by[s]} other="Liar" caption={`Who fools ${p.model} (${s})`} minN={minN} />
+            <Pairs rows={p.fools[s]} other="Listener" caption={`Who ${modelName(p.model)} fools (${s})`} minN={minN} />
+            <Pairs rows={p.fooled_by[s]} other="Liar" caption={`Who fools ${modelName(p.model)} (${s})`} minN={minN} />
           </div>
         ))}
       </section>

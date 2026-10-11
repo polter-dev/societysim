@@ -185,8 +185,8 @@ class MeteredAgent:
     doesn't fit in what is left today, a scripted agent answers instead (no spend), so the
     game still finishes. The hold settles to the real cost, or stays if the call never
     returns. The hold covers every attempt the client may make (PLAY_ATTEMPTS), and a call
-    that failed books all of it, so a failed call is never under-counted and never books
-    more than it held. Failed calls are scrubbed of provider text."""
+    that failed or was retried books all of it, so a failed request is never under-counted
+    and a call never books more than it held. Failed calls are scrubbed of provider text."""
 
     def __init__(
         self,
@@ -214,8 +214,10 @@ class MeteredAgent:
         try:
             result = scrub(await self.inner.act(turn))
             cost = result.usage.cost_usd
-            if result.error is not None:  # the client reports $0 for a timeout, but the
-                cost = None  # provider may still bill it: book the whole hold
+            # The client reports $0 for a failed request, but the provider may still bill
+            # it: a call that failed, or needed a retry, books the whole hold.
+            if result.error is not None or result.usage.attempts > 1:
+                cost = None
             return result
         finally:  # also when cancelled: then the hold is what gets booked
             await self.ledger.settle(self.game_id, held, cost)

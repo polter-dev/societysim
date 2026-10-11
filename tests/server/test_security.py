@@ -13,6 +13,7 @@ import uuid
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 import pytest
@@ -635,10 +636,50 @@ async def test_failed_start_count_write_refuses_games_until_written(make_client)
     assert list(db.starts.values()) == [2]
 
 
-async def test_failed_call_books_its_hold_and_never_more(monkeypatch):
-    """A timed-out call reports $0 (models/client.py), but the provider may still bill each
-    attempt. The play client makes at most PLAY_ATTEMPTS requests, the hold covers that many
-    worst cases, and a failed call books exactly the hold: never $0, never more (#382)."""
+def _unavailable():
+    import litellm
+
+    return litellm.exceptions.ServiceUnavailableError("503", llm_provider="openai", model="x")
+
+
+def _rate_limited():
+    import litellm
+
+    return litellm.exceptions.RateLimitError("slow down", llm_provider="openai", model="x")
+
+
+_VOTE = SimpleNamespace(
+    choices=[
+        SimpleNamespace(
+            message=SimpleNamespace(
+                content=json.dumps(
+                    {
+                        "private_reasoning": {"thoughts": "x", "suspicion": []},
+                        "action": {"vote": "p2"},
+                    }
+                )
+            )
+        )
+    ],
+    usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5),
+)
+
+
+@pytest.mark.parametrize(
+    "outcomes",
+    [
+        pytest.param([TimeoutError, TimeoutError, TimeoutError], id="timeouts"),
+        pytest.param([_unavailable, _unavailable, _unavailable], id="503s"),
+        pytest.param([_rate_limited, _rate_limited, _rate_limited], id="429s"),
+        pytest.param([TimeoutError, _VOTE], id="timeout-then-success"),
+        pytest.param([_unavailable, _VOTE], id="503-then-success"),
+    ],
+)
+async def test_failed_or_retried_call_books_its_hold_and_never_more(monkeypatch, outcomes):
+    """The client reports $0 for a failed request, but the provider may still bill it. The
+    play client makes at most PLAY_ATTEMPTS requests per call, the hold covers that many
+    worst cases, and a call that failed or needed a retry books exactly the hold: never
+    $0 for the failed request, never more than held (#382)."""
     import litellm
 
     cfg = GameConfig(n_players=7, models=["qwen3-235b"] * 7)
@@ -650,19 +691,26 @@ async def test_failed_call_books_its_hold_and_never_more(monkeypatch):
         monkeypatch.setattr(client, "backoff_s", 0.0)
         sent = []
 
-        async def hangs(**kw):
+        async def provider(**kw):
+            out = outcomes[len(sent)]
             sent.append(kw)
-            raise TimeoutError
+            if out is _VOTE:
+                return out
+            raise out()
 
-        monkeypatch.setattr(litellm, "acompletion", hangs)
+        monkeypatch.setattr(litellm, "acompletion", provider)
         ledger, calls = Ledger(1.0), set()
         state = GameState(cfg)
         agent = manager_module._metered(make, ledger, "g", calls, 300)(state, "p1")
         turn = Turn(action="vote", prompt="vote", others=["p2"], targets=["p2"])
         held = agent.worst_case(turn.prompt)
         result = await agent.act(turn)
-    assert result.error == manager_module.TIMED_OUT
+    succeeded = outcomes[-1] is _VOTE
+    assert (result.error is None) == succeeded
+    if outcomes[0] is TimeoutError and not succeeded:
+        assert result.error == manager_module.TIMED_OUT
     assert len(sent) == manager_module.PLAY_ATTEMPTS == 2
+    assert result.usage.attempts == 2
     one = admission.call_worst_case("qwen3-235b", len(agent.inner.system) + 4, 300)
     assert held == pytest.approx(2 * one) and held > 0
     assert ledger.games["g"] == pytest.approx(held) and ledger.spent_nanos == nanos(held)

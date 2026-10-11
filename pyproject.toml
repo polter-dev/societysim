@@ -26,6 +26,9 @@ server = [
     "fastapi>=0.115",
     "uvicorn>=0.30",
 ]
+smoke = [
+    "playwright>=1.45", # scripts/site_smoke.py (live site check); not needed by the engine or CI
+]
 
 [project.scripts]
 societysim = "societysim.cli:app"

@@ -28,7 +28,8 @@ spark.sql(f"USE {CATALOG}.{SCHEMA}")
 # MAGIC %md
 # MAGIC ## Seats and groups
 # MAGIC One row per (game, seat). `seat_groups` repeats each seat once per group it counts in, and
-# MAGIC once more under the model `*`.
+# MAGIC once more under the model `*`. A human seat counts in `*` only, never as a model row
+# MAGIC (`compute_metrics` gives `human` no row).
 
 # COMMAND ----------
 
@@ -47,7 +48,8 @@ WITH one AS (
          explode(IF(role = 'wolf', array('all', 'wolf'), array('all', 'village', role))) AS grp
   FROM seats
 )
-SELECT * FROM one UNION ALL SELECT game_id, seat, '*', won, draw, winner, grp FROM one
+SELECT * FROM one WHERE model <> 'human'
+UNION ALL SELECT game_id, seat, '*', won, draw, winner, grp FROM one
 """)
 
 # COMMAND ----------
@@ -360,6 +362,13 @@ got_win, got_det, got_pers = (
 )
 got_lies = by_key(lies, "model", "grp", "source")
 checks, bad = 0, []
+want_keys = {(m, g) for m, g, _ in summaries()}
+for name, got in (("win", got_win), ("detection", got_det), ("persuasion", got_pers)):
+    extra = {k for k in got if k not in want_keys}
+    if name != "detection":  # detection has no row for a group with no pairs
+        extra |= want_keys - set(got)
+    assert not extra, f"{name} keys differ from metrics.json: {sorted(extra)}"
+assert {k[:2] for k in got_lies} <= want_keys, "lies has (model, grp) keys not in metrics.json"
 
 
 def check(what, want, have):

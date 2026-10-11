@@ -528,3 +528,25 @@ def test_notebooks_dry_run_prints_calls(tmp_path, monkeypatch, capsys):
 def test_normalize_host():
     for h in ("dbc-1.cloud.databricks.com", "https://dbc-1.cloud.databricks.com/?o=99"):
         assert ingest.normalize_host(h) == "https://dbc-1.cloud.databricks.com"
+
+
+# --- human seat (#421) ---
+
+
+def test_notebook_drops_human_from_model_rows_but_keeps_it_in_star():
+    """Spark can't run here, so pin the SQL, and the compute_metrics behaviour it must match."""
+    src = (ROOT / "notebooks" / "databricks" / "metrics.py").read_text()
+    assert "SELECT * FROM one WHERE model <> 'human'\nUNION ALL SELECT game_id, seat, '*'" in src
+
+    def metrics(text):
+        path = Path(tmp) / "g.jsonl"
+        path.write_text(text)
+        return compute_metrics([load_game(path)])
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        base = metrics(FIXTURE.read_text())
+        human = metrics(FIXTURE.read_text().replace('"model":"qwen3-235b"', '"model":"human"'))
+    assert "human" not in human["models"] and "qwen3-235b" in base["models"]
+    assert human["by_group"]["all"]["games"] == base["by_group"]["all"]["games"]

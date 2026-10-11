@@ -10,6 +10,18 @@ services:
     plan: starter
     numInstances: 1 # game state is in memory: never scale out or autoscale
     healthCheckPath: /api/health
+    # A deploy restarts the server and fails every visitor game in progress (#446, #504), so
+    # only changes to what server/Dockerfile copies trigger one. README.md and LICENSE are
+    # copied too but don't change how the server runs; viewer and docs merges don't deploy.
+    buildFilter:
+      paths:
+        - server/Dockerfile
+        - pyproject.toml
+        - uv.lock
+        - src/**
+        - configs/**
+        - schema/**
+        - neon/schema.sql
     envVars:
       # The server maps PLAY_* onto OPENAI_API_KEY / HF_TOKEN / GEMINI_API_KEY at startup and
       # PLAY_* wins over a plain provider var. /api/health shows providers_ready per provider.

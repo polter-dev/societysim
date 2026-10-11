@@ -244,6 +244,31 @@ def test_render_blueprint_has_names_only_and_one_instance():
     assert "PLAY_RATE_PER_MIN" in env and "PLAY_DAILY_BUDGET_USD" in env
 
 
+def test_render_deploys_only_for_files_the_image_runs():
+    """#504: every merge redeployed the server and failed the visitor games in progress."""
+    import fnmatch
+
+    import yaml
+
+    svc = yaml.safe_load((ROOT / "render.yaml").read_text())["services"][0]
+    paths = svc["buildFilter"]["paths"]
+    assert "ignoredPaths" not in svc["buildFilter"]
+
+    def deploys(path: str) -> bool:
+        return any(fnmatch.fnmatch(path, p) for p in paths)
+
+    # Everything the image copies, except README.md and LICENSE, triggers a deploy.
+    dockerfile = (ROOT / "server/Dockerfile").read_text()
+    copied = re.findall(r"^COPY (?!--from)(.+?) \S+$", dockerfile, re.M)
+    sources = [s for line in copied for s in line.split() if s not in ("README.md", "LICENSE")]
+    assert sources == ["pyproject.toml", "uv.lock", "src", "configs", "schema", "neon/schema.sql"]
+    assert deploys("server/Dockerfile")
+    for src in sources:
+        assert deploys(src if "." in src else f"{src}/x/y.py"), src
+    for path in ("viewer/src/App.tsx", "docs/DEMO.md", "README.md", "neon/seed.sql", "tests/x.py"):
+        assert not deploys(path), path
+
+
 def test_dockerfile_binds_port_env_with_space_default():
     text = (ROOT / "server/Dockerfile").read_text()
     assert "--port ${PORT:-7860}" in text

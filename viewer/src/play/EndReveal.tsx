@@ -19,11 +19,15 @@ export function trustedWolves(events: Event[], idx: number) {
     .map(([id]) => ({id,name:seats[id]?.name ?? id,p:latest.get(id)!}));
 }
 
-export function EndReveal({events,labels,idx,mode}: {events:Event[];labels:Label[];idx:number;mode:Mode}) {
+/** `live`: the game may still be running, so its last event is not the end. */
+export function EndReveal({events,labels,idx,mode,live=false}: {events:Event[];labels:Label[];idx:number;mode:Mode;live?:boolean}) {
   const [copied,setCopied] = useState(false);
   const shown = events.slice(0,idx+1);
   const end = shown.find(e => e.type === 'game_end');
-  if (!end) return null;
+  // A log that stops without game_end (a visitor game cut off or left): say so at its last event.
+  if (!end) return !live && events.length > 1 && idx === events.length - 1 ? <section className="game-reveal game-reveal--early" aria-labelledby="game-reveal-title">
+    <div className="game-reveal__header"><div><h2 id="game-reveal-title">The game stopped early</h2><p className="game-reveal__outcome">It ended before either side won, so there is no result.</p></div></div>
+  </section> : null;
   const scene = deriveScene(events,idx,mode);
   const fooled = trustedWolves(events,idx);
   const human = scene.players.find(p => p.model === 'human');

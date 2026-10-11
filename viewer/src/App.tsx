@@ -44,7 +44,7 @@ export function Game({events, labels, idx, mode, selected, onSelect, onSeqChange
   return <>
     <div className="replay-table"><LabelPopups scene={scene} labels={labels} mode={mode} playing={playing} range={beatRange}><Table scene={scene} selected={selected} onSelect={onSelect}/><Arrows scene={scene}/><Speech scene={scene} playing={playing}/></LabelPopups></div>
     <IllustratedInspector scene={scene} mode={mode} selected={selected} close={() => onSelect(null)}/>
-    <EndReveal events={events} labels={labels} idx={idx} mode={mode}/>
+    <EndReveal events={events} labels={labels} idx={idx} mode={mode} live={!!step?.live}/>
     {/* The bottom bar: stepping and the timeline, then pop-ups that open upward over the table. */}
     <div className="replay-bar">
       <div className="replay-controls">{step?.live && <LiveBadge newCount={step.newCount}/>}{step && <StepControls {...step}/>}<Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} seq={seq} onSeek={onSeek} onStep={onStep} onPlayingChange={setPlaying} narrationIdle={narration?.whenIdle}/></div>

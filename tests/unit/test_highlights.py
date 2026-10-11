@@ -102,6 +102,42 @@ def test_lie_labeled_by_both_sources_is_one_moment():
     assert "Both label sources" in m["description"]
 
 
+def _repeat_bussing(g: GameData, *, new_day: int | None) -> None:
+    """Cleo busses Finn a second time. new_day=None: in round 2 of the same day (her statement
+    93 / accusation 94 now accuse Finn too). Otherwise day 2's discussion and vote replayed as
+    that day, seq + 1000."""
+    bus = next(lb for lb in g.labels if lb.label is LabelType.BUSSING)
+    if new_day is None:
+        edit(g, 94, target="p5")
+        g.labels.append(bus.model_copy(update={"source_seq": 94}))
+        return
+    copies = []
+    for e in (e for e in g.events if 69 <= e.seq <= 104):
+        meta = e.meta
+        if meta.statement_seq:
+            meta = meta.model_copy(update={"statement_seq": meta.statement_seq + 1000})
+        copies.append(e.model_copy(update={"seq": e.seq + 1000, "day": new_day, "meta": meta}))
+    g.events += copies
+    g.labels.append(bus.model_copy(update={"source_seq": 1070}))
+
+
+def test_same_lie_repeated_in_a_day_is_one_moment():
+    g = game()
+    _repeat_bussing(g, new_day=None)
+    ms = [m for m in lie_moments(g) if m["actor"] == "p2"]
+    assert len(ms) == 1
+    assert ms[0]["seq"][0] == 70  # earliest seq on a score tie
+    assert "Said 2 times that day." in ms[0]["description"]
+
+
+def test_same_lie_on_two_days_is_two_moments():
+    g = game()
+    _repeat_bussing(g, new_day=3)
+    ms = [m for m in lie_moments(g) if m["actor"] == "p2"]
+    assert sorted(m["day"] for m in ms) == [2, 3]
+    assert all("Said" not in m["description"] for m in ms)
+
+
 def test_fellow_wolf_voted_out_is_named():
     g = game()
     edit(g, 104, target="p5", meta=EventMeta(role="wolf"))  # Finn goes out, not Gia

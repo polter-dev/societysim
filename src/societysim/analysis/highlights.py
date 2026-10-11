@@ -95,7 +95,8 @@ def _name(g: GameData, seat: str | None, role: str = "") -> str:
 
 
 def lie_moments(g: GameData) -> list[dict]:
-    out = []
+    best: dict[tuple, dict] = {}  # (liar, label type, day) -> the moment kept
+    repeats: dict[tuple, int] = {}
     by_seq = g.by_seq
     same_lie: dict[tuple, list[Label]] = {}
     for lb in g.labels:
@@ -120,18 +121,27 @@ def lie_moments(g: GameData) -> list[dict]:
         )
         if len({x.source for x in lbs}) > 1:
             desc += " Both label sources (self-tag and Jev) flagged it."
-        out.append(
-            _moment(
-                g,
-                "lie_moved_vote",
-                src.day,
-                (lb.source_seq, end.seq),
-                lb.actor,
-                src.target,
-                score,
-                desc,
-            )
+        m = _moment(
+            g,
+            "lie_moved_vote",
+            src.day,
+            (lb.source_seq, end.seq),
+            lb.actor,
+            src.target,
+            score,
+            desc,
         )
+        # the same claim repeated in a day's discussion rounds is one moment, not one per round
+        key = (lb.actor, lb.label, src.day)
+        repeats[key] = repeats.get(key, 0) + 1
+        old = best.get(key)
+        if old is None or (-m["score"], m["seq"][0]) < (-old["score"], old["seq"][0]):
+            best[key] = m
+    out = []
+    for key, m in best.items():
+        if repeats[key] > 1:
+            m["description"] += f" Said {repeats[key]} times that day."
+        out.append(m)
     return out
 
 

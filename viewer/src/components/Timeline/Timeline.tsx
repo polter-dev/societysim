@@ -20,12 +20,17 @@ export interface TimelineProps {
    */
   seq?: number | null;
   onSeek?: (seq: number) => void;
+  /** Controlled mode: step by beat. The slider and Up/Down keys use it, since a seq +/- 1 seek can land in the same beat. */
+  onStep?: (type: "next" | "prev" | "first" | "last") => void;
   /** Reports autoplay on/off so chat can leave the live regions while it runs. */
   onPlayingChange?: (playing: boolean) => void;
 }
 
+const BEAT_KEYS: Record<string, "next" | "prev" | "first" | "last"> = {
+  ArrowLeft: "prev", ArrowDown: "prev", ArrowRight: "next", ArrowUp: "next", Home: "first", End: "last",
+};
 const EMPTY_LABELS: Label[] = [];
-export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqChange, seq: controlled, onSeek, onPlayingChange }: TimelineProps) {
+export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqChange, seq: controlled, onSeek, onStep, onPlayingChange }: TimelineProps) {
   const isControlled = onSeek !== undefined;
   const [ownSeq, ownSet] = useSeqParam(events, !isControlled);
   const seq = isControlled ? (controlled ?? null) : ownSeq;
@@ -66,6 +71,15 @@ export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqCha
     // defaultPrevented: the Speed ThemedSelect already used the key (arrows, Home/End, Space).
     if (event.defaultPrevented || tag === "SELECT" || (tag === "BUTTON" && event.key === " ")) return;
     let next: number | null | undefined;
+    if (isControlled && onStep) {
+      // The stepper's page-level keys skip inputs, so a focused slider would otherwise move one seq and snap back into the same beat.
+      const type = BEAT_KEYS[event.key];
+      if (type && (tag === "INPUT" || event.key === "ArrowUp" || event.key === "ArrowDown")) {
+        event.preventDefault();
+        onStep(type);
+        return;
+      }
+    }
     if (isControlled && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     switch (event.key) {
       case "ArrowLeft":

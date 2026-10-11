@@ -101,6 +101,32 @@ describe("Replay stepping", () => {
     expect(label()).toMatch(/^beat 2 \//);
   });
 
+  it("arrow keys, Home and End on the focused slider step by beat (seq-1 is still inside a multi-event beat)", () => {
+    window.history.replaceState(null, "", "/?step=6&mode=narrator");
+    mount("narrator");
+    const slider = box.querySelector("input[aria-label='Event sequence']") as HTMLInputElement;
+    const beat = () => Number(label()!.match(/^beat (\d+) \//)![1]);
+    const here = beat();
+    expect(here).toBeGreaterThan(1);
+    const fire = (k: string) => {
+      const e = new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true });
+      act(() => void slider.dispatchEvent(e));
+      return e;
+    };
+    expect(fire("ArrowLeft").defaultPrevented).toBe(true);
+    expect(beat()).toBe(here - 1);
+    fire("ArrowRight");
+    expect(beat()).toBe(here);
+    fire("ArrowDown");
+    expect(beat()).toBe(here - 1);
+    fire("ArrowUp");
+    expect(beat()).toBe(here);
+    fire("Home");
+    expect(beat()).toBe(1);
+    fire("End");
+    expect(label()).toMatch(/^beat (\d+) \/ \1/);
+  });
+
   it("the timeline slider jumps through the stepper and the share link follows", () => {
     mount();
     const slider = box.querySelector("input[aria-label='Event sequence']") as HTMLInputElement;

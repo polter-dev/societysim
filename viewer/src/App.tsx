@@ -11,7 +11,7 @@ import { modeFromSearch, urlWithMode } from './components/ModeToggle/modeUrl';
 import { Speech } from './components/Speech/Speech';
 import { Table } from './components/Table/Table';
 import { Tally } from './components/Tally/Tally';
-import Timeline from './components/Timeline/Timeline';
+import Timeline, { type TimelineProps } from './components/Timeline/Timeline';
 import { fetchLabels, siblingLabelsUrl } from './data/labels';
 import { parseLog } from './data/parse';
 import { fetchLog, type GameSource, type LoadedGame } from './data/source';
@@ -33,9 +33,9 @@ export interface GameProps {
   events: Event[]; labels: Label[]; idx: number; mode: Mode; selected: string | null;
   onSelect: (seat: string | null) => void; onSeqChange?: (seq: number, index: number) => void;
   /** Stepper wiring. With `onSeek` the timeline is controlled by the stepper (`seq` is the shown event). */
-  step?: StepControlsProps; seq?: number | null; onSeek?: (seq: number) => void; narration?: NarrationUi;
+  step?: StepControlsProps; seq?: number | null; onSeek?: (seq: number) => void; onStep?: TimelineProps['onStep']; narration?: NarrationUi;
 }
-export function Game({events, labels, idx, mode, selected, onSelect, onSeqChange, step, seq, onSeek, narration}: GameProps) {
+export function Game({events, labels, idx, mode, selected, onSelect, onSeqChange, step, seq, onSeek, onStep, narration}: GameProps) {
   const scene = deriveScene(events, idx, mode);
   const [playing, setPlaying] = useState(false); // autoplay: chat stays out of the live regions
   return <>
@@ -44,7 +44,7 @@ export function Game({events, labels, idx, mode, selected, onSelect, onSeqChange
     <EndReveal events={events} labels={labels} idx={idx} mode={mode}/>
     {/* The bottom bar: stepping and the timeline, then pop-ups that open upward over the table. */}
     <div className="replay-bar">
-      <div className="replay-controls">{step?.live && <LiveBadge newCount={step.newCount}/>}{step && <StepControls {...step}/>}<Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} seq={seq} onSeek={onSeek} onPlayingChange={setPlaying}/></div>
+      <div className="replay-controls">{step?.live && <LiveBadge newCount={step.newCount}/>}{step && <StepControls {...step}/>}<Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} seq={seq} onSeek={onSeek} onStep={onStep} onPlayingChange={setPlaying}/></div>
       <div className="replay-pops">
         <details className="replay-pop replay-chat" name="replay-pop"><summary>Discussion and votes</summary><div className="replay-pop__body"><Tally scene={scene}/><ChatLog scene={scene}/></div></details>
         <details className="replay-pop replay-spotwolf" name="replay-pop"><summary>Spot the wolf</summary><div className="replay-pop__body"><SpotWolfPanel key={events[0]?.game_id} events={events} idx={idx}/></div></details>
@@ -66,7 +66,7 @@ export function Replay({events, labels, mode, selected, onSelect, audioUrl = nul
   const step: StepControlsProps = {pos: st.state.pos, count: st.state.beats.length, live: st.state.live, atLatest: st.atLatest, newCount: st.newCount,
     onPrev: () => st.dispatch({type: 'prev'}), onNext: () => st.dispatch({type: 'next'}), onLive: st.goLive};
   return <Game events={events} labels={labels} idx={idx} mode={mode} selected={selected} onSelect={onSelect} step={step} seq={events[idx]?.seq ?? null}
-    onSeek={seq => st.dispatch({type: 'goto', seq})} narration={{available: n.available, on: n.on, enabled: n.enabled, onToggle: n.setOn, onCategory: n.setCategory}}/>;
+    onSeek={seq => st.dispatch({type: 'goto', seq})} onStep={type => st.dispatch({type})} narration={{available: n.available, on: n.on, enabled: n.enabled, onToggle: n.setOn, onCategory: n.setCategory}}/>;
 }
 export default function App({source}: {source?: GameSource} = {}) {
  const [log, setLog] = useState<LoadedGame | null>(null);

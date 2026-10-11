@@ -15,23 +15,26 @@ const bankJson = readFileSync(join(__dirname, "../../public/narration-bank/index
 const reveal = fixture.clips.find((c) => c.text.startsWith("The wolves struck."))!;
 
 let played: string[];
+let audios: { onended: (() => void) | null }[];
 let fetched: string[];
 type Hook = ReturnType<typeof useNarration>;
 let hook: Hook;
 let root: Root;
 
-function Probe(p: { url: string | null; seq: number; events: Event[] }) {
-  hook = useNarration(p.url, { first: p.seq, last: p.seq }, "villager", p.events);
+type Props = { url: string | null; seq: number; last?: number; events: Event[] };
+function Probe(p: Props) {
+  hook = useNarration(p.url, { first: p.seq, last: p.last ?? p.seq }, "villager", p.events);
   return null;
 }
 // the bank path hashes with crypto.subtle, which resolves outside the microtask queue
-const render = async (p: { url: string | null; seq: number; events: Event[] }) => {
+const render = async (p: Props) => {
   await act(async () => root.render(createElement(Probe, p)));
   await act(() => new Promise((r) => setTimeout(r, 50)));
 };
 
 beforeEach(() => {
   played = [];
+  audios = [];
   fetched = [];
   vi.stubGlobal(
     "Audio",
@@ -44,6 +47,9 @@ beforeEach(() => {
         return Promise.resolve();
       }
       pause() {}
+      constructor() {
+        audios.push(this);
+      }
     },
   );
   vi.stubGlobal(
@@ -90,5 +96,17 @@ describe("useNarration", () => {
     await act(async () => hook.setOn(true));
     await render({ url: null, seq: reveal.seq, events: events.filter((e) => e.seq <= reveal.seq + 5) });
     expect(played).toEqual([`narration-bank/${reveal.file}`]);
+  });
+
+  it("live: a new line in the playing beat queues after the clip instead of restarting it", async () => {
+    const after = fixture.clips[fixture.clips.indexOf(reveal) + 1];
+    const range = { url: null, seq: reveal.seq, last: after.seq };
+    await render({ ...range, events: events.filter((e) => e.seq <= reveal.seq) });
+    await act(async () => hook.setOn(true));
+    expect(played).toEqual([`narration-bank/${reveal.file}`]);
+    await render({ ...range, events: events.filter((e) => e.seq <= after.seq) });
+    expect(played).toEqual([`narration-bank/${reveal.file}`]); // still on the first clip
+    await act(async () => audios[0].onended?.());
+    expect(played).toEqual([`narration-bank/${reveal.file}`, `narration-bank/${after.file}`]);
   });
 });

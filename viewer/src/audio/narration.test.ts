@@ -115,6 +115,25 @@ describe("createPlayer", () => {
     expect(first.src).toBe("/u/e.mp3");
   });
 
+  it("extend queues new clips behind the playing one, resumes a finished run, and restarts on a different list", () => {
+    const { made, make } = fakeAudio();
+    const p = createPlayer(make, urlOf as never);
+    const [a, b, e] = [clipsForSeq(idx, 3, "narrator", all)[0], clipsForSeq(idx, 3, "narrator", all)[1], clipsForSeq(idx, 4, "narrator", all)[0]];
+    p.play([a]);
+    p.extend([a, b]);
+    expect(made[0].play).toHaveBeenCalledTimes(1); // a keeps playing
+    made[0].onended?.();
+    expect(made[0].src).toBe("/u/b.mp3");
+    made[0].onended?.(); // run over
+    const idle = vi.fn();
+    p.whenIdle(idle);
+    expect(idle).toHaveBeenCalled();
+    p.extend([a, b, e]);
+    expect(made[0].src).toBe("/u/e.mp3"); // only the new clip
+    p.extend([e]);
+    expect(made[0].play).toHaveBeenCalledTimes(4); // not a prefix: restart
+  });
+
   it("stop pauses and plays nothing further", () => {
     const { made, make } = fakeAudio();
     const p = createPlayer(make, urlOf as never);

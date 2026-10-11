@@ -33,6 +33,7 @@ export function createPlayer(makeAudio: () => AudioLike, urlOf: (c: Clip) => str
 
   function stop() {
     halt();
+    queue = [];
     settle();
   }
 
@@ -49,31 +50,50 @@ export function createPlayer(makeAudio: () => AudioLike, urlOf: (c: Clip) => str
     return () => void waiting.delete(cb);
   }
 
+  /** The clips of the current run and how many have started. */
+  let queue: Clip[] = [];
+  let i = 0;
+
+  function next(mine: number) {
+    if (mine !== run || !audio) return;
+    if (i >= queue.length) return settle();
+    const el = audio;
+    el.src = urlOf(queue[i++]);
+    el.onended = () => next(mine);
+    el.onerror = () => next(mine); // a missing file skips to the next clip
+    try {
+      // Autoplay can be blocked until a user gesture; treat that as silence.
+      // It also plays no sound, so nothing will fire onended: give up on this run rather than stall autoplay.
+      void Promise.resolve(el.play()).catch(() => mine === run && stop());
+    } catch {
+      stop();
+    }
+  }
+
   function play(clips: Clip[]) {
     halt();
+    queue = clips;
+    i = 0;
     // Waiters carry over to a new run (the clips changed under them); they leave only when no clips remain.
     if (!clips.length) return settle();
     busy = true;
     audio ??= makeAudio();
-    const el = audio;
-    const mine = run;
-    let i = 0;
-    const next = () => {
-      if (mine !== run) return;
-      if (i >= clips.length) return settle();
-      el.src = urlOf(clips[i++]);
-      el.onended = next;
-      el.onerror = next; // a missing file skips to the next clip
-      try {
-        // Autoplay can be blocked until a user gesture; treat that as silence.
-        // It also plays no sound, so nothing will fire onended: give up on this run rather than stall autoplay.
-        void Promise.resolve(el.play()).catch(() => mine === run && stop());
-      } catch {
-        stop();
-      }
-    };
-    next();
+    next(run);
   }
 
-  return { play, stop, whenIdle };
+  /**
+   * Like `play`, but when `clips` starts with the current run's clips (a live game's beat gained a
+   * line), the clip playing keeps going and the new ones queue after it. Otherwise it is `play`.
+   */
+  function extend(clips: Clip[]) {
+    const same = (a: Clip, b: Clip) => a.seq === b.seq && a.category === b.category && a.file === b.file;
+    if (!queue.length || clips.length < queue.length || !queue.every((c, k) => same(c, clips[k]))) return play(clips);
+    queue = clips;
+    if (!busy && i < queue.length) {
+      busy = true;
+      next(run);
+    }
+  }
+
+  return { play, extend, stop, whenIdle };
 }

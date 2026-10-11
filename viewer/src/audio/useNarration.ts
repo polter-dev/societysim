@@ -70,13 +70,20 @@ export function useNarration(
   }, [needBank, events]);
 
   const clips = first === null || last === null ? [] : clipsForSeqRange(index, first, last, mode, enabled);
-  // A live game rebuilds the bank index as events arrive: replay only when this beat's clips change.
-  const clipsKey = clips.map((c) => `${c.seq}:${c.file}`).join(",");
+  // A live game rebuilds the bank index as events arrive. Act only when this beat's clips change,
+  // and when the same beat gains a line, queue it after the clip playing instead of restarting.
+  const clipsKey = clips.map((c) => `${c.seq}:${c.category}:${c.file}`).join(",");
   const clipsRef = useRef(clips);
   clipsRef.current = clips;
+  const playedFor = useRef<number | null>(null);
   useEffect(() => {
-    if (!on || first === null) player.stop();
+    if (!on || first === null) {
+      playedFor.current = null;
+      return player.stop();
+    }
+    if (playedFor.current === first) player.extend(clipsRef.current);
     else player.play(clipsRef.current);
+    playedFor.current = first;
   }, [on, first, clipsKey, player]);
   useEffect(() => player.stop, [player]);
 

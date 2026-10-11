@@ -86,13 +86,16 @@
   .illustrated-shell :is(.roster,.event-roster) .panel-content{position:absolute;inset:0;padding:0 2px}
   .illustrated-shell :is(.roster,.event-roster) .panel-content h2{margin:0 0 clamp(4px,1dvh,12px);font:700 min(clamp(14px,2.1dvh,26px),12cqw) Georgia,serif;letter-spacing:.04em;white-space:nowrap}
 
-  /* Agents: all ten fit without scrolling from 1366 x 768 up. Sizes follow the height. */
+  /* Agents: all ten fit without scrolling from 1366 x 768 up. --ag, the name size, follows the height,
+     or the panel width (cqw) where that gives more, as on ultrawide screens; the row's height and
+     width cap it. Model name and medallion are set from it. */
+  .illustrated-shell .roster{--ag:min(max(1.65dvh,7cqw),2.1dvh,9.5cqw)}
   .illustrated-shell .agent-list{flex:1;display:flex;flex-direction:column;justify-content:space-between;gap:0;overflow:hidden auto;scrollbar-width:none;padding:0}
   .illustrated-shell .agent-list>li{flex:none}
   .illustrated-shell .roster .agent-button{margin:0;gap:clamp(5px,.5vw,10px);padding:clamp(1px,.25dvh,4px) 2px}
-  .illustrated-shell .roster .agent-button .medallion{flex:none;width:clamp(26px,4.3dvh,58px)!important;height:auto!important}
-  .illustrated-shell .agent-button strong{font:700 clamp(12px,1.65dvh,19px)/1.15 Georgia,serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .illustrated-shell .agent-button small{margin:1px 0 0;font-size:clamp(10px,1.3dvh,14px);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal}
+  .illustrated-shell .roster .agent-button .medallion{flex:none;width:max(26px,min(2.6 * var(--ag),4.8dvh))!important;height:auto!important}
+  .illustrated-shell .agent-button strong{font:700 max(12px,var(--ag))/1.15 Georgia,serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .illustrated-shell .agent-button small{margin:1px 0 0;font-size:max(10px,.79 * var(--ag));line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal}
   .illustrated-shell .agent-button[data-alive=false] strong{text-decoration:line-through;text-decoration-thickness:1px}
 
   /* Game events: the history is the one panel that scrolls. */
@@ -101,9 +104,10 @@
   .illustrated-shell .event-list .decision-card{margin:0 0 clamp(3px,.6dvh,8px);min-height:0;aspect-ratio:4}
   .illustrated-shell .event-list .decision-card>span{inset:16% 8% 16% 26%;gap:1px}
   .illustrated-shell .event-list .decision-notes>span{bottom:28%}
-  /* Text follows the height, capped by the panel width so narrow, tall windows don't overflow the card. */
-  .illustrated-shell .event-list .decision-card strong{font-size:min(clamp(10px,1.3dvh,14px),var(--gs-right) * .055);line-height:1.1}
-  .illustrated-shell .event-list .decision-card small{font-size:min(clamp(8px,1dvh,11px),var(--gs-right) * .042);line-height:1.1}
+  /* Text follows the height, or the card width (cqw of the panel) where that gives more, as on
+     ultrawide screens; the card width caps it so narrow, tall windows don't overflow the card. */
+  .illustrated-shell .event-list .decision-card strong{font-size:max(10px,min(max(1.3dvh,6.3cqw),8.3cqw));line-height:1.1}
+  .illustrated-shell .event-list .decision-card small{font-size:max(8px,min(max(1dvh,4.85cqw),6.3cqw));line-height:1.1}
 
   /* Collapse arrow on the Agents panel's edge; collapsed, the panel slides off and leaves a rail. */
   .illustrated-shell .roster-toggle{left:calc(var(--gs-left) - 22px);top:calc(var(--gs-top) + (100dvh - var(--gs-top) - var(--gs-bar)) / 2);width:clamp(30px,2.6vw,48px);height:clamp(52px,7dvh,84px)}

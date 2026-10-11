@@ -118,7 +118,7 @@ def _seats(leak, step: bool = False) -> str:
         + "".join(f"<li><button aria-pressed='false'>{s}</button></li>" for s in SEATS)
         + "</ul></section></details>"
         "<script>document.querySelector('[data-seat] button').onclick="
-        "()=>{document.body.insertAdjacentHTML('beforeend','<b class=role-badge>role unknown</b>')}</script>"
+        "()=>{document.body.insertAdjacentHTML('beforeend','<dialog open aria-label=\"Inspector: p0\"><span class=profile-role>role unknown</span></dialog>')}</script>"
     )
 
 

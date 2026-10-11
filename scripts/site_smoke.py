@@ -33,6 +33,8 @@ SEL_SEATS = "[data-seat]"  # the table: one <li> per player (Table.tsx); count a
 # plate overflow it, so Playwright never sees the <li> as visible. Wait on the button instead.
 # The testid only exists once deployed; the structural fallback works on the live site today.
 SEL_SEAT_KEY = "[data-testid='seat-button'], [data-seat] > button"
+# The seat inspector is the player profile dialog (PlayerProfile.tsx); its role line.
+SEL_PROFILE_ROLE = "dialog[aria-label^='Inspector:'] .profile-role"
 SEL_STEP = ".step-label"  # "beat N / M"
 SEL_SPOT = "section.spotwolf"
 # Landing screens (viewer/src/landing). Each key is "data-testid, current DOM": the testid is
@@ -398,7 +400,7 @@ def hidden_info(page, name: str, add) -> None:
         "; ".join(leaks) or f"{len(cards)} seats, no role names",
     )
     page.locator("[data-seat] button").first.click()
-    badge = page.locator(".role-badge").first
+    badge = page.locator(SEL_PROFILE_ROLE).first
     badge.wait_for(state="visible")
     add(name, "inspector role", not ROLE_WORDS.search(badge.inner_text()), badge.inner_text())
 

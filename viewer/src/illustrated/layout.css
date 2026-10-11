@@ -188,3 +188,7 @@ main.replay-app .replay-tools.open-log .open-log__games{color:var(--accent-gold,
   .replay-app .replay-bar nav[aria-label='Timeline markers'] button{min-height:32px;min-width:32px;font-size:12px}
   .replay-app .replay-pop>summary{min-height:32px;display:flex;align-items:center;box-sizing:border-box}
 }
+/* Keep both text lines inside the event scroll's inner gold rim. */
+.illustrated-shell .event-list .decision-card>span{inset:22% 10% 24% 28%;gap:2px}
+.illustrated-shell .event-list .decision-card strong{font-size:clamp(10px,4.6cqw,16px);line-height:1.1}
+.illustrated-shell .event-list .decision-card small{font-size:clamp(9px,3.6cqw,12px);line-height:1.1}

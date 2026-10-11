@@ -18,3 +18,7 @@ body{margin:0;background:#031b17;color:#efe5bd}a{color:#eacb75}.batch-source{dis
   .event-detail-board .detail-participants h3{line-height:1.2;min-height:3.5cqw;display:flex;align-items:center;margin-bottom:0}
   .event-detail-board .detail-participants p{margin-top:6%}
 }
+@media(min-width:601px){
+  .event-detail-board .detail-participants{top:24.8%;height:32.2%}
+  .event-detail-board .detail-participants h3{height:3.5cqw;min-height:0;font-size:1.65cqw;line-height:1;margin:0;padding-left:17%}
+}

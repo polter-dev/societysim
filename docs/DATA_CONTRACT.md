@@ -20,9 +20,9 @@ file it produces against those schemas, and checks the Neon tables and views bel
 | `Board`, `BoardRow`, `Rating` (`viewer/src/pages/Leaderboard.tsx`) | `schema/leaderboard.schema.json` |
 | `BySide` (`Leaderboard.tsx`) | `openskill` in `schema/metrics.schema.json` |
 | `ModelProfile`, `PairRow` (`viewer/src/data/models.ts`) | `profiles` in `schema/metrics.schema.json` |
-| narration index (not typed yet) | `schema/narration_index.schema.json` |
+| `NarrationIndex`, `Clip` (`viewer/src/audio/narration.ts`) | `schema/narration_index.schema.json` |
 | highlights (not typed yet) | `schema/highlights.schema.json` |
-| settings screen (not built yet) | `schema/game_setup.schema.json` and `models_catalog.json`, see [Game setup](#game-setup) |
+| Advanced Setup (`viewer/src/landing/AdvancedSetup.tsx`) | `schema/game_setup.schema.json` and `models_catalog.json`, see [Game setup](#game-setup) |
 
 The viewer types should match these schemas. They can be generated the same way `events.ts` is
 (`json-schema-to-typescript`).
@@ -521,7 +521,7 @@ to them). All bodies are JSON and closed: an unknown key is a 422. Every error i
 | `GET /api/games/{id}/me` | seat token | | `Me` |
 | `POST /api/games/{id}/action` | seat token | `ActionBody` | `{"accepted": true}` |
 | `GET /api/limits` | none | | `{"play_enabled": bool, "remaining_today": int, "client_ip_hint": str, "allowed_models": [str]}` (model ids visitors may use, sorted) |
-| `GET /api/health` | none | | `{"ok": true}` |
+| `GET /api/health` | none | | `{"ok": true, "providers_ready": {"<provider>": bool}}` (a key is present for that provider; never the key) |
 
 ### Starting a game
 

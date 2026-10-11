@@ -192,3 +192,12 @@ main.replay-app .replay-tools.open-log .open-log__games{color:var(--accent-gold,
 .illustrated-shell .event-list .decision-card>span{inset:22% 10% 24% 28%;gap:2px}
 .illustrated-shell .event-list .decision-card strong{font-size:clamp(10px,4.6cqw,16px);line-height:1.1}
 .illustrated-shell .event-list .decision-card small{font-size:clamp(9px,3.6cqw,12px);line-height:1.1}
+
+/* Shared emerald-and-gold scrollbar: reveal reasoning, game events, Decision history (#588). */
+.gs-scroll,.replay-app .game-reveal,.illustrated-shell .event-list,.profile-pane{scrollbar-width:thin;scrollbar-color:#d9b45a #0b2a1d}
+:is(.gs-scroll,.replay-app .game-reveal,.illustrated-shell .event-list,.profile-pane)::-webkit-scrollbar{width:12px;height:12px}
+:is(.gs-scroll,.replay-app .game-reveal,.illustrated-shell .event-list,.profile-pane)::-webkit-scrollbar-track{background:#0b2a1d;border-radius:6px}
+:is(.gs-scroll,.replay-app .game-reveal,.illustrated-shell .event-list,.profile-pane)::-webkit-scrollbar-thumb{background:#c9a24f;border:2px solid #0b2a1d;border-radius:6px;min-height:36px}
+:is(.gs-scroll,.replay-app .game-reveal,.illustrated-shell .event-list,.profile-pane)::-webkit-scrollbar-thumb:hover{background:#f0cf7a}
+@media (forced-colors:active){.gs-scroll,.replay-app .game-reveal,.illustrated-shell .event-list,.profile-pane{scrollbar-width:auto;scrollbar-color:auto}
+  :is(.gs-scroll,.replay-app .game-reveal,.illustrated-shell .event-list,.profile-pane)::-webkit-scrollbar,:is(.gs-scroll,.replay-app .game-reveal,.illustrated-shell .event-list,.profile-pane)::-webkit-scrollbar-thumb,:is(.gs-scroll,.replay-app .game-reveal,.illustrated-shell .event-list,.profile-pane)::-webkit-scrollbar-track{all:revert}}

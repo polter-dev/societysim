@@ -171,6 +171,41 @@ async def test_global_liars(db):
         _check(row, want[model])
 
 
+async def test_lies_by_model_leaves_out_human_seats(db):
+    """A visitor wolf (p5) who lies gets a self_tag label, but no `human` row in lies_by_model."""
+    gid = "g-visitor-wolf"
+    events = _events(gid, False)
+    events[0]["meta"]["seats"]["p5"]["model"] = "human"
+    labels = _labels(gid, False)
+    assert any(lb["source"] == "self_tag" and lb["actor"] == "p5" for lb in labels)
+    w = await _connect(db, "writer")
+    try:
+        tr = w.transaction()  # rolled back below, so the other tests never see this game
+        await tr.start()
+        await w.execute(
+            "insert into games (game_id, batch_id, status, agents)"
+            " values ($1, 'visitor', 'finished', 'llm')",
+            gid,
+        )
+        await w.executemany(
+            "insert into events (game_id, seq, day, phase, type, actor, schema_version, event)"
+            " values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)",
+            [event_row(e) for e in events],
+        )
+        await w.executemany(
+            "insert into labels (game_id, idx, label_type, actor, source_seq, source, label)"
+            " values ($1, $2, $3, $4, $5, $6, $7::jsonb)",
+            [label_row(i, lb) for i, lb in enumerate(labels)],
+        )
+        rows = await w.fetch("select * from lies_by_model where batch_id = 'visitor'")
+        await tr.rollback()
+    finally:
+        await w.close()
+    models = {r["model"] for r in rows}
+    assert models  # the AI wolf's bussing label is still counted
+    assert "human" not in models
+
+
 @pytest.mark.parametrize("view", ["finished_seats", "finished_suspicion"])
 async def test_internal_views_are_not_anonymous(db, view):
     import asyncpg

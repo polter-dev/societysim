@@ -8,6 +8,7 @@ import { neonSource, withFallback } from "./data/neonSource";
 import { DEFAULT_INDEX_URL, indexSource, publishedBase } from "./data/staticSource";
 import { retryLoad } from "./data/source";
 import ModelProfilePage from "./components/ModelProfile/ModelProfile";
+import { modelName } from "./data/modelNames";
 import IndexPage from "./pages/Index";
 import LeaderboardPage from "./pages/Leaderboard";
 import NewGamePage from "./pages/NewGame";
@@ -86,7 +87,7 @@ createRoot(document.getElementById("root")!).render(
       </div>
     ) : (
       <main className={profileModel || page === "new" ? "info-page info-page--text" : "info-page"}>
-        <h1>SocietySim {title}</h1>
+        <h1 title={profileModel ?? undefined}>SocietySim {profileModel ? modelName(profileModel) : title}</h1>
         <form method="get" className="batch-source"><label>Published batch base URL <input name="base" type="url" required defaultValue={dataBase.href} /></label><button type="submit">Load batch</button></form>
         {profileModel ? (
           <ModelProfilePage metricsUrl={sibling("metrics.json")} model={profileModel} />

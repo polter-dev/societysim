@@ -33,7 +33,7 @@ PLAY_API_GLOB = "**/api/**"
 READ_ONLY_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 # key element per page: (selector, what it is). The replay and its deep links share one.
-SEL_H1 = "main h1"
+SEL_H1 = "h1"  # the leaderboard (#551) has no <main>
 SEL_SEATS = "[data-seat]"  # the table: one <li> per player (Table.tsx); count and read these
 # The <li> is a zero-size anchor since the medallion table (#404): its button, medallion and
 # plate overflow it, so Playwright never sees the <li> as visible. Wait on the button instead.

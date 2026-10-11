@@ -46,3 +46,32 @@ describe('illustrated replay data',()=>{
  });
 });
 
+describe('role claim text',()=>{
+ const claim=events.find(e=>e.type==='role_claim')!;
+ const text=(meta:object,mode:'villager'|'narrator'='narrator')=>{
+  const scene=deriveScene(events,events.length-1,mode);
+  return eventPresentation({...claim,private_reasoning:'secret',meta:{...claim.meta,...meta}} as typeof claim,scene).text;
+ };
+ it('names each claimed role',()=>{
+  expect(text({role:'seer'})).toBe('Claims to be the Seer');
+  expect(text({role:'doctor'})).toBe('Claims to be the Doctor');
+  expect(text({role:'villager'})).toBe('Claims to be a Villager');
+  expect(text({role:'wolf'})).toBe('Claims to be a Werewolf');
+ });
+ it('shows the claim, not the true role, in both modes',()=>{
+  const start=events.find(e=>e.type==='game_start')!;
+  const truth=start.meta.seats![claim.actor!].role;
+  const lie=truth==='seer'?'doctor':'seer';
+  for(const mode of ['villager','narrator'] as const){
+   const t=text({role:lie},mode);
+   expect(t).toBe(`Claims to be the ${lie==='seer'?'Seer':'Doctor'}`);
+   expect(t).not.toContain('secret');
+  }
+ });
+ it('falls back neutrally on missing or malformed claims',()=>{
+  expect(text({role:undefined})).toBe('Claims a role');
+  expect(text({role:42})).toBe('Claims a role');
+  expect(text({role:'banana'})).toBe('Claims a role');
+  expect(text({role:'toString'})).toBe('Claims a role');
+ });
+});

@@ -246,6 +246,8 @@ class Session:
     agent: WebHumanAgent | None
     token_hash: bytes | None
     status: Status = "running"
+    reason: str = ""  # why it ended: "leave", "turn timeouts", an exception type...
+    started_at: float = field(default_factory=time.time)
     ended_at: float | None = None
     task: asyncio.Task | None = None
     client: str = "unknown"  # the starting client's IP, for per-client limits
@@ -383,22 +385,33 @@ class GameManager:
                 )
                 winner = await game.run()
             await session.logger.end_game(winner)
-            session.status = "finished"
+            session.status, session.reason = "finished", f"winner {winner}"
         except TimeoutError:
-            log.warning("game %s hit the time limit; ended", session.game_id)
-            session.status = "failed"
+            session.status, session.reason = "failed", "time limit"
         except Forfeit:
-            session.status = "forfeit"
+            session.status, session.reason = "forfeit", "turn timeouts"
         except asyncio.CancelledError:
             if session.status != "forfeit":  # server shutdown; leave() sets forfeit first
-                session.status = "failed"
+                session.status, session.reason = "failed", "server shutdown"
                 raise
             asyncio.current_task().uncancel()
         except Exception as exc:  # by type only: provider text can echo request details
-            log.error("game %s failed (%s)", session.game_id, type(exc).__name__)
-            session.status = "failed"
+            session.status, session.reason = "failed", type(exc).__name__
         finally:
             session.ended_at = time.time()
+            # One line per game, so Render's log says why each one ended (#593). Neon keeps
+            # only running/finished/failed: a forfeit is 'failed' there, so this tells them apart.
+            st = game.state
+            log.log(
+                logging.INFO if session.status == "finished" else logging.WARNING,
+                "game %s ended: %s (%s) at %s %d after %.0fs",
+                session.game_id,
+                session.status,
+                session.reason,
+                st.phase,
+                st.day,
+                session.ended_at - session.started_at,
+            )
             # Calls still running (beside a forfeited turn, say) are cancelled and booked.
             for call in list(session.calls):
                 call.cancel()
@@ -489,7 +502,7 @@ class GameManager:
         spending and stops counting toward the per-IP limit. Calls in flight are cancelled
         and their holds booked, as for any forfeit. An ended game is left as it is."""
         if session.status == "running" and session.task and not session.task.done():
-            session.status = "forfeit"
+            session.status, session.reason = "forfeit", "leave"
             session.task.cancel()
 
     def _prune(self) -> None:

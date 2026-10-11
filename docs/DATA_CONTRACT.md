@@ -693,8 +693,8 @@ Limits, all set by env on the server (defaults in brackets):
 
 - Base URL: `VITE_NEON_DATA_API_URL` (PostgREST). Every request needs a JWT; without an
   `Authorization` header the API answers 400.
-- Auth: `GET <VITE_NEON_AUTH_URL>/token/anonymous` returns `{"token": "<jwt>", "expires_at": "<ISO 8601>"}`
-  for the read-only `anonymous` role. It is valid about 1 h. Send it as `Authorization: Bearer <token>`.
+- Auth: `GET <VITE_NEON_AUTH_URL>/token/anonymous` returns `{"token": "<jwt>", "expires_at": ...}`
+  (`expires_at` is epoch seconds or an ISO 8601 string; parse both) for the read-only `anonymous` role. It is valid about 1 h. Send it as `Authorization: Bearer <token>`.
   Cache it and fetch a new one shortly before `expires_at`, or after a 400 or 401 (retry once). Never
   log it. `VITE_NEON_ANON_KEY` (a pinned JWT) is optional and not recommended: it expires.
 - Env vars (public repo variables): `VITE_NEON_DATA_API_URL`, `VITE_NEON_AUTH_URL`, optional
@@ -916,7 +916,7 @@ can't select and which are not part of the contract.
 ### Requests the viewer makes
 
 ```
-GET {base}/games?select=game_id,models,status&order=started_at.desc.nullslast   game list
+GET {base}/games?select=game_id,models,status,winner&order=started_at.desc.nullslast   game list
 GET {base}/games?select=status,models&game_id=eq.<id>                       one game's status
 GET {base}/games?select=game_id&status=eq.finished&or=(agents.is.null,agents.neq.scripted)   finished-game count
 GET {base}/events_public?select=event&game_id=eq.<id>&order=seq             a whole game (over)

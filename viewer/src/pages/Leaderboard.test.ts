@@ -58,11 +58,11 @@ describe("LeaderboardTable", () => {
     const withN = renderToStaticMarkup(
       createElement(LeaderboardTable, { board: b, sideGames: { nano: { wolf: 2, village: 11 } } }),
     );
-    expect(withN).toContain("<td>0% (n=2)</td>");
-    expect(withN).toContain("<td>50% (n=11)</td>");
+    expect(withN).toMatch(/<td[^>]*white-space:nowrap[^>]*>0% \(n=2\)<\/td>/);
+    expect(withN).toMatch(/<td[^>]*white-space:nowrap[^>]*>50% \(n=11\)<\/td>/);
     const bare = renderToStaticMarkup(createElement(LeaderboardTable, { board: b }));
-    expect(bare).toContain("<td>0%</td>");
-    expect(bare).toContain("<td>50%</td>");
+    expect(bare).toMatch(/>0%<\/td>/);
+    expect(bare).toMatch(/>50%<\/td>/);
   });
 
   it("shows n/a for missing values instead of zero", () => {

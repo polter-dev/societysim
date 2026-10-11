@@ -119,8 +119,8 @@ export function LeaderboardTable({
                     {pct(r.win_rate)}
                     {r.win_ci && ` (${pct(r.win_ci[0])} to ${pct(r.win_ci[1])})`}
                   </td>
-                  <td>{withN(r.wolf_win_rate, sideGames[r.model]?.wolf)}</td>
-                  <td>{withN(r.village_win_rate, sideGames[r.model]?.village)}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>{withN(r.wolf_win_rate, sideGames[r.model]?.wolf)}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>{withN(r.village_win_rate, sideGames[r.model]?.village)}</td>
                   <td>{num(r.openskill?.ordinal)}</td>
                   <td>{num(bySide.wolf?.[r.model]?.ordinal)}</td>
                   <td>{num(bySide.village?.[r.model]?.ordinal)}</td>

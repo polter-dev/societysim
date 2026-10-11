@@ -3,6 +3,7 @@
 // suspicious/unsure/trust buttons. The client builds the JSON (play/action.ts).
 // Everything comes from useHumanSeat; the live table itself uses the existing Neon live mode.
 import { useEffect, useState } from "react";
+import { leaveGame } from "../../play/api";
 import { ABSTAIN, type Draft, LEVELS, type Level, MAX_TEXT, playerLabel } from "../../play/action";
 import { ModelAvatar, useModelLabel } from "../ModelAvatar/ModelAvatar";
 import type { Player } from "../../play/types";
@@ -75,6 +76,12 @@ export function YourTurnPanel({ seat }: { seat: Seat }) {
     const now = draft.accuse ?? [];
     set({ accuse: now.includes(s) ? now.filter((a) => a !== s) : [...now, s] });
   };
+  // Ends the game as a forfeit, so a new one can start; the next poll shows it ended.
+  const leave = async () => {
+    if (!window.confirm("Leave this game? It ends as a forfeit.")) return;
+    await leaveGame(me.game_id).catch(() => undefined);
+    await seat.refresh();
+  };
   const rate = (s: string, level: Level) =>
     set({ suspicion: { ...draft.suspicion, [s]: draft.suspicion?.[s] === level ? undefined : level } });
 
@@ -87,6 +94,11 @@ export function YourTurnPanel({ seat }: { seat: Seat }) {
         <p>
           Day {me.day}, {me.phase}. {me.alive ? "You are alive." : "You are out."}
         </p>
+        {me.status === "running" && (
+          <button type="button" className="your-turn__abstain" onClick={() => void leave()}>
+            Leave game
+          </button>
+        )}
         {me.status !== "running" && (
           <>
             <p>

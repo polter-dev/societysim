@@ -7,6 +7,9 @@ import { buildAction, type Draft, LEVELS } from "../../play/action";
 import type { Me, PendingAction } from "../../play/types";
 import { YourTurnPanel } from "./YourTurnPanel";
 
+const leaveGame = vi.hoisted(() => vi.fn(async (_id: string) => ({ accepted: true as const })));
+vi.mock("../../play/api", () => ({ leaveGame }));
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const players = [
@@ -33,8 +36,8 @@ afterEach(() => {
   box.remove();
 });
 
-function render(pending: PendingAction) {
-  const seat = { me: me(pending), gone: false, pending, error: null, errors: [], busy: false, secondsLeft: 30, submit, refresh: vi.fn() };
+function render(pending: PendingAction, refresh = vi.fn(async () => {})) {
+  const seat = { me: me(pending), gone: false, pending, error: null, errors: [], busy: false, secondsLeft: 30, submit, refresh };
   act(() => root.render(createElement(YourTurnPanel, { seat })));
 }
 const button = (text: string, scope: ParentNode = box) => {
@@ -89,5 +92,18 @@ describe("YourTurnPanel", () => {
         action: { text: "Ava is lying.", accuse: ["p1"], claim_role: null, seer_report: null },
       },
     });
+  });
+
+  it("Leave game asks first, then ends the seat's game on the server", async () => {
+    const pending: PendingAction = { kind: "vote", targets: ["p1"], others: ["p1"], deadline: 0 };
+    const refresh = vi.fn(async () => {});
+    render(pending, refresh);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    click(button("Leave game"));
+    expect(leaveGame).not.toHaveBeenCalled();
+    await act(async () => button("Leave game").click());
+    expect(leaveGame).toHaveBeenCalledWith("g1");
+    expect(refresh).toHaveBeenCalled();
+    confirm.mockRestore();
   });
 });

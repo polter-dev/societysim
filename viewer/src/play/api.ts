@@ -124,6 +124,12 @@ export const postAction = (gameId: string, body: ActionBody) =>
     body,
     token: loadToken(gameId),
   });
+/** Give up the seat: the server ends the game as a forfeit and frees the per-IP slot. */
+export const leaveGame = (gameId: string) =>
+  call<{ accepted: true }>(`/api/games/${encodeURIComponent(gameId)}/leave`, {
+    method: "POST",
+    token: loadToken(gameId),
+  });
 export const getLimits = () => call<Limits>("/api/limits");
 
 export type PlayStatus =

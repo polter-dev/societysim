@@ -117,9 +117,9 @@
   .replay-app .replay-bar nav[aria-label='Timeline markers']>div{flex:none;padding:1px 4px!important;border-color:#ac8b4566!important;white-space:nowrap}
   .replay-app .replay-bar nav[aria-label='Timeline markers'] button{padding:1px 6px;font-size:calc(var(--gs-ui) - 1px);text-transform:capitalize}
   /* Pop-ups: summaries stacked at the bar's end; open, they rise over the table. One at a time. */
-  .replay-app .replay-pops{flex:none;display:flex;flex-direction:column;justify-content:center;gap:4px}
+  .replay-app .replay-pops{flex:none;display:flex;flex-direction:column;justify-content:center;gap:3px}
   .replay-app .replay-pop{position:static;width:auto;margin:0;padding:0;background:none;border:0;font-size:var(--gs-ui)}
-  .replay-app .replay-pop>summary{padding:3px 10px;border:1px solid #ac8b4599;border-radius:999px;background:#123c2e;cursor:pointer;white-space:nowrap;list-style:none}
+  .replay-app .replay-pop>summary{padding:calc((var(--gs-ctl) - 28px) / 4 + 1px) 10px;line-height:1.25;border:1px solid #ac8b4599;border-radius:999px;background:#123c2e;cursor:pointer;white-space:nowrap;list-style:none}
   .replay-app .replay-pop>summary::-webkit-details-marker{display:none}
   .replay-app .replay-pop[open]>summary{background:#82692c;border-color:#e3c576}
   .replay-app .replay-pop__body{position:absolute;right:0;bottom:calc(100% + 6px);width:min(560px,100%);max-height:calc(100dvh - var(--gs-top) - var(--gs-bar) - 2 * var(--gs-gap));box-sizing:border-box;display:flex;flex-direction:column;gap:8px;padding:10px 12px;overflow:auto;scrollbar-width:thin;background:#03271ef7;border:1px solid var(--gs-line);border-radius:12px;box-shadow:0 12px 30px #000a}

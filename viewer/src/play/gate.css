@@ -266,4 +266,34 @@
 .play-gate .play-gate-seal > img { display: none; }
 .play-gate .play-gate__cast { display: none; }
 @keyframes arrival-glow { 50% { opacity: .5; } }
+.play-gate__panel {
+  position: relative;
+  width: min(1000px, 96vw);
+  background: url("../landing/assets/advanced/panel.webp") center / 100% 100% no-repeat;
+  filter: drop-shadow(0 18px 28px #0008);
+}
+.play-gate__panel-content {
+  padding: 18% 13% 14%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.play-gate__panel .play-gate__banner { width: 100%; animation: none; filter: none; }
+.play-gate__panel .play-gate__banner > img,
+.play-gate__panel .play-arrival__art { display: none; }
+.play-gate__panel .play-gate__banner h1 { position: static; font: 400 clamp(26px, 4vw, 44px)/1.2 Georgia, serif; font-variant: small-caps; }
+.play-gate__panel .play-gate__lead { font-size: 15px; }
+.play-gate__panel .play-start--gate,
+.play-gate__panel .play-arrival,
+.play-gate__panel .play-gate-seal { width: 100%; }
+.play-gate__panel .play-arrival h2 { font-size: clamp(20px, 2.5vw, 28px); margin: 8px 0 22px; }
+.play-gate__panel .play-gate-seal { background: none; border: 0; margin: 12px 0 0; min-height: 70px; padding: 0; }
+.play-gate__panel .play-start__status,
+.play-gate__panel .play-start__limits { font-size: 16px; font-weight: 400; }
+@media (max-width: 600px) {
+  .play-gate__panel { background: none; border-style: solid; border-width: 90px 30px 75px; border-image: url("../landing/assets/advanced/panel.webp") 440 360 380 360 fill / 1 / 0 stretch; box-sizing: border-box; }
+  .play-gate__panel-content { padding: 28px 0; gap: 16px; }
+  .play-gate__panel .play-arrival__steps { gap: 8px; font-size: 11px; }
+}
 @media (prefers-reduced-motion: reduce) { .play-arrival__steps [data-state="current"]::before { animation: none; } }

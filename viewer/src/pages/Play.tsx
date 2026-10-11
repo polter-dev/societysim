@@ -95,6 +95,7 @@ export default function PlayPage({
       <div className="landing-lights" aria-hidden="true">{[[20, 8], [78, 14], [12, 62], [88, 70]].map(([x, y], i) => <i key={i} style={{ left: `${x}%`, top: `${y}%`, animationDelay: `-${i * 0.4}s` }} />)}</div>
       <div className="landing-fireflies" aria-hidden="true">{Array.from({ length: 28 }, (_, i) => <i key={i} style={{ left: `${(i * 37 + 11) % 100}%`, top: `${(i * 23 + 9) % 100}%`, animationDelay: `-${i * 0.8}s`, animationDuration: `${7 + (i % 6)}s` }} />)}</div>
       <a className="mode-back" href={backHref} aria-label="Back to game modes"><img src={back} alt="" /></a>
+      <section className="play-gate__panel"><div className="play-gate__panel-content">
       <header className="play-gate__banner">
         {counter && <img src={counter} alt="" />}
         <h1>{watch ? "Watch the village" : "Join the village"}</h1>
@@ -107,6 +108,7 @@ export default function PlayPage({
         })}
       </div>
       <PlayStart autoStart={auto} modeLocked initialMode={initialMode} assets={assets} onStarted={(game) => go(gameHref(game.game_id))} />
+      </div></section>
       <button className="landing-motion" type="button" aria-pressed={paused} onClick={() => setPaused(!paused)}>{paused ? "Resume ambience" : "Pause ambience"}</button>
     </main>
   );

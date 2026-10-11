@@ -1034,6 +1034,41 @@ async def test_model_errors_still_trip_the_breaker_next_to_provider_errors(tmp_p
     assert "a" not in res["invalid_output"]
 
 
+class FlakyBad(HealthyFake):
+    """Model b always answers bad JSON, and every HTTP call needed 4 transient retries first.
+    LiteLLMClient then reports usage.attempts=5 for that one reply."""
+
+    async def complete(self, model, messages, response_model):
+        r = await super().complete(model, messages, response_model)
+        if model.name == "b":
+            r = r.model_copy(update={"usage": r.usage.model_copy(update={"attempts": 5})})
+        return r
+
+
+async def test_provider_retries_dilute_invalid_rate(tmp_path):
+    c = cfg(n_games=8, max_concurrency=1, **LIMIT)
+    res = await run_batch(c, SPECS, FlakyBad(bad="b"), runs_dir=tmp_path)
+    assert res["status"] == "stopped_invalid"
+    assert res["invalid_stop"].startswith("b: 100.0% invalid output")
+
+
+def test_game_invalid_counts_model_replies_from_events(tmp_path):
+    """p0 (b): bad JSON, then the retry dies on a 503; p1 (a): one reply after two 429s."""
+
+    def ev(type_, actor, **meta):
+        return json.dumps({"type": type_, "actor": actor, "meta": meta})
+
+    log = tmp_path / "g.jsonl"
+    lines = [
+        ev("invalid_output", "p0", attempt=1, error="bad json"),
+        ev("invalid_output", "p0", attempt=2, error="ServiceUnavailableError", reason="provider"),
+        ev("fallback_action", "p0", reason="provider", usage={"model": "b", "attempts": 6}),
+        ev("vote", "p1", usage={"model": "a", "attempts": 3}),
+    ]
+    log.write_text("\n".join(lines), encoding="utf-8")
+    assert runner.game_invalid(log, ["b", "a"]) == {"b": [1, 1], "a": [0, 1]}
+
+
 async def test_breaker_waits_for_the_minimum_number_of_calls(tmp_path):
     c = cfg(n_games=3, max_concurrency=1, min_calls_for_invalid_check=10**6, **LIMIT)
     res = await run_batch(c, SPECS, HealthyFake(bad="b"), runs_dir=tmp_path)

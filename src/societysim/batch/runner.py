@@ -126,18 +126,20 @@ def game_invalid(path: Path, models: list[str]) -> dict[str, list[int]]:
             e = json.loads(line)
             meta = e.get("meta") or {}
             # Provider failures (5xx, 429, timeout) are not the model's fault: ProviderDown
-            # covers outages, so they count neither as invalid nor as model calls.
+            # covers outages, so they count neither as invalid nor as model calls. Calls are
+            # model replies counted from events: each rejected reply, plus each accepted reply
+            # (a usage-bearing event other than fallback_action). usage.attempts is not used:
+            # it also counts the client's transient HTTP retries (#433).
             if (
                 e["type"] == EventType.INVALID_OUTPUT
                 and e.get("actor")
                 and not is_provider_failure(meta.get("reason"), meta.get("error"))
             ):
-                out[models[int(e["actor"][1:])]][0] += 1
-            provider_fallback = e["type"] == EventType.FALLBACK_ACTION and (
-                meta.get("reason") == "provider"
-            )
-            if (usage := meta.get("usage")) and not provider_fallback:
-                out[usage["model"]][1] += usage.get("attempts", 1)
+                row = out[models[int(e["actor"][1:])]]
+                row[0] += 1
+                row[1] += 1
+            if (usage := meta.get("usage")) and e["type"] != EventType.FALLBACK_ACTION:
+                out[usage["model"]][1] += 1
     except (OSError, ValueError, KeyError, IndexError):
         return {}
     return dict(out)

@@ -808,7 +808,16 @@ def report(
     try:
         out = write_report(batch)
     except ValueError as e:
-        _echo(str(e))
+        if not str(e).startswith("no game logs"):
+            _echo(str(e))
+            raise typer.Exit(1) from e
+        # No finished games: every non-empty log is unfinished.
+        n = sum(
+            1
+            for p in batch.glob("*.jsonl")
+            if not p.name.endswith(".labels.jsonl") and p.stat().st_size
+        )
+        _echo(f"no finished games in {batch} ({n} unfinished skipped)" if n else str(e))
         raise typer.Exit(1) from e
     _echo(f"wrote {out}")
 
@@ -816,7 +825,7 @@ def report(
 @app.command()
 def highlights(
     batch: Annotated[Path, typer.Argument(help="Batch directory, e.g. runs/<batch>.")],
-    top: Annotated[int, typer.Option("--top", help="How many moments to keep.")] = 10,
+    top: Annotated[int, typer.Option("--top", min=1, help="How many moments to keep.")] = 10,
     out: Annotated[
         Path | None, typer.Option("--out", help="Output file. Default: <batch>/highlights.json.")
     ] = None,

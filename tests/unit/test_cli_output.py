@@ -244,3 +244,26 @@ def test_play_accepts_a_plain_batch_id(tmp_path, monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert len(list((tmp_path / "runs" / "b.1").glob("b.1-*.jsonl"))) == 1
+
+
+def test_highlights_refuses_top_below_1(tmp_path):
+    for top in ("-3", "0"):
+        result = CliRunner().invoke(app, ["highlights", str(tmp_path), "--top", top])
+        assert result.exit_code != 0
+    assert not (tmp_path / "highlights.json").exists()
+
+
+def test_report_with_only_unfinished_logs_says_so(tmp_path):
+    lines = [ln for ln in FIXTURE.read_text().splitlines() if '"game_end"' not in ln]
+    (tmp_path / "g1.jsonl").write_text("\n".join(lines) + "\n")
+    result = CliRunner().invoke(app, ["report", str(tmp_path)])
+    assert result.exit_code == 1
+    assert f"no finished games in {tmp_path} (1 unfinished skipped)" in result.output
+
+
+def test_report_bad_labels_file_keeps_its_own_error(tmp_path):
+    shutil.copy(FIXTURE, tmp_path / "g1.jsonl")
+    (tmp_path / "g1.labels.jsonl").write_text("{}\n")
+    result = CliRunner().invoke(app, ["report", str(tmp_path)])
+    assert result.exit_code == 1
+    assert "no finished games" not in result.output

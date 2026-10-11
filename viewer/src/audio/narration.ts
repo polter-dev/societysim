@@ -101,5 +101,11 @@ export function clipUrl(indexUrl: string, clip: Clip): string {
   return indexUrl.slice(0, indexUrl.lastIndexOf("/") + 1) + clip.file;
 }
 
-/** `<game_id>.jsonl` -> `<game_id>.audio/index.json` beside it. */
-export const siblingAudioIndexUrl = (logUrl: string) => logUrl.replace(/\.jsonl(?=$|[?#])/, ".audio/index.json");
+/** Games with shipped narration (viewer/public/<id>.audio/). Others skip the fetch, so no 404 is logged. */
+export const NARRATED_GAMES: readonly string[] = ["mixed_v2_10p-g0008", "mixed_v2_10p-g0031", "mixed_v2_10p-g0043"];
+
+/** `<game_id>.jsonl` -> `<game_id>.audio/index.json` beside it; null when that game has no narration. */
+export function siblingAudioIndexUrl(logUrl: string): string | null {
+  const id = /([^/]+)\.jsonl(?=$|[?#])/.exec(logUrl)?.[1];
+  return id && NARRATED_GAMES.includes(id) ? logUrl.replace(/\.jsonl(?=$|[?#])/, ".audio/index.json") : null;
+}

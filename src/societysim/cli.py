@@ -13,6 +13,17 @@ from dotenv import load_dotenv
 app = typer.Typer(no_args_is_help=True, help="societysim: LLM Werewolf research harness")
 
 
+def _echo(message: object = "", **kwargs) -> None:
+    """typer.echo that never dies on text the console can't encode (Windows cp1252 pipes).
+
+    Provider errors and model names can hold arrows, CJK text and the like. Unencodable
+    characters turn into "?" instead of raising UnicodeEncodeError.
+    """
+    text = str(message)
+    enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+    typer.echo(text.encode(enc, "replace").decode(enc), **kwargs)
+
+
 class AgentMode(StrEnum):
     SCRIPTED = "scripted"
     LLM = "llm"
@@ -28,7 +39,7 @@ def version() -> None:
     """Print the package version."""
     from societysim import __version__
 
-    typer.echo(__version__)
+    _echo(__version__)
 
 
 def _require_served(specs) -> None:
@@ -37,7 +48,7 @@ def _require_served(specs) -> None:
 
     errors = [e for e in check_served_models(specs).values() if e]
     for e in errors:
-        typer.echo(e)
+        _echo(e)
     if errors:
         raise typer.Exit(1)
 
@@ -67,9 +78,7 @@ def _neon_connect(neon: bool):
     try:
         asyncio.run(setup())
     except Exception as exc:  # the message may hold the DSN, so print only the type
-        typer.echo(
-            f"warning: Neon unavailable ({type(exc).__name__}); not streaming live", err=True
-        )
+        _echo(f"warning: Neon unavailable ({type(exc).__name__}); not streaming live", err=True)
         return None
     return neon_sink.connect_neon
 
@@ -99,7 +108,7 @@ def catalog(
     from societysim.setup import build_catalog
 
     if not registry.is_file():
-        typer.echo(f"config file not found: {registry}")
+        _echo(f"config file not found: {registry}")
         raise typer.Exit(1)
     load_dotenv()
     cat = build_catalog(load_registry(registry).models, check=check)
@@ -107,7 +116,7 @@ def catalog(
     path = out / "models_catalog.json"
     path.write_text(cat.model_dump_json(indent=2) + "\n", encoding="utf-8")
     n_off = sum(not m.available for m in cat.models)
-    typer.echo(f"wrote {path} ({len(cat.models)} models, {n_off} unavailable)")
+    _echo(f"wrote {path} ({len(cat.models)} models, {n_off} unavailable)")
 
 
 def _load_setup(path: Path | None, human_seat: str | None, seed: int | None):
@@ -120,11 +129,11 @@ def _load_setup(path: Path | None, human_seat: str | None, seed: int | None):
     data = {"mode": "basic"}
     if path is not None:
         if not path.is_file():
-            typer.echo(f"setup file not found: {path}")
+            _echo(f"setup file not found: {path}")
             raise typer.Exit(1)
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}  # YAML reads JSON too
         if not isinstance(data, dict):
-            typer.echo(f"setup file must hold an object: {path}")
+            _echo(f"setup file must hold an object: {path}")
             raise typer.Exit(1)
     if human_seat is not None:
         data["human_seat"] = human_seat
@@ -134,7 +143,7 @@ def _load_setup(path: Path | None, human_seat: str | None, seed: int | None):
         return GameSetup.model_validate(data)
     except ValidationError as exc:
         for line in setup_errors(exc):
-            typer.echo(f"invalid setup: {line}")
+            _echo(f"invalid setup: {line}")
         raise typer.Exit(1) from None
 
 
@@ -170,14 +179,14 @@ def play(
     from societysim.orchestrator import run_game
 
     if sum(x is not None for x in (config, preset, setup)) != 1:
-        typer.echo("give exactly one of --config, --preset or --setup")
+        _echo("give exactly one of --config, --preset or --setup")
         raise typer.Exit(1)
     if config is None:
         game_setup = _load_setup(setup, human_seat, seed)
         cfg, human_seat = game_setup.game_config(), game_setup.human_seat
         stem = setup.stem if setup is not None else preset.value
     elif not config.is_file():
-        typer.echo(f"config file not found: {config}")
+        _echo(f"config file not found: {config}")
         raise typer.Exit(1)
     else:
         cfg, stem = load_yaml(config, GameConfig), config.stem
@@ -189,7 +198,7 @@ def play(
         models = cfg.seat_models()
         seats = [f"p{i}" for i in range(cfg.n_players)]
         if human_seat not in seats or not models:
-            typer.echo(f"--human-seat must be one of {', '.join(seats)} with models in the config")
+            _echo(f"--human-seat must be one of {', '.join(seats)} with models in the config")
             raise typer.Exit(1)
         models[seats.index(human_seat)] = human.MODEL
         cfg = cfg.model_copy(update={"models": models})
@@ -201,7 +210,7 @@ def play(
     try:
         specs = reg.resolve([m for m in cfg.seat_models() if m != human.MODEL])
     except KeyError as exc:
-        typer.echo(exc.args[0])
+        _echo(exc.args[0])
         raise typer.Exit(1) from None
 
     if agents is AgentMode.SCRIPTED:
@@ -224,7 +233,7 @@ def play(
                 missing.append(str(exc))
         missing = list(dict.fromkeys(missing))
         if missing:
-            typer.echo(f"missing provider key: {', '.join(missing)}")
+            _echo(f"missing provider key: {', '.join(missing)}")
             raise typer.Exit(1)
         _require_served(specs)
 
@@ -251,13 +260,13 @@ def play(
             )
         )
     except (EOFError, KeyboardInterrupt):
-        typer.echo(f"\ngame abandoned; partial log: {Path('runs') / batch_id / f'{game_id}.jsonl'}")
+        _echo(f"\ngame abandoned; partial log: {Path('runs') / batch_id / f'{game_id}.jsonl'}")
         raise typer.Exit(130) from None
     from societysim.batch.runner import _tag_agents
 
     _tag_agents(Path("runs") / batch_id / f"{game_id}.run_meta.json", agents.value)
-    typer.echo(Path("runs") / batch_id / f"{game_id}.jsonl")
-    typer.echo(f"winner: {game.winner}")
+    _echo(Path("runs") / batch_id / f"{game_id}.jsonl")
+    _echo(f"winner: {game.winner}")
 
 
 def _hm(seconds: float, *, eta: bool = False) -> str:
@@ -309,7 +318,7 @@ def batch(
 
     for path in (config, registry):
         if not path.is_file():
-            typer.echo(f"config file not found: {path}")
+            _echo(f"config file not found: {path}")
             raise typer.Exit(1)
     cfg = load_yaml(config, BatchConfig)
     load_dotenv()
@@ -318,7 +327,7 @@ def batch(
     try:
         specs = {s.name: s for s in reg.resolve(sorted(set(cfg.models)))}
     except KeyError as exc:
-        typer.echo(exc.args[0])
+        _echo(exc.args[0])
         raise typer.Exit(1) from None
 
     if dry_run:
@@ -326,13 +335,13 @@ def batch(
 
         for name, spec in specs.items():
             if prior_seat_cost(spec) == 0:
-                typer.echo(f"warning: {name} is unpriced; the budget guard can't see its cost")
+                _echo(f"warning: {name} is unpriced; the budget guard can't see its cost")
         rows = plan(cfg, specs)
         for row in rows:
             seats = " ".join(f"{seat}={model}/{role}" for seat, model, role in row["seats"])
-            typer.echo(f"{row['game_id']} seed={row['seed']} ${row['est_usd']:.4f} {seats}")
+            _echo(f"{row['game_id']} seed={row['seed']} ${row['est_usd']:.4f} {seats}")
         total = sum(row["est_usd"] for row in rows)
-        typer.echo(
+        _echo(
             f"{len(rows)} games, estimated ${total:.2f} (price-based guess) "
             f"against a ${cfg.budget_usd:.2f} budget"
         )
@@ -354,7 +363,7 @@ def batch(
             if provider in providers and not any(os.environ.get(key) for key in keys)
         ]
         if missing:
-            typer.echo(f"missing provider key: {', '.join(missing)}")
+            _echo(f"missing provider key: {', '.join(missing)}")
             raise typer.Exit(1)
         _require_served(specs.values())
 
@@ -370,38 +379,38 @@ def batch(
                 client,
                 provider_concurrency={p: c.concurrency for p, c in reg.providers.items()},
                 neon_connect=_neon_connect(neon),
-                on_progress=lambda e: typer.echo(_progress_line(e)),
+                on_progress=lambda e: _echo(_progress_line(e)),
             )
         )
     except KeyboardInterrupt:
-        typer.echo(f"interrupted; re-run to resume: runs/{cfg.batch_id}")
+        _echo(f"interrupted; re-run to resume: runs/{cfg.batch_id}")
         raise typer.Exit(130) from None
     except BatchMismatch as exc:
-        typer.echo(str(exc))
+        _echo(str(exc))
         raise typer.Exit(1) from None
-    typer.echo(Path("runs") / cfg.batch_id)
-    typer.echo(
+    _echo(Path("runs") / cfg.batch_id)
+    _echo(
         f"{result['status']} ({agents.value}): {len(result['finished'])} played, "
         f"{len(result['skipped'])} skipped, "
         f"{len(result['not_started'])} not started; "
         f"spent ${result['spent_usd']:.4f} of ${cfg.budget_usd:.2f}"
     )
     if lost := result["write_errors"]:
-        typer.echo(
+        _echo(
             f"write errors: {sum(lost.values())} events missing from {len(lost)} game logs "
             f"({', '.join(lost)}); see run_meta.json"
         )
     if result["failed"]:
-        typer.echo(f"failed games: {', '.join(result['failed'])}")
+        _echo(f"failed games: {', '.join(result['failed'])}")
         for msg in result["provider_down"]:
-            typer.echo(f"provider down: {msg}")
+            _echo(f"provider down: {msg}")
         if result["provider_down"]:
             out = Path("runs") / cfg.batch_id
-            typer.echo(f"no new games started; re-run once it is back to resume: {out}")
+            _echo(f"no new games started; re-run once it is back to resume: {out}")
         raise typer.Exit(1)
     if result["status"] == "stopped_invalid":
-        typer.echo(f"stopped for invalid output: {result['invalid_stop']}")
-        typer.echo(
+        _echo(f"stopped for invalid output: {result['invalid_stop']}")
+        _echo(
             f"to continue, raise max_invalid_rate (now {cfg.max_invalid_rate:.1%}) in the "
             f"batch config and re-run to resume: {Path('runs') / cfg.batch_id}"
         )
@@ -432,13 +441,13 @@ def doctor(
 
     load_dotenv()
     if not config.is_file():
-        typer.echo(f"config file not found: {config}")
+        _echo(f"config file not found: {config}")
         raise typer.Exit(1)
     reg = load_registry(config)
     reg.apply_env()
     specs = reg.match(model)
     if not specs:
-        typer.echo(f"no model matches {model!r}")
+        _echo(f"no model matches {model!r}")
         raise typer.Exit(1)
     client = LiteLLMClient(limits=reg.limits())
 
@@ -448,7 +457,7 @@ def doctor(
     for spec in specs:
         if error := served[served_key(spec)]:
             failed = True
-            typer.echo(f"FAIL {error}")  # the error already names the model
+            _echo(f"FAIL {error}")  # the error already names the model
         else:
             reachable.append(spec)
     specs = reachable
@@ -462,16 +471,13 @@ def doctor(
         status = "ok" if configured_ok else ("WORKS ONLY WITH " if working else "FAIL")
         if not configured_ok:
             failed = True
-        typer.echo(f"{spec.name}: {status}{', '.join(working) if not configured_ok else ''}")
+        _echo(f"{spec.name}: {status}{', '.join(working) if not configured_ok else ''}")
         for r in results:
             mark = "ok  " if r.ok else "fail"
             detail = f"{r.latency_ms} ms, ${r.cost_usd:.5f}" if r.ok else (r.error or "")[:120]
-            # Provider errors can hold characters the console can't encode (Windows cp1252).
-            enc = getattr(sys.stdout, "encoding", None) or "utf-8"
-            detail = detail.encode(enc, "replace").decode(enc)
-            typer.echo(f"    {mark} {r.mode:<12} {detail}")
+            _echo(f"    {mark} {r.mode:<12} {detail}")
         if estimate_cost(spec, 1_000_000, 1_000_000) == 0:
-            typer.echo(
+            _echo(
                 f"    note: no price for {spec.name}; its cost reads $0 and the batch budget "
                 "can't limit it. Set input/output_cost_per_mtok in models.yaml unless it's free."
             )
@@ -504,10 +510,17 @@ def label(
     from societysim.analysis import jev
     from societysim.analysis.labeler import jev_verdicts, label_batch
 
+    if not batch_dir.is_dir():
+        _echo(f"not a directory: {batch_dir}")
+        raise typer.Exit(1)
+    if not any(p for p in batch_dir.glob("*.jsonl") if not p.name.endswith(".labels.jsonl")):
+        _echo(f"no game logs in {batch_dir}")
+        raise typer.Exit(1)
+
     def without_jev(why: str) -> None:
         (batch_dir / "agreement.json").unlink(missing_ok=True)  # a stale table would mislead
         label_batch(batch_dir)
-        typer.echo(f"Jev skipped ({why}); no self-tag vs Jev agreement")
+        _echo(f"Jev skipped ({why}); no self-tag vs Jev agreement")
 
     load_dotenv()
     if no_jev or not os.environ.get("TYPESAFE_API_KEY"):
@@ -582,16 +595,16 @@ def sync_neon(
     load_dotenv()
     if migrate:
         if batch_dir is not None or delete or prune or batch:
-            typer.echo("--migrate takes no BATCH_DIR, --delete, --prune or --batch")
+            _echo("--migrate takes no BATCH_DIR, --delete, --prune or --batch")
             raise typer.Exit(1)
         migrations = list_migrations()
         for name, sql in migrations:
-            typer.echo(f"-- {name}\n{sql.rstrip()}")
+            _echo(f"-- {name}\n{sql.rstrip()}")
         if not apply:
-            typer.echo("dry run: nothing was run. Re-run with --apply to run these.")
+            _echo("dry run: nothing was run. Re-run with --apply to run these.")
             return
         if not os.environ.get("NEON_DATABASE_URL"):
-            typer.echo("NEON_DATABASE_URL is not set")
+            _echo("NEON_DATABASE_URL is not set")
             raise typer.Exit(1)
 
         async def migrate_db():
@@ -602,27 +615,27 @@ def sync_neon(
                 await conn.close()
 
         asyncio.run(migrate_db())
-        typer.echo(f"ran {len(migrations)} migrations")
+        _echo(f"ran {len(migrations)} migrations")
         return
     if prune:
         if batch_dir is not None or delete:
-            typer.echo("--prune takes no BATCH_DIR and no --delete")
+            _echo("--prune takes no BATCH_DIR and no --delete")
             raise typer.Exit(1)
     elif apply or batch:
-        typer.echo("--apply only works with --prune or --migrate, --batch only with --prune")
+        _echo("--apply only works with --prune or --migrate, --batch only with --prune")
         raise typer.Exit(1)
     elif delete:
         if batch_dir is not None:
-            typer.echo("give either BATCH_DIR or --delete, not both")
+            _echo("give either BATCH_DIR or --delete, not both")
             raise typer.Exit(1)
     elif batch_dir is None:
-        typer.echo("give a batch dir to sync, or --delete GAME_ID, or --prune")
+        _echo("give a batch dir to sync, or --delete GAME_ID, or --prune")
         raise typer.Exit(1)
     elif not batch_dir.is_dir():
-        typer.echo(f"not a directory: {batch_dir}")
+        _echo(f"not a directory: {batch_dir}")
         raise typer.Exit(1)
     if not os.environ.get("NEON_DATABASE_URL"):
-        typer.echo("NEON_DATABASE_URL is not set")
+        _echo("NEON_DATABASE_URL is not set")
         raise typer.Exit(1)
 
     async def run():
@@ -645,26 +658,26 @@ def sync_neon(
     try:
         n = asyncio.run(run())
     except PruneBlocked as e:
-        typer.echo(f"refusing to prune: {e}")
+        _echo(f"refusing to prune: {e}")
         raise typer.Exit(1) from e
     if prune:
         for g in n:
-            typer.echo(
+            _echo(
                 f"{g['game_id']}  batch={g['batch_id']}  status={g['status']}  "
                 f"{g['events']} events, {g['labels']} labels  ({g['reason']})"
             )
         events, labels = sum(g["events"] for g in n), sum(g["labels"] for g in n)
         verb = "deleted" if apply else "would delete"
-        typer.echo(f"{verb} {len(n)} games, {events} events, {labels} labels")
+        _echo(f"{verb} {len(n)} games, {events} events, {labels} labels")
         if not apply:
-            typer.echo("dry run: nothing was deleted. Re-run with --apply to delete.")
+            _echo("dry run: nothing was deleted. Re-run with --apply to delete.")
         return
     if delete:
-        typer.echo(f"deleted {len(n['deleted'])} games, {n['events']} events, {n['labels']} labels")
+        _echo(f"deleted {len(n['deleted'])} games, {n['events']} events, {n['labels']} labels")
         if n["missing"]:
-            typer.echo(f"not found: {', '.join(n['missing'])}")
+            _echo(f"not found: {', '.join(n['missing'])}")
         return
-    typer.echo(f"synced {n['games']} games, {n['events']} events, {n['labels']} labels")
+    _echo(f"synced {n['games']} games, {n['events']} events, {n['labels']} labels")
 
 
 @app.command()
@@ -674,12 +687,15 @@ def report(
     """Write report.md, metrics.json, charts, leaderboard.json and index.json to <batch>/report."""
     from societysim.analysis.report import write_report
 
+    if not batch.is_dir():
+        _echo(f"not a directory: {batch}")
+        raise typer.Exit(1)
     try:
         out = write_report(batch)
     except ValueError as e:
-        typer.echo(str(e))
+        _echo(str(e))
         raise typer.Exit(1) from e
-    typer.echo(f"wrote {out}")
+    _echo(f"wrote {out}")
 
 
 @app.command()
@@ -694,22 +710,20 @@ def highlights(
     from societysim.analysis.highlights import write_highlights
 
     if not batch.is_dir():
-        typer.echo(f"not a directory: {batch}")
+        _echo(f"not a directory: {batch}")
         raise typer.Exit(1)
     out = out or batch / "highlights.json"
     moments = write_highlights(batch, top, out)
-    typer.echo(
-        f"{'score':>5}  {'type':<20} {'game':<20} {'day':>3}  {'seq':<9} {'actor':<16} target"
-    )
+    _echo(f"{'score':>5}  {'type':<20} {'game':<20} {'day':>3}  {'seq':<9} {'actor':<16} target")
     for m in moments:
         seq = f"{m['seq'][0]}-{m['seq'][1]}"
         actor = f"{m['actor']} {m['actor_model']}"
         target = f"{m['target']} {m['target_model']}" if m["target"] else "-"
-        typer.echo(
+        _echo(
             f"{m['score']:>5}  {m['type']:<20} {m['game_id']:<20} {m['day']:>3}  {seq:<9} "
             f"{actor:<16} {target}\n       {m['description']}\n       {m['link']}"
         )
-    typer.echo(f"wrote {out} ({len(moments)} moments)")
+    _echo(f"wrote {out} ({len(moments)} moments)")
 
 
 @app.command()
@@ -735,23 +749,21 @@ def publish(
     load_dotenv()
     repo = repo or os.environ.get("SOCIETYSIM_HF_DATASET")
     if not repo:
-        typer.echo("no dataset repo: pass --repo org/name or set SOCIETYSIM_HF_DATASET")
+        _echo("no dataset repo: pass --repo org/name or set SOCIETYSIM_HF_DATASET")
         raise typer.Exit(1)
     token = os.environ.get("HF_TOKEN")
     if not token:
-        typer.echo("HF_TOKEN is not set")
+        _echo("HF_TOKEN is not set")
         raise typer.Exit(1)
     if not batch_dir.is_dir():
-        typer.echo(f"not a directory: {batch_dir}")
+        _echo(f"not a directory: {batch_dir}")
         raise typer.Exit(1)
     try:
         n = publish_batch(batch_dir, repo, token, private=private)
     except ValueError as e:
-        typer.echo(str(e))
+        _echo(str(e))
         raise typer.Exit(1) from None
-    typer.echo(
-        f"published {n['games']} games, {n['events']} events, {n['labels']} labels to {repo}"
-    )
+    _echo(f"published {n['games']} games, {n['events']} events, {n['labels']} labels to {repo}")
 
 
 if __name__ == "__main__":

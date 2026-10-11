@@ -33,6 +33,8 @@ export function headlines(s: Summary): [string, string][] {
 
 /** `matrix` is null when the batch has none; `matrixError` says why a present one failed to parse. */
 export function ResearchView({ summary, matrix, matrixError }: { summary: Summary | null; matrix: Matrix | null; matrixError?: string }) {
+  // The box holds what was typed (it can be empty mid-edit); the matrix keeps the last whole number >= 1.
+  const [text, setText] = useState(String(DEFAULT_MIN_N));
   const [minN, setMinN] = useState(DEFAULT_MIN_N);
   return (
     <>
@@ -55,7 +57,18 @@ export function ResearchView({ summary, matrix, matrixError }: { summary: Summar
         <>
           <label>
             Minimum voters per cell{" "}
-            <input type="number" min={1} value={minN} onChange={(e) => setMinN(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                const n = Number(e.target.value);
+                if (e.target.value !== "" && Number.isInteger(n) && n >= 1) setMinN(n);
+              }}
+              onBlur={() => setText(String(minN))}
+            />
           </label>
           <DeceptionMatrix matrix={matrix} minN={minN} />
         </>

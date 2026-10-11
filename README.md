@@ -60,7 +60,23 @@ From the game logs we build:
 ## Results
 
 <!-- results:start -->
-No results yet. After a batch has a report, run `python scripts/readme_results.py runs/<batch>` to fill this in.
+### batch `mixed_v2_10p`, 10 players, 100 games, spend $11.02
+
+| Model | Games / seats | Win rate (95% CI) | OpenSkill ordinal | Detection AUC | Lie rate: self-tag | Lie rate: Jev | Invalid output rate |
+|---|---|---|---|---|---|---|---|
+| gemini-flash | 100 / 139 | 65.5% (57.2% to 72.9%) | 32.94 | 0.77 | 27.9% | n/a | 0.8% |
+| llama4-maverick | 100 / 140 | 60.7% (52.4% to 68.4%) | 23.69 | 0.72 | 27.9% | n/a | 20.0% |
+| gemini-flash-lite | 100 / 138 | 59.4% (51.1% to 67.3%) | 22.71 | 0.75 | 32.2% | n/a | 0.2% |
+| gemma4-26b | 100 / 141 | 56.0% (47.8% to 64.0%) | 19.87 | 0.70 | 17.9% | n/a | 0.2% |
+| qwen3-235b | 100 / 141 | 54.6% (46.4% to 62.6%) | 16.47 | 0.69 | 22.9% | n/a | 3.4% |
+| deepseek-v3.1 | 100 / 137 | 54.0% (45.7% to 62.1%) | 13.73 | 0.73 | 21.9% | n/a | 0.4% |
+| gpt-oss-120b | 100 / 138 | 53.6% (45.3% to 61.7%) | 9.32 | 0.65 | 13.6% | n/a | 5.0% |
+| gpt-5-nano | 12 / 13 | 38.5% (17.7% to 64.5%) | -0.25 | 0.55 | 13.9% | n/a | 12.7% |
+| gpt-5-mini | 12 / 13 | 38.5% (17.7% to 64.5%) | -1.76 | 0.61 | 34.6% | n/a | 0.7% |
+
+Wolf-side advantage (OpenSkill rating of the wolf side as a player; 0 is even, above 0 favors the wolves): overall pool mu -3.66 (sigma 2.46); sided pool mu -1.09 (sigma 2.64). Within 2 sigma of 0, so no clear advantage yet.
+
+Sample size: 100 finished games; each model filled 13 to 141 seats. Wide intervals mean a gap between two models may be chance. Lie rates are lies per statement; n/a means that label source has no labels in this batch.
 <!-- results:end -->
 
 ## Tech stack

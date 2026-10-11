@@ -4,6 +4,7 @@ import { playEnabled } from '../play/config';
 import type { Limits } from '../play/types';
 import playButton from './assets/play-button.webp';
 import howButton from './assets/how-button.png';
+import {musicCredit} from '../audio/music';
 import aboutButton from './assets/about-button.png';
 import statusFrame from './assets/status-frame-clean.webp';
 
@@ -92,6 +93,7 @@ function LandingDialog({kind,close,href}: {kind:'rules'|'about';close:()=>void;h
       </> : <>
         <p>Different AI models sit at the same table, form alliances, accuse one another, and try to survive. Society Sim uses Werewolf to explore deception, trust, and persuasion between models.</p>
         <p>Every action is recorded. Replay a game, inspect an agent’s decisions, or compare results across models. Narrator view reveals private reasoning; villager view keeps hidden information out of sight.</p>
+        <p className="landing-note music-credit">{musicCredit()}</p>
         <div className="landing-dialog-links"><a href={href({page:'games'})}>Browse games →</a><a href={href({page:'leaderboard'})}>Leaderboard →</a><a href={href({page:'research'})}>Research →</a></div>
       </>}
     </div>

@@ -14,6 +14,7 @@ import LeaderboardPage from "./pages/Leaderboard";
 import NewGamePage from "./pages/NewGame";
 import PlayPage, { PlayDock, PlayNavLink } from "./pages/Play";
 import ResearchPage from "./pages/Research";
+import BackgroundMusic from "./components/BackgroundMusic/BackgroundMusic";
 import TrailerPage, { AUDIO_INDEX_URL } from "./pages/Trailer";
 import "./pages/pages.css";
 import "./a11y.css";
@@ -66,6 +67,7 @@ const schemaUrl = sibling("devui/schema/game_setup.schema.json");
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
+    <BackgroundMusic />
     {baseError && <p role="alert">Could not use batch base: {baseError}</p>}
     {!home && !modes && !advanced && !joining && !trailer && <nav aria-label="Pages" className={ledger ? "site-nav site-nav--float" : "site-nav"}>
       <a href={href({})}>Home</a><a href={href({page:"games"})}>Games</a><a href={href({ page: "leaderboard" })}>Leaderboard</a><a href={href({ page: "research" })}>Research</a>

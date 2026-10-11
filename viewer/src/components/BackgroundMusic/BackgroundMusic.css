@@ -1,0 +1,38 @@
+/* Fixed corner mute button, above page content but below modal dialogs (top layer). */
+.music-toggle {
+  position: fixed;
+  z-index: 20;
+  left: 12px;
+  bottom: 12px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: #f0e3b8;
+  background: #031b18d9;
+  border: 1px solid #b69c5990;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.music-toggle:hover {
+  filter: brightness(1.25);
+}
+.music-toggle[aria-pressed="true"] {
+  color: #b9ab82;
+}
+
+/* The desktop replay has a control bar along the bottom edge: sit just above it. */
+@media (min-width: 821px) {
+  body:has(.replay-bar) .music-toggle {
+    bottom: calc(var(--gs-bar) + 4px);
+  }
+}
+
+/* The credit only shows once the track has loaded (BackgroundMusic sets data-music on <html>). */
+.music-credit {
+  display: none;
+}
+html[data-music] .music-credit {
+  display: block;
+}

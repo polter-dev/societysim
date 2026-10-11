@@ -42,7 +42,8 @@ export function useStepper(events: Event[], live = false) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const type = KEYS[e.key];
-      if (!type || e.altKey || e.ctrlKey || e.metaKey) return;
+      // defaultPrevented: a focused control (e.g. a ThemedSelect's Home/End) already used the key.
+      if (!type || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
       e.preventDefault();

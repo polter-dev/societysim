@@ -10,7 +10,7 @@ export interface StepControlsProps {
   onLive: () => void;
 }
 
-/** Unstyled. Classes: step-controls, step-prev, step-next, step-label, step-live. */
+/** Classes: step-controls, step-prev, step-next, step-label, step-live (styled in controls.css). */
 export function StepControls(p: StepControlsProps) {
   return (
     <div className="step-controls" role="group" aria-label="Step through the game">

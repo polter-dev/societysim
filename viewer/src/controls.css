@@ -1,0 +1,92 @@
+/* Illustrated controls (T4.x #301): step, narration, deception matrix, setup form.
+   Tokens mirror docs/design/tokens.css. Cinzel and Inter are not loaded, so the stacks fall back to Georgia and system-ui. */
+:root{--day-surface:#3f7546;--night-canvas:#03131d;--night-panel:#03271e;--night-surface:#123c2e;--text-primary:#f4ebc2;--text-secondary:#d8e4d1;--accent-gold:#d4b35c;--focus-ring:#ffe499;--event-accusation:#843f4b;--radius-control:8px;--radius-panel:16px;--target-minimum:44px;--font-heading:'Cinzel',Georgia,serif;--font-body:'Inter',system-ui,sans-serif;
+  --marble:radial-gradient(ellipse at 35% 30%,#0b3f2c,#04251e 85%);--rim:inset 0 0 0 2px #04251e,inset 0 0 0 3px #c9a24f55}
+
+/* Shared primitives. Doubled class selectors beat the page-wide `.replay-app button` / `.info-page input` rules. */
+:is(.step-controls,.narration-controls,.deception-matrix,.setup-form) :focus-visible{outline:3px solid var(--focus-ring);outline-offset:3px}
+:is(.narration-controls,.setup-form) input[type=checkbox]{appearance:none;flex:none;width:20px;height:20px;margin:0;padding:0;border:1.5px solid var(--accent-gold);border-radius:5px;background:#04251e center/14px no-repeat;cursor:pointer}
+:is(.narration-controls,.setup-form) input[type=checkbox]:checked{background-color:var(--accent-gold);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5' fill='none' stroke='%2303271e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+:is(.narration-controls,.setup-form) input:disabled{opacity:.45;cursor:not-allowed}
+.gold-button.gold-button{min-height:var(--target-minimum);padding:0 18px;border:1px solid var(--accent-gold);border-radius:999px;background:var(--marble);box-shadow:var(--rim);color:var(--text-primary);font:600 14px var(--font-heading);font-variant:small-caps;letter-spacing:.04em;cursor:pointer}
+.gold-button.gold-button:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.gold-button.gold-button:not(:disabled):hover{filter:brightness(1.18)}
+
+/* Replay control panel: step and narration share a row, the timeline takes the next. */
+.replay-controls.replay-controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;font:13px var(--font-body);color:var(--text-primary)}
+.replay-controls>section{flex:1 0 100%}
+
+/* StepControls */
+.step-controls{display:flex;align-items:center;gap:10px}
+.step-controls .step-prev,.step-controls .step-next{display:grid;place-items:center;width:var(--target-minimum);height:var(--target-minimum);padding:0;border:1.5px solid var(--accent-gold);border-radius:50%;background:var(--marble);box-shadow:var(--rim),0 2px 6px #0008;color:var(--accent-gold);font-size:15px;line-height:1}
+.step-controls .step-prev{padding-right:2px}.step-controls .step-next{padding-left:2px}
+.step-controls .step-label{min-width:7.5em;text-align:center;font:600 16px var(--font-heading);font-variant:small-caps;letter-spacing:.05em;font-variant-numeric:tabular-nums}
+.step-controls .step-live{min-height:36px;padding:0 14px;border:1px solid var(--accent-gold);border-radius:999px;background:linear-gradient(180deg,#e2c574,#b8963e);color:var(--night-panel);font:700 13px var(--font-body)}
+.replay-controls .live-badge{padding:4px 10px;border:1px solid var(--event-accusation);border-radius:999px;background:#2b1612;color:var(--text-primary);font-weight:600}
+
+/* NarrationControls: a switch, then category chips. */
+.narration-controls.narration-controls{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;padding:6px 10px 8px;min-width:0;border:1px solid #a88a4699;border-radius:var(--radius-control);background:#04251e99}
+.narration-controls legend{padding:0 6px;font:600 13px var(--font-heading);font-variant:small-caps;letter-spacing:.06em;color:var(--accent-gold)}
+.narration-controls label{display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:0 10px;border:1px solid #a88a4666;border-radius:999px;cursor:pointer}
+.narration-controls label:has(input:checked:not([role=switch])){border-color:var(--accent-gold);background:#c9a24f26}
+.narration-controls label:has(input:disabled){cursor:not-allowed;color:var(--text-secondary)}
+.narration-controls input[role=switch]{appearance:none;flex:none;width:38px;height:22px;margin:0;border:1.5px solid var(--accent-gold);border-radius:999px;background:radial-gradient(circle at 10px 50%,var(--text-secondary) 6px,transparent 7px) #04251e;cursor:pointer;transition:background-position .15s}
+.narration-controls input[role=switch]:checked{background:radial-gradient(circle at calc(100% - 10px) 50%,var(--night-panel) 6px,transparent 7px) var(--accent-gold)}
+.narration-controls .narration-switch{border-color:transparent;font-weight:600}
+.narration-controls small{flex-basis:100%;color:var(--text-secondary)}
+
+/* DeceptionMatrix */
+.deception-matrix{display:grid;gap:12px;justify-items:start;color:var(--text-primary)}
+.deception-sources{display:inline-flex;padding:3px;border:1px solid var(--accent-gold);border-radius:999px;background:var(--marble);box-shadow:var(--rim)}
+.deception-sources button.deception-sources__option{min-height:38px;padding:0 18px;border:0;border-radius:999px;background:none;color:var(--text-primary);font:600 14px var(--font-heading);font-variant:small-caps;letter-spacing:.04em;cursor:pointer}
+.deception-sources button[aria-pressed=true]{background:linear-gradient(180deg,#e2c574,#b8963e);color:var(--night-panel)}
+.deception-matrix .deception-scroll{max-width:100%;overflow:auto;border:1px solid var(--accent-gold);border-radius:var(--radius-panel);background:var(--night-panel);box-shadow:var(--rim)}
+.deception-matrix table{border-collapse:separate;border-spacing:4px;padding:8px}
+.deception-matrix caption{caption-side:top;text-align:left;padding:0 0 10px;color:var(--text-primary);max-width:72ch}
+.deception-matrix th,.deception-matrix td{border:0;border-radius:6px;padding:8px 10px}
+.deception-matrix thead th{vertical-align:bottom;font:600 12px var(--font-body);min-width:92px}
+.deception-matrix thead th:first-child{text-align:left;font:600 13px var(--font-heading);font-variant:small-caps;color:var(--accent-gold)}
+.deception-matrix tbody th{text-align:left;font:600 13px var(--font-body);white-space:nowrap}
+.deception-model{display:inline-flex;align-items:center;gap:8px}
+.deception-matrix thead .deception-model{flex-direction:column;gap:4px;text-align:center}
+.deception-model .model-avatar-img{border:1px solid var(--accent-gold)}
+/* Heat: night surface blended toward accusation red by the follow rate. Low-n cells are hatched, not shaded. */
+.deception-matrix td{text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap;background:color-mix(in srgb,var(--event-accusation) calc(var(--rate,0) * 100%),var(--night-surface))}
+.deception-matrix td small{display:block;color:var(--text-secondary);font-size:11px}
+.deception-matrix td[data-empty=true]{background:repeating-linear-gradient(45deg,#ffffff08 0 4px,transparent 4px 8px)}
+.deception-matrix td.below-threshold{background:repeating-linear-gradient(45deg,#d4b35c14 0 4px,transparent 4px 8px);color:var(--text-secondary);font-style:italic;outline:1px dashed #a88a4688;outline-offset:-1px}
+
+/* SetupForm */
+.setup-form.setup-form{display:grid;gap:16px;max-width:760px;padding:24px;border:1px solid var(--accent-gold);border-radius:var(--radius-panel);background:linear-gradient(135deg,#0c3528,#051e20);box-shadow:var(--rim);color:var(--text-primary);font:15px var(--font-body)}
+.setup-form fieldset{margin:0;padding:0;border:0;min-width:0}
+.setup-form legend,.setup-form .setup-label{margin-bottom:8px;font:600 15px var(--font-heading);font-variant:small-caps;letter-spacing:.06em;color:var(--accent-gold)}
+.setup-mode{display:inline-flex;gap:4px;width:max-content;padding:3px;border:1px solid var(--accent-gold);border-radius:999px;background:var(--marble);box-shadow:var(--rim)}
+.setup-mode legend{float:left;margin:0 10px 0 12px;align-self:center}
+.setup-mode label{position:relative;display:grid;place-items:center;min-height:38px;padding:0 20px;border-radius:999px;text-transform:capitalize;font:600 15px var(--font-heading);font-variant:small-caps;cursor:pointer}
+.setup-mode label:has(input:checked){background:linear-gradient(180deg,#e2c574,#b8963e);color:var(--night-panel)}
+.setup-mode label:has(input:focus-visible){outline:3px solid var(--focus-ring);outline-offset:3px}
+.setup-mode input{position:absolute;opacity:0;width:1px;height:1px;margin:0}
+.setup-form .setup-check{display:inline-flex;align-items:center;gap:10px;min-height:var(--target-minimum);margin-right:24px;cursor:pointer}
+.setup-form .setup-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 24px}
+.setup-form .setup-slider{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:6px 14px;min-width:260px;flex:1}
+.setup-form .setup-slider .setup-label{margin:0}
+.setup-form .setup-slider output{min-width:2ch;font:700 20px var(--font-heading);text-align:right}
+.setup-form input[type=range]{appearance:none;width:100%;height:var(--target-minimum);margin:0;padding:0;border:0;background:none;cursor:pointer}
+.setup-form input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:999px;background:linear-gradient(90deg,#8b6e27,var(--accent-gold));box-shadow:inset 0 0 0 1px #04251e}
+.setup-form input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:linear-gradient(90deg,#8b6e27,var(--accent-gold))}
+.setup-form input[type=range]::-webkit-slider-thumb{appearance:none;width:22px;height:22px;margin-top:-8px;border:2px solid var(--accent-gold);border-radius:50%;background:radial-gradient(circle,#ffe499 0 3px,#0b3f2c 4px);box-shadow:0 2px 6px #000a}
+.setup-form input[type=range]::-moz-range-thumb{width:18px;height:18px;border:2px solid var(--accent-gold);border-radius:50%;background:radial-gradient(circle,#ffe499 0 3px,#0b3f2c 4px)}
+.setup-form .setup-field{display:inline-flex;align-items:center;gap:12px}
+.setup-form .setup-field .setup-label{margin:0}
+.setup-form input[type=number]{width:9em;min-height:40px;box-sizing:border-box;padding:0 12px;border:1px solid var(--accent-gold);border-radius:var(--radius-control);background:#04251e;color:var(--text-primary);font:15px var(--font-body)}
+.setup-form .setup-seats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0;padding:0;list-style:none}
+.setup-form .setup-seats li{display:flex;align-items:center;gap:10px;min-height:52px;padding:4px 12px 4px 6px;border:1px solid #a88a4688;border-radius:999px;background:#04251ecc}
+.setup-form .setup-seat-id{flex:none;width:2.4em;font:700 14px var(--font-heading);color:var(--accent-gold);text-align:center}
+.setup-form .setup-seats .model-avatar-img{border:1px solid var(--accent-gold);font-size:15px}
+.setup-form .setup-seats .themed-select{flex:1;min-width:0}
+.setup-form .setup-human{flex:1;font-weight:600}
+.setup-form .setup-errors{margin:0;padding:10px 14px 10px 32px;border:1px solid var(--event-accusation);border-radius:var(--radius-control);background:#2b1612;color:#ffcbb1}
+.setup-form .setup-json{margin:0;max-height:240px;overflow:auto;padding:12px;border:1px solid #a88a4666;border-radius:var(--radius-control);background:#021a13;font-size:12px}
+.setup-form .setup-dev{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.setup-form .setup-command{padding:8px 12px;border-radius:var(--radius-control);background:#021a13;color:var(--text-primary)}
+.setup-form details summary{cursor:pointer;font:600 14px var(--font-heading);font-variant:small-caps;color:var(--accent-gold)}

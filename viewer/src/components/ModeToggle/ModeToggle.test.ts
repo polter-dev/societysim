@@ -12,8 +12,9 @@ describe("ModeToggle", () => {
   it("shows the active mode and both choices", () => {
     const html = renderToStaticMarkup(ModeToggle({ mode: "villager", onChange: () => {} }));
     expect(html).toContain("View");
-    expect(html).toContain('<option value="villager" selected="">Villager</option>');
-    expect(html).toContain('<option value="narrator">Narrator</option>');
+    expect(html).toMatch(/role="combobox"[^>]*aria-label="View"/);
+    expect(html).toContain('<span class="themed-select__value">Villager</span>');
+    expect(renderToStaticMarkup(ModeToggle({ mode: "narrator", onChange: () => {} }))).toContain(">Narrator</span>");
   });
 
   it("reads the mode from the URL and preserves the log URL when changing modes", () => {

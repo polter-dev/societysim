@@ -20,6 +20,9 @@ describe("NarrationControls", () => {
     expect(html).toContain("Narrator events");
     expect(html).toContain("Wolf chat (narrator view only)");
   });
+  it("renders the main toggle as a checkbox switch", () => {
+    expect(render("villager")).toMatch(/<input type="checkbox" role="switch" checked=""/);
+  });
   it("hides hidden-info categories in villager mode", () => {
     const html = render("villager");
     expect(html).toContain("Speeches");

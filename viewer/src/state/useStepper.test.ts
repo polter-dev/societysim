@@ -65,6 +65,15 @@ describe("useStepper keys", () => {
       el.remove();
     }
   });
+  it("ignores keys a focused control already handled", () => {
+    mount();
+    const el = document.createElement("button");
+    el.addEventListener("keydown", (e) => e.preventDefault());
+    document.body.append(el);
+    key("Home", {}, el);
+    expect(h.current.state.pos).toBe(tipPos());
+    el.remove();
+  });
   it("ignores keys with modifiers", () => {
     mount();
     key("Home", { metaKey: true });

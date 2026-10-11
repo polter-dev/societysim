@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import {
   DECEPTION_SOURCES,
   DEFAULT_MIN_N,
@@ -8,6 +8,7 @@ import {
   type DeceptionMatrix as Matrix,
   type DeceptionSource,
 } from "../../data/deception";
+import { ModelAvatar, useModelLabel } from "../ModelAvatar/ModelAvatar";
 
 export interface DeceptionMatrixProps {
   matrix: Matrix;
@@ -17,24 +18,33 @@ export interface DeceptionMatrixProps {
 }
 
 const pct = (x: number) => `${(x * 100).toFixed(0)}%`;
+const SOURCE_LABELS: Record<DeceptionSource, string> = { self_tag: "Self-tagged", jev: "Jev" };
 
-/** Unstyled liar (rows) x listener (columns) heatmap table. Style via the data attributes. */
+/** Liar (rows) x listener (columns) heatmap table, shaded by vote-follow rate (styled in controls.css). */
 export function DeceptionMatrix({ matrix, minN = DEFAULT_MIN_N, initialSource = "self_tag" }: DeceptionMatrixProps) {
   const [source, setSource] = useState<DeceptionSource>(initialSource);
   const { liars, listeners } = sortAxes(matrix, source);
+  const label = useModelLabel();
+  const model = (m: string, size: number) => (
+    <span className="deception-model">
+      <ModelAvatar model={m} label={label(m)} size={size} />
+      {label(m)}
+    </span>
+  );
 
   return (
     <section className="deception-matrix" data-exploratory={matrix.exploratory}>
-      <div role="group" aria-label="Label source">
+      <div role="group" aria-label="Label source" className="deception-sources">
         {DECEPTION_SOURCES.map((s) => (
-          <button key={s} type="button" aria-pressed={s === source} onClick={() => setSource(s)}>
-            {s}
+          <button key={s} type="button" className="deception-sources__option" aria-pressed={s === source} onClick={() => setSource(s)}>
+            {SOURCE_LABELS[s]}
           </button>
         ))}
       </div>
       {liars.length === 0 ? (
         <p>No lies heard for this label source.</p>
       ) : (
+        <div className="deception-scroll">
         <table>
           <caption>
             Vote-follow rate: how often a listener voted the way a lie implied (n = voters, greyed under {minN}).
@@ -45,7 +55,7 @@ export function DeceptionMatrix({ matrix, minN = DEFAULT_MIN_N, initialSource = 
               <th scope="col">Liar \ Listener</th>
               {listeners.map((l) => (
                 <th key={l} scope="col">
-                  {l}
+                  {model(l, 32)}
                 </th>
               ))}
             </tr>
@@ -53,7 +63,7 @@ export function DeceptionMatrix({ matrix, minN = DEFAULT_MIN_N, initialSource = 
           <tbody>
             {liars.map((liar) => (
               <tr key={liar}>
-                <th scope="row">{liar}</th>
+                <th scope="row">{model(liar, 28)}</th>
                 {listeners.map((listener) => {
                   const c = cell(matrix, source, liar, listener);
                   if (!c) return <td key={listener} data-empty="true" />;
@@ -67,9 +77,9 @@ export function DeceptionMatrix({ matrix, minN = DEFAULT_MIN_N, initialSource = 
                       data-below-threshold={grey}
                       data-rate={c.vote_follow_rate ?? undefined}
                       title={`95% CI ${ci}; baseline ${base}`}
-                      style={grey ? { opacity: 0.4 } : undefined}
+                      style={grey || c.vote_follow_rate === null ? undefined : ({ "--rate": c.vote_follow_rate } as CSSProperties)}
                     >
-                      {c.vote_follow_rate === null ? "n/a" : pct(c.vote_follow_rate)} (n={c.voters})
+                      {c.vote_follow_rate === null ? "n/a" : pct(c.vote_follow_rate)} <small>(n={c.voters})</small>
                     </td>
                   );
                 })}
@@ -77,6 +87,7 @@ export function DeceptionMatrix({ matrix, minN = DEFAULT_MIN_N, initialSource = 
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </section>
   );

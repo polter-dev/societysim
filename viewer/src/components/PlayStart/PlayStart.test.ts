@@ -75,7 +75,7 @@ it("sends an edited Advanced setup to startGame", async () => {
   const adv = [...box.querySelectorAll("label")].find((l) => /Advanced/.test(l.textContent ?? ""))!;
   await act(async () => (adv.querySelector("input") as HTMLInputElement).click());
   await act(async () => (box.querySelector('input[type="radio"][name="mode"]:not(:checked)') as HTMLInputElement).click());
-  const seats = box.querySelector('input[type="number"]') as HTMLInputElement;
+  const seats = box.querySelector('input[type="range"]') as HTMLInputElement; // the Seats slider
   const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
   await act(async () => {
     set.call(seats, "8");

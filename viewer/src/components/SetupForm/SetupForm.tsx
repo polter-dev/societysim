@@ -1,7 +1,10 @@
-// Unstyled game setup form. Mount it anywhere with the loaded assets; see the PR's port notes.
+// Game setup form (styled in controls.css). Mount it anywhere with the loaded assets; see the PR's port notes.
 import { useEffect } from "react";
+import { avatarFor } from "../../data/models";
 import { type GameSetupJson, type SetupAssets, HUMAN, modelLabel, MAX_PLAYERS, MIN_PLAYERS, PLAY_COMMAND, maxWolves, seatId } from "../../settings/setup";
 import { useSetupForm } from "../../settings/useSetupForm";
+import { ModelAvatar } from "../ModelAvatar/ModelAvatar";
+import { ThemedSelect } from "../ThemedSelect/ThemedSelect";
 
 export function SetupForm({
   assets,
@@ -31,23 +34,46 @@ export function SetupForm({
     URL.revokeObjectURL(url);
   };
   const copy = () => navigator.clipboard?.writeText(PLAY_COMMAND);
+  const modelOptions = f.catalog.models.map((c) => ({
+    value: c.name,
+    label: modelLabel(c) + (c.available ? "" : " (unavailable)"),
+    disabled: !c.available,
+    title: c.unavailable_reason ?? undefined,
+    icon: avatarFor(c.name),
+  }));
+  const seatOptions = [
+    ...(visitor ? [] : [{ value: "", label: "none" }]),
+    ...Array.from({ length: s.nPlayers }, (_, i) => ({ value: String(i), label: seatId(i) })),
+  ];
 
   const dev = (
-    <>
+    <div className="setup-dev">
       <pre className="setup-json">{f.json}</pre>
-      <button type="button" disabled={!f.valid} onClick={download}>
+      <button type="button" className="gold-button" disabled={!f.valid} onClick={download}>
         Download setup.json
       </button>
-      <code className="setup-command">{PLAY_COMMAND}</code>{" "}
-      <button type="button" onClick={copy}>
+      <code className="setup-command">{PLAY_COMMAND}</code>
+      <button type="button" className="gold-button" onClick={copy}>
         Copy command
       </button>
-    </>
+    </div>
+  );
+  const slider = (label: string, value: number, min: number, max: number, set: (n: number) => void) => (
+    <label className="setup-slider">
+      <span className="setup-label">{label}</span>
+      <input type="range" min={min} max={max} step={1} value={value} onChange={(e) => set(Number(e.target.value))} />
+      <output>{value}</output>
+    </label>
+  );
+  const check = (label: string, checked: boolean, set: (v: boolean) => void) => (
+    <label className="setup-check">
+      <input type="checkbox" checked={checked} onChange={(e) => set(e.target.checked)} /> {label}
+    </label>
   );
 
   return (
     <form className="setup-form" onSubmit={(e) => e.preventDefault()}>
-      <fieldset>
+      <fieldset className="setup-mode">
         <legend>Mode</legend>
         {(["basic", "advanced"] as const).map((m) => (
           <label key={m}>
@@ -56,75 +82,48 @@ export function SetupForm({
         ))}
       </fieldset>
 
-      {!advanced && !visitor && (
-        <label>
-          <input type="checkbox" checked={s.basicHuman} onChange={(e) => f.update({ basicHuman: e.target.checked })} />{" "}
-          I play (seat p0, 1 human and 9 models)
-        </label>
-      )}
+      {!advanced && !visitor && check("I play (seat p0, 1 human and 9 models)", s.basicHuman, (v) => f.update({ basicHuman: v }))}
 
       {advanced && (
         <>
-          <label>
-            Seats{" "}
-            <input
-              type="number"
-              min={MIN_PLAYERS}
-              max={MAX_PLAYERS}
-              value={s.nPlayers}
-              onChange={(e) => f.update({ nPlayers: Number(e.target.value) })}
-            />
-          </label>
-          <label>
-            Wolves{" "}
-            <input
-              type="number"
-              min={1}
-              max={maxWolves(s.nPlayers)}
-              value={s.nWolves}
-              onChange={(e) => f.update({ nWolves: Number(e.target.value) })}
-            />
-          </label>
-          <label>
-            <input type="checkbox" checked={s.seer} onChange={(e) => f.update({ seer: e.target.checked })} /> Seer
-          </label>
-          <label>
-            <input type="checkbox" checked={s.doctor} onChange={(e) => f.update({ doctor: e.target.checked })} /> Doctor
-          </label>
-          {(!visitor || play) && (
-          <label>
-            Human seat{" "}
-            <select
-              value={humanIndex < 0 ? "" : String(humanIndex)}
-              onChange={(e) => f.setHuman(e.target.value === "" ? null : Number(e.target.value))}
-            >
-              {!visitor && <option value="">none</option>}
-              {Array.from({ length: s.nPlayers }, (_, i) => (
-                <option key={i} value={i}>
-                  {seatId(i)}
-                </option>
-              ))}
-            </select>
-          </label>
-          )}
-          <ol className="setup-seats">
+          <div className="setup-row">
+            {slider("Seats", s.nPlayers, MIN_PLAYERS, MAX_PLAYERS, (n) => f.update({ nPlayers: n }))}
+            {slider("Wolves", s.nWolves, 1, maxWolves(s.nPlayers), (n) => f.update({ nWolves: n }))}
+          </div>
+          <div className="setup-row">
+            {check("Seer", s.seer, (v) => f.update({ seer: v }))}
+            {check("Doctor", s.doctor, (v) => f.update({ doctor: v }))}
+            {(!visitor || play) && (
+              <label className="setup-field">
+                <span className="setup-label">Human seat</span>
+                <ThemedSelect
+                  className="themed-select--field"
+                  label="Human seat"
+                  value={humanIndex < 0 ? "" : String(humanIndex)}
+                  options={seatOptions}
+                  onChange={(v) => f.setHuman(v === "" ? null : Number(v))}
+                />
+              </label>
+            )}
+          </div>
+          <ol className="setup-seats" aria-label="Seats">
             {s.seats.slice(0, s.nPlayers).map((m, i) => (
               <li key={i}>
-                <label>
-                  {seatId(i)}{" "}
-                  {m === HUMAN ? (
-                    <span>human</span>
-                  ) : (
-                    <select value={m} onChange={(e) => f.setSeatModel(i, e.target.value)}>
-                      {f.catalog.models.map((c) => (
-                        <option key={c.name} value={c.name} disabled={!c.available} title={c.unavailable_reason ?? undefined}>
-                          {modelLabel(c)}
-                          {c.available ? "" : " (unavailable)"}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </label>
+                <span className="setup-seat-id">{seatId(i)}</span>
+                <span aria-hidden="true">
+                  <ModelAvatar model={m} size={36} />
+                </span>
+                {m === HUMAN ? (
+                  <span className="setup-human">Human</span>
+                ) : (
+                  <ThemedSelect
+                    className="themed-select--field"
+                    label={`Model for ${seatId(i)}`}
+                    value={m}
+                    options={modelOptions}
+                    onChange={(v) => f.setSeatModel(i, v)}
+                  />
+                )}
               </li>
             ))}
           </ol>
@@ -132,8 +131,8 @@ export function SetupForm({
       )}
 
       {!visitor && (
-        <label>
-          Seed{" "}
+        <label className="setup-field">
+          <span className="setup-label">Seed</span>
           <input type="number" value={s.seed} onChange={(e) => f.update({ seed: Math.trunc(Number(e.target.value)) })} />
         </label>
       )}

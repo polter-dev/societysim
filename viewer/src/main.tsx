@@ -16,6 +16,7 @@ import ResearchPage from "./pages/Research";
 import "./pages/pages.css";
 import "./a11y.css";
 import "./play/play.css";
+import "./controls.css";
 
 // Routes: ?game=<id> or ?log=<url> or ?page=replay -> replay, ?page=leaderboard,
 // ?page=model&model=<name> -> model profile, else the game index.

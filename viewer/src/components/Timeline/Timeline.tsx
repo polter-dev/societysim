@@ -4,6 +4,9 @@ import type { Event, Label } from "../../types/events";
 import { buildTimelineGroups } from "./markers";
 import { indexForSeq, stepSeq } from "./seq";
 import { useSeqParam } from "./useSeqParam";
+import { ThemedSelect } from "../ThemedSelect/ThemedSelect";
+
+const SPEEDS = ["0.5", "1", "2", "4"].map((v) => ({ value: v, label: `${v}×` }));
 
 export interface TimelineProps {
   events: Event[];
@@ -56,7 +59,8 @@ export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqCha
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     const tag = (event.target as HTMLElement).tagName;
-    if (tag === "SELECT" || (tag === "BUTTON" && event.key === " ")) return;
+    // defaultPrevented: the Speed ThemedSelect already used the key (arrows, Home/End, Space).
+    if (event.defaultPrevented || tag === "SELECT" || (tag === "BUTTON" && event.key === " ")) return;
     let next: number | null | undefined;
     if (isControlled && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     switch (event.key) {
@@ -95,12 +99,7 @@ export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqCha
         </button>
         <label>
           Speed{" "}
-          <select value={speed} onChange={(event) => setSpeed(Number(event.target.value))}>
-            <option value={0.5}>0.5×</option>
-            <option value={1}>1×</option>
-            <option value={2}>2×</option>
-            <option value={4}>4×</option>
-          </select>
+          <ThemedSelect className="themed-select--field" label="Speed" value={String(speed)} options={SPEEDS} onChange={(v) => setSpeed(Number(v))} />
         </label>
         <label style={{ flex: "1 1 240px" }}>
           Event {seq}

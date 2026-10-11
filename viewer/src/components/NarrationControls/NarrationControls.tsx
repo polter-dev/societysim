@@ -17,13 +17,13 @@ interface Props {
   onCategory: (c: Category, v: boolean) => void;
 }
 
-/** Unstyled narration switch plus category checkboxes. Categories a mode may not play are hidden. */
+/** Narration switch plus category chips (styled in controls.css). Categories a mode may not play are hidden. */
 export function NarrationControls({ mode, on, enabled, onToggle, onCategory, available = true }: Props) {
   return (
     <fieldset className="narration-controls">
       <legend>Narration</legend>
-      <label>
-        <input type="checkbox" checked={on} disabled={!available} onChange={(e) => onToggle(e.target.checked)} />
+      <label className="narration-switch">
+        <input type="checkbox" role="switch" checked={on} disabled={!available} onChange={(e) => onToggle(e.target.checked)} />
         Narration on
       </label>
       {!available && <small>Audio is not available for this game yet.</small>}

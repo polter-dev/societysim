@@ -1,10 +1,32 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { ModelAvatar, useModelLabel } from "../components/ModelAvatar/ModelAvatar";
 import { GlobalLeaderboard } from "../components/GlobalLeaderboard/GlobalLeaderboard";
 import { useGlobalBoard } from "../data/globalBoard";
 import { modelName } from "../data/modelNames";
 import { fetchJson } from "../data/staticSource";
+import { art } from "../illustrated/assets";
 import "./Leaderboard.css";
+
+/** Inspector banners, in rank order, so the first rows wear the village, the seer, and the doctor. */
+const ROW_BANNERS = [
+  "inspector/01_discussion.png",
+  "inspector/04_investigation.png",
+  "inspector/03_protection.png",
+  "inspector/07_vote.png",
+  "inspector/02_werewolf.png",
+  "inspector/06_night.png",
+  "inspector/05_group.png",
+  "inspector/08_relationship.png",
+  "inspector/10_notes.png",
+  "inspector/09_attack.png",
+];
+
+const dayCounter = art("new/day_counter-v2.png");
+
+function rowStyle(index: number): CSSProperties | undefined {
+  const url = art(ROW_BANNERS[index % ROW_BANNERS.length]);
+  return url ? ({ "--row-art": `url("${url}")` } as CSSProperties) : undefined;
+}
 
 /** leaderboard.json from `societysim report` (shape documented in analysis/report.py). */
 export interface Rating {
@@ -75,46 +97,47 @@ export function LeaderboardTable({
           : "Ranked by win rate over all finished games; small samples are noisy."}
         {side && ` Wolf-side advantage: mu ${num(side.mu)} (0 means the sides are even).`}
       </p>
-      {/* Scrolls sideways on its own when the window is narrow; focusable so the keyboard can scroll it. */}
-      <div className="leaderboard-scroll" style={{ overflowX: "auto", maxWidth: "100%" }} tabIndex={0} role="region" aria-label="Leaderboard table">
-        <table className="leaderboard-table">
-          <caption>Leaderboard</caption>
-          <thead>
-            <tr>
-              <th scope="col">Rank</th>
-              <th scope="col">Model</th>
-              <th scope="col">Games</th>
-              <th scope="col">Seats</th>
-              <th scope="col">Win rate (95% CI)</th>
-              <th scope="col">Wolf win</th>
-              <th scope="col">Village win</th>
-              <th scope="col">OpenSkill</th>
-              <th scope="col">OpenSkill as wolf</th>
-              <th scope="col">OpenSkill as village</th>
-              <th scope="col">Detection AUC</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.model}>
-                <td className="leaderboard-rank" data-rank={i + 1}><span>{i + 1}</span></td>
-                <th scope="row" title={catalogLabel(r.model)}><ModelAvatar model={r.model} label={label(r.model)} size={28} /> {profileHref ? <a href={profileHref(r.model)}>{label(r.model)}</a> : label(r.model)}</th>
-                <td>{r.games ?? "n/a"}</td>
-                <td>{r.seats ?? "n/a"}</td>
-                <td>
-                  {pct(r.win_rate)}
-                  {r.win_ci && ` (${pct(r.win_ci[0])} to ${pct(r.win_ci[1])})`}
-                </td>
-                <td>{pct(r.wolf_win_rate)}</td>
-                <td>{pct(r.village_win_rate)}</td>
-                <td>{num(r.openskill?.ordinal)}</td>
-                <td>{num(bySide.wolf?.[r.model]?.ordinal)}</td>
-                <td>{num(bySide.village?.[r.model]?.ordinal)}</td>
-                <td>{num(r.detection_auc)}</td>
+      <div className="leaderboard-table-card">
+        <div className="leaderboard-scroll" style={{ overflowX: "auto", maxWidth: "100%" }} tabIndex={0} role="region" aria-label="Leaderboard table">
+          <table className="leaderboard-table">
+            <caption className="visually-hidden">Leaderboard</caption>
+            <thead>
+              <tr>
+                <th scope="col">Rank</th>
+                <th scope="col">Model</th>
+                <th scope="col">Games</th>
+                <th scope="col">Seats</th>
+                <th scope="col">Win rate (95% CI)</th>
+                <th scope="col">Wolf win</th>
+                <th scope="col">Village win</th>
+                <th scope="col">OpenSkill</th>
+                <th scope="col">OpenSkill as wolf</th>
+                <th scope="col">OpenSkill as village</th>
+                <th scope="col">Detection AUC</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.model} style={rowStyle(i)}>
+                  <td className="leaderboard-rank" data-rank={i + 1}><span>{i + 1}</span></td>
+                  <th scope="row" title={catalogLabel(r.model)}><ModelAvatar model={r.model} label={label(r.model)} size={40} /> {profileHref ? <a href={profileHref(r.model)}>{label(r.model)}</a> : label(r.model)}</th>
+                  <td>{r.games ?? "n/a"}</td>
+                  <td>{r.seats ?? "n/a"}</td>
+                  <td>
+                    {pct(r.win_rate)}
+                    {r.win_ci && ` (${pct(r.win_ci[0])} to ${pct(r.win_ci[1])})`}
+                  </td>
+                  <td>{pct(r.wolf_win_rate)}</td>
+                  <td>{pct(r.village_win_rate)}</td>
+                  <td>{num(r.openskill?.ordinal)}</td>
+                  <td>{num(bySide.wolf?.[r.model]?.ordinal)}</td>
+                  <td>{num(bySide.village?.[r.model]?.ordinal)}</td>
+                  <td>{num(r.detection_auc)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -148,17 +171,29 @@ function LiveGlobalBoard() {
  * Loads leaderboard.json, plus metrics.json for OpenSkill by side when it is there.
  * Published files only; the Neon board is not overlaid (#395).
  */
+function LedgerTitle() {
+  return (
+    <header className="ledger-banner">
+      {dayCounter && <img src={dayCounter} alt="" />}
+      <h1>Leaderboard</h1>
+    </header>
+  );
+}
+
 export default function LeaderboardPage({
   leaderboardUrl,
   metricsUrl,
   profileHref,
   globalBoard = false,
+  batchBase,
 }: {
   leaderboardUrl: string;
   metricsUrl: string;
   profileHref?: (model: string) => string;
   /** True when the build has the Neon URLs; mounts the global detectors/liars board. */
   globalBoard?: boolean;
+  /** Published batch root. When set, the page can load a different batch. */
+  batchBase?: string;
 }) {
   const [board, setBoard] = useState<Board | null>(null);
   const [bySide, setBySide] = useState<BySide>({});
@@ -176,15 +211,32 @@ export default function LeaderboardPage({
   }, [leaderboardUrl, metricsUrl]);
 
   return (
-    <>
-      {error ? (
-        <p role="alert">Could not load the leaderboard: {error}</p>
-      ) : !board ? (
-        <p>Loading leaderboard...</p>
-      ) : (
-        <LeaderboardTable board={board} bySide={bySide} profileHref={profileHref} />
-      )}
-      <GlobalSection enabled={globalBoard} />
-    </>
+    <div className="ledger">
+      <div className="ledger-flies" aria-hidden="true">{Array.from({ length: 18 }, (_, i) => <i key={i} style={{ left: `${(i * 37 + 11) % 100}%`, top: `${(i * 23 + 9) % 100}%`, animationDelay: `-${i * 0.8}s` }} />)}</div>
+      <div className="ledger-body">
+        <LedgerTitle />
+        <div className="ledger-stage">
+          <div className="ledger-main">
+            {error ? (
+              <p role="alert" className="leaderboard-alert">Could not load the leaderboard: {error}</p>
+            ) : !board ? (
+              <p className="leaderboard-loading">Loading leaderboard...</p>
+            ) : (
+              <LeaderboardTable board={board} bySide={bySide} profileHref={profileHref} />
+            )}
+          </div>
+          <GlobalSection enabled={globalBoard} />
+        </div>
+        {batchBase && (
+          <details className="ledger-batch">
+            <summary>Load a published batch</summary>
+            <form method="get">
+              <label>Published batch base URL <input name="base" type="url" required defaultValue={batchBase} /></label>
+              <button type="submit">Load batch</button>
+            </form>
+          </details>
+        )}
+      </div>
+    </div>
   );
 }

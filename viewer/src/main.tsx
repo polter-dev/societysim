@@ -52,6 +52,7 @@ const href = (extra: Record<string, string>) =>
 const sibling = (name: string) => new URL(name, new URL(indexUrl, location.href)).href;
 
 const replay = params.has("game") || params.has("log") || page === "replay";
+const ledger = page === "leaderboard";
 const profileModel = page === "model" ? params.get("model") : null;
 const profileHref = (model: string) => href({ page: "model", model });
 const title =
@@ -60,12 +61,20 @@ const title =
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {baseError && <p role="alert">Could not use batch base: {baseError}</p>}
-    {!home && !modes && !advanced && <nav aria-label="Pages" className="site-nav">
+    {!home && !modes && !advanced && <nav aria-label="Pages" className={ledger ? "site-nav site-nav--float" : "site-nav"}>
       <a href={href({})}>Home</a><a href={href({page:"games"})}>Games</a><a href={href({ page: "leaderboard" })}>Leaderboard</a><a href={href({ page: "research" })}>Research</a>
       <a href={href({ page: "new" })}>New game</a><PlayNavLink href={href({ page: "modes" })} />
       <a href={href({ page: "replay" })}>Open a log file</a>
     </nav>}
-    {home ? <LandingPage href={href}/> : modes ? <ModeSelection href={href}/> : advanced ? <AdvancedSetup href={href} catalogUrl={sibling("models_catalog.json")} schemaUrl={sibling("devui/schema/game_setup.schema.json")}/> : replay ? (
+    {home ? <LandingPage href={href}/> : modes ? <ModeSelection href={href}/> : advanced ? <AdvancedSetup href={href} catalogUrl={sibling("models_catalog.json")} schemaUrl={sibling("devui/schema/game_setup.schema.json")}/> : ledger ? (
+      <LeaderboardPage
+        leaderboardUrl={sibling("leaderboard.json")}
+        metricsUrl={sibling("metrics.json")}
+        profileHref={profileHref}
+        globalBoard={Boolean(neon)}
+        batchBase={dataBase.href}
+      />
+    ) : replay ? (
       <div className="play-replay">
         <PlayDock gameId={params.get("game")} />
         <App source={source} />
@@ -76,13 +85,6 @@ createRoot(document.getElementById("root")!).render(
         <form method="get" className="batch-source"><label>Published batch base URL <input name="base" type="url" required defaultValue={dataBase.href} /></label><button type="submit">Load batch</button></form>
         {profileModel ? (
           <ModelProfilePage metricsUrl={sibling("metrics.json")} model={profileModel} />
-        ) : page === "leaderboard" ? (
-          <LeaderboardPage
-            leaderboardUrl={sibling("leaderboard.json")}
-            metricsUrl={sibling("metrics.json")}
-            profileHref={profileHref}
-            globalBoard={Boolean(neon)}
-          />
         ) : page === "research" ? (
           <ResearchPage metricsUrl={sibling("metrics.json")} />
         ) : page === "play" ? (

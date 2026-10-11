@@ -6,6 +6,8 @@
 #   huggingface limit, because both routes hit router.huggingface.co (client.limit_key). The
 #   hosted_vllm entry below only applies to a hosted_vllm model on some other endpoint.
 # models: one ModelSpec each (see societysim.config.ModelSpec).
+#   avatar_presentation: feminine | masculine | neutral, how viewer/public/avatars/<name>.webp
+#   reads. It picks the seat's name pool so names match the portraits (#400). Default neutral.
 #   structured: json_schema | json_object | none. `doctor` reports which one actually works.
 #   Prices are USD per 1M tokens, only where LiteLLM's table is likely missing the model.
 #   HF ids, provider pins and prices come from router.huggingface.co/v1/models (live providers
@@ -35,6 +37,7 @@ env_from:
 models:
   # --- Hugging Face Inference Providers ---
   - name: qwen3-235b
+    avatar_presentation: masculine
     litellm_model: hosted_vllm/Qwen/Qwen3-235B-A22B-Instruct-2507:deepinfra
     structured: json_object
     temperature: 0.7
@@ -43,6 +46,7 @@ models:
     output_cost_per_mtok: 0.55
     color: "#4f8ef7"
   - name: llama4-maverick
+    avatar_presentation: masculine
     litellm_model: huggingface/meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8
     hf_provider: novita
     structured: json_object
@@ -51,6 +55,7 @@ models:
     output_cost_per_mtok: 0.85
     color: "#9b6bf2"
   - name: gemma4-26b
+    avatar_presentation: feminine
     litellm_model: hosted_vllm/google/gemma-4-26B-A4B-it:deepinfra
     structured: json_schema
     max_tokens: 1024
@@ -58,6 +63,7 @@ models:
     output_cost_per_mtok: 0.34
     color: "#34a853"
   - name: gpt-oss-120b
+    avatar_presentation: masculine
     litellm_model: huggingface/openai/gpt-oss-120b
     hf_provider: cerebras
     structured: json_object
@@ -67,6 +73,7 @@ models:
     output_cost_per_mtok: 0.75
     color: "#e8833a"
   - name: deepseek-v3.1
+    avatar_presentation: masculine
     litellm_model: hosted_vllm/deepseek-ai/DeepSeek-V3.1:deepinfra
     structured: json_object
     max_tokens: 1024
@@ -76,12 +83,14 @@ models:
 
   # --- Google AI Studio ---
   - name: gemini-flash-lite
+    avatar_presentation: feminine
     litellm_model: gemini/gemini-3.5-flash-lite
     structured: json_schema
     reasoning_effort: disable # thinking budget 0
     max_tokens: 1024
     color: "#fbbc04"
   - name: gemini-flash
+    avatar_presentation: feminine
     litellm_model: gemini/gemini-3.8-flash
     structured: json_schema
     reasoning_effort: disable
@@ -97,6 +106,7 @@ models:
   # Low reasoning effort (#151): at default effort a turn spent most of its time reasoning at
   # ~33 tok/s single stream. max_tokens caps a runaway turn at about a minute.
   - name: amd-gpt-oss-20b
+    avatar_presentation: masculine
     litellm_model: openai/openai/gpt-oss-20b
     api_base: ${AMD_VLLM_BASE_URL} # https://<name>.trycloudflare.com/v1
     api_key_env: AMD_API_KEY
@@ -112,6 +122,7 @@ models:
   # prefix is doubled like the vLLM entry. llama-server takes response_format json_schema
   # (grammar-constrained). Reasoning effort is also set server-side via --chat-template-kwargs.
   - name: amd-strix-gpt-oss-20b
+    avatar_presentation: masculine
     litellm_model: openai/openai/gpt-oss-20b
     api_base: ${AMD_LLAMACPP_BASE_URL}
     api_key_env: AMD_API_KEY
@@ -124,6 +135,7 @@ models:
 
   # --- OpenAI (selected runs only) ---
   - name: gpt-5-nano
+    avatar_presentation: neutral
     litellm_model: openai/gpt-5-nano
     structured: json_schema
     temperature: 1.0 # reasoning models only accept the default
@@ -131,6 +143,7 @@ models:
     max_tokens: 2048
     color: "#10a37f"
   - name: gpt-5-mini
+    avatar_presentation: neutral
     litellm_model: openai/gpt-5-mini
     structured: json_schema
     temperature: 1.0

@@ -302,8 +302,9 @@ async def test_tenth_seat_narration(tmp_path: Path):
     sink = JsonlSink("b", runs_dir=tmp_path)
     await run_game(GameConfig(n_players=10, seed=1), partial(RandomAgent), [sink], "g10")
     events = read_log(tmp_path / "b" / "g10.jsonl")
-    names = {s: seat.name for s, seat in events[0].meta.seats.items()}
-    assert "p9" in names and "Jude" in names.values()
+    assert "p9" in events[0].meta.seats
+    # The bank pre-renders the ten pre-#400 names; seat them as the old engine would have.
+    names = dict(zip(events[0].meta.seats, NAMES, strict=True))
     lines = bank_lines()
     assert {narrator_line(e, names) for e in events} - {None} <= lines
     assert any("Jude, the Seer, was found dead." in t for _, t in lines)

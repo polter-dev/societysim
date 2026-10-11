@@ -1,11 +1,21 @@
 """In-memory game state. All game randomness belongs to this state."""
 
 import random
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from societysim.config import GameConfig
+from societysim.config import GameConfig, Presentation
 from societysim.roles import Phase, Role, SeerResult
 
+# One pool per avatar presentation (ModelSpec.avatar_presentation), 10 names each so a game of
+# one model still gets distinct names. Initials are distinct within a pool.
+NAME_POOLS: dict[Presentation, tuple[str, ...]] = {
+    "feminine": ("Ava", "Bea", "Cleo", "Dina", "Elif", "Gia", "Iris", "Lena", "Nora", "Rosa"),
+    "masculine": ("Ben", "Dev", "Finn", "Hugo", "Jude", "Karl", "Leo", "Milo", "Omar", "Theo"),
+    "neutral": ("Ash", "Blair", "Casey", "Drew", "Eden", "Jules", "Kai", "Quinn", "Remy", "Sky"),
+}
+# The names before #400, all still in the pools. analysis/narrate.py pre-renders narrator lines for
+# these only, to fit the TTS free tier; other names are voiced when first needed.
 NAMES = ("Ava", "Ben", "Cleo", "Dev", "Elif", "Finn", "Gia", "Hugo", "Iris", "Jude")
 # During night N, state.day is N; day N keeps the same value.
 type NightNumber = int
@@ -16,6 +26,8 @@ class GameState:
     """Truth known to the engine; observations must filter it by role."""
 
     config: GameConfig
+    # Model name -> avatar presentation; a model left out (scripted, human) gets neutral names.
+    presentations: Mapping[str, Presentation] = field(default_factory=dict, repr=False)
     seats: tuple[str, ...] = field(init=False)
     names: dict[str, str] = field(init=False)
     models: dict[str, str] = field(init=False)
@@ -33,12 +45,18 @@ class GameState:
         self.rng = random.Random(self.config.seed)
         self.seats = tuple(f"p{i}" for i in range(self.config.n_players))
 
-        names = list(NAMES[: self.config.n_players])
-        self.rng.shuffle(names)
-        self.names = dict(zip(self.seats, names, strict=True))
-
         models = self.config.seat_models()
         self.models = dict(zip(self.seats, models, strict=True)) if models else {}
+
+        # One shuffled index per seat, distinct, so two seats on one pool get different names.
+        # The same single n-item shuffle as before #400: roles and speaking orders per seed are
+        # unchanged, and the models never change the draws.
+        order = list(range(self.config.n_players))
+        self.rng.shuffle(order)
+        self.names = {
+            seat: NAME_POOLS[self.presentations.get(self.models.get(seat, ""), "neutral")][i]
+            for seat, i in zip(self.seats, order, strict=True)
+        }
 
         counts = self.config.roles
         role_list = (

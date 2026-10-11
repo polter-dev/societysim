@@ -23,7 +23,7 @@ from societysim.agents.base import AgentFactory, Turn
 from societysim.agents.observation import observe
 from societysim.agents.prompts import UNPARSED, Action, phase_prompt, player, retry_prompt
 from societysim.agents.schemas import ABSTAIN
-from societysim.config import GameConfig
+from societysim.config import GameConfig, Presentation
 from societysim.engine.engine import (
     _emit,  # stamps t/day/phase and drops None meta; shared so both sides log alike
     finish_if_over,
@@ -101,8 +101,9 @@ class Game:
         make_agent: AgentFactory,
         logger: EventLogger,
         colors: Mapping[str, str | None] | None = None,
+        presentations: Mapping[str, Presentation] | None = None,
     ):
-        self.state = GameState(config)
+        self.state = GameState(config, presentations or {})
         self.agents = {seat: make_agent(self.state, seat) for seat in self.state.seats}
         self.logger = logger
         self.colors = colors or {}  # model name -> viewer color (None falls back)
@@ -390,11 +391,12 @@ async def run_game(
     sinks: Sequence[EventSink],
     game_id: str,
     colors: Mapping[str, str | None] | None = None,
+    presentations: Mapping[str, Presentation] | None = None,
 ) -> Game:
     """Play one game to the end. Pass fresh sinks per game; returns the finished Game."""
     logger = EventLogger(game_id, sinks)
     try:
-        game = Game(config, make_agent, logger, colors)
+        game = Game(config, make_agent, logger, colors, presentations)
         await logger.start_game(config.model_dump(mode="json"), config.seed, config.seat_models())
         await logger.end_game(await game.run())
     finally:

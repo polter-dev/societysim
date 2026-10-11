@@ -400,7 +400,7 @@ async def test_index_and_report_for_a_ten_player_game(tmp_path):
     index = json.loads((out / "index.json").read_text())
     assert sorted(index[0]["seats"]) == [f"p{i}" for i in range(10)]
     assert TypeAdapter(Seat).validate_python("p9") == "p9"
-    assert "Jude" in {s["name"] for s in index[0]["seats"].values()}
+    assert "Sky" in {s["name"] for s in index[0]["seats"].values()}  # 10th neutral name
 
 
 def test_model_profiles_in_metrics(tmp_path):

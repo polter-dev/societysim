@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from societysim.logging.events import Event, Visibility
+from societysim.logging.events import Event, EventType, Visibility
 from societysim.logging.textio import read_text_lenient
 
 log = logging.getLogger(__name__)
@@ -44,6 +44,7 @@ on conflict (game_id, idx) do update set
 _CLEAR_EVENTS = "delete from events where game_id = $1"
 _CLEAR_LABELS = "delete from labels where game_id = $1"
 _END_GAME = "update games set status = $2, winner = $3, ended_at = now() where game_id = $1"
+_SET_SEATS = "update games set models = $2::jsonb where game_id = $1"
 
 Connect = Callable[[], Awaitable[Any]]
 
@@ -72,6 +73,16 @@ def event_row(event: dict[str, Any]) -> tuple:
         event["schema_version"],
         json.dumps(event),
     )
+
+
+def public_seats(start_meta: dict[str, Any]) -> list[dict[str, str]]:
+    """games.models from game_start's seats: [{"model", "name"}] in seat order. Never the role:
+    anyone can read games, and a running game's game_start event is hidden from them (#400)."""
+    seats = start_meta.get("seats") or {}
+    return [
+        {"model": seats[s].get("model", ""), "name": seats[s].get("name", "")}
+        for s in sorted(seats, key=lambda s: int(s[1:]))
+    ]
 
 
 def label_row(idx: int, label: dict[str, Any]) -> tuple:
@@ -187,6 +198,8 @@ class NeonSink:
             log.exception("NeonSink.start_game failed")
 
     async def write(self, event: Event) -> None:
+        if event.type == EventType.GAME_START:
+            await self._set_seats(event)
         try:
             if self.public_only:
                 if event.visibility != Visibility.PUBLIC:
@@ -202,6 +215,18 @@ class NeonSink:
                 await self._flush()
         except Exception:
             log.exception("NeonSink.write failed")
+
+    async def _set_seats(self, event: Event) -> None:
+        """Seat names and models go public on the games row as soon as the game starts."""
+        try:
+            seats = public_seats(event.model_dump(mode="json")["meta"])
+            if not seats or self._game_id is None:
+                return
+            async with self._lock:
+                conn = await self._conn_ready()
+                await self._t(conn.execute, _SET_SEATS, self._game_id, json.dumps(seats))
+        except Exception:
+            log.exception("NeonSink could not set seat names")
 
     async def _tick(self) -> None:
         while True:
@@ -284,7 +309,7 @@ async def sync_game(path: Path, conn: Any, chunk: int = 500) -> dict[str, int] |
         return None
     gid = events[0]["game_id"]
     start_meta = events[0]["meta"] if events[0]["type"] == "game_start" else {}
-    models = [s["model"] for s in (start_meta.get("seats") or {}).values()]
+    models = public_seats(start_meta)
     end = next((e for e in reversed(events) if e["type"] == "game_end"), None)
     started = start_meta.get("ts")
     agents = None

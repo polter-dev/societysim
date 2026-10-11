@@ -286,10 +286,12 @@ class GameManager:
         s = self.settings
         cfg, seat = setup.game_config(), setup.human_seat
         game_id = f"{s.batch_id}-{secrets.token_hex(8)}"
+        presentations = {}  # test agents: neutral names
         if s.agents:
             make_agent, colors = s.agents(cfg)
         else:
             make_agent, colors = llm_agents_for(cfg, s.play.max_tokens)
+            presentations = {m.name: m.avatar_presentation for m in _registry().models}
         calls: set[asyncio.Task] = set()
         make_agent = _metered(make_agent, self.ledger, game_id, calls, s.play.max_tokens)
         sinks: list[Any] = [JsonlSink(s.batch_id, s.runs_dir)]
@@ -306,7 +308,7 @@ class GameManager:
             sinks = [human.HumanSink(sink, seat) for sink in sinks]
             token = secrets.token_urlsafe(32)  # 256 bits; only its hash is kept
         logger = EventLogger(game_id, sinks)
-        game = Game(cfg, make_agent, logger, colors)
+        game = Game(cfg, make_agent, logger, colors, presentations)
         session = Session(game_id, game, logger, seat, agent, token and hash_token(token))
         session.client, session.calls = client, calls
         session.task = asyncio.create_task(self._run(session))

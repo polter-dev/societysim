@@ -3,7 +3,7 @@ from collections import Counter
 import pytest
 
 from societysim.config import GameConfig, RoleCounts
-from societysim.engine.state import NAMES, GameState
+from societysim.engine.state import NAME_POOLS, NAMES, GameState
 from societysim.roles import Phase, Role
 
 
@@ -71,8 +71,41 @@ def test_distinct_models_keep_configured_seats_without_consuming_randomness():
     assert state.speaking_order() == without_models.speaking_order()
 
 
-def test_ten_seats_add_a_tenth_name_and_keep_the_first_nine():
-    assert NAMES[:9] == ("Ava", "Ben", "Cleo", "Dev", "Elif", "Finn", "Gia", "Hugo", "Iris")
-    state = GameState(GameConfig(n_players=10, seed=3))
-    assert state.seats[-1] == "p9"
-    assert set(state.names.values()) == set(NAMES) and len(NAMES) == 10
+def test_name_pools_are_big_short_and_distinct():
+    everyone = [n for pool in NAME_POOLS.values() for n in pool]
+    assert len(everyone) == len(set(everyone))  # a name tells you its pool
+    for pool in NAME_POOLS.values():
+        assert len(pool) >= GameConfig.model_fields["n_players"].metadata[1].le
+        assert len({n[0] for n in pool}) == len(pool)  # distinct initials within a pool
+        assert max(map(len, pool)) <= 5
+    assert set(NAMES) <= set(everyone)  # old logs' names are still known names
+
+
+PRESENTATIONS = {"f": "feminine", "m": "masculine", "n": "neutral"}
+MIXED = ["f", "m", "n", "f", "m", "x", "human", "f", "m", "f"]  # x and human: not in the map
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_each_seat_name_matches_its_models_presentation(seed):
+    state = GameState(GameConfig(n_players=10, seed=seed, models=MIXED), PRESENTATIONS)
+    for seat, model in state.models.items():
+        assert state.names[seat] in NAME_POOLS[PRESENTATIONS.get(model, "neutral")]
+    assert len(set(state.names.values())) == 10
+
+
+@pytest.mark.parametrize("kind", ["feminine", "masculine", "neutral"])
+def test_one_model_at_every_seat_gets_ten_different_names_from_its_pool(kind):
+    state = GameState(GameConfig(n_players=10, seed=5, models=["solo"]), {"solo": kind})
+    assert sorted(state.names.values()) == sorted(NAME_POOLS[kind])
+
+
+def test_names_are_seeded_and_presentations_change_nothing_else():
+    config = GameConfig(n_players=10, seed=11, models=MIXED)
+    first, second = GameState(config, PRESENTATIONS), GameState(config, PRESENTATIONS)
+    assert first.names == second.names
+    plain = GameState(config)
+    assert set(plain.names.values()) == set(NAME_POOLS["neutral"])  # no map: neutral names
+    assert first.roles == plain.roles
+    assert first.speaking_order() == plain.speaking_order()
+    p0 = {GameState(GameConfig(seed=s, models=MIXED), PRESENTATIONS).names["p0"] for s in range(30)}
+    assert len(p0) > 1  # the seed picks the name, not the seat

@@ -404,6 +404,7 @@ async def run_batch(
         metered = MeteredClient(client, provider_concurrency, on_spend=save_quietly)
     make_agent: AgentFactory = llm_agents(metered, specs) if metered else RandomAgent
     colors = {name: s.color for name, s in specs.items()}
+    presentations = {name: s.avatar_presentation for name, s in specs.items()}
 
     reserved: dict[str, float] = {}  # in-flight game -> estimated USD
     solo: set[str] = set()  # in-flight games with a seat no estimate can bound
@@ -440,7 +441,9 @@ async def run_batch(
             sinks: list[Any] = [jsonl]
             if neon_connect:
                 sinks.append(NeonSink(cfg.batch_id, connect=neon_connect, agents=agents))
-            game = await run_game(a.game_config(cfg.game), make_agent, sinks, a.game_id, colors)
+            game = await run_game(
+                a.game_config(cfg.game), make_agent, sinks, a.game_id, colors, presentations
+            )
             outcome = {"event": "finished", "winner": getattr(game.winner, "value", game.winner)}
             try:
                 _tag_agents(out / f"{a.game_id}.run_meta.json", agents)

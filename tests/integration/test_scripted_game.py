@@ -110,12 +110,13 @@ async def test_same_seed_replays_byte_identical(tmp_path):
 async def test_seven_player_log_matches_the_pre_ten_seat_engine(tmp_path):
     """sha256 of the seed-7 log recorded on main before #250 (schema_version 2). The 10-seat
     change only bumps schema_version, so with that put back the bytes must be identical. An
-    intended engine change updates this hash in its own PR."""
+    intended engine change updates this hash in its own PR. #400 changed only the names (no
+    models means neutral names); mapping them back to the old ones gives the old hash."""
     _, data = await play(7, tmp_path)
     assert data.count(b'"schema_version":3,') == len(data.splitlines())
     old = data.replace(b'"schema_version":3,', b'"schema_version":2,')
     assert hashlib.sha256(old).hexdigest() == (
-        "42085758312f1ba7de0cb798e7dcdf9fec58b6da170d2bf90a5585995852ec46"
+        "f185f2a0827a97093feb957fb1e252747b9bb777b27a99e6c127c57b64525e20"
     )
 
 

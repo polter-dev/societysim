@@ -241,7 +241,14 @@ def play(
         sinks = [human.HumanSink(sink, human_seat) for sink in sinks]
     try:
         game = asyncio.run(
-            run_game(cfg, make_agent, sinks, game_id, colors={s.name: s.color for s in specs})
+            run_game(
+                cfg,
+                make_agent,
+                sinks,
+                game_id,
+                colors={s.name: s.color for s in specs},
+                presentations={s.name: s.avatar_presentation for s in specs},
+            )
         )
     except (EOFError, KeyboardInterrupt):
         typer.echo(f"\ngame abandoned; partial log: {Path('runs') / batch_id / f'{game_id}.jsonl'}")

@@ -3,6 +3,7 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
+import yaml
 from typer.testing import CliRunner
 
 from societysim.batch.assign import assign_games
@@ -151,3 +152,29 @@ def test_dry_run_estimate_under_budget(name, tmp_path, monkeypatch):
         # conservative, so its estimate legitimately exceeds the cap here (mixed_v1: $20 vs $10).
         return
     assert float(match[2]) < cfg.budget_usd
+
+
+# Read off each portrait in viewer/public/avatars/ (#400). gpt-5-mini and gpt-5-nano are
+# androgynous children; amd-strix-gpt-oss-20b reuses the amd-gpt-oss-20b portrait.
+AVATARS = {
+    "qwen3-235b": "masculine",
+    "llama4-maverick": "masculine",
+    "gemma4-26b": "feminine",
+    "gpt-oss-120b": "masculine",
+    "deepseek-v3.1": "masculine",
+    "gemini-flash-lite": "feminine",
+    "gemini-flash": "feminine",
+    "amd-gpt-oss-20b": "masculine",
+    "amd-strix-gpt-oss-20b": "masculine",
+    "gpt-5-nano": "neutral",
+    "gpt-5-mini": "neutral",
+}
+
+
+def test_every_model_says_how_its_avatar_reads():
+    raw = yaml.safe_load((CONFIGS / "models.yaml").read_text())["models"]
+    assert all("avatar_presentation" in m for m in raw)  # explicit, never the default
+    reg = load_registry(CONFIGS / "models.yaml")
+    assert {m.name: m.avatar_presentation for m in reg.models} == AVATARS
+    portraits = Path(__file__).resolve().parents[2] / "viewer/public/avatars"
+    assert {p.stem for p in portraits.glob("*.webp")} - {"human"} <= set(AVATARS)

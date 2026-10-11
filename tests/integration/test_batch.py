@@ -18,6 +18,7 @@ from societysim.batch import runner
 from societysim.batch.runner import PROVIDER_DOWN_AFTER, BatchMismatch, run_batch
 from societysim.cli import app
 from societysim.config import BatchConfig, ModelSpec
+from societysim.engine.state import NAME_POOLS
 from societysim.logging.events import EventType
 from societysim.models.client import CompletionResult, Usage
 
@@ -91,6 +92,20 @@ async def test_mixed_batch_runs_all_games_and_writes_meta(tmp_path):
     assert meta["not_started"] == []
     assert client.peak["openai"] <= 2
     assert client.peak["gemini"] <= 1
+
+
+async def test_batch_names_match_each_models_avatar(tmp_path):
+    specs = {
+        "a": SPECS["a"].model_copy(update={"avatar_presentation": "feminine"}),
+        "b": SPECS["b"].model_copy(update={"avatar_presentation": "masculine"}),
+    }
+    await run_batch(cfg(n_games=2), specs, PricedFake(), runs_dir=tmp_path)
+    for log in finished_logs(tmp_path):
+        seats = json.loads(log.read_text().splitlines()[0])["meta"]["seats"]
+        for seat in seats.values():
+            assert seat["name"] in NAME_POOLS[specs[seat["model"]].avatar_presentation]
+    # Names change what a game says, not what it is: a resumed batch keeps its fingerprint.
+    assert runner.fingerprint(cfg(), specs, "llm") == runner.fingerprint(cfg(), SPECS, "llm")
 
 
 async def test_games_run_in_parallel(tmp_path):

@@ -23,7 +23,7 @@ from societysim.engine.state import GameState
 from societysim.logging.events import Event, EventLogger, EventType, Suspicion, Visibility
 from societysim.roles import Phase, Role
 
-CFG = GameConfig(n_players=7, seed=3, models=["scripted"])  # p0 Ava, p1 Cleo, p2 Dev, ...
+CFG = GameConfig(n_players=7, seed=3, models=["scripted"])  # p0 Ash, p1 Casey, p2 Drew, ...
 SECRET = "SECRET"
 WOLFCHAT = "WOLFCHAT"
 CANARY_P = 0.4242
@@ -74,7 +74,7 @@ async def test_vote_is_a_numbered_choice_with_names():
     assert len(read.asked) == 4
     assert read.asked[0] == "Your vote [1-3]: "
     shown = "\n".join(out)
-    assert "  1. Cleo (p1)\n  2. Dev (p2)\n  3. abstain (vote for nobody)" in shown
+    assert "  1. Casey (p1)\n  2. Drew (p2)\n  3. abstain (vote for nobody)" in shown
     assert sum("invalid" in line for line in out) == 2
     # no JSON in what the human reads
     assert "JSON" not in shown and '"action"' not in shown and '"suspicion"' not in shown

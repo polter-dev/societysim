@@ -86,7 +86,7 @@ async def test_batches_inserts_and_sets_status():
     games = [a for sql, a in conn.executed if "insert into games" in sql]
     assert games[0][:2] == ("g1", "b1")
     assert json.loads(games[0][2]) == ["m1", "m2"]
-    ends = [a for sql, a in conn.executed if sql.startswith("update games")]
+    ends = [a for sql, a in conn.executed if sql.startswith("update games set status")]
     assert ends == [("g1", "finished", "wolves")]
     assert conn.closed
 
@@ -102,7 +102,7 @@ async def test_close_without_end_game_marks_failed():
     await logger.start_game({}, 1, [])
     logger.log(t=0, day=0, phase="setup", type="game_start", visibility="narrator")
     await logger.close()
-    assert [a for sql, a in conn.executed if sql.startswith("update games")] == [
+    assert [a for sql, a in conn.executed if sql.startswith("update games set status")] == [
         ("g1", "failed", None)
     ]
     assert sum(len(r) for _, r in conn.many) == 1
@@ -196,9 +196,41 @@ async def test_sync_batch_reads_every_line(tmp_path):
     assert max(len(r) for _, r in conn.many) <= 40
     game = next(a for sql, a in conn.executed if "insert into games" in sql)
     assert game[1] == "batch1"
-    assert len(json.loads(game[2])) == 7
-    end = next(a for sql, a in conn.executed if sql.startswith("update games"))
+    seats = events[0]["meta"]["seats"]
+    assert json.loads(game[2]) == [
+        {"model": seats[f"p{i}"]["model"], "name": seats[f"p{i}"]["name"]} for i in range(7)
+    ]
+    end = next(a for sql, a in conn.executed if sql.startswith("update games set status"))
     assert end == ("fixture-0001", "finished", "wolves")
+
+
+@pytest.mark.parametrize("public_only", [False, True])
+async def test_game_start_puts_seat_names_on_the_games_row_without_roles(public_only):
+    """A running game's game_start is hidden from the public (it holds every role), so the
+    live viewer reads names from games.models (#400)."""
+    conn = FakeConn()
+
+    async def connect():
+        return conn
+
+    sink = NeonSink("b1", connect=connect, public_only=public_only)
+    logger = EventLogger("g1", [sink])
+    await logger.start_game({}, 1, ["m0", "m1"])
+    seats = {
+        "p1": {"name": "Bea", "model": "m1", "color": "#000", "role": "wolf"},
+        "p0": {"name": "Ash", "model": "m0", "color": "#111", "role": "seer"},
+    }
+    logger.log(
+        t=0, day=0, phase="setup", type="game_start", visibility="narrator", meta={"seats": seats}
+    )
+    await logger.close()
+    sets = [a for sql, a in conn.executed if sql.startswith("update games set models")]
+    assert sets == [
+        ("g1", json.dumps([{"model": "m0", "name": "Ash"}, {"model": "m1", "name": "Bea"}]))
+    ]
+    assert "wolf" not in sets[0][1] and "seer" not in sets[0][1]
+    written = [json.loads(r[7])["type"] for _, rows in conn.many for r in rows]
+    assert written == ([] if public_only else ["game_start"])  # the event itself stays hidden
 
 
 async def test_sync_batch_marks_unfinished_game_failed(tmp_path):
@@ -208,7 +240,7 @@ async def test_sync_batch_marks_unfinished_game_failed(tmp_path):
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     conn = FakeConn()
     await sync_batch(batch, conn)
-    end = next(a for sql, a in conn.executed if sql.startswith("update games"))
+    end = next(a for sql, a in conn.executed if sql.startswith("update games set status"))
     assert end == ("fixture-0001", "failed", None)
 
 
@@ -295,7 +327,7 @@ async def test_batch_streams_every_game_in_order(tmp_path):
     assert set(seqs) == set(res["finished"])
     for gid, got in seqs.items():
         assert got == list(range(len(_events(tmp_path / "nb" / f"{gid}.jsonl"))))
-    ends = [a for sql, a in conn.executed if sql.startswith("update games")]
+    ends = [a for sql, a in conn.executed if sql.startswith("update games set status")]
     assert sorted(a[0] for a in ends) == sorted(res["finished"])
     assert all(a[1] == "finished" for a in ends)
 
@@ -374,7 +406,7 @@ def test_play_neon_streams_live(tmp_path, monkeypatch):
     assert "create table if not exists games" in conn.executed[0][0]  # schema first
     log = _events(tmp_path / "runs/selfplay_smoke/selfplay_smoke-s0.jsonl")
     assert _event_rows(conn) == {"selfplay_smoke-s0": [e["seq"] for e in log]}
-    end = next(a for sql, a in conn.executed if sql.startswith("update games"))
+    end = next(a for sql, a in conn.executed if sql.startswith("update games set status"))
     assert end == ("selfplay_smoke-s0", "finished", log[-1]["meta"]["winner"])
     assert next(a for sql, a in conn.executed if "insert into games" in sql)[4] == "scripted"
 
@@ -532,7 +564,7 @@ def test_abandoned_human_game_ends_failed_in_neon(tmp_path, monkeypatch):
     args = ["play", "--config", str(CONFIG), "--neon", "--human-seat", "p0"]
     res = CliRunner().invoke(app, args, input="")  # stdin EOF: the player walks away
     assert res.exit_code == 130, res.output
-    ends = [a for sql, a in conn.executed if sql.startswith("update games")]
+    ends = [a for sql, a in conn.executed if sql.startswith("update games set status")]
     assert ends == [("selfplay_smoke-s0", "failed", None)]
 
 

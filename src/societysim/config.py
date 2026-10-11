@@ -8,6 +8,8 @@ from typing import Literal, Self
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+type Presentation = Literal["feminine", "masculine", "neutral"]
+
 
 class _Config(BaseModel):
     model_config = ConfigDict(extra="forbid")  # typos in YAML fail loudly
@@ -28,6 +30,10 @@ class ModelSpec(_Config):
     input_cost_per_mtok: float | None = None  # USD per 1M tokens; overrides LiteLLM pricing
     output_cost_per_mtok: float | None = None
     color: str | None = None  # viewer color, e.g. "#4f8ef7"
+    # How the model's portrait (viewer/public/avatars/<name>.webp) reads; picks its seat's name
+    # pool (engine/state.py NAME_POOLS). Left out of model_dump, so batch fingerprints and the
+    # catalog don't change with it.
+    avatar_presentation: Presentation = Field("neutral", exclude=True)
 
     @property
     def provider(self) -> str:

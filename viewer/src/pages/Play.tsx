@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { PlayStart } from "../components/PlayStart/PlayStart";
 import { YourTurnPanel } from "../components/YourTurnPanel/YourTurnPanel";
 import { playEnabled } from "../play/config";
-import { leaveWatch, leaveWatchOnUnload, loadToken, loadWatchToken } from "../play/api";
+import { leaveWatch, loadToken, loadWatchToken } from "../play/api";
 import { usePlayStatus } from "../play/usePlayStatus";
 import { useHumanSeat } from "../play/useHumanSeat";
 import { useLiveEvents } from "../play/liveEvents";
@@ -130,22 +130,15 @@ export function PlayDock({ gameId, modesHref = "?page=modes", go = (url) => wind
   return null;
 }
 
-/** Stop-watching control for a watch game. Also sends a best-effort leave when the page is closed. */
+/** Stop-watching control for a watch game. Only the explicit button leaves: a reload keeps the game (#411). */
 function WatchBar({ gameId, modesHref, go }: { gameId: string; modesHref: string; go: (url: string) => void }) {
-  useEffect(() => {
-    const onHide = () => leaveWatchOnUnload(gameId);
-    window.addEventListener("pagehide", onHide);
-    return () => window.removeEventListener("pagehide", onHide);
-  }, [gameId]);
   const stop = async () => {
     await leaveWatch(gameId).catch(() => undefined);
     go(modesHref);
   };
   return (
-    <section className="your-turn your-turn--watch" aria-label="Watching">
-      <button type="button" className="your-turn__abstain your-turn__leave" onClick={() => void stop()}>
-        Stop watching
-      </button>
-    </section>
+    <button type="button" className="watch-stop" onClick={() => void stop()}>
+      Stop watching
+    </button>
   );
 }

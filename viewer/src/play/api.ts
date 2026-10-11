@@ -164,21 +164,6 @@ export const leaveWatch = async (gameId: string) => {
     clearWatchToken(gameId);
   }
 };
-/** Best-effort leave on pagehide. Watch games only: a seated player must survive a refresh. */
-export function leaveWatchOnUnload(gameId: string) {
-  const token = loadWatchToken(gameId);
-  if (!token || loadToken(gameId)) return;
-  try {
-    // sendBeacon can't set an Authorization header, so use fetch keepalive.
-    void fetch(`${baseUrl()}/api/games/${encodeURIComponent(gameId)}/leave`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      keepalive: true,
-    }).catch(() => undefined);
-  } catch {
-    /* best effort */
-  }
-}
 export const getLimits = () => call<Limits>("/api/limits");
 
 export type PlayStatus =

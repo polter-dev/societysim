@@ -3,7 +3,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TOKEN_PREFIX, WATCH_PREFIX, leaveWatchOnUnload, startGame } from "../play/api";
+import { TOKEN_PREFIX, WATCH_PREFIX, startGame } from "../play/api";
 import { PlayDock } from "./Play";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -54,7 +54,7 @@ describe("stop watching", () => {
     const go = vi.fn();
     await render(createElement(PlayDock, { gameId: "w1", go }));
     expect(box.textContent).toContain("Stop watching");
-    box.querySelector<HTMLButtonElement>("button.your-turn__leave")!.click();
+    box.querySelector<HTMLButtonElement>("button.watch-stop")!.click();
     await settle();
     expect(leaves()).toHaveLength(1);
     expect(leaves()[0][0]).toBe("https://play.example.test/api/games/w1/leave");
@@ -68,27 +68,25 @@ describe("stop watching", () => {
     sessionStorage.setItem(WATCH_PREFIX + "w1", "wt");
     const go = vi.fn();
     await render(createElement(PlayDock, { gameId: "w1", go }));
-    box.querySelector<HTMLButtonElement>("button.your-turn__leave")!.click();
+    box.querySelector<HTMLButtonElement>("button.watch-stop")!.click();
     await settle();
     expect(go).toHaveBeenCalledWith("?page=modes");
   });
 
-  it("pagehide sends a keepalive leave for a watch game", async () => {
+  it("a reload (pagehide) never leaves: neither watch nor seated", async () => {
     sessionStorage.setItem(WATCH_PREFIX + "w1", "wt");
     await render(createElement(PlayDock, { gameId: "w1" }));
     window.dispatchEvent(new Event("pagehide"));
-    expect(leaves()).toHaveLength(1);
-    expect(leaves()[0][1].keepalive).toBe(true);
-    expect(leaves()[0][1].headers.Authorization).toBe("Bearer wt");
+    expect(leaves()).toHaveLength(0);
+    expect(sessionStorage.getItem(WATCH_PREFIX + "w1")).toBe("wt");
   });
 
-  it("pagehide never sends leave for a seated player", async () => {
+  it("a seated player never gets the stop-watching button", async () => {
     sessionStorage.setItem(TOKEN_PREFIX + "g1", "tok");
     sessionStorage.setItem(WATCH_PREFIX + "g1", "wt");
     fetchMock.mockImplementation(async () => new Response(JSON.stringify(me)));
     await render(createElement(PlayDock, { gameId: "g1" }));
     window.dispatchEvent(new Event("pagehide"));
-    leaveWatchOnUnload("g1");
     expect(leaves()).toHaveLength(0);
     expect(box.textContent).not.toContain("Stop watching");
   });

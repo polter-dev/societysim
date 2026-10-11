@@ -675,12 +675,26 @@
   color: #faedd0;
 }
 
-/* Watch games: a slim bar, so the anchored table layout is untouched */
-.your-turn--watch {
-  display: flex;
-  justify-content: flex-end;
+/* Watch games: a small floating control, so the anchored table layout keeps its full size */
+.watch-stop {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  z-index: 20;
+  background: #2a1413;
+  color: #fad1cb;
+  border: 1px solid #7b3630;
+  border-radius: 8px;
   padding: 6px 12px;
+  font: 600 13px system-ui, sans-serif;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
-.your-turn--watch .your-turn__leave {
-  margin-top: 0;
+.watch-stop:hover {
+  background: #3e1b19;
+  border-color: #b04941;
+}
+.watch-stop:focus-visible {
+  outline: 3px solid #ffe499;
+  outline-offset: 3px;
 }

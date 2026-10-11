@@ -31,6 +31,13 @@ SEL_H1 = "main h1"
 SEL_SEATS = "[data-seat]"  # the table: one <li> per player (Table.tsx)
 SEL_STEP = ".step-label"  # "beat N / M"
 SEL_SPOT = "section.spotwolf"
+# Landing screens (viewer/src/landing). Each key is "data-testid, current DOM": the testid is
+# stable across redesigns but only exists once deployed; the class selector works on the live
+# site today.
+SEL_LANDING = "[data-testid='landing'], main.landing-page"
+SEL_MODES = "[data-testid='mode-selection'], main.mode-selection"
+SEL_MODE_CARDS = "[data-testid='mode-cards'] a, nav.mode-cards a"
+SEL_ADVANCED = "[data-testid='advanced-setup'], main.advanced-screen"
 PLAY_STATES = {
     "section.play-coming-soon": "coming soon",
     "section.play-offline": "offline",
@@ -56,7 +63,11 @@ class Route:
 
 
 ROUTES = [
-    Route("index", "", "games", "main table a[href*='game=']"),
+    # the bare URL is the illustrated landing page; the game index moved to ?page=games
+    Route("landing", "", "society sim", SEL_LANDING),
+    Route("modes", "?page=modes", "choose your fate", SEL_MODES),
+    Route("advanced setup", "?page=play&mode=advanced", "advanced setup", SEL_ADVANCED),
+    Route("index", "?page=games", "games", "main table a[href*='game=']"),
     Route("replay", "?game={game}", "", SEL_SEATS, ("game",)),
     # mode=villager is the spectator view (modeFromSearch in viewer/src); explicit so a changed
     # default can't swap in the narrator view
@@ -249,7 +260,20 @@ def extra(
     page, route: Route, values: dict[str, str], add, strict_play: bool, log_text: str = ""
 ) -> None:
     n = route.name
-    if n == "index":
+    if n == "landing":
+        # the Play button leads to the mode picker; read-only, so only the link target is checked
+        add(n, "play link", page.locator("a[href*='page=modes']").count() >= 1, "links to modes")
+    elif n == "modes":
+        modes = page.locator(SEL_MODE_CARDS).evaluate_all(
+            "els => els.map(a => new URL(a.href).searchParams.get('mode'))"
+        )
+        add(n, "mode cards", sorted(modes) == ["advanced", "basic", "watch"], ", ".join(modes))
+    elif n == "advanced setup":
+        selects = page.locator("form select[aria-label]").count()
+        start = page.locator("button[aria-label='Start simulation']").count()
+        # never clicked: starting a game is not read-only
+        add(n, "setup form", selects >= 3 and start == 1, f"{selects} selects, start button")
+    elif n == "index":
         add(
             n,
             "game list",

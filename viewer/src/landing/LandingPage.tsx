@@ -43,7 +43,7 @@ export default function LandingPage({ href }: { href: (extra: Record<string, str
     return () => { active = false; window.clearInterval(timer); };
   }, []);
   const labels = landingStatus(status);
-  return <main className={`landing-page ${paused ? 'landing-paused' : ''}`}>
+  return <main data-testid="landing" className={`landing-page ${paused ? 'landing-paused' : ''}`}>
     <div className="landing-background" aria-hidden="true"/>
     <div className="landing-lights" aria-hidden="true">{[[20,5],[25,31],[36,30],[89,12],[98,40],[87,72]].map(([x,y],i) => <i key={i} style={{left:`${x}%`,top:`${y}%`,animationDelay:`-${i*.3}s`}}/>)}</div>
     <div className="landing-fireflies" aria-hidden="true">{Array.from({length:38},(_,i) => <i key={i} style={{left:`${(i*37+11)%100}%`,top:`${(i*23+9)%100}%`,animationDelay:`-${i*.8}s`,animationDuration:`${7+i%6}s`}}/>)}</div>

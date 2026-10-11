@@ -25,6 +25,13 @@ def test_page_url_keeps_query_and_adds_slash():
     assert smoke.page_url("https://x.test/sub", "index.json") == "https://x.test/sub/index.json"
 
 
+def test_landing_routes_accept_the_testid_or_the_current_dom():
+    keys = {r.name: r.key for r in smoke.ROUTES}
+    for name in ("landing", "modes", "advanced setup"):
+        assert "[data-testid=" in keys[name] and "main." in keys[name], name
+    assert next(r for r in smoke.ROUTES if r.name == "index").query == "?page=games"
+
+
 def test_routes_only_use_known_context_values():
     for r in smoke.ROUTES:
         used = {n for n in ("game", "step", "model") if "{" + n + "}" in r.query}
@@ -114,10 +121,29 @@ def _page(query: dict, leak: bool) -> str:
         body = "<h1>SocietySim m1</h1><h2>m1</h2><dl><dt>Games</dt><dd>1</dd></dl>"
     elif page == "new":
         body = "<h1>SocietySim new game</h1><form class='setup-form'><label>Mode</label></form><pre class='setup-json'>{}</pre>"
+    elif page == "play" and query.get("mode") == ["advanced"]:
+        body = (
+            "<main class='landing-page advanced-screen'><h1>Advanced Setup</h1><form>"
+            + "".join(f"<select aria-label='s{i}'></select>" for i in range(3))
+            + "<button aria-label='Start simulation' disabled></button></form></main>"
+        )
     elif page == "play":
         body = "<h1>SocietySim play</h1><section class='play-coming-soon'>coming soon</section>"
-    else:
+    elif page == "modes":
+        body = (
+            "<main class='landing-page mode-selection'><h1>Choose your fate</h1>"
+            "<nav class='mode-cards'>"
+            + "".join(
+                f"<a href='?page=play&mode={m}'>{m}</a>" for m in ("basic", "watch", "advanced")
+            )
+            + "</nav></main>"
+        )
+    elif page == "games":
         body = "<h1>SocietySim games</h1><main><table><tr><td><a href='?game=g1'>g1</a></td></tr></table></main>"
+    else:
+        body = (
+            "<main class='landing-page'><h1>Society Sim</h1><a href='?page=modes'>Play</a></main>"
+        )
     return f"<!doctype html><html><body><main>{body}</main></body></html>"
 
 
@@ -176,6 +202,9 @@ def test_run_passes_on_a_healthy_site(browser_ready):
     results = _run(leak=False)
     assert [r for r in results if not r.ok] == []
     assert {r.page for r in results} >= {
+        "landing",
+        "modes",
+        "advanced setup",
         "index",
         "replay",
         "step deep link",

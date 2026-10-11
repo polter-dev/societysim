@@ -84,7 +84,7 @@ export default function AdvancedSetup({ catalogUrl, schemaUrl, href, go = (url: 
     finally { starting.current = false; setBusy(false); }
   };
 
-  return <main className={`landing-page advanced-screen ${paused ? 'landing-paused' : ''}`}>
+  return <main data-testid="advanced-setup" className={`landing-page advanced-screen ${paused ? 'landing-paused' : ''}`}>
     <div className="landing-background" aria-hidden="true" />
     <div className="landing-fireflies" aria-hidden="true">{Array.from({length:28},(_,i) => <i key={i} style={{left:`${(i*37+11)%100}%`,top:`${(i*23+9)%100}%`,animationDelay:`-${i*.8}s`}} />)}</div>
     <a className="mode-back" href={href({page:'modes'})} aria-label="Back to game modes"><img src={back} alt="" /></a>

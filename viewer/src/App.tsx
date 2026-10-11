@@ -106,9 +106,13 @@ export default function App({source}: {source?: GameSource} = {}) {
  const onFile = async (file?: File) => {if(!file) return;const version = ++loadVersion.current;try {setLabels([]);const parsed = parseLog(await file.text());if(loadVersion.current === version) {clearStepUrl();show(parsed);}} catch(err) {setLoadError(err instanceof Error ? err.message : String(err));}};
  const events = log?.events ?? [];
  const gameLabels = labels.filter(l => l.game_id === events[0]?.game_id);
- return <main className="replay-app"><div className="replay-tools"><h1>SocietySim viewer</h1><p><label className="file-button">Open log<input type="file" className="visually-hidden" accept=".jsonl" aria-label="Open a game log (.jsonl)" onChange={e => onFile(e.target.files?.[0])}/></label>{log && <ModeToggle mode={mode} onChange={changeMode}/>}</p>
+ const gameParam = new URLSearchParams(window.location.search).has('game') && !loadError;
+ const empty = !log && !gameParam;
+ const picker = <label className="file-button">Open log<input type="file" className="visually-hidden" accept=".jsonl" aria-label="Open a game log (.jsonl)" onChange={e => onFile(e.target.files?.[0])}/></label>;
+ const gamesHref = '?' + new URLSearchParams([...new URLSearchParams(window.location.search)].filter(([k]) => k === 'base' || k === 'index').concat([['page','games']]));
+ return <main className="replay-app"><div className={empty ? "replay-tools open-log" : "replay-tools"}><h1>{empty ? "Open a game log" : "SocietySim viewer"}</h1><p>{!empty && picker}{log && <ModeToggle mode={mode} onChange={changeMode}/>}</p>
  {loadError && <p role="alert">Could not load log: {loadError}</p>}
  {log && log.errors.length > 0 && <details open><summary role="alert">{log.errors.length} bad line(s) skipped</summary><ul>{log.errors.map(b => <li key={b.line}>line {b.line}: {b.error}</li>)}</ul></details>}
- {!log && (new URLSearchParams(window.location.search).has('game') && !loadError ? <p role="status">Loading the game…</p> : <p>Open a recorded game log or choose a game from Games.</p>)}{log && !events.length && <p role="status">This file has no valid game events.</p>}</div>
+ {!log && (gameParam ? <p role="status">Loading the game…</p> : <><p>Open a recorded game log or choose a game from Games.</p><p>{picker}<a className="open-log__games" href={gamesHref}>Browse games</a></p></>)}{log && !events.length && <p role="status">This file has no valid game events.</p>}</div>
  {log?.finishing && <p className="live-finishing" role="status">Finishing up…</p>}{events.length > 0 && <Replay key={`${loadId}${log?.partial ? 'p' : ''}`} live={!!log?.live} atEnd={!!log?.watchedLive} events={events} labels={gameLabels} mode={mode} selected={selected} onSelect={setSelected} audioUrl={audioUrl}/>}</main>;
 }

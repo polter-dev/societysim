@@ -151,7 +151,12 @@ def _claim_labels(
                 detail = f"{said} but is not the Seer."
             elif actual != t.result:
                 detail = f"{said}; their check said {actual or 'nothing'}."
-        elif t.kind is EventType.ACCUSATION and t.actor in game.wolves and t.target in game.wolves:
+        elif (
+            t.kind is EventType.ACCUSATION
+            and t.actor in game.wolves
+            and t.target in game.wolves
+            and t.target not in game.dead_before(t.seq)
+        ):
             kind = LabelType.BUSSING
             detail = f"{game.who(t.actor)}, a wolf, accused fellow wolf {game.who(t.target)}."
         if detail:

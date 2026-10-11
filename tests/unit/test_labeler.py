@@ -319,3 +319,14 @@ def test_cli_label_llm_game_still_uses_jev_and_prints_count(tmp_path, monkeypatc
     assert calls == ["fixture-0001"]
     assert f"Jev: sending up to {n} statements" in result.output
     assert "scripted" not in result.output
+
+
+def test_jev_accusing_a_dead_fellow_wolf_is_not_bussing():
+    events = _events()
+    jev = {93: JevVerdict(accuse=["p5"])}  # wolf p2 speaks; p5 is the other wolf
+    assert ("bussing", "p2", 93, "jev") in _keys(label_game(events, jev))
+    for e in events:
+        if e.seq == 67:  # p5 dies before the statement
+            e.target = "p5"
+    dead = label_game(events, jev)
+    assert not [k for k in _keys(dead) if k[0] == "bussing" and k[3] == "jev"]

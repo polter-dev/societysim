@@ -9,7 +9,8 @@ Limits (#281): every model call is metered in the Ledger, and once today's budge
 the remaining AI turns go to scripted agents. A game runs at most PLAY_MAX_GAME_MINUTES.
 When a game ends, however it ends, model calls still running are cancelled and booked.
 Neon gets only public events, without reasoning or suspicion, while the game runs; the full
-log is backfilled once it has reached game_end.
+log is backfilled once it has reached game_end, with its rule-based labels (self-tags and
+engine, as `label --no-jev`; no paid Jev call), which the global leaderboard reads (#344).
 """
 
 import asyncio
@@ -298,6 +299,7 @@ class GameManager:
             await session.logger.close()
             self._tag(session)
             if session.status == "finished":
+                self._label(session)
                 await self._backfill(session)
             cost = sum(e.meta.usage.cost_usd for e in game.events if e.meta.usage)
             await self.ledger.record(session.game_id, cost)
@@ -317,6 +319,18 @@ class GameManager:
                 await conn.close()
         except Exception as exc:
             log.warning("game %s: Neon backfill failed (%s)", session.game_id, type(exc).__name__)
+
+    def _label(self, session: Session) -> None:
+        """<game_id>.labels.jsonl next to the log, as `label --no-jev` writes it."""
+        from societysim.analysis.labeler import label_game, read_log
+
+        path = self.settings.runs_dir / self.settings.batch_id / f"{session.game_id}.jsonl"
+        try:
+            labels = label_game(read_log(path))
+            out = path.with_name(f"{session.game_id}.labels.jsonl")
+            out.write_text("".join(lb.model_dump_json() + "\n" for lb in labels), encoding="utf-8")
+        except Exception as exc:
+            log.warning("game %s: labelling failed (%s)", session.game_id, type(exc).__name__)
 
     def _tag(self, session: Session) -> None:
         """run_meta like `play --agents llm` writes it, plus `forfeit: true` for one."""

@@ -203,9 +203,9 @@ def test_dockerfile_cmd_target_imports_and_builds(monkeypatch):
     import json
 
     cmd = re.search(r"^CMD (\[.*\])$", (ROOT / "server/Dockerfile").read_text(), re.M)
-    args = json.loads(cmd.group(1))
-    assert args[:2] == ["uvicorn", "--factory"]
-    module, _, attr = args[2].partition(":")
+    args = json.loads(cmd.group(1))[2].split()  # ["sh", "-c", "exec uvicorn --factory ..."]
+    assert args[:3] == ["exec", "uvicorn", "--factory"]
+    module, _, attr = args[3].partition(":")
     monkeypatch.setenv("PLAY_DEV_MODE", "1")
     monkeypatch.delenv("NEON_DATABASE_URL", raising=False)
     factory = getattr(importlib.import_module(module), attr)
@@ -222,3 +222,29 @@ def test_stage_hard_fails_on_tracked_secret_looking_file(tmp_path):
     r = _stage(repo, tmp_path / "s")
     assert r.returncode == 1
     assert "leak.pem" in r.stderr
+
+
+def test_render_blueprint_has_names_only_and_one_instance():
+    import yaml
+
+    svc = yaml.safe_load((ROOT / "render.yaml").read_text())["services"][0]
+    assert svc["dockerfilePath"] == "./server/Dockerfile"
+    assert svc["numInstances"] == 1 and "scaling" not in svc
+    assert svc["healthCheckPath"] == "/api/health"
+    env = {e["key"]: e for e in svc["envVars"]}
+    for name in (
+        "PLAY_OPENAI_API_KEY",
+        "PLAY_HF_TOKEN",
+        "PLAY_GEMINI_API_KEY",
+        "TURNSTILE_SECRET_KEY",
+        "NEON_DATABASE_URL",
+        "PLAY_ALERT_WEBHOOK_URL",
+    ):
+        assert env[name] == {"key": name, "sync": False}  # no value in git
+    assert "PLAY_RATE_PER_MIN" in env and "PLAY_DAILY_BUDGET_USD" in env
+
+
+def test_dockerfile_binds_port_env_with_space_default():
+    text = (ROOT / "server/Dockerfile").read_text()
+    assert "--port ${PORT:-7860}" in text
+    assert "os.environ.get('PORT', '7860')" in text

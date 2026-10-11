@@ -138,6 +138,21 @@ Space variables the script sets: `PLAY_TRUSTED_PROXIES` (HF's private proxy rang
 
 After a deploy, check `curl https://polter-dev-societysim-play.hf.space/api/limits`: `remaining_today` above 0 means the Neon spend ledger loaded (it needs `neon/schema.sql`, which the image ships), and `client_ip_hint` should be your own public IP, masked (`104.53.x.x`), not HF's proxy (`10.x.x`). The uvicorn access log always shows the proxy; the hint is what the limits use. HF's proxy allows any CORS origin, so the server also refuses a POST whose `Origin` isn't the site's (403 `forbidden`) and a Turnstile token solved on another hostname.
 
+### Deploy on Render (fallback host)
+
+`render.yaml` describes the same server as one Render web service, built from `server/Dockerfile`, a single instance (game state is in memory, so never scale out). The Dockerfile listens on `$PORT` when set (Render sets it) and on 7860 otherwise, so the Space is unchanged.
+
+1. In the Render dashboard: New, Blueprint, pick this repo, apply.
+2. Paste the secrets Render asks for: `PLAY_OPENAI_API_KEY`, `PLAY_HF_TOKEN`, `PLAY_GEMINI_API_KEY`, `TURNSTILE_SECRET_KEY`, `NEON_DATABASE_URL`, `PLAY_ALERT_WEBHOOK_URL`. The limits (`PLAY_*`) have defaults in the file.
+3. Once it's live, set the repo variable `VITE_PLAY_API_URL` to the Render URL (`https://societysim-play.onrender.com`, or whatever Render assigned) and redeploy the site. The uptime workflow reads the same variable.
+4. Checks, with `$URL` as the Render URL:
+   - `curl $URL/api/limits`: `remaining_today` above 0, and `client_ip_hint` is your own public IP, masked, not `10.x.x.x` or a Cloudflare address (`172.64-71.x.x`, `104.16-31.x.x`).
+   - Spoof test: `curl -H 'X-Forwarded-For: 6.6.6.6' $URL/api/limits` still shows your IP, never `6.6.x.x`.
+   - Origin: `curl -X POST -H 'Origin: https://evil.example' $URL/api/games` returns 403 `forbidden`. CORS and the Origin allowlist (society-sim.us, www, pages.dev) are the same as on the Space.
+
+**Client IP on Render.** Render doesn't document the exact header chain or its proxy ranges. Its [DDoS article](https://render.com/articles/how-render-handles-ddos-attacks) says all traffic to web services passes through Cloudflare and Render's load balancers, that the app sees the proxy's IP by default, and to read the client from `X-Forwarded-For`. A [community test service on Render](https://github.com/johnbeynon/header-test) shows the shape: a client-sent `X-Forwarded-For` is kept and the real address is appended after it, then the Cloudflare edge (`172.71.x.x`) and a Render-internal `10.x` hop, so the real client is not the rightmost entry. The server reads the chain right to left past trusted hops, so `PLAY_TRUSTED_PROXIES` on Render is `10.0.0.0/8` plus [Cloudflare's published ranges](https://www.cloudflare.com/ips/), which `render.yaml` sets. Anything a visitor sends sits to the left of the real address and is never used. Unlike a Space, the server doesn't refuse to start on Render without this variable, so check `client_ip_hint` after the first deploy. If Cloudflare adds ranges, update the list.
+
+
 Kill switch: set the Space variable `PLAY_ENABLED=0` (Space settings, Variables, then restart). New games get a `play_disabled` error; the rest of the site keeps working.
 
 Alerts: set `PLAY_ALERT_WEBHOOK_URL` (a Discord webhook URL) as a Space secret, and as a repo secret so the deploy script copies it. The server posts when daily spend passes 50% and 90% of the cap, when it starts with the kill switch on (or the switch flips while it runs), and when it fails to start. The `Play uptime` workflow checks `/api/limits` every 15 minutes and posts to the same webhook if the Space is down; it reads the `VITE_PLAY_API_URL` repo variable. With no webhook set, nothing is posted.

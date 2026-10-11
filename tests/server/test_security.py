@@ -834,3 +834,30 @@ async def test_real_neon_ledger_roundtrip():
     finally:
         await conn.execute("delete from visitor_spend where game_id = $1", gid)
         await conn.close()
+
+
+# --- Render: Cloudflare edge, then a Render-internal 10.x hop ---------------------------------
+
+
+def _render_proxies():
+    import pathlib
+
+    import yaml
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+    env = yaml.safe_load((root / "render.yaml").read_text())["services"][0]["envVars"]
+    value = next(e["value"] for e in env if e["key"] == "PLAY_TRUSTED_PROXIES")
+    return PlayConfig.from_env({"PLAY_TRUSTED_PROXIES": value}).trusted_proxies
+
+
+def test_client_ip_behind_render_proxy():
+    trusted = _render_proxies()
+    # Observed shape: "<client-sent>, <real client>, <Cloudflare edge>"; peer is Render's 10.x.
+    hdr = {"X-Forwarded-For": "203.0.113.50, 172.71.10.4"}
+    assert security.client_ip(scope("10.20.0.7", hdr), trusted) == "203.0.113.50"
+    spoofed = {"X-Forwarded-For": "6.6.6.6, 203.0.113.50, 172.71.10.4, 10.20.0.3"}
+    assert security.client_ip(scope("10.20.0.7", spoofed), trusted) == "203.0.113.50"
+    v6 = {"X-Forwarded-For": "6.6.6.6, 2001:db8::5, 2606:4700::1"}
+    assert security.client_ip(scope("10.20.0.7", v6), trusted) == "2001:db8::5"
+    # Not through Render's proxy: the header is ignored.
+    assert security.client_ip(scope("203.0.113.9", spoofed), trusted) == "203.0.113.9"

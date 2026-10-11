@@ -679,6 +679,7 @@
 .site-nav .watch-stop {
   display: inline-flex;
   align-items: center;
+  gap: 0.25em; /* flex collapses the space between "Stop" and "watching" */
   min-height: 44px;
   box-sizing: border-box;
   padding: 8px 12px;

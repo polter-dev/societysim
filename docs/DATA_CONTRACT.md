@@ -697,7 +697,7 @@ Limits, all set by env on the server (defaults in brackets):
 | `batch_id` | text | Run dir name (`runs/<batch_id>`); nullable, but current code always sets it |
 | `status` | text | `running` \| `finished` \| `failed` |
 | `winner` | text | `wolves` \| `villagers` \| `draw` \| null |
-| `models` | jsonb | Model name per seat, in seat order (`["a", "b", ...]`) |
+| `models` | jsonb | One entry per seat, in seat order. At game start it is the model names (`["a", "b", ...]`); once `game_start` is logged it becomes `[{"model": "a", "name": "Ava"}, ...]`, so a running game shows real names (#400). Never roles. Rows from before #400 keep plain names |
 | `started_at` | timestamp with time zone | |
 | `ended_at` | timestamp with time zone | Null while running |
 | `agents` | text | `scripted` \| `llm` \| null (rows from before #219). Scripted games are replayable but left out of the three views |

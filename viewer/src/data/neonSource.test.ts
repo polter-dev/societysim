@@ -146,12 +146,56 @@ describe("neonSource, running games (hidden information)", () => {
     expect(game.events.every((e) => e.visibility === "public" && e.private_reasoning === null && e.suspicion === null)).toBe(true);
   });
 
-  it("rebuilds the seat list from games.models, without names or roles", async () => {
+  it("rebuilds the seat list from games.models, with Seat N for a row without names", async () => {
     fakeNeon({ [ID]: running() });
     const [start, next] = (await neonSource().loadGame(ID)).events;
     expect(start.type).toBe("game_start");
     expect(start.seq).toBeLessThan(next.seq);
     expect(start.meta.seats!.p2).toEqual({ name: "Seat 3", model: MODELS[2], color: expect.any(String) });
+  });
+
+  // #400: the sink puts [{model, name}] on the games row at game_start; names are public.
+  const NAMED = Object.values(full[0].meta.seats!).map(({ model, name }) => ({ model, name }));
+  const NAMES = NAMED.map((s) => s.name);
+
+  it("takes the real names from games.models, never a role", async () => {
+    fakeNeon({ [ID]: { ...running(), models: NAMED } });
+    const { events } = await neonSource().loadGame(ID);
+    const seats = events[0].meta.seats!;
+    expect(Object.values(seats).map((s) => s.name)).toEqual(NAMES);
+    expect(seats.p2).toEqual({ name: NAMED[2].name, model: NAMED[2].model, color: expect.any(String) });
+    expect(Object.values(seats).some((s) => "role" in s)).toBe(false);
+  });
+
+  it("shows the names on the live table, agents panel and chat, not Seat N", async () => {
+    fakeNeon({ [ID]: { ...running(full.length), models: NAMED } });
+    const { events } = await neonSource().loadGame(ID);
+    const html = renderToStaticMarkup(
+      createElement(Game, {
+        events,
+        labels: [],
+        idx: events.length - 1,
+        mode: "villager",
+        selected: null,
+        onSelect: () => {},
+        onSeqChange: () => {},
+      }),
+    );
+    for (const name of NAMES) expect(html).toContain(name);
+    expect(html).not.toMatch(/Seat \d/);
+  });
+
+  it("names the seats of a forfeited visitor game too", async () => {
+    const rows = full.filter((e) => e.visibility === "public").slice(0, 10);
+    fakeNeon({ [ID]: { status: "failed", models: NAMED, rows } });
+    const { events } = await neonSource().loadGame(ID);
+    expect(Object.values(events[0].meta.seats!).map((s) => s.name)).toEqual(NAMES);
+  });
+
+  it("lists a named row by its models", async () => {
+    fakeNeon({ [ID]: { ...running(), models: NAMED } });
+    const games = await neonSource().listGames();
+    expect(games[0].models).toEqual([...new Set(MODELS)].sort());
   });
 
   it("renders nothing private, even in narrator mode", async () => {

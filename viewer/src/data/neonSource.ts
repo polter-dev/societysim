@@ -41,9 +41,18 @@ async function publicEvents(id: string, afterSeq = -1): Promise<Event[]> {
   return events.filter((e) => e.visibility === "public");
 }
 
+/** One games.models entry: a model name, or {model, name} once the game has started (#400). */
+function seatEntry(v: unknown): { model?: string; name?: string } {
+  if (typeof v === "string") return { model: v };
+  if (typeof v !== "object" || v === null) return {};
+  const { model, name } = v as { model?: unknown; name?: unknown };
+  return { model: typeof model === "string" ? model : undefined, name: typeof name === "string" && name ? name : undefined };
+}
+
 /**
  * A stand-in game_start for a public-only log, which has none (the real one is narrator-only and
  * holds every role). Seats come from games.models plus any seat the events mention; no roles.
+ * Names too, when games.models has them; "Seat N" only for a game that never published them.
  */
 export function publicSeats(gameId: string, models: unknown, events: Event[]): Event {
   const list = Array.isArray(models) ? models : [];
@@ -53,8 +62,8 @@ export function publicSeats(gameId: string, models: unknown, events: Event[]): E
   const seats = Object.fromEntries(
     sorted.map((id) => {
       const n = Number(id.slice(1));
-      const model = typeof list[n] === "string" ? (list[n] as string) : "unknown";
-      return [id, { name: `Seat ${n + 1}`, model, color: SEAT_COLORS[n % SEAT_COLORS.length] }];
+      const { model = "unknown", name = `Seat ${n + 1}` } = seatEntry(list[n]);
+      return [id, { name, model, color: SEAT_COLORS[n % SEAT_COLORS.length] }];
     }),
   );
   return {
@@ -75,11 +84,11 @@ export function publicSeats(gameId: string, models: unknown, events: Event[]): E
   };
 }
 
-/** games.models: a list of model names in seat order (older rows may map seats to names). */
+/** games.models: per seat in seat order, a model name or {model, name} (older rows may map seats to names). */
 function modelNames(m: unknown): string[] | undefined {
   if (typeof m !== "object" || m === null) return undefined;
   const names = Object.values(m)
-    .map((v) => (typeof v === "object" && v !== null ? (v as { model?: unknown }).model : v))
+    .map((v) => seatEntry(v).model)
     .filter((v): v is string => typeof v === "string");
   return [...new Set(names)].sort();
 }

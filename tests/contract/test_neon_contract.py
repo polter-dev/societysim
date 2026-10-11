@@ -84,6 +84,35 @@ def test_doc_grants_match_schema_sql():
     assert "revoke all on events, labels from anonymous" in SQL
 
 
+def _role_block(role: str) -> str:
+    return re.search(rf"rolname = '{role}'\) then(.*?)end if;", SQL, re.S)[1]
+
+
+def test_authenticated_is_reset_and_gets_only_the_anonymous_reads():
+    """#496: Neon's Data API grants `authenticated` writes on every public table by default."""
+    block = _role_block("authenticated")
+    assert "revoke all on all tables in schema public from authenticated;" in block
+    assert (
+        "alter default privileges in schema public revoke all on tables from authenticated;"
+        in block
+    )
+    granted = {
+        t.strip()
+        for g in re.findall(r"grant select on ([\w, ]+) to authenticated", block)
+        for t in g.split(",")
+    }
+    assert granted == ANON
+    assert not re.search(r"grant\s+(?!select\b)\w+", block)  # nothing but select
+    # The revoke comes first, so the grants below it are all that is left.
+    assert block.index("revoke all on all tables") < block.index("grant select")
+
+
+def test_anonymous_is_reset_and_gets_no_future_tables():
+    block = _role_block("anonymous")
+    assert "revoke all on all tables in schema public from anonymous;" in block
+    assert "revoke all on tables from anonymous;" in block
+
+
 def test_events_public_hides_running_games():
     """Static check of #323; tests/integration/test_neon_anon_privacy.py runs it on Postgres."""
     view = re.search(r"create or replace view events_public (.*?);\n", SQL, re.S)[1]

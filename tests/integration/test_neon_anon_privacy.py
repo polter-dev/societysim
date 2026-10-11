@@ -92,16 +92,26 @@ async def _setup(pg_port: int) -> None:
     su = await _connect(pg_port, "postgres", "postgres")
     try:
         await su.execute("create role anonymous nologin")
+        await su.execute("create role authenticated nologin")
         await su.execute("create role writer login")
         await su.execute("create database sim owner writer")
     finally:
         await su.close()
     w = await _connect(pg_port, "writer")
     try:
+        # Neon's Data API default (#496): authenticated gets everything on public, new tables too.
+        await w.execute("grant usage on schema public to authenticated")
+        await w.execute(
+            "alter default privileges in schema public"
+            " grant select, insert, update, delete on tables to authenticated"
+        )
         await apply_schema(w)
         # The live database before #323: anonymous could select events and labels directly.
         await w.execute("grant select on events, labels to anonymous")
-        await apply_schema(w)  # idempotent, and it takes that grant away
+        await w.execute(
+            "grant select, insert, update, delete on all tables in schema public to authenticated"
+        )
+        await apply_schema(w)  # idempotent, and it takes those grants away
         for gid, status in GAMES.items():
             await w.execute(
                 "insert into games (game_id, batch_id, status, models) values ($1, 'b', $2, '[]')",
@@ -134,6 +144,16 @@ async def _as_anon(port: int, sql: str, *args):
         await conn.close()
 
 
+async def _as_authenticated(port: int, sql: str, *args):
+    conn = await _connect(port, "postgres")
+    try:
+        async with conn.transaction():
+            await conn.execute("set local role authenticated")
+            return await conn.fetch(sql, *args)
+    finally:
+        await conn.close()
+
+
 def _event(row) -> dict:
     return json.loads(row["event"])
 
@@ -149,6 +169,50 @@ async def test_fixture_has_hidden_information():
 async def test_anonymous_cannot_select_events_or_labels(db, table):
     with pytest.raises(asyncpg.InsufficientPrivilegeError):
         await _as_anon(db, f"select * from {table} limit 1")
+
+
+# #496: Neon grants `authenticated` write access on every public table by default. One sign-up
+# could set a running game to finished, and events_public would then show it in full.
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "update games set status = 'finished' where game_id = 'g-run'",
+        "insert into games (game_id, status) values ('g-fake', 'finished')",
+        "delete from games where game_id = 'g-run'",
+        "update events set type = 'x' where game_id = 'g-run'",
+        "delete from labels",
+        "insert into visitor_starts (day, client_hash, games) values (current_date, 'h', 1)",
+    ],
+)
+async def test_authenticated_cannot_write(db, sql):
+    with pytest.raises(asyncpg.InsufficientPrivilegeError):
+        await _as_authenticated(db, sql)
+
+
+@pytest.mark.parametrize(
+    "table",
+    ["events", "labels", "finished_seats", "finished_suspicion", "visitor_spend", "visitor_starts"],
+)
+async def test_authenticated_cannot_select_internal_tables(db, table):
+    with pytest.raises(asyncpg.InsufficientPrivilegeError):
+        await _as_authenticated(db, f"select * from {table} limit 1")
+
+
+async def test_authenticated_reads_the_anonymous_views(db):
+    rows = await _as_authenticated(db, "select distinct game_id from events_public")
+    assert {r["game_id"] for r in rows} == set(GAMES)
+    for view in ("games", "labels_public", "leaderboard", "global_liars"):
+        await _as_authenticated(db, f"select * from {view} limit 1")
+
+
+async def test_new_tables_get_no_authenticated_grant(db):
+    w = await _connect(db, "writer")
+    try:
+        await w.execute("create table if not exists later_table (x int)")
+    finally:
+        await w.close()
+    with pytest.raises(asyncpg.InsufficientPrivilegeError):
+        await _as_authenticated(db, "select * from later_table")
 
 
 async def test_labels_and_lies_only_for_finished_games(db):

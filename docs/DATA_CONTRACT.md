@@ -691,6 +691,9 @@ Limits, all set by env on the server (defaults in brackets):
   `labels_public`, which hide an unfinished game's hidden information inside the database. The writer role (`NEON_DATABASE_URL`, used by
   `NeonSink` and `sync-neon`) keeps full access to every table. The Databricks ingest reads the
   JSONL and Parquet files, not Neon.
+- `authenticated` (anyone who signs up through Neon Auth) has the same read-only access as
+  `anonymous` and nothing else (#496). Neon grants it writes on every public table by default;
+  `neon/schema.sql` revokes them, and the default privileges for future tables too.
 - Produced by: `NeonSink` during `societysim batch --neon` / `play --neon` (live, game by
   game), or `societysim sync-neon <batch>` (backfill). JSONL stays the source of truth.
 - Types below are Postgres `information_schema.columns.data_type`. In JSON, `integer` and

@@ -29,6 +29,8 @@ uv run societysim --help
 cd viewer && npm ci && npm run build && npm test
 ```
 
+Running a real (paid) experiment batch: follow [docs/RUNNING_BATCHES.md](docs/RUNNING_BATCHES.md).
+
 ## Repo map
 
 | Path | What lives there | Team |

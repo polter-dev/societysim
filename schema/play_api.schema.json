@@ -262,12 +262,20 @@
         "client_ip_hint": {
           "title": "Client Ip Hint",
           "type": "string"
+        },
+        "allowed_models": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Models",
+          "type": "array"
         }
       },
       "required": [
         "play_enabled",
         "remaining_today",
-        "client_ip_hint"
+        "client_ip_hint",
+        "allowed_models"
       ],
       "title": "Limits",
       "type": "object"

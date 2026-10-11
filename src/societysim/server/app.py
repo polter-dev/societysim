@@ -89,6 +89,7 @@ class Limits(_Strict):
     play_enabled: bool
     remaining_today: int
     client_ip_hint: str  # the caller's IP as the server sees it, masked: "104.53.x.x"
+    allowed_models: list[str]  # model ids visitor games may use (PLAY_ALLOWED_MODELS), sorted
 
 
 class Health(_Strict):
@@ -157,6 +158,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             client_ip_hint=security.ip_hint(
                 security.client_ip(request, play.trusted_proxies, play.client_ip_header)
             ),
+            allowed_models=sorted(play.allowed_models),
         )
 
     @app.post("/api/games")

@@ -378,6 +378,14 @@ async def test_limits_show_the_derived_ip_masked(make_client):
     assert r.json()["client_ip_hint"] == "127.0.x.x"  # the peer, header ignored
 
 
+async def test_limits_list_the_allowed_models(make_client):
+    """#356: the viewer filters its model catalog to this list."""
+    c = make_client(play=play(allowed_models=frozenset({"qwen3-235b", "gpt-5-nano"})))
+    assert (await c.get("/api/limits")).json()["allowed_models"] == ["gpt-5-nano", "qwen3-235b"]
+    r = await make_client(play=play()).get("/api/limits")
+    assert r.json()["allowed_models"] == sorted(security.DEFAULT_ALLOWED)
+
+
 # --- models -------------------------------------------------------------------------------------
 
 

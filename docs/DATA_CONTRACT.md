@@ -492,7 +492,7 @@ to them). All bodies are JSON and closed: an unknown key is a 422. Every error i
 | `POST /api/games` | none (Turnstile token in the body) | `StartGame` | `StartedGame` |
 | `GET /api/games/{id}/me` | seat token | | `Me` |
 | `POST /api/games/{id}/action` | seat token | `ActionBody` | `{"accepted": true}` |
-| `GET /api/limits` | none | | `{"play_enabled": bool, "remaining_today": int, "client_ip_hint": str}` |
+| `GET /api/limits` | none | | `{"play_enabled": bool, "remaining_today": int, "client_ip_hint": str, "allowed_models": [str]}` (model ids visitors may use, sorted) |
 | `GET /api/health` | none | | `{"ok": true}` |
 
 ### Starting a game

@@ -57,6 +57,7 @@ export default function LandingPage({ href }: { href: (extra: Record<string, str
       <div className="landing-badge"><img src={statusFrame} alt=""/><span>{labels.games}</span></div>
       <div className="landing-badge"><img src={statusFrame} alt=""/><span>{labels.server}</span></div>
     </footer>
+    <a className="landing-motion landing-trailer" href={href({page:'trailer'})}>Trailer</a>
     <button className="landing-motion" aria-pressed={paused} onClick={() => setPaused(!paused)}>{paused ? 'Resume ambience' : 'Pause ambience'}</button>
     {modal && <LandingDialog kind={modal} href={href} close={() => setModal(null)}/>}
   </main>;

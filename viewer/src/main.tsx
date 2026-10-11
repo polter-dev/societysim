@@ -14,6 +14,7 @@ import LeaderboardPage from "./pages/Leaderboard";
 import NewGamePage from "./pages/NewGame";
 import PlayPage, { PlayDock, PlayNavLink } from "./pages/Play";
 import ResearchPage from "./pages/Research";
+import TrailerPage, { AUDIO_INDEX_URL } from "./pages/Trailer";
 import "./pages/pages.css";
 import "./a11y.css";
 import "./play/play.css";
@@ -29,6 +30,7 @@ const page = params.get("page");
 const home = !params.has("game") && !params.has("log") && (!page || page === "home");
 const modes = !params.has("game") && !params.has("log") && page === "modes";
 const advanced = !params.has("game") && !params.has("log") && page === "play" && params.get("mode") === "advanced";
+const trailer = !params.has("game") && !params.has("log") && page === "trailer";
 const indexParam = params.get("index");
 let baseError: string | null = null;
 let dataBase: URL;
@@ -65,12 +67,12 @@ const schemaUrl = sibling("devui/schema/game_setup.schema.json");
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {baseError && <p role="alert">Could not use batch base: {baseError}</p>}
-    {!home && !modes && !advanced && !joining && <nav aria-label="Pages" className={ledger ? "site-nav site-nav--float" : "site-nav"}>
+    {!home && !modes && !advanced && !joining && !trailer && <nav aria-label="Pages" className={ledger ? "site-nav site-nav--float" : "site-nav"}>
       <a href={href({})}>Home</a><a href={href({page:"games"})}>Games</a><a href={href({ page: "leaderboard" })}>Leaderboard</a><a href={href({ page: "research" })}>Research</a>
       <a href={href({ page: "new" })}>New game</a><PlayNavLink href={href({ page: "modes" })} />
       <a href={href({ page: "replay" })}>Open a log file</a>
     </nav>}
-    {home ? <LandingPage href={href}/> : modes ? <ModeSelection href={href}/> : advanced ? <AdvancedSetup href={href} catalogUrl={catalogUrl} schemaUrl={schemaUrl}/> : ledger ? (
+    {home ? <LandingPage href={href}/> : trailer ? <TrailerPage audioIndexUrl={new URL(AUDIO_INDEX_URL, new URL(import.meta.env.BASE_URL, location.href)).href}/> : modes ? <ModeSelection href={href}/> : advanced ? <AdvancedSetup href={href} catalogUrl={catalogUrl} schemaUrl={schemaUrl}/> : ledger ? (
       <LeaderboardPage
         leaderboardUrl={sibling("leaderboard.json")}
         metricsUrl={sibling("metrics.json")}

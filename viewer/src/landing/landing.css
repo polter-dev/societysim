@@ -4,3 +4,6 @@
 @media(max-height:650px) and (min-width:601px){.landing-title{top:9%}.landing-title h1{font-size:clamp(38px,5vw,68px)}.landing-menu{top:31%;gap:8px;width:min(46%,90svh)}.landing-title p{margin-top:5px}.landing-play{margin-bottom:0}.landing-status{bottom:-8px}}
 @media(prefers-reduced-motion:reduce){.landing-page *{animation:none!important;transition:none!important}}
 .landing-button{font-family:Georgia,'Times New Roman',serif}.landing-badge span{font-weight:400;background:transparent}.landing-title p{font-weight:400}
+
+/* Trailer link (#626): the ambience button's twin, top-left. */
+.landing-trailer{right:auto;left:16px;display:inline-flex;align-items:center;text-decoration:none;font-variant:small-caps;font-size:14px;letter-spacing:.04em}

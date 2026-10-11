@@ -14,7 +14,8 @@ Moment types and scores:
   voted out, the description says so.
 - doctor_save: the doctor saved the night-kill target. Score 3.
 - seer_led_elimination: the seer found a wolf and a later vote eliminated that wolf. Score =
-  2 + votes cast against the wolf on that day.
+  2 + votes cast against the wolf on that day. One per (seer, wolf), anchored on the first wolf
+  result, so re-checking a known wolf does not make a second moment.
 
 Ordering: score (high first), then game id, then first seq. Links are viewer query strings
 (`?game=<id>&seq=<n>&mode=narrator`); prefix them with the viewer's URL.
@@ -180,11 +181,15 @@ def wolf_survival_moments(g: GameData) -> list[dict]:
 
 def role_action_moments(g: GameData) -> list[dict]:
     out = []
+    led = set()  # (seer, wolf) pairs already anchored: a re-check of a known wolf adds nothing
     for e in g.events:
         if e.type is EventType.DOCTOR_SAVE and e.meta.saved:
             desc = f"{_name(g, e.actor, 'doctor')} saved {_name(g, e.target)} from the night kill."
             out.append(_moment(g, "doctor_save", e.day, (e.seq, e.seq), e.actor, e.target, 3, desc))
         if e.type is EventType.SEER_CHECK and e.meta.result == "wolf":
+            if (e.actor, e.target) in led:
+                continue
+            led.add((e.actor, e.target))
             elim = next(
                 (
                     x

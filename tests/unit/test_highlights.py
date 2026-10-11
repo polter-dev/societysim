@@ -217,6 +217,27 @@ def test_seer_led_one_vote_is_singular():
     assert "(1 vote)." in m["description"]
 
 
+def _eliminate_after(g: GameData, target: str, seq: int) -> None:
+    update = {"seq": seq, "target": target, "meta": EventMeta(role="wolf")}
+    g.events.append(g.events[104].model_copy(update=update))
+
+
+def test_rechecked_wolf_gives_one_seer_led_moment():
+    g = game()  # p0 already checked Finn (p5) at seq 64; check him again, then vote him out
+    g.events.append(g.events[64].model_copy(update={"seq": 1064}))
+    _eliminate_after(g, "p5", 1104)
+    (m,) = [m for m in role_action_moments(g) if m["type"] == "seer_led_elimination"]
+    assert (m["actor"], m["target"], m["seq"]) == ("p0", "p5", [64, 1104])  # first check anchors
+
+
+def test_two_wolves_both_eliminated_give_two_seer_led_moments():
+    g = game()  # p0 checked Cleo (p2, seq 10) and Finn (p5, seq 64)
+    _eliminate_after(g, "p5", 1104)
+    _eliminate_after(g, "p2", 1105)
+    ms = [m for m in role_action_moments(g) if m["type"] == "seer_led_elimination"]
+    assert sorted((m["target"], m["seq"][0]) for m in ms) == [("p2", 10), ("p5", 64)]
+
+
 def test_failed_doctor_save_is_not_a_moment():
     g = game()
     edit(g, 12, meta=EventMeta(saved=False))

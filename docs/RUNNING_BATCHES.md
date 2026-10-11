@@ -60,11 +60,13 @@ The batch stops starting new games when any of these hit. Games already running 
 | Stop | Status | What it means | Exit code |
 |---|---|---|---|
 | Budget | `budget_stopped` | Spend so far, plus what running games still need, plus the next game's estimate, would pass `budget_usd`. | 0 |
-| Invalid output | `stopped_invalid` | A model's `invalid_output` rate passed `max_invalid_rate` (default 0.25) after at least `min_calls_for_invalid_check` calls (default 40). `run_meta.json` has `invalid_stop` naming the model. | 2 |
+| Invalid output | `stopped_invalid` | A model's `invalid_output` rate passed `max_invalid_rate` (default 0.25) after at least `min_calls_for_invalid_check` calls (default 40). The rate is invalid outputs the model caused, over the model's call attempts. Provider failures (5xx, 429, timeout; `meta.reason == "provider"`) count as neither, so a provider outage does not trip it (#363). `run_meta.json` has `invalid_stop` naming the model. | 2 |
 | Provider down | `failed` | A model failed 10 calls in a row with no tokens back (out of credit, quota, revoked key). `run_meta.json` has `provider_down`. | 1 |
 | A game raised | `failed` | Listed under `failed` in `run_meta.json`. | 1 |
 
-`stopped_invalid` means a model is producing JSON the engine can't use, so its games would be mostly fallbacks. Look at that model's `invalid_output` events before you raise the limit. To continue anyway, raise `max_invalid_rate` in the config and rerun. The check also covers games already on disk, so rerunning without raising it stops again at once.
+`stopped_invalid` means a model is producing JSON the engine can't use, so its games would be mostly fallbacks. Look at that model's `invalid_output` events before you raise the limit, and skip the ones with `meta.reason == "provider"`: those are provider errors, not bad JSON, and they don't count toward this stop. For provider trouble, check `provider_errors` and `provider_error_rate` per model in `report/metrics.json`; raising `max_invalid_rate` won't help with those. To continue anyway, raise `max_invalid_rate` in the config and rerun. The check also covers games already on disk, so rerunning without raising it stops again at once.
+
+After the run, `report/metrics.json` also has, per model, `fallback_rate` (turns that ended in a fallback move), `retry_success_rate` (retries whose second attempt was accepted) and `invalid_attempt_rate` (rejected replies per call attempt, which still counts a retry that worked, so it overstates the turns lost) (#408). None of them count provider errors.
 
 Other final statuses: `completed`, `interrupted` (Ctrl-C or kill), `running` (still going, or killed hard before it could save).
 
@@ -102,11 +104,12 @@ uv run societysim sync-neon runs/<batch_id>                     # needs NEON_DAT
 - `publish` pushes logs, labels, parquet tables and a dataset card to a Hugging Face Dataset. The repo is **private** if it gets created; `--public` is opt-in, so ask the team first. `--repo` defaults to `$SOCIETYSIM_HF_DATASET`. Run `label` first, or the labels are missing. It is safe to rerun: files are named per game and get overwritten. The dataset card is one aggregate card for the whole repo (#335): each publish merges the new batch into `manifest.json` and rewrites the card, so it always describes every batch in the repo.
 - `sync-neon` creates the tables if needed, then backfills the batch and prints `synced N games, N events, N labels`. It is the same data `--neon` streams live.
 - To put the batch on the site, see the deploy notes in the README (`scripts/deploy-space.sh`, Cloudflare Pages).
+- After a deploy, check the live site (read-only, free): `uv run --extra smoke python -m playwright install chromium` once, then `uv run --extra smoke python scripts/site_smoke.py` (#370, #381). It loads each page headless and exits 1 if one is broken. Add `--strict-play` to also fail unless the play start screen is up.
 
 ## 6. Safety
 
 - **Tests never see real keys** (#336). `pytest` strips every key, token and DSN from the environment and turns off `.env` loading. Don't set `SOCIETYSIM_LIVE=1` to get around this. It puts the real keys back and runs the tests marked `live`, which call paid APIs and real databases. Only set it for a single deliberate live check, and unset it after.
-- **Neon migrations** go through `sync-neon --migrate` only. Without `--apply` it prints the SQL and runs nothing. `--migrate --apply` changes the live database and needs Seth and Marcus to say OK first.
+- **Neon migrations** go through `sync-neon --migrate` only. Without `--apply` it prints the SQL and runs nothing. `--migrate --apply` changes the live database and needs Seth and Marcus to say OK first. Migration `001_events_inserted_at.sql` is already applied on the live database, so `--prune` works there; a new database made from `neon/schema.sql` already has the column.
 - **`--prune` is a dry run first.** `sync-neon --prune` lists partial, fixture and test games (partial means older than `--older-than-hours`, default 6) and deletes nothing. Read the list, then add `--apply`. `--batch <id>` adds a test batch to the list; `sync-neon --delete <game_id>` removes one game.
 - Don't run paid commands (`--agents llm`, `doctor`, Jev `label`, `uv run python -m societysim.analysis.narrate <game_id>.jsonl` or `--build-bank --yes` without `--dry-run`, which are billed per character) without checking the dry-run estimate and your `budget_usd` first.
 - Keys stay in `.env`. Don't put `NEON_DATABASE_URL` in a CI variable or a viewer build; it can write.

@@ -31,12 +31,12 @@ The results below are 10-player games with 2 wolves and 8 others (#250, #216). H
 
 ## The game in one minute
 
-Werewolf is a bluffing game. Seven players get secret roles:
+Werewolf is a bluffing game. Ten players get secret roles (the default; a game can have 7 to 10):
 
 - **Two wolves** know each other. They want to stay hidden while killing off the village.
 - **One seer** can check one player each night and learn whether they are a wolf.
 - **One doctor** can protect one player each night from the wolves.
-- **Three villagers** have no powers, only their eyes and their votes.
+- **Six villagers** have no powers, only their eyes and their votes.
 
 The game alternates night and day. At **night**, the wolves pick a victim in a private chat, the seer checks someone and the doctor protects someone. At **day**, the village learns who died, everyone talks for two rounds (up to 80 words per turn), and then everyone votes at once. The player with the most votes is eliminated and their role is revealed.
 
@@ -54,8 +54,8 @@ From the game logs we build:
 - **Lie labels.** `societysim label` marks false role claims, false seer reports, a wolf turning on a fellow wolf, a seer hiding a wolf result, and votes that eliminated an innocent player. The raw log is never edited; labels go in a separate file.
 - **A per-model leaderboard and report.** Win, draw and loss rates with confidence intervals, skill ratings as wolf and as villager, how often each model lies and whether the lie worked, how well its suspicion scores pointed at the real wolves, and how often other players voted for someone it accused. Lie success and persuasion are correlations, not proof of cause.
 - **Highlights.** `societysim highlights` picks the best moments in a batch (a lie that swung a vote, a wolf who survived, a doctor save, a seer who found a wolf that the village then voted out) and links to them in the viewer.
-- **Narration.** An offline script turns a finished game's public events into spoken clips with ElevenLabs. It never voices private reasoning or the wolf chat. The viewer does not play the clips yet.
-- **A human seat.** `societysim play --human-seat p3` lets you take one seat yourself from the terminal, with the same information an AI in that seat gets.
+- **Narration.** An offline script turns a finished game's public events into spoken clips with ElevenLabs. It never voices private reasoning or the wolf chat. The replay plays the clips, with narration controls under the table.
+- **A human seat.** `societysim play --preset basic --human-seat p3` lets you take one seat yourself from the terminal, with the same information an AI in that seat gets. The other seats are scripted random players, so it is free. For a game against nine different models (paid), use `societysim play --config configs/human_vs_ai_10p.yaml --human-seat p0 --agents llm`.
 
 ## Results
 
@@ -88,7 +88,7 @@ The code is Python 3.12 (engine, batch runner and analysis, with Pydantic for da
 | Hugging Face | Most players are open models served through Inference Providers (Hugging Face's pay-per-use service that runs models hosted by other companies). Game logs are meant to go into a Dataset, and the viewer and leaderboard onto a Space (`scripts/deploy-space.sh` handles the Space; the Dataset upload is in progress). |
 | AMD | gpt-oss-20b runs on an AMD Radeon AI PRO R9700 GPU, served with vLLM (software that runs a model as a web service) on ROCm (AMD's toolkit for running AI on its GPUs), as a self-hosted player. See [infra/amd/README.md](infra/amd/README.md). |
 | Databricks | Game logs become Delta tables (Databricks' table format), a notebook recomputes the metrics, an AI/BI dashboard sits on top, and MLflow (an experiment tracker) records each batch as a run. See [notebooks/databricks/README.md](notebooks/databricks/README.md). |
-| Neon | Serverless Postgres database. `play` and `batch` with `--neon` stream events in while a game runs, and `societysim sync-neon` backfills finished batches ([neon/schema.sql](neon/schema.sql)). Read-only views serve the leaderboard (`leaderboard`, `leaderboard_by_batch`, `lies_by_model`). The viewer does not read from Neon yet. |
+| Neon | Serverless Postgres database. `play` and `batch` with `--neon` stream events in while a game runs, and `societysim sync-neon` backfills finished batches ([neon/schema.sql](neon/schema.sql)). Read-only views serve the leaderboard (`leaderboard`, `leaderboard_by_batch`, `lies_by_model`). When `VITE_NEON_DATA_API_URL` and `VITE_NEON_AUTH_URL` are set at build time, the viewer reads the game list, live games and the global leaderboard from Neon's Data API (see the deploy notes below). |
 | ElevenLabs | Text-to-speech for game narration. |
 | TypeSafe (Jev) | A classifier that reads each statement to help label lies. Labeling still works without it. |
 | Figma | Design for a viewer that someone who has never played Werewolf can follow. The viewer supports keyboard use, screen readers and reduced motion. |
@@ -110,7 +110,7 @@ That writes `runs/selfplay_smoke/selfplay_smoke-s0.jsonl`. To watch it:
 cd viewer && npm ci && npm run dev
 ```
 
-Then use "Open a log file" in the viewer and pick the `.jsonl`. The viewer opens in villager view, which hides the scratchpads and lie labels, so switch the View menu to Narrator to see them. For the full list of commands, including free labeling with `label --no-jev` and what real runs cost, see [docs/DEMO.md](docs/DEMO.md).
+The dev server opens the illustrated landing page, which has no "Open a log file" link. Go to `http://localhost:5173/?page=replay` (or `?page=games`, then "Open a log file") and pick the `.jsonl`. The viewer opens in villager view, which hides the scratchpads and lie labels, so switch the View menu to Narrator to see them. For the full list of commands, including free labeling with `label --no-jev` and what real runs cost, see [docs/DEMO.md](docs/DEMO.md).
 
 Games with real models need keys. Copy `.env.example` to `.env` and fill in the ones you have:
 
@@ -134,10 +134,10 @@ What these do:
 
 - `batch` runs games in parallel and rotates models through seats and roles.
 - It stops starting new games before it would go over the config's `budget_usd`, and resumes if you run it again.
-- The main experiment is `configs/mixed_v1.yaml` (100 mixed games).
+- The main experiment is `configs/mixed_v2_10p.yaml` (100 mixed 10-player games). `configs/mixed_v1.yaml` is the older 7-player batch.
 - Running a real experiment batch, step by step (dry run, budget, resume, label, publish, safety): [docs/RUNNING_BATCHES.md](docs/RUNNING_BATCHES.md).
 - After a batch, `uv run python -m societysim.analysis.postbatch runs/<batch>` runs label (without Jev), report and highlights in one go, and prints the numbers and upload commands to use next.
-- The viewer loads `data/report/index.json` by default; add `?index=<url>` to point it at another batch.
+- The viewer loads `./index.json` from the site root by default (`report/index.json` is the older location); add `?index=<url>` to point it at another batch.
 - `scripts/deploy-space.sh runs/<batch> <owner/space>` builds the viewer with a batch and uploads it to a Hugging Face Space. To preview the same site locally with no upload and no token, run `scripts/deploy-space.sh --out site runs/<batch>` and then `python -m http.server -d site 8000` (`--force` writes into a non-empty folder).
 - The live site is on Cloudflare Pages at https://society-sim.us (project `societysim`). The `Deploy` workflow runs by hand (`gh workflow run deploy.yml -f targets=cloudflare,hf-space,github-pages`; `targets` picks any of the three, default all) and automatically on every push to `main` that touches `viewer/`. It deploys the sample game unless a data source is set: the `source` input or the `DEPLOY_SOURCE` repo variable, as `hf:<owner/name>[:<batch_id>]` (for example `hf:societysim/societysim-games`). CI then downloads that dataset's logs and labels with `scripts/fetch_hf_batch.py`, runs `label --no-jev` (only if the dataset has no labels), `report` and `highlights`, and deploys the result. No paid calls; a private dataset needs the `HF_TOKEN` secret. The Cloudflare step needs the repo secret `CLOUDFLARE_API_TOKEN` and the repo variable `CLOUDFLARE_ACCOUNT_ID`, and is skipped when either is missing. The Hugging Face step needs the `HF_TOKEN` secret. The GitHub Pages mirror at https://polter-dev.github.io/societysim stays. Pull requests that touch `viewer/` also get a Cloudflare Pages preview (the `Preview` workflow, `.github/workflows/preview.yml`): it deploys the sample-game site to the `societysim` project on a branch named after the PR branch and comments the `*.pages.dev` URL on the PR. It uses the same secret and variable as the deploy, skips on fork PRs and when they are missing, and is not a required check.
 - Before a demo, check the live site: `uv run --extra smoke python -m playwright install chromium` once, then `uv run --extra smoke python scripts/site_smoke.py [BASE_URL]` (default https://society-sim.us; `--json` for machine output, `--strict-play` to fail unless the play start screen is up). It loads every page headless, checks each key element, console errors, the data files and that unrevealed seats show no role names, prints a pass/fail table and exits non-zero on a failure. It only reads. The `Site smoke` workflow runs the same check by hand.
@@ -193,7 +193,7 @@ Open models through Hugging Face Inference Providers:
 
 Self-hosted on an AMD GPU: `amd-gpt-oss-20b`, [openai/gpt-oss-20b](https://huggingface.co/openai/gpt-oss-20b) served with vLLM on ROCm. There is also `amd-strix-gpt-oss-20b`, the same model as a GGUF on llama.cpp, running on a Radeon 8060S (Strix Halo). Both play self-play games inside the AMD pod (`configs/selfplay_amd.yaml`, `configs/selfplay_amd_strix.yaml`); the mixed batches leave them out because laptops can't reach the pod. Strix Halo numbers, from 5 self-play games with no errors: 7.3 s per call, 39.5 output tokens/s, about 138 s per game, $0/h (hackathon-provided GPU). Every game ended in a wolf win by parity on day 2, so these are short games.
 
-Closed models: `gemini-flash-lite` and `gemini-flash` through Google AI Studio, and `gpt-5-nano` and `gpt-5-mini` from OpenAI, which sit in at most 10 games each.
+Closed models: `gemini-flash-lite` and `gemini-flash` through Google AI Studio, and `gpt-5-nano` and `gpt-5-mini` from OpenAI, which sit in at most 12 games each in `mixed_v2_10p` (10 in the older `mixed_v1`; the self-play baselines have no cap).
 
 ## How it works
 

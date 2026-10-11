@@ -33,13 +33,13 @@ How to read this file:
 
 ## 2. Main demo flow (3 to 5 minutes)
 
-Site: https://society-sim.us. Use this for any judge who walks up, then switch to the track script. Navigation bar order on the site: Games, Leaderboard, Research, New game, Play, Open a log file.
+Site: https://society-sim.us. Use this for any judge who walks up, then switch to the track script. The site opens on an illustrated landing page (Play, How to play, About) with no navigation bar. Every other page has one, in this order: Home, Games, Leaderboard, Research, New game, Play, Open a log file. Play opens a mode picker ("Choose your fate": Normal, Watch, Advanced), not a game. The mode picker and Advanced setup have no navigation bar either: each has a back arrow in the corner (the picker's goes to the landing page, Advanced's goes back to the picker), and the browser Back button works too.
 
 Before you start, have two tabs ready: the demo game (open it with `?mode=narrator` appended, because the viewer opens in villager view and hides everything private) and the Leaderboard page. Demo game: `mixed_v2_10p-g0043`, open https://society-sim.us/?game=mixed_v2_10p-g0043&seq=49&mode=narrator. It is the top `lie_moved_vote` row from `uv run societysim highlights runs/mixed_v2_10p`: at seq 48 to 49, Hugo (p5, gemini-flash, a wolf) accuses his own partner Iris (p2, gpt-oss-120b). All 8 village voters then vote Iris out (votes seq 69 to 78, elimination seq 79). Hugo survives and the wolves win by parity on day 5. Be honest about it: four players had already accused Iris before Hugo joined in, so he rode the pile-on rather than starting it.
 
 | Time | Page | What to do | What to say |
 |---|---|---|---|
-| 0:00 | Games (index) | Show the list. Point at the model names on each game. | "Models from different companies play Werewolf against each other. Every game is logged." |
+| 0:00 | Games (index) | Open `https://society-sim.us/?page=games` (or the landing page, About, then "Browse games"). Show the list. Point at the model names on each game. | "Models from different companies play Werewolf against each other. Every game is logged." |
 | 0:30 | Replay | Open the demo game in Narrator view. Press Space to play, pause on the first accusation arrow. | "A Python engine owns the real game state. A model can lie but can't bend a rule." |
 | 1:00 | Replay, stepper | Step with the arrow keys, or the step controls under the table. | "We can walk it one event at a time." |
 | 1:15 | Replay, inspector | Click a wolf's seat. | "This is the private scratchpad next to what the wolf said out loud. Every turn also carries a suspicion score for every living player." |
@@ -50,7 +50,7 @@ Before you start, have two tabs ready: the demo game (open it with `?mode=narrat
 | 3:15 | Model profile | From the leaderboard, click a model name. | "One page per model: how it does as wolf and as villager, how often it lies, how well its suspicion scores find the wolves." |
 | 3:30 | Spot the wolf | Back in a replay, open the "Spot the wolf" panel under the table, guess a seat, step forward. | "You get the same public information a villager had. Can you beat the models?" |
 | 4:00 | Live mode | Open a game that is still running (a running game shows a live badge). Needs the Neon deploy variables. If nothing is running, play the 60-second backup video instead. | "Games stream into Neon while they run. The page asks for anything newer every two seconds." |
-| 4:30 | Play | Open the Play page. Show the model picker and the seat list. Start a game only if you have time and the play server is up (see backup plan). | "Visitors can take a seat at the table. There's a daily spend cap and a per-visitor limit." |
+| 4:30 | Play | Click Play in the navigation bar to show the mode picker. Normal and Watch go straight to a start screen with no model picker. To show the model picker and the seat list, open Advanced (`?page=play&mode=advanced`). Start a game only if you have time and the play server is up (see backup plan). | "Visitors can take a seat at the table. There's a daily spend cap and a per-visitor limit." |
 
 If you are running long, drop in this order: narration, model profile, play.
 
@@ -65,7 +65,7 @@ Each script is about 60 seconds spoken. Each says what to click, what to say, an
 **Evidence:** HF Dataset with the game logs and labels: https://huggingface.co/datasets/polter-dev/societysim-games (public, 100 games of `mixed_v2_10p`, 20,512 events, 1,951 labels). HF Space with the viewer: `polter-dev/societysim`, deployed from that dataset by the Deploy workflow (#294). Model list in `configs/models.yaml` and the README.
 
 **Click path**
-1. Space (or society-sim.us), game index. Point at the model names.
+1. Space (or society-sim.us, `?page=games`), game index. Point at the model names.
 2. Open the demo game in Narrator view. Click a wolf's seat to show reasoning next to speech.
 3. Leaderboard page.
 4. Switch tabs to the Dataset page. Show the card and the files.
@@ -151,7 +151,7 @@ Don't plan on a live pod. AUP sessions are time-boxed, the first start downloads
 - Labels are synced (#294): `lies_by_model` returns rows and `global_liars` has a non-null self-tag lie success (gemini-flash 0.669) through the Data API.
 - Counts (2026-10-11): 180 games (158 finished), 2,486 labels. The four batch syncs wrote 27,714 events (`mixed_v2_10p` 20,512, `mixed_v1` 4,598, `selfplay_baseline` 2,542, `selfplay_amd` 62); the anonymous role can't count `events`, so check the total in the SQL editor.
 
-**If it breaks:** the static site (reads `report/index.json`, no Neon) and the two SQL queries in the console.
+**If it breaks:** the static site (reads `index.json` from the site root, no Neon) and the two SQL queries in the console.
 
 ### Gemini
 
@@ -181,7 +181,7 @@ Gemini is in the lineup and the Devpost draft lists the Gemini prize. No ticket 
 **Evidence:** the Figma file with the flow wireframes and tokens (`TODO(#22)`: link; not started as of the last note), `docs/design/` if it exists by Sunday, `viewer/src/tokens.css` if PR #121 landed, the accessibility tests in `viewer/src`.
 
 **Click path**
-1. Games index, then open a game.
+1. Games index (`?page=games`), then open a game.
 2. Without the mouse: Tab to the timeline, arrow through a few events, press End, then Home.
 3. Switch the View select to Narrator. Click a seat for the inspector.
 4. Click a lie marker on the timeline.
@@ -213,7 +213,7 @@ Decide the fallback before you walk in, not in front of a judge.
 | What fails | Fallback |
 |---|---|
 | society-sim.us is down or slow | Use the HF Space or the GitHub Pages mirror (https://polter-dev.github.io/societysim). Then the local viewer. |
-| Venue wifi is down | Local viewer on the laptop with the demo game loaded through `?log=<url>` or "Open a log file". Run `cd viewer && npm ci && npm run dev` the night before. Phone hotspot is the next step. |
+| Venue wifi is down | Local viewer on the laptop with the demo game loaded through `?log=<url>` or "Open a log file" (`?page=replay`). Run `cd viewer && npm ci && npm run dev` the night before. Phone hotspot is the next step. |
 | Live mode has no running game | Play the 60-second backup video. Don't start a paid game on stage. |
 | Play server | The HF Space `polter-dev/societysim-play` was paused by HF ("flagged as abusive", appeal sent) and the Render fallback `societysim-play` was being set up. Check `curl <VITE_PLAY_API_URL>/api/limits` before the demo. If it fails, skip the Play step and say visitor play is "built and rate limited, hosting is moving". Don't claim it is live. `TODO(verify)`: current host. |
 | Neon console is slow | Screenshots of the two queries, plus the static site. |
@@ -231,7 +231,7 @@ Backup assets, all stored on the laptop, not only online:
 
 Free unless marked.
 
-- [ ] Run the site smoke check (#362): `uv run --extra smoke python scripts/site_smoke.py` against https://society-sim.us (the script comes from #362 / PR #370; if it is not on `main` yet, check each page by hand: index, a replay, leaderboard, Research, a model profile, New game, Play, Spot the wolf). Note any failure and fix or avoid that page.
+- [ ] Run the site smoke check (#362, #370, #381): `uv run --extra smoke python scripts/site_smoke.py --strict-play` against https://society-sim.us (run `uv run --extra smoke python -m playwright install chromium` once first). It checks the landing page, the mode picker, Advanced setup, the game list, a replay, a step deep link, the leaderboard, Research, a model profile, New game, Play and Spot the wolf. `--strict-play` fails unless the play start screen is up; without it an offline or coming-soon Play page still passes. Note any failure and fix or avoid that page.
 - [ ] `uv run societysim doctor` (paid: makes a tiny structured call to every model in `configs/models.yaml`, so cost is a few cents; read the output for any model with no working mode). To check one model: `--model 'gemini-*'`.
 - [ ] Warm the HF Space: open it and click through the index, a replay and the leaderboard until it's awake. A sleeping Space takes a minute to start. If the Space is paused or flagged, use the Cloudflare site and say nothing about the Space.
 - [ ] Check the play server: `curl <play URL>/api/limits`. `remaining_today` above 0 and `client_ip_hint` showing your own masked IP mean it's healthy.
@@ -275,7 +275,7 @@ uv run python -m societysim.analysis.postbatch runs/<batch>                # lab
 - Use `label --no-jev` for free or test runs. Without `--no-jev`, and with `TYPESAFE_API_KEY` set, `label` also calls Jev, which costs money.
 - A scripted run of `configs/smoke_batch.yaml` writes to the same folder as the real run, and the real run then stops with a mismatch error. Delete `runs/smoke_batch` between the two.
 - If a model fails 10 calls in a row with no tokens, the batch stops starting new games (`provider_down`), lets running games finish, and exits with status 1. Fix the provider and run the same command again: finished games are skipped (#177).
-- Each call times out after 120 seconds; set `timeout_s` on a provider in `configs/models.yaml` to change it (#181).
+- Each call times out after 120 seconds by default; set `timeout_s` on a provider in `configs/models.yaml` to change it (#181). The `huggingface` provider sets 180 seconds (#346), and the HF-router `hosted_vllm` models count under it.
 - Failed and empty replies are never written to the response cache (#188).
 - Deploy a real batch: `bash scripts/deploy-space.sh --out /tmp/site --force runs/<batch>`, then `npx wrangler login` once and `npx wrangler pages deploy /tmp/site --project-name societysim --branch main`. Or set the `DEPLOY_SOURCE` repo variable to `hf:<owner/name>[:<batch_id>]` and rerun `Deploy`. Live Neon games on the site need the repo variables `VITE_NEON_DATA_API_URL` and `VITE_NEON_AUTH_URL` (README, deploy section).
 - Visitor play kill switch: set the Space variable `PLAY_ENABLED=0` and restart (README, "Visitor play").

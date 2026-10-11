@@ -35,7 +35,7 @@ How to read this file:
 
 Site: https://society-sim.us. Use this for any judge who walks up, then switch to the track script. Navigation bar order on the site: Games, Leaderboard, Research, New game, Play, Open a log file.
 
-Before you start, have two tabs ready: the demo game (open it with `?mode=narrator` appended, because the viewer opens in villager view and hides everything private) and the Leaderboard page. `TODO(batch)`: demo game id and the seq numbers to jump to. Get them from `uv run societysim highlights runs/<batch>`: take the top `lie_moved_vote` row, where `seq` is [lie seq, vote resolution seq] and `link` is a query string to append to the site URL (#160).
+Before you start, have two tabs ready: the demo game (open it with `?mode=narrator` appended, because the viewer opens in villager view and hides everything private) and the Leaderboard page. Demo game: `mixed_v2_10p-g0043`, open https://society-sim.us/?game=mixed_v2_10p-g0043&seq=49&mode=narrator. It is the top `lie_moved_vote` row from `uv run societysim highlights runs/mixed_v2_10p`: at seq 48 to 49, Hugo (p5, gemini-flash, a wolf) accuses his own partner Iris (p2, gpt-oss-120b). All 8 village voters then vote Iris out (votes seq 69 to 78, elimination seq 79). Hugo survives and the wolves win by parity on day 5. Be honest about it: four players had already accused Iris before Hugo joined in, so he rode the pile-on rather than starting it.
 
 | Time | Page | What to do | What to say |
 |---|---|---|---|
@@ -45,8 +45,8 @@ Before you start, have two tabs ready: the demo game (open it with `?mode=narrat
 | 1:15 | Replay, inspector | Click a wolf's seat. | "This is the private scratchpad next to what the wolf said out loud. Every turn also carries a suspicion score for every living player." |
 | 1:40 | Replay, narration | Turn narration on (narration controls under the table). Let one or two clips play. | "Narration never voices a player's private reasoning. By default it reads only public events. Wolf-chat and highlight clips exist only if they were generated with `--select`, and the viewer plays them only in Narrator view, never in villager view." Skip this step if the clips are missing for the demo game. |
 | 2:00 | Replay, lie label | Jump to the labeled lie pop-up, then the vote it moved. | "We label a lie by comparing the claim with the engine's truth. The raw log is never edited." |
-| 2:20 | Leaderboard | Open the page. Show win rate by model. Scroll to **Global rankings** and click the **Detectors** tab (best wolf detectors, as villagers), then **Liars** (best liars, as wolves). Needs the Neon deploy variables, and it is off when the URL has `?base=` or `?index=`. | `TODO(batch)`: the one row to point at and the number to say. For the Global rankings: "These two tables count every finished game on the site, visitor games included." It shows finished, non-scripted games only, and shows no player handles, only model names. Models with fewer than 5 games are listed last, unranked. `TODO(verify)` on the day that both tabs have rows. |
-| 2:45 | Research | Open the deception matrix. | "Rows are the liar model, columns are the listener. Each cell is how often the listener's vote followed the lie, against how often it followed a true claim." `TODO(batch)`: one cell to read out, with its n. Say "exploratory" if n is small. |
+| 2:20 | Leaderboard | Open the page. Show win rate by model. Scroll to **Global rankings** and click the **Detectors** tab (best wolf detectors, as villagers), then **Liars** (best liars, as wolves). Needs the Neon deploy variables, and it is off when the URL has `?base=` or `?index=`. | Point at gemini-flash, the top row: "Gemini Flash won 65% of its seats over 100 ten-player games, 57% to 73% at 95% confidence, and it's first on OpenSkill." For the Global rankings: "These two tables count every finished game on the site, visitor games included." It shows finished, non-scripted games only, and shows no player handles, only model names. Models with fewer than 5 games are listed last, unranked. `TODO(verify)` on the day that both tabs have rows. |
+| 2:45 | Research | Open the deception matrix. | "Rows are the liar model, columns are the listener. Each cell is how often the listener's vote followed the lie, against how often it followed a true claim." Read out: "When gpt-oss-120b lied, deepseek-v3.1 voted the way the lie wanted 26% of the time over 69 votes, against 81% after a true claim. Most cells sit below their baseline. gpt-5-mini is the exception, but it only played 12 games, so that's exploratory." |
 | 3:15 | Model profile | From the leaderboard, click a model name. | "One page per model: how it does as wolf and as villager, how often it lies, how well its suspicion scores find the wolves." |
 | 3:30 | Spot the wolf | Back in a replay, open the "Spot the wolf" panel under the table, guess a seat, step forward. | "You get the same public information a villager had. Can you beat the models?" |
 | 4:00 | Live mode | Open a game that is still running (a running game shows a live badge). Needs the Neon deploy variables. If nothing is running, play the 60-second backup video instead. | "Games stream into Neon while they run. The page asks for anything newer every two seconds." |
@@ -62,7 +62,7 @@ Each script is about 60 seconds spoken. Each says what to click, what to say, an
 
 ### Hugging Face: Best Use of Open Source AI
 
-**Evidence:** HF Dataset with the game logs and labels (planned name `polter-dev/societysim-games`; Seth was asked to publish an earlier batch to `Sethery32/societysim-games`, `TODO(verify)` which one is final and public). HF Space with the viewer (`polter-dev/societysim`, `TODO(verify)` that it is up). Model list in `configs/models.yaml` and the README.
+**Evidence:** HF Dataset with the game logs and labels: https://huggingface.co/datasets/polter-dev/societysim-games (public, 100 games of `mixed_v2_10p`, 20,512 events, 1,951 labels). HF Space with the viewer: `polter-dev/societysim`, deployed from that dataset by the Deploy workflow (#294). Model list in `configs/models.yaml` and the README.
 
 **Click path**
 1. Space (or society-sim.us), game index. Point at the model names.
@@ -72,12 +72,14 @@ Each script is about 60 seconds spoken. Each says what to click, what to say, an
 
 **Say**
 
-> SocietySim is a social deduction benchmark for language models. Players sit down to a game of Werewolf. Most of them are open models served through Hugging Face Inference Providers: Qwen3 235B, Llama 4 Maverick, Gemma 4, gpt-oss-120b and DeepSeek V3.1. Gemini and GPT fill the other seats. A deterministic engine owns the rules, so a model can lie to the others but can't bend a rule. Every turn, each model writes private reasoning, a suspicion score for every other player, and one public move. After the game we label each lie and check whether it worked. Every game is published as a Hugging Face Dataset, and the replay viewer and leaderboard run on a Space. In our batch of TODO(batch) games, TODO(batch: model) won most often as a wolf.
+> SocietySim is a social deduction benchmark for language models. Players sit down to a game of Werewolf. Most of them are open models served through Hugging Face Inference Providers: Qwen3 235B, Llama 4 Maverick, Gemma 4, gpt-oss-120b and DeepSeek V3.1. Gemini and GPT fill the other seats. A deterministic engine owns the rules, so a model can lie to the others but can't bend a rule. Every turn, each model writes private reasoning, a suspicion score for every other player, and one public move. After the game we label each lie and check whether it worked. Every game is published as a Hugging Face Dataset, and the replay viewer and leaderboard run on a Space. In our batch of 100 ten-player games, Gemini Flash won most often as a wolf.
 
 **Numbers**
 - Open models at the table: 5 of the 9 in `configs/mixed_v1.yaml`, all through HF Inference Providers.
 - Smoke batch (#34): 10 of 10 games finished, about $0.02 per game.
-- `TODO(batch)`: games played, total spend, win rates with confidence intervals, lie success, top of the leaderboard.
+- `mixed_v2_10p`: 100 ten-player games, 0 unfinished, $11.02 total. Villagers won 62, wolves 38.
+- Top of the leaderboard: gemini-flash, 65% win rate (95% CI 57% to 73%), OpenSkill ordinal 32.94, 68% as wolf over 28 wolf seats. Next: llama4-maverick 61% (52% to 68%), gemini-flash-lite 59% (51% to 67%).
+- Lie success (self-tag, exploratory): 1,129 lies. 57% of votes went the way a lie implied, against a 59% no-lie base rate. gemini-flash's lies moved 45% of the suspicions they targeted (n=943), the highest.
 
 **If it breaks:** local viewer with the same game, and a screenshot of the dataset card.
 
@@ -101,14 +103,14 @@ Don't plan on a live pod. AUP sessions are time-boxed, the first start downloads
 - R9700 vLLM, one game: 62 events, 30 model turns, 0 `invalid_output`, 0 fallbacks. 9,044 output tokens. Model time 373 s, about 12.4 s per turn. 33 to 41 tok/s for one stream.
 - Strix Halo llama.cpp, 5 self-play games: 7.3 s per call, 39.5 output tokens/s, about 138 s per game, $0/h (hackathon-provided GPU). All five ended in a wolf win by parity on day 2, so these are short games.
 - `TODO(#38)`: the hourly rate for imputed $/game. Until then say "no cost on the AUP quota", not a $/game.
-- `TODO(batch)`: the AMD speed table from the final report, if a pod run lands before Sunday.
+- The AMD model is not in `mixed_v2_10p`, so its report has no AMD speed row. Use the two lines above.
 - Don't call AMD faster or slower than the API providers. The setups differ.
 
 **If it breaks:** viewer replay of the AMD game from the laptop, plus the #114 and #253 comments.
 
 ### Databricks: Best Use of Databricks
 
-**Evidence:** Databricks workspace: catalog `workspace.societysim` (`games`, `events`, `labels`, `batch_metrics`, `metrics_*`, `deception_pairs`), the AI/BI dashboard (id `01f1c4a8de811c60854d375219a83fbb` per Marcus's status, `TODO(verify)`), the MLflow experiment (`387213714723263`, `TODO(verify)`). Code in `notebooks/databricks/` and `scripts/databricks_ingest.py`.
+**Evidence:** Databricks workspace: catalog `workspace.societysim` (`games`, `events`, `labels`, `batch_metrics`, `metrics_*`, `deception_pairs`), the AI/BI dashboard (id `01f1c4a8de811c60854d375219a83fbb`, republished on all four batches for #294), the MLflow experiment (`387213714723263`, `TODO(verify)`). Code in `notebooks/databricks/` and `scripts/databricks_ingest.py`.
 
 **Click path**
 1. Catalog Explorer: `workspace.societysim` and its tables.
@@ -118,13 +120,13 @@ Don't plan on a live pod. AUP sessions are time-boxed, the first start downloads
 
 **Say**
 
-> We want to know which models lie and whose lies work, across every game we've played. One script loads every game into Delta tables: games, events, labels and a per-batch metrics table. A notebook ports our whole metrics layer to Spark SQL, and its last cell checks every value against our Python metrics and fails on any mismatch, so the dashboard and the leaderboard can't drift apart. The AI/BI dashboard sits on those tables: win rate by model and role, which lies swayed votes, how well villagers spotted wolves, and who fools whom. Each experiment batch is logged as an MLflow run. TODO(batch: model) had the most successful lies.
+> We want to know which models lie and whose lies work, across every game we've played. One script loads every game into Delta tables: games, events, labels and a per-batch metrics table. A notebook ports our whole metrics layer to Spark SQL, and its last cell checks every value against our Python metrics and fails on any mismatch, so the dashboard and the leaderboard can't drift apart. The AI/BI dashboard sits on those tables: win rate by model and role, which lies swayed votes, how well villagers spotted wolves, and who fools whom. Each experiment batch is logged as an MLflow run. Gemini Flash had the most successful lies.
 
 **Numbers**
-- Live on real data per Marcus's status (#42): 58 games from `mixed_v1`, `selfplay_baseline` and `selfplay_amd`; win rates matched the report. `TODO(verify)`.
+- Live on real data (#294): 158 games from `mixed_v1`, `selfplay_baseline`, `selfplay_amd` and `mixed_v2_10p`, 26,760 events, 2,486 labels, 2,790 batch_metrics rows, 158 deception pairs. The `metrics.py` notebook (with the parity cell) and `mlflow_batches` both ran to SUCCESS on the workspace.
 - Parity checks (#127, local PySpark): 1,050 on the fixture, 2,730 on a 25-game scripted batch, 0 mismatches.
-- `TODO(#42)`: rerun on `mixed_v2_10p` after the batch, then quote its row count and parity result.
-- `TODO(batch)`: top lie-success model, detection AUC per model.
+- Top lie success (`mixed_v2_10p`, self-tag): gemini-flash, 45% of targeted suspicions moved (n=943).
+- Detection AUC (`mixed_v2_10p`): gemini-flash 0.77, gemini-flash-lite 0.75, deepseek-v3.1 0.73, llama4-maverick 0.72, gemma4-26b 0.70, qwen3-235b 0.69, gpt-oss-120b 0.65, gpt-5-mini 0.61, gpt-5-nano 0.55 (the two GPT-5 models played only 12 games).
 
 **If it breaks:** screenshots of the dashboard and the parity cell, plus `uv run python scripts/databricks_ingest.py --fixture --dry-run` in a terminal.
 
@@ -141,13 +143,13 @@ Don't plan on a live pod. AUP sessions are time-boxed, the first start downloads
 
 **Say**
 
-> Every game we run is a stream of events: speeches, accusations, night kills, votes. Neon Postgres holds all of them. Each game is a row in a games table, marked running, finished or failed. Each event is a JSONB row keyed by game and sequence number, so a schema change needs no migration. Labels sit in their own table, and leaderboard views compute win rates in SQL. Games stream into Neon while they run, and sync-neon backfills a batch you played without streaming. The website reads it directly: a short-lived anonymous token gets a read-only role that can select from a few tables and views, and nothing else. Events and labels for a running game stay hidden until it ends, so a spectator can't see secrets. For a game in progress, the page asks for new events every two seconds. Right now Neon holds TODO(batch) games and TODO(batch) events.
+> Every game we run is a stream of events: speeches, accusations, night kills, votes. Neon Postgres holds all of them. Each game is a row in a games table, marked running, finished or failed. Each event is a JSONB row keyed by game and sequence number, so a schema change needs no migration. Labels sit in their own table, and leaderboard views compute win rates in SQL. Games stream into Neon while they run, and sync-neon backfills a batch you played without streaming. The website reads it directly: a short-lived anonymous token gets a read-only role that can select from a few tables and views, and nothing else. Events and labels for a running game stay hidden until it ends, so a spectator can't see secrets. For a game in progress, the page asks for new events every two seconds. Right now Neon holds 180 games, 158 of them finished, and about 28 thousand events.
 
 **Numbers and facts**
 - Privacy (#323, applied live per Marcus's status): `events` and `labels` return 403 to the anonymous role; running games expose public events only through views. `TODO(verify)` on the day.
 - Visitor play uses Neon for the spend ledger and for streaming public events. Only public events reach Neon while a game runs; the full log is backfilled after it ends.
-- Labels in Neon were empty at the last note (#294). Until they are synced, lie-success columns in the leaderboard views are null. `TODO(batch)`: sync labels after the 10-player batch, then confirm `lie_success` is filled before you point at it.
-- `TODO(batch)`: game, event and label counts.
+- Labels are synced (#294): `lies_by_model` returns rows and `global_liars` has a non-null self-tag lie success (gemini-flash 0.669) through the Data API.
+- Counts (2026-10-11): 180 games (158 finished), 2,486 labels. The four batch syncs wrote 27,714 events (`mixed_v2_10p` 20,512, `mixed_v1` 4,598, `selfplay_baseline` 2,542, `selfplay_amd` 62); the anonymous role can't count `events`, so check the total in the SQL editor.
 
 **If it breaks:** the static site (reads `report/index.json`, no Neon) and the two SQL queries in the console.
 
@@ -164,13 +166,13 @@ Gemini is in the lineup and the Devpost draft lists the Gemini prize. No ticket 
 
 **Say**
 
-> Gemini plays at the same table as the open models, as a wolf and as a villager, in both Flash and Flash-Lite. We rate every model the same way: win rate, lie success, and how well its suspicion scores find the wolves. TODO(batch): one sentence on what the Gemini models did best.
+> Gemini plays at the same table as the open models, as a wolf and as a villager, in both Flash and Flash-Lite. We rate every model the same way: win rate, lie success, and how well its suspicion scores find the wolves. In 100 ten-player games, Gemini Flash came first on win rate, skill rating, lie success and wolf detection, and Flash-Lite was third on skill rating.
 
 **Numbers**
 - Last look, 7-player self-play baseline (#35 note, 45 games): `gemini-flash` had the highest detection score, about 0.91, ahead of `deepseek` (0.85) and `llama4` (0.81). `TODO(verify)` against the report before saying it, and call it a 7-player self-play result.
 - Neon detectors/liars views last seen (#344): `gemini-flash-lite` the top detector, `gemini-flash` the top liar by suspicion received. They are also on the Leaderboard page under Global rankings (Detectors and Liars tabs). `TODO(verify)` on the day.
 - Honest caveat: `gemini-flash` calls were slow (45 to 389 s per call in the preflight, #35) and the free-tier rate limit is low. If asked, say so.
-- `TODO(batch)`: Gemini rows from the final mixed report.
+- `mixed_v2_10p` (10 players, 100 games): gemini-flash 65% win rate (57% to 73%), OpenSkill 32.94 (first), detection AUC 0.77 (first), lies moved 45% of targeted suspicions (n=943, first). gemini-flash-lite 59% (51% to 67%), OpenSkill 22.71 (third), AUC 0.75, 39% (n=1,204). Median latency 3.7 s and 1.5 s per call in this batch.
 
 **If it breaks:** model profile screenshots.
 
@@ -280,10 +282,9 @@ uv run python -m societysim.analysis.postbatch runs/<batch>                # lab
 
 ## 8. Open items for #38
 
-- Every `TODO(batch)`: wait for Marcus's 10-player close-out (#294), then `postbatch`, the HF publish, Neon label sync and the Databricks rerun (#42).
+- `TODO(batch)` items are filled from `mixed_v2_10p` (#294). Narration audio for the demo game is not on the live site yet: the CI deploy has no `.audio` folders, so a local deploy (above) is needed to serve them.
 - Every `TODO(verify)`: re-check against the live site and the report.
-- Demo game id and the seq numbers to jump to.
-- HF Space and Dataset URLs, and whether the Space appeal was accepted.
+- Whether the Space appeal was accepted.
 - Who presents Gemini, and whether the Adobe room is on.
 - Figma file link (#22) and whether PR #121's token file landed.
 - The AMD hourly rate for imputed $/game.

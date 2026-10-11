@@ -2,13 +2,13 @@
 
 A 3-minute talk track, a 9-slide outline, one beat per sponsor and answers to likely judge questions. It follows the research question in the README ("What we're asking"). Part of demo prep (#38).
 
-`TODO(batch)` marks a number that does not exist yet. Each one says where it will come from. Fill them once the mixed batch is labeled and reported, and don't say a number out loud until it is filled.
+Numbers come from the `mixed_v2_10p` report (100 ten-player games, #294). Say only the numbers written here.
 
 ## What we can claim today
 
 - Built and merged: the engine, the batch runner, `label`, `report` (including the "who fools whom" matrix, #251), the replay viewer, the human seat, narration clips, and the live site at https://society-sim.us.
-- Not done yet: the 10-player engine (#250, open), so every real batch so far is 7 players. The 10-player batch config and the human-vs-models config are #259. The report's "Research answers" section is #264 (open).
-- Not done yet: the real results. The only model numbers we have are an exploratory first look at 9 mixed_v1 games (7 players, small n), posted on #216. Treat it as a hint, not a finding.
+- Done: the 10-player engine (#250) and the 10-player mixed batch `mixed_v2_10p`: 100 games, 0 unfinished, $11.02. Results are in its report and on #216.
+- Lie labels are self-tags only (the free source). Jev was not run on this batch, so every lie number is self-tag.
 
 ## 3-minute talk track
 
@@ -16,9 +16,9 @@ Times are cumulative.
 
 ### 0:00 to 0:20 Hook
 
-> Here is a line from one of our games. A wolf says "I'm the Seer. I checked Ava last night and she is a wolf. Vote Ava today." His own notes that turn: claiming first makes Ava's counterclaim look desperate. The engine knows he's a wolf.
+> Here is a wolf, played by Gemini Flash, on day one. The village is turning on his partner. Out loud he says: "I understand the suspicion on p2; pushing immediately against an uncontested Seer claim ... definitely looks defensive." His private notes that turn: "If I defend Iris blatantly, I'll be tied to her." Every villager votes his partner out. He survives, and the wolves win.
 
-That example is the hand-written sample game in `fixtures/sample_game.jsonl` (Finn; labels at seq 19 and 20 in `fixtures/sample_game.labels.jsonl`). It shows the shape of a real log but it is not model output, so don't call it one. `TODO(batch)`: swap in a real quote, its model name and seq numbers from the demo game.
+That is real model output: `mixed_v2_10p-g0043`, seq 48 (statement and private reasoning) and 49 (the accusation, labeled `bussing`), votes at seq 69 to 78, elimination at 79. Four players had accused Iris before he spoke, so he joined a pile-on rather than starting it; don't say he caused the vote.
 
 ### 0:20 to 0:45 The question
 
@@ -34,14 +34,15 @@ That example is the hand-written sample game in `fixtures/sample_game.jsonl` (Fi
 
 Say only what is filled in:
 
-- Win rate per model as wolf and as villager, with confidence intervals. `TODO(batch)`: report summary (`runs/<batch>/report/`).
-- Skill rating as wolf and as villager. `TODO(batch)`: OpenSkill table in the report.
-- Lie rate and lie success per model. `TODO(batch)`: report summary.
-- Who fools whom: for each liar model and listener model, how often the listener's vote followed the lie, against how often it followed a true claim. `TODO(batch)`: deception matrix in the report (#251).
-- Detection: how well each model's suspicion scores pointed at the real wolves. `TODO(batch)`: AUC in the report summary.
-- Human seat against models. `TODO(batch)`: only if the #259 run happens.
+All from `runs/mixed_v2_10p/report/report.md` (100 ten-player games, 2 wolves each):
 
-Until the batch is done, the only honest line is: "In a first look at 9 games, lies from gemini-flash and qwen3-235b were followed often, and gpt-oss-120b, gpt-5-nano and gemma4-26b fooled nobody. That is a small sample, and the full batch is running." (From #216; the top pairs have n of 6 to 8.)
+- Win rate: villagers won 62, wolves 38. gemini-flash won 65% of its seats (95% CI 57% to 73%): 68% as wolf, 65% as villager. Next are llama4-maverick 61% (52% to 68%) and gemini-flash-lite 59% (51% to 67%). The intervals overlap, so say "led", not "beat".
+- Skill rating (OpenSkill ordinal): gemini-flash 32.94, llama4-maverick 23.69, gemini-flash-lite 22.71, gemma4-26b 19.87, qwen3-235b 16.47, deepseek-v3.1 13.73, gpt-oss-120b 9.32. The report gives one ordinal per model, not one per side.
+- Lies: 1,129 self-tagged lies in 4,702 statements (24%). gemini-flash-lite lied most among the 100-game models (32%), gpt-oss-120b least (14%). gemini-flash's lies moved 45% of the suspicions they targeted (n=943), the highest; gpt-oss-120b's moved 16% (n=383).
+- Does lying win? Overall, 57% of votes went the way a lie implied, against a 59% no-lie base rate, so not on average. gemini-flash is the exception: 73% against its 65% base.
+- Who fools whom: in most liar-listener cells the listener followed the lie less often than it followed true claims of the same kind. Example: when gpt-oss-120b lied, deepseek-v3.1 followed 26% of 69 votes, against 81% after true claims. The cells above baseline are mostly gpt-5-mini as the liar, which played only 12 games (for example qwen3-235b followed 19 of 19, against 78%).
+- Detection AUC (0.5 is chance): gemini-flash 0.77, gemini-flash-lite 0.75, deepseek-v3.1 0.73, llama4-maverick 0.72, gemma4-26b 0.70, qwen3-235b 0.69, gpt-oss-120b 0.65.
+- Human seat against models: no visitor games yet, so say nothing.
 
 ### 2:00 to 2:40 Live demo
 
@@ -53,7 +54,7 @@ Open https://society-sim.us, the demo game, with `?mode=narrator`. The viewer st
 4. Narration: play the game's ElevenLabs clips from its `.audio` folder alongside the replay. Callum voices the day, Harry voices the night. The viewer does not play clips itself yet, so run them from a second window or drop this step.
 5. Human seat: `uv run societysim play --human-seat p3` puts you in a seat with the same information an AI would get. The other seats need model keys, so use a laptop that has them, or skip it.
 
-`TODO(batch)`: demo game id and the seq numbers to jump to (same open item as in [DEMO.md](DEMO.md)).
+Demo game: https://society-sim.us/?game=mixed_v2_10p-g0043&seq=49&mode=narrator. Seq 48 to 49 is the wolf turning on his partner, 69 to 78 the votes, 79 the elimination (same as in [DEMO.md](DEMO.md)).
 
 ### 2:40 to 3:00 Close
 
@@ -81,16 +82,16 @@ Open https://society-sim.us, the demo game, with `?mode=narrator`. The viewer st
    - Seats and roles rotate. No Claude models play.
    - On screen: the model table in the README or `configs/models.yaml`.
 6. **Results: who lies best, who catches lies**
-   - `TODO(batch)`: win rate, OpenSkill as wolf and villager, lie success, detection AUC.
+   - gemini-flash leads: 65% win rate (57% to 73%), OpenSkill 32.94, lies moved 45% of targeted suspicions, detection AUC 0.77. Villagers won 62 of 100.
    - On screen: report charts from `runs/<batch>/report/`, or the leaderboard page.
 7. **Results: who fools whom**
-   - `TODO(batch)`: the liar-by-listener matrix with 95% CIs and the true-claim baseline.
+   - Most cells sit below the listener's true-claim baseline: lies were followed less than truths. Example: gpt-oss-120b lying to deepseek-v3.1, 26% (n=69) against 81%.
    - On screen: the deception matrix from the report.
 8. **Live: watch a lie work**
    - Narrator view, inspector, label pop-up, the vote it moved, narration clips.
    - On screen: https://society-sim.us.
 9. **What's next**
-   - 10-player games (2 wolves, 8 others), tracked in #250 and #259. Human seat against models.
+   - Jev labels on top of the self-tags, more games for the GPT-5 models (12 each so far), and human seats against models through visitor play.
    - On screen: the "What we're asking" list in the README.
 
 ## Structure numbers we can cite
@@ -109,8 +110,8 @@ Use them for the "why 10 players" answer and nowhere else.
 
 One or two sentences each. Full scripts and click paths are in [DEMO.md](DEMO.md).
 
-- **Hugging Face.** Most players are open models (Qwen3 235B, Llama 4 Maverick, Gemma 4, gpt-oss-120b, DeepSeek V3.1) served through Inference Providers. The Dataset upload and the Space are still in progress: `TODO(#37)` for URLs; `scripts/deploy-space.sh` builds the Space.
-- **Databricks.** Game logs load into Delta tables, a notebook recomputes our metrics in Spark SQL and checks them against the Python numbers, an AI/BI dashboard sits on top and MLflow records each batch. Parity was checked on local PySpark with 0 mismatches. `TODO(#42)`: say it runs on the live workspace only once that is done.
+- **Hugging Face.** Most players are open models (Qwen3 235B, Llama 4 Maverick, Gemma 4, gpt-oss-120b, DeepSeek V3.1) served through Inference Providers. The 100 games and their labels are a public Dataset (https://huggingface.co/datasets/polter-dev/societysim-games), and the viewer runs on the Space `polter-dev/societysim`.
+- **Databricks.** Game logs load into Delta tables, a notebook recomputes our metrics in Spark SQL and checks them against the Python numbers, an AI/BI dashboard sits on top and MLflow records each batch. It runs on the live workspace on all 158 finished model games, and the parity notebook passes there.
 - **AMD.** gpt-oss-20b plays as a self-hosted player on an AMD Radeon AI PRO R9700, served with vLLM on ROCm. The run is done (see [infra/amd/README.md](../infra/amd/README.md) and the #114 numbers in DEMO.md). A Strix Halo run (Radeon 8060S, llama.cpp, gpt-oss-20b GGUF) also finished: 5 self-play games, 0 errors, 7.3 s per call, 39.5 output tokens/s, about 138 s per game, $0/h on the hackathon GPU. All five were short wolf wins by parity on day 2. It plays self-play games, not the mixed batch.
 - **Neon.** Games stream into Neon Postgres while they run (`--neon`), finished batches backfill with `sync-neon`, and the deployed viewer can read live games through the Neon Data API using an anonymous token. That last part only works when the deploy variables are set, so check the live site before saying it.
 - **ElevenLabs.** An offline script turns a game's public events into spoken clips: two narrators (Callum by day, Harry by night) and a voice per model. It never voices private reasoning.
@@ -125,10 +126,10 @@ We don't use scripted games for any result. Scripted bots test the engine and gi
 The engine knows every role, so a false role claim or a false seer report is false by construction. The model's own scratchpad is a second signal, and the Jev classifier covers statements that are harder to check. The raw log stays untouched; labels go in a separate file.
 
 **Isn't the sample too small?**
-Today, yes. The first look on #216 is 9 games and its top pairs have 6 to 8 votes. That is why the report gives 95% confidence intervals and a true-claim baseline, and why we call it exploratory. `TODO(batch)`: game count and pair counts once the batch is done.
+For some questions, yes. The 10-player batch is 100 games, and most liar-listener cells have 50 to 200 votes, but the GPT-5 models played only 12 games each and their cells have 1 to 23 votes. Win-rate intervals are about 16 points wide. That is why the report gives 95% confidence intervals and a true-claim baseline, and why we call the lie results exploratory.
 
 **Why 10 players?**
-Scripted 7-player games last 2.65 days with 20.5 statements. At 10 players it is 4.38 days and 53.4 statements, about 2.6 times the votes, so each pair of models gets more chances to lie and be judged. It isn't live yet (#250), so results so far are 7-player.
+Scripted 7-player games last 2.65 days with 20.5 statements. At 10 players it is 4.38 days and 53.4 statements, about 2.6 times the votes, so each pair of models gets more chances to lie and be judged. The headline results are 10-player.
 
 **Does a model that wins by lying prove it deceives well?**
 Not by itself. Lie success and persuasion are correlations. A vote can follow a lie for other reasons, so the matrix compares against how often the same listener follows true claims of the same kind.

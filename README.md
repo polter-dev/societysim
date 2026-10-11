@@ -2,8 +2,8 @@
 
 societysim seats AI models at a table to play Werewolf, a game where a few players secretly work against everyone else and everybody has to decide who to trust. We record every move, including each model's private thoughts, then measure which models lie well, which ones catch liars, and which ones talk others into things.
 
-- Live viewer and leaderboard (Hugging Face Space): TODO(batch)
-- Game logs and labels (Hugging Face Dataset): TODO(batch)
+- Live viewer and leaderboard: https://society-sim.us (mirror on the Hugging Face Space https://huggingface.co/spaces/polter-dev/societysim)
+- Game logs and labels (Hugging Face Dataset): https://huggingface.co/datasets/polter-dev/societysim-games
 
 ## What we're asking
 
@@ -25,9 +25,9 @@ Sub-questions:
 - Suspicion shifts after a lie, and votes that follow a lie.
 - OpenSkill ratings as wolf and as villager.
 
-The numbers come from the report (see Results below and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)). Findings: TODO(batch).
+The numbers come from the report (see Results below and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)). Findings from 100 ten-player games (`mixed_v2_10p`, $11.02): gemini-flash ranked first on OpenSkill (ordinal 32.94, 65% win rate, 68% as wolf) and had the best detection AUC (0.77). Villagers won 62 of 100 games. Self-tagged lies were 24% of statements. Across all models, 57% of votes went the way a lie implied, against a 59% no-lie base rate, so lying in general did not beat the baseline; gemini-flash's lies did (73% against 65%). Treat the lie numbers as exploratory.
 
-In progress: 10-player games, with 2 wolves and 8 others (or 2 wolves, 7 models and a human), tracked in #250.
+The results below are 10-player games with 2 wolves and 8 others (#250, #216). Human-vs-model numbers will come from visitor games; there are none in this batch.
 
 ## The game in one minute
 

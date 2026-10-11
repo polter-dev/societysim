@@ -249,7 +249,8 @@ class GameManager:
         self.neon_connect: Any = None  # set by prepare_neon() when Neon is reachable
         self.neon_backoff: tuple[float, ...] = (1, 2, 5, 15, 60)  # seconds; the last repeats
         self._neon_up = True  # False from the first failure until Neon is back
-        self._neon_task: asyncio.Task | None = None
+        self._neon_task: asyncio.Task | None = None  # the one background retry loop
+        self._neon_on_ready: Callable[[], Awaitable[bool]] | None = None
         self._started: tuple[str, dict[str, int]] = ("", {})  # (UTC day, client -> games)
 
     def _started_counts(self) -> dict[str, int]:
@@ -262,12 +263,19 @@ class GameManager:
         return self._started_counts().get(client, 0)
 
     async def prepare_neon(self, on_ready: Callable[[], Awaitable[bool]] | None = None) -> None:
-        """Create the Neon tables, then call `on_ready` (the ledger load). If either fails, games
-        run without live streaming and a background task keeps retrying with backoff (#453)."""
-        if not await self._try_neon(on_ready):
-            self._neon_task = asyncio.create_task(self._retry_neon(on_ready))
+        """Create the Neon tables, then call `on_ready` (the ledger load; kept for later calls).
+        If either fails, games run without live streaming and one background task keeps retrying
+        with backoff (#453). While it runs, further calls (admission) leave it to that task."""
+        if on_ready is not None:
+            self._neon_on_ready = on_ready
+        if self._neon_retrying() or await self._try_neon() or self._neon_retrying():
+            return
+        self._neon_task = asyncio.create_task(self._retry_neon())
 
-    async def _try_neon(self, on_ready: Callable[[], Awaitable[bool]] | None) -> bool:
+    def _neon_retrying(self) -> bool:
+        return self._neon_task is not None and not self._neon_task.done()
+
+    async def _try_neon(self) -> bool:
         from societysim.logging.sinks import neon
 
         try:
@@ -285,6 +293,7 @@ class GameManager:
             self._neon_up = False
             return False
         self.neon_connect = neon.connect_neon
+        on_ready = self._neon_on_ready
         if on_ready and not await on_ready():  # the ledger logs its own failure
             self._neon_up = False
             return False
@@ -293,10 +302,10 @@ class GameManager:
         self._neon_up = True
         return True
 
-    async def _retry_neon(self, on_ready: Callable[[], Awaitable[bool]] | None) -> None:
+    async def _retry_neon(self) -> None:
         for attempt in itertools.count():
             await asyncio.sleep(self.neon_backoff[min(attempt, len(self.neon_backoff) - 1)])
-            if await self._try_neon(on_ready):
+            if await self._try_neon():
                 return
 
     def start(

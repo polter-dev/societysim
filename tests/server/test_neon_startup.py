@@ -106,6 +106,45 @@ async def test_persistent_failure_keeps_retrying_without_crashing(tmp_path, monk
     assert m._neon_task.cancelled()
 
 
+def retry_loops() -> list[asyncio.Task]:
+    return [t for t in asyncio.all_tasks() if t.get_coro().__name__ == "_retry_neon"]
+
+
+async def test_starts_during_the_outage_leave_one_retry_loop(tmp_path, monkeypatch):
+    """Admission calls prepare_neon() on each visitor start while the ledger isn't ready. Those
+    calls, concurrent ones too, leave the one running loop alone; shutdown cancels it."""
+    fake_neon(monkeypatch, [ConnectionRefusedError("down")])
+    m = manager(tmp_path)
+
+    async def on_ready():
+        return True
+
+    await m.prepare_neon(on_ready)  # the lifespan
+    loop = m._neon_task
+    for _ in range(3):
+        await m.prepare_neon()  # what admission.check_start calls
+    await asyncio.gather(*(m.prepare_neon() for _ in range(3)))
+    assert m._neon_task is loop and retry_loops() == [loop]
+    assert m._neon_on_ready is on_ready  # kept for the loop, not cleared by admission's calls
+    await m.shutdown()
+    assert loop.cancelled() and retry_loops() == []
+
+
+async def test_the_loop_loads_the_ledger_with_the_lifespan_callback(tmp_path, monkeypatch):
+    fake_neon(monkeypatch, [ConnectionRefusedError("down"), ConnectionRefusedError("down"), None])
+    m = manager(tmp_path)
+    loads = []
+
+    async def on_ready():
+        loads.append(m.neon_connect)
+        return True
+
+    await m.prepare_neon(on_ready)
+    await m.prepare_neon()  # a visitor start during the outage
+    await asyncio.wait_for(m._neon_task, 5)
+    assert loads == [neon.connect_neon]
+
+
 async def test_ledger_load_failure_is_retried(tmp_path, monkeypatch):
     fake_neon(monkeypatch, [None])
     m = manager(tmp_path)

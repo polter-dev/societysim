@@ -1,0 +1,27 @@
+/* Exported from Figma viewer foundations; scoped adoption is a separate ticket. */
+:root {
+  --day-canvas: #243d2b;
+  --day-panel: #183020;
+  --day-surface: #3f7546;
+  --night-canvas: #03131d;
+  --night-panel: #03271e;
+  --night-surface: #123c2e;
+  --text-primary: #f4ebc2;
+  --text-secondary: #d8e4d1;
+  --accent-gold: #d4b35c;
+  --focus-ring: #ffe499;
+  --event-accusation: #843f4b;
+  --event-vote: #d4b35c;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --radius-control: 8px;
+  --radius-panel: 16px;
+  --target-minimum: 44px;
+  --font-heading: 'Cinzel', Georgia, serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+}

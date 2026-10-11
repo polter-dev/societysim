@@ -18,7 +18,7 @@ REGISTRY = Path(__file__).resolve().parents[2] / "configs/models.yaml"
 def _no_dotenv(monkeypatch, tmp_path):
     monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
     monkeypatch.setattr("societysim.cli.secrets.token_hex", lambda n: "deadbeefdeadbeef")
-    monkeypatch.setattr("societysim.cli.secrets.randbelow", lambda n: 17)
+    monkeypatch.setattr("societysim.cli.secrets.randbits", lambda n: 17)
     monkeypatch.chdir(tmp_path)
 
 
@@ -75,7 +75,7 @@ def test_play_setup_file_runs_an_advanced_game(tmp_path):
     assert [s["model"] for s in seats.values()] == ["gemma4-26b", "qwen3-235b"] * 4
     roles = sorted(evs[-1]["meta"]["roles"].values())
     assert roles.count("wolf") == 3 and "doctor" not in roles and roles.count("seer") == 1
-    assert evs[0]["meta"]["seed"] == 17
+    assert evs[0]["meta"]["seed"] == 11
 
     again = RUNNER.invoke(app, ["play", "--setup", "eight.json", "--batch-id", "b"])
     assert again.exit_code == 0, again.output
@@ -90,6 +90,21 @@ def test_play_setup_reads_yaml(tmp_path):
     assert result.exit_code == 0, result.output
     seats = events(tmp_path / "runs/s/s-deadbeefdeadbeef.jsonl")[0]["meta"]["seats"]
     assert [s["model"] for s in seats.values()] == ["gemma4-26b"] * 7
+    assert events(tmp_path / "runs/s/s-deadbeefdeadbeef.jsonl")[0]["meta"]["seed"] == 2
+
+
+def test_play_setup_without_seed_draws_one(tmp_path):
+    (tmp_path / "s.yaml").write_text("mode: basic\n")
+    result = RUNNER.invoke(app, ["play", "--setup", "s.yaml"])
+    assert result.exit_code == 0, result.output
+    assert events(tmp_path / "runs/s/s-deadbeefdeadbeef.jsonl")[0]["meta"]["seed"] == 17
+
+
+def test_play_seed_override_wins_over_setup_file(tmp_path):
+    (tmp_path / "s.yaml").write_text("mode: basic\nseed: 11\n")
+    result = RUNNER.invoke(app, ["play", "--setup", "s.yaml", "--seed", "2"])
+    assert result.exit_code == 0, result.output
+    assert events(tmp_path / "runs/s/s-deadbeefdeadbeef.jsonl")[0]["meta"]["seed"] == 2
 
 
 def test_play_setup_errors_are_one_clear_line(tmp_path):

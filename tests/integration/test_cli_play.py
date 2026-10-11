@@ -20,7 +20,7 @@ RUNNER = CliRunner()
 @pytest.fixture(autouse=True)
 def _fixed_play_randomness(monkeypatch):
     monkeypatch.setattr("societysim.cli.secrets.token_hex", lambda n: "deadbeefdeadbeef")
-    monkeypatch.setattr("societysim.cli.secrets.randbelow", lambda n: 17)
+    monkeypatch.setattr("societysim.cli.secrets.randbits", lambda n: 17)
 
 
 def events(path: Path) -> list[dict]:
@@ -49,7 +49,7 @@ def test_scripted_play_is_reproducible_and_writes_metadata(tmp_path, monkeypatch
     assert first_bytes
     assert json.loads(meta.read_text())["game_id"] == "selfplay_smoke-deadbeefdeadbeef"
     assert json.loads(meta.read_text())["agents"] == "scripted"
-    assert json.loads(meta.read_text())["seed"] == 17
+    assert json.loads(meta.read_text())["seed"] == 0
 
     second = RUNNER.invoke(app, args)
     assert second.exit_code == 0, second.output
@@ -70,18 +70,25 @@ def test_seed_override_changes_deal_but_not_id_shape(tmp_path, monkeypatch):
 
 def test_play_without_seed_draws_a_new_seed_for_each_game(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    config = tmp_path / "no_seed.yaml"
+    config.write_text("n_players: 7\nmodels: [gemma4-26b]\n")
     seeds = iter([101, 202])
     ids = iter(["1111111111111111", "2222222222222222"])
-    monkeypatch.setattr("societysim.cli.secrets.randbelow", lambda n: next(seeds))
+
+    def draw_seed(bits):
+        assert bits == 53
+        return next(seeds)
+
+    monkeypatch.setattr("societysim.cli.secrets.randbits", draw_seed)
     monkeypatch.setattr("societysim.cli.secrets.token_hex", lambda n: next(ids))
     for suffix, seed in [("1111111111111111", 101), ("2222222222222222", 202)]:
-        result = RUNNER.invoke(app, ["play", "--config", str(CONFIG)])
+        result = RUNNER.invoke(app, ["play", "--config", str(config)])
         assert result.exit_code == 0, result.output
-        log = tmp_path / f"runs/selfplay_smoke/selfplay_smoke-{suffix}.jsonl"
+        log = tmp_path / f"runs/no_seed/no_seed-{suffix}.jsonl"
         assert log.is_file()
         assert events(log)[0]["meta"]["seed"] == seed
         assert json.loads(log.with_suffix(".run_meta.json").read_text())["seed"] == seed
-        assert f"selfplay_smoke-{suffix}" in result.output
+        assert f"no_seed-{suffix}" in result.output
         assert f"-s{seed}" not in result.output
 
 

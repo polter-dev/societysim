@@ -206,7 +206,6 @@
           "title": "Human Seat"
         },
         "seed": {
-          "default": 0,
           "title": "Seed",
           "type": "integer"
         }

@@ -82,13 +82,13 @@ class GameSetup(_Strict):
         "shuffle first shuffles the pool with the seed.",
     )
     human_seat: SeatId | None = Field(None, description="The seat a person plays, or null.")
-    seed: int = Field(default_factory=lambda: secrets.randbelow(2**31))
+    seed: int = Field(default_factory=lambda: secrets.randbits(53))
 
     @classmethod
     def basic(cls, human: bool = False, *, seed: int | None = None) -> Self:
         """The default game: 10 seats, 2 wolves, seer and doctor; the human (if any) at p0."""
         if seed is None:
-            seed = secrets.randbelow(2**31)
+            seed = secrets.randbits(53)
         return cls(human_seat="p0" if human else None, seed=seed)
 
     @model_validator(mode="after")

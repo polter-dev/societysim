@@ -39,7 +39,7 @@ def adv(**kw) -> dict:
 
 
 def test_basic_setup_is_ten_seats_two_wolves_seer_doctor(monkeypatch):
-    monkeypatch.setattr("societysim.setup.secrets.randbelow", lambda n: 23)
+    monkeypatch.setattr("societysim.setup.secrets.randbits", lambda n: 23)
     setup = GameSetup.basic()
     cfg = setup.game_config()
     assert setup == GameSetup()  # every default is Basic
@@ -58,7 +58,12 @@ def test_basic_setup_is_ten_seats_two_wolves_seer_doctor(monkeypatch):
 
 def test_default_seed_is_fresh_and_explicit_seed_is_deterministic(monkeypatch):
     seeds = iter([11, 22, 33, 44])
-    monkeypatch.setattr("societysim.setup.secrets.randbelow", lambda n: next(seeds))
+
+    def draw_seed(bits):
+        assert bits == 53
+        return next(seeds)
+
+    monkeypatch.setattr("societysim.setup.secrets.randbits", draw_seed)
     assert [GameSetup().seed, GameSetup().seed, GameSetup.basic().seed, GameSetup.basic().seed] == [
         11,
         22,

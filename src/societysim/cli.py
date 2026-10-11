@@ -182,7 +182,6 @@ def play(
     if sum(x is not None for x in (config, preset, setup)) != 1:
         _echo("give exactly one of --config, --preset or --setup")
         raise typer.Exit(1)
-    seed = seed if seed is not None else secrets.randbelow(2**31)
     if config is None:
         game_setup = _load_setup(setup, human_seat, seed)
         cfg, human_seat = game_setup.game_config(), game_setup.human_seat
@@ -192,7 +191,10 @@ def play(
         raise typer.Exit(1)
     else:
         cfg, stem = load_yaml(config, GameConfig), config.stem
-        cfg = cfg.model_copy(update={"seed": seed})
+        if seed is not None:
+            cfg = cfg.model_copy(update={"seed": seed})
+        elif "seed" not in cfg.model_fields_set:
+            cfg = cfg.model_copy(update={"seed": secrets.randbits(53)})
     batch_id = batch_id if batch_id is not None else stem
     game_id = f"{batch_id}-{secrets.token_hex(8)}"
     if config is not None and human_seat is not None:

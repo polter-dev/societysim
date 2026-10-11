@@ -429,7 +429,7 @@ def test_play_neon_streams_live(tmp_path, monkeypatch):
         return conn
 
     monkeypatch.setattr("societysim.logging.sinks.neon.connect_neon", connect)
-    res = CliRunner().invoke(app, ["play", "--config", str(CONFIG), "--neon"])
+    res = CliRunner().invoke(app, ["play", "--config", str(CONFIG), "--seed", "0", "--neon"])
     assert res.exit_code == 0, res.output
     assert "create table if not exists games" in conn.executed[0][0]  # schema first
     log = _events(tmp_path / "runs/selfplay_smoke/selfplay_smoke-deadbeefdeadbeef.jsonl")
@@ -455,7 +455,7 @@ def test_play_neon_with_human_seat_streams_unrated_suspicion_as_null(tmp_path, m
 
     monkeypatch.setattr("societysim.logging.sinks.neon.connect_neon", connect)
     monkeypatch.setattr("builtins.input", answer)
-    args = ["play", "--config", str(CONFIG), "--neon", "--human-seat", "p3"]
+    args = ["play", "--config", str(CONFIG), "--seed", "0", "--neon", "--human-seat", "p3"]
     res = CliRunner().invoke(app, args)
     assert res.exit_code == 0, res.output
     log = _events(tmp_path / "runs/selfplay_smoke/selfplay_smoke-deadbeefdeadbeef.jsonl")
@@ -473,7 +473,7 @@ def test_play_without_neon_url_still_plays(tmp_path, monkeypatch):
     monkeypatch.setattr("societysim.cli.secrets.token_hex", lambda n: "deadbeefdeadbeef")
     monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
     monkeypatch.delenv("NEON_DATABASE_URL", raising=False)
-    res = CliRunner().invoke(app, ["play", "--config", str(CONFIG), "--neon"])
+    res = CliRunner().invoke(app, ["play", "--config", str(CONFIG), "--seed", "0", "--neon"])
     assert res.exit_code == 0, res.output
     assert "warning: Neon unavailable (RuntimeError)" in res.output
     assert (tmp_path / "runs/selfplay_smoke/selfplay_smoke-deadbeefdeadbeef.jsonl").is_file()
@@ -592,7 +592,7 @@ def test_abandoned_human_game_ends_failed_in_neon(tmp_path, monkeypatch):
         return conn
 
     monkeypatch.setattr("societysim.logging.sinks.neon.connect_neon", connect)
-    args = ["play", "--config", str(CONFIG), "--neon", "--human-seat", "p0"]
+    args = ["play", "--config", str(CONFIG), "--seed", "0", "--neon", "--human-seat", "p0"]
     res = CliRunner().invoke(app, args, input="")  # stdin EOF: the player walks away
     assert res.exit_code == 130, res.output
     ends = [a for sql, a in conn.executed if sql.startswith("update games set status")]

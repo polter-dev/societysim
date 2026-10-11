@@ -35,6 +35,11 @@ describe("Table on the fixture", () => {
     expect(s.p5).toContain("gemini-flash");
   });
 
+  it("marks each seat's button for the live smoke check (the <li> is a zero-size anchor)", () => {
+    const s = seats(render(0, "villager"));
+    for (const li of Object.values(s)) expect(li).toContain('data-testid="seat-button"');
+  });
+
   it("names each seat with name, model, status and only the roles this mode shows", () => {
     expect(label(seats(render(0, "narrator")).p2)).toBe("Cleo, gemma-4-26b, alive, wolf");
     expect(label(seats(render(14, "villager")).p2)).toBe("Cleo, gemma-4-26b, alive");

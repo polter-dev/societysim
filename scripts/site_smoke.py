@@ -28,7 +28,11 @@ THIRD_PARTY = re.compile(r"challenges\.cloudflare\.com|cloudflareinsights\.com")
 
 # key element per page: (selector, what it is). The replay and its deep links share one.
 SEL_H1 = "main h1"
-SEL_SEATS = "[data-seat]"  # the table: one <li> per player (Table.tsx)
+SEL_SEATS = "[data-seat]"  # the table: one <li> per player (Table.tsx); count and read these
+# The <li> is a zero-size anchor since the medallion table (#404): its button, medallion and
+# plate overflow it, so Playwright never sees the <li> as visible. Wait on the button instead.
+# The testid only exists once deployed; the structural fallback works on the live site today.
+SEL_SEAT_KEY = "[data-testid='seat-button'], [data-seat] > button"
 SEL_STEP = ".step-label"  # "beat N / M"
 SEL_SPOT = "section.spotwolf"
 # Landing screens (viewer/src/landing). Each key is "data-testid, current DOM": the testid is
@@ -69,14 +73,14 @@ ROUTES = [
     Route("modes", "?page=modes", "choose your fate", SEL_MODES),
     Route("advanced setup", "?page=play&mode=advanced", "advanced setup", SEL_ADVANCED),
     Route("index", "?page=games", "games", "main table a[href*='game=']"),
-    Route("replay", "?game={game}", "", SEL_SEATS, ("game",)),
+    Route("replay", "?game={game}", "", SEL_SEAT_KEY, ("game",)),
     # mode=villager is the spectator view (modeFromSearch in viewer/src); explicit so a changed
     # default can't swap in the narrator view
     Route(
         "step deep link",
         "?game={game}&step={step}&mode=villager",
         "",
-        SEL_SEATS,
+        SEL_SEAT_KEY,
         ("game", "step"),
     ),
     Route("leaderboard", "?page=leaderboard", "leaderboard", "table caption"),

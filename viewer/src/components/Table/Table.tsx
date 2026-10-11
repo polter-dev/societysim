@@ -61,7 +61,7 @@ function Seat({ p, i, n, model, selected, speaking, onSelect }: SeatProps) {
       data-plate={y < 50 ? "above" : "below"}
       style={{ left: `${x}%`, top: `${y}%` }}
     >
-      <button type="button" aria-pressed={selected} aria-label={seatLabel(p, model)} onClick={() => onSelect?.(p.id)}>
+      <button type="button" aria-pressed={selected} aria-label={seatLabel(p, model)} data-testid="seat-button" onClick={() => onSelect?.(p.id)}>
         <AvatarMedallion model={p.model} label={model} alive={p.alive} size={96} />
         <span className="seat-plate">
           <span className="seat-name">

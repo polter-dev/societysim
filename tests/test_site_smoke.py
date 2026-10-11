@@ -32,6 +32,15 @@ def test_landing_routes_accept_the_testid_or_the_current_dom():
     assert next(r for r in smoke.ROUTES if r.name == "index").query == "?page=games"
 
 
+def test_replay_routes_wait_on_the_seat_button_not_the_zero_size_li():
+    # since #404 the <li data-seat> has no box of its own, so it is never "visible"
+    keys = {r.name: r.key for r in smoke.ROUTES}
+    for name in ("replay", "step deep link"):
+        assert keys[name] == smoke.SEL_SEAT_KEY, name
+    assert "[data-testid='seat-button']" in smoke.SEL_SEAT_KEY
+    assert "[data-seat] > button" in smoke.SEL_SEAT_KEY
+
+
 def test_advanced_controls_accept_comboboxes_and_native_selects():
     assert "role='combobox'" in smoke.SEL_ADVANCED_CONTROLS
     assert "select[aria-label]" in smoke.SEL_ADVANCED_CONTROLS
@@ -95,10 +104,11 @@ WOLF_LINE = "Ava feels like a power role, take her out tonight"
 def _seats(leak, step: bool = False) -> str:
     """leak: False, True (a role on an unrevealed seat) or "wolf" (wolf chat on the step link)."""
     cards = "".join(
-        f'<li data-seat="{s}" data-revealed="false"><button>{s}'
+        f'<li data-seat="{s}" data-revealed="false" style="position:absolute;top:400px;left:{i * 120}px;width:0;height:0">'
+        f"<button>{s}"
         f"<span data-role-card>{'Wolf' if leak is True and s == 'p2' else '? role unknown'}"
         "</span></button></li>"
-        for s in SEATS
+        for i, s in enumerate(SEATS)
     )
     wolf = f"<p>{WOLF_LINE}</p>" if leak == "wolf" and step else ""
     return (

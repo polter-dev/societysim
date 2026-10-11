@@ -8,7 +8,7 @@ Numbers come from the `mixed_v2_10p` report (100 ten-player games, #294). Say on
 
 - Built and merged: the engine, the batch runner, `label`, `report` (including the "who fools whom" matrix, #251), the replay viewer, the human seat, narration that plays inside the viewer, and the live site at https://society-sim.us.
 - Done: the 10-player engine (#250) and the 10-player mixed batch `mixed_v2_10p`: 100 games, 0 unfinished, $11.02. Results are in its report and on #216.
-- Lie labels are self-tags only (the free source). Jev was not run on this batch, so every lie number is self-tag.
+- Lie labels come from two sources: self-tags (the free source) and Jev, now published. Overall lie rate is 7.6% by self-tag and 7.5% by Jev (354 lies); votes followed a lie 40.3% of the time by Jev, against 73.1% after a true claim. Say which source a number is from; the Research page has a Self-tagged / Jev toggle.
 
 ## 3-minute talk track
 
@@ -91,7 +91,7 @@ Demo game: https://society-sim.us/?game=mixed_v2_10p-g0043&seq=49&mode=narrator.
    - Narrator view, inspector, label pop-up, the vote it moved, narration playing in the viewer.
    - On screen: https://society-sim.us.
 9. **What's next**
-   - Jev labels on top of the self-tags, more games for the GPT-5 models (12 each so far), and human seats against models through visitor play.
+   - More games for the GPT-5 models (12 each so far), and human seats against models through visitor play.
    - On screen: the "Research questions" list in the README.
 
 ## Structure numbers we can cite

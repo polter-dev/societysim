@@ -1,0 +1,110 @@
+{
+  "game_id": "mixed_v2_10p-g0031",
+  "model_id": "eleven_flash_v2_5",
+  "output_format": "mp3_44100_64",
+  "voices": {
+    "narrator": "N2lVS1w4EtoT3dr4eOWO",
+    "narrator_night": "SOYHLrjzK2X1ezoPC6cr"
+  },
+  "clips": [
+    {
+      "seq": 1,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "Night 1. The village sleeps.",
+      "file": "c27ca0c1984731b0e3587efc1a9b8bd6cef9e59e.mp3"
+    },
+    {
+      "seq": 14,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "Nobody died last night.",
+      "file": "0e02ef3d51a70da3ef8408388159efd2cba44b2e.mp3"
+    },
+    {
+      "seq": 15,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 1. The village wakes.",
+      "file": "3c28e64e935ae38dfc8ffd82fe7df91b48957d5e.mp3"
+    },
+    {
+      "seq": 75,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 1. Time to vote.",
+      "file": "50bb2dbe1551c36d70df0374a53a1afb08132c82.mp3"
+    },
+    {
+      "seq": 86,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Ben, a wolf.",
+      "file": "c2bf97cb9c7a26d80ea33a6eee09a0fd68676c4e.mp3"
+    },
+    {
+      "seq": 87,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "Night 2. The village sleeps.",
+      "file": "5eb6f9a8edc27da499995f2a943cf8667d1c6411.mp3"
+    },
+    {
+      "seq": 92,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "Nobody died last night.",
+      "file": "0e02ef3d51a70da3ef8408388159efd2cba44b2e.mp3"
+    },
+    {
+      "seq": 93,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 2. The village wakes.",
+      "file": "bb6d580c4b68d35b41c6899ef728ceb4f509fa23.mp3"
+    },
+    {
+      "seq": 148,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 2. Time to vote.",
+      "file": "3c67f5d733bf17628bac2338ebb08410f94e6f98.mp3"
+    },
+    {
+      "seq": 158,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Hugo, a wolf.",
+      "file": "3c97c858eba0695f6059d7079a2a154b4bb0b77b.mp3"
+    },
+    {
+      "seq": 159,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village wins. Every wolf is dead.",
+      "file": "495a0894ae10a4fe2d98028da216992f59199236.mp3"
+    }
+  ]
+}

@@ -190,6 +190,9 @@ def test_label_without_key_and_no_cache_falls_back_and_says_how_many_are_missing
     assert "26 statements have no cached Jev response" in result.output
     assert _jev_label_count(batch) == 0
     assert not (batch / "agreement.json").exists()
+    # Labelled once, with no "sending" line and no all-zero agreement table (#697).
+    assert result.output.count("labelled 1 games") == 1
+    assert "sending" not in result.output and "both" not in result.output
 
 
 def test_label_without_key_skips_cache_entry_whose_fingerprint_does_not_match(tmp_path, no_network):

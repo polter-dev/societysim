@@ -542,7 +542,7 @@ def label(
     import httpx
 
     from societysim.analysis import jev
-    from societysim.analysis.labeler import jev_verdicts, label_batch
+    from societysim.analysis.labeler import _scripted, jev_verdicts, label_batch, read_log
     from societysim.logging.events import EventType
 
     if not batch_dir.is_dir():
@@ -588,15 +588,41 @@ def label(
                 raise JevFailed("malformed cached response") from None
             return jev_verdicts(got)
 
+        def any_cached() -> tuple[bool, int]:
+            """Whether any statement Jev would read is cached, and how many statements
+            that is (finished, non-scripted games only, as label_batch picks them)."""
+            n = 0
+            for path in sorted(batch_dir.glob("*.jsonl")):
+                if path.name.endswith(".labels.jsonl") or _scripted(path):
+                    continue
+                events = read_log(path)
+                if not any(e.type is EventType.GAME_END for e in events):
+                    continue
+                for e in events:
+                    if e.type is EventType.STATEMENT:
+                        n += 1
+                        cached = jev.cached_verdict(
+                            cache, e.game_id, e.seq, e.actor, e.public_text or ""
+                        )
+                        if cached is not None:
+                            return True, n
+            return False, n
+
+        # Nothing cached: label once without Jev (no "sending" line, no all-zero table).
+        try:
+            found, n = any_cached()
+        except (KeyError, TypeError, ValueError):  # a cache file that doesn't parse
+            without_jev(f"{why}; cache unusable, malformed cached response")
+            return
+        if not found:
+            without_jev(why)
+            if n:
+                _echo(f"{n} statements have no cached Jev response in {cache}")
+            return
         try:
             label_batch(batch_dir, jev_for=cached_jev_for)
         except JevFailed as e:
             without_jev(f"{why}; cache unusable, {e}")
-            return
-        if not hits[0]:
-            without_jev(why)
-            if misses[0]:
-                _echo(f"{misses[0]} statements have no cached Jev response in {cache}")
             return
         n_labels = sum(
             line.count('"source":"jev"')

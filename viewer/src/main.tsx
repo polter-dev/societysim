@@ -6,6 +6,7 @@ import ModeSelection from "./landing/ModeSelection";
 import AdvancedSetup from "./landing/AdvancedSetup";
 import { neonSource, withFallback } from "./data/neonSource";
 import { DEFAULT_INDEX_URL, indexSource, publishedBase } from "./data/staticSource";
+import { retryLoad } from "./data/source";
 import ModelProfilePage from "./components/ModelProfile/ModelProfile";
 import IndexPage from "./pages/Index";
 import LeaderboardPage from "./pages/Leaderboard";
@@ -34,18 +35,18 @@ const staticGames = home ? undefined : indexSource(indexUrl);
 // Neon (index, leaderboard, live games) when the build has both Neon URLs and the URL doesn't
 // pick a static batch with ?base= or ?index=. Neon errors fall back to the static files.
 // The global rankings board reads Neon directly, so it uses the same gate.
+// A visitor game lives only in Neon: no static fallback, and its row may land a moment after the start.
 const { VITE_NEON_DATA_API_URL, VITE_NEON_AUTH_URL } = import.meta.env;
+const neonOn = !home && Boolean(VITE_NEON_DATA_API_URL && VITE_NEON_AUTH_URL);
 const visitorGame = params.get("game")?.startsWith("visitor-") ?? false;
 const neon =
-  !home && VITE_NEON_DATA_API_URL && VITE_NEON_AUTH_URL && (visitorGame || (!indexParam && !params.get("base")))
-    ? withFallback(neonSource(), staticGames!)
+  neonOn && visitorGame ? retryLoad(neonSource())
+    : neonOn && !indexParam && !params.get("base") ? withFallback(neonSource(), staticGames!)
     : null;
 const source = neon ?? staticGames;
 const href = (extra: Record<string, string>) =>
   "?" + new URLSearchParams({ ...(params.get("base") ? { base: params.get("base")! } : {}), ...(indexParam ? { index: indexParam } : {}), ...extra });
 const sibling = (name: string) => new URL(name, new URL(indexUrl, location.href)).href;
-
-
 
 const replay = params.has("game") || params.has("log") || page === "replay";
 const profileModel = page === "model" ? params.get("model") : null;

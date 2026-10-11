@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import normal from './assets/modes/normal.png';
-import watch from './assets/modes/watch.png';
-import advanced from './assets/modes/advanced.png';
+import normal from './assets/modes/normal.webp';
+import watch from './assets/modes/watch.webp';
+import advanced from './assets/modes/advanced.webp';
 import back from './assets/modes/back.png';
 import './landing.css';
 import './mode-selection.css';

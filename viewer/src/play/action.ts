@@ -20,11 +20,10 @@ export interface Draft {
 
 export type Built = { ok: true; body: ActionBody } | { ok: false; errors: string[] };
 
-/** "Ava (p3)" for a seat id; "Abstain" for the abstain choice. */
+/** "Ava" for a seat id ("Seat 4" if the name is unknown); "Abstain" for the abstain choice. Never the raw id. */
 export function playerLabel(players: Player[], seat: string): string {
   if (seat === ABSTAIN) return "Abstain";
-  const name = players.find((p) => p.seat === seat)?.name;
-  return name ? `${name} (${seat})` : seat;
+  return players.find((p) => p.seat === seat)?.name ?? `Seat ${Number(seat.slice(1)) + 1}`;
 }
 
 export function buildAction(pending: PendingAction, d: Draft): Built {

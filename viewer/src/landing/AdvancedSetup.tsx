@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { defaultState, HUMAN, humanSeat, loadSetupAssets, MAX_PLAYERS, MIN_PLAYERS, maxWolves, schemaErrors, seatId, setHumanSeat, toSetupJson, validate, type SetupAssets, type SetupState } from '../settings/setup';
+import { defaultState, HUMAN, humanSeat, loadSetupAssets, MAX_PLAYERS, MIN_PLAYERS, maxWolves, modelLabel, restrictCatalog, schemaErrors, seatId, setHumanSeat, setNPlayers, toSetupJson, validate, type SetupAssets, type SetupState } from '../settings/setup';
 import { getLimits, PlayError, startGame } from '../play/api';
 import { allowedModels } from '../play/allowed';
-import { restrictCatalog } from '../settings/setup';
 import { playEnabled } from '../play/config';
 import { getTurnstileToken } from '../play/turnstile';
 import type { Limits } from '../play/types';
@@ -15,11 +14,6 @@ import './mode-selection.css';
 import './advanced-setup.css';
 
 const emptyCatalog = { human: HUMAN, default_lineup: [], models: [] };
-export function seedValue(text: string): number {
-  if (!text.trim()) return 0;
-  const value = /^[+-]?\d+$/.test(text.trim()) ? Number(text) : NaN;
-  return Number.isSafeInteger(value) ? value : NaN;
-}
 
 export default function AdvancedSetup({ catalogUrl, schemaUrl, href, go = (url: string) => window.location.assign(url) }: {
   catalogUrl: string; schemaUrl: string; go?: (url: string) => void; href: (extra: Record<string, string>) => string;
@@ -27,7 +21,6 @@ export default function AdvancedSetup({ catalogUrl, schemaUrl, href, go = (url: 
   const [assets, setAssets] = useState<SetupAssets | null>(null);
   const [assetError, setAssetError] = useState<string | null>(null);
   const [state, setState] = useState<SetupState>(() => setHumanSeat({ ...defaultState(emptyCatalog), mode: 'advanced' }, 0, emptyCatalog));
-  const [seed, setSeed] = useState('');
   const [limits, setLimits] = useState<Limits | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,11 +61,10 @@ export default function AdvancedSetup({ catalogUrl, schemaUrl, href, go = (url: 
     const defaults = defaultState(restrictCatalog(assets.catalog, allowed)).seats;
     setState(s => ({ ...s, seats:s.seats.map((m,i) => m === HUMAN || allowed.includes(m) ? m : defaults[i]) }));
   }, [assets, allowedKey]);
-  const actualState = { ...state, seed: seedValue(seed) };
-  const setup = toSetupJson(actualState);
-  const errors = assets ? [...validate(actualState, catalog), ...schemaErrors(setup, assets.schema)] : [];
-  const seedError = Number.isNaN(actualState.seed) ? 'Enter a whole number for the seed, or leave it blank.' : null;
-  const canStart = on && assets !== null && errors.length === 0 && !seedError && token !== null && limits !== null && limits.play_enabled === true && Number.isInteger(limits.remaining_today) && limits.remaining_today > 0 && !busy;
+  // No seed field: the play server draws its own seed so the role deal stays secret.
+  const setup = toSetupJson(state);
+  const errors = assets ? [...validate(state, catalog), ...schemaErrors(setup, assets.schema)] : [];
+  const canStart = on && assets !== null && errors.length === 0 && token !== null && limits !== null && limits.play_enabled === true && Number.isInteger(limits.remaining_today) && limits.remaining_today > 0 && !busy;
   const human = humanSeat(state);
   const defaults = defaultState(catalog).seats;
   const models = state.seats.slice(0,state.nPlayers).filter(m => m !== HUMAN);
@@ -100,10 +92,7 @@ export default function AdvancedSetup({ catalogUrl, schemaUrl, href, go = (url: 
       <form onSubmit={e => { e.preventDefault(); void submit(); }}>
         <div className="advanced-columns">
           <fieldset><legend><img src={rules} alt="Game rules" /></legend>
-            <label className="advanced-row"><span>Seats</span><select aria-label="Seats" value={state.nPlayers} onChange={e => {
-              const n = Number(e.target.value);
-              setState(s => { const next = { ...s, nPlayers:n, nWolves:Math.min(s.nWolves,maxWolves(n)) }; return humanSeat(s) && Number(humanSeat(s)!.slice(1)) >= n ? setHumanSeat(next,0,catalog) : next; });
-            }}>{Array.from({length:MAX_PLAYERS-MIN_PLAYERS+1},(_,i) => <option key={i} value={MIN_PLAYERS+i}>{MIN_PLAYERS+i}</option>)}</select></label>
+            <label className="advanced-row"><span>Seats</span><select aria-label="Seats" value={state.nPlayers} onChange={e => setState(s => setNPlayers(s, Number(e.target.value), catalog))}>{Array.from({length:MAX_PLAYERS-MIN_PLAYERS+1},(_,i) => <option key={i} value={MIN_PLAYERS+i}>{MIN_PLAYERS+i}</option>)}</select></label>
             <label className="advanced-row"><span>Werewolves</span><select aria-label="Werewolves" value={state.nWolves} onChange={e => update({nWolves:Number(e.target.value)})}>{Array.from({length:maxWolves(state.nPlayers)},(_,i) => <option key={i} value={i+1}>{i+1}</option>)}</select></label>
             <label className="advanced-row"><span>Seer</span><input className="advanced-toggle" type="checkbox" role="switch" aria-label="Seer" checked={state.seer} onChange={e => update({seer:e.target.checked})} /></label>
             <label className="advanced-row"><span>Doctor</span><input className="advanced-toggle" type="checkbox" role="switch" aria-label="Doctor" checked={state.doctor} onChange={e => update({doctor:e.target.checked})} /></label>
@@ -112,14 +101,12 @@ export default function AdvancedSetup({ catalogUrl, schemaUrl, href, go = (url: 
             <label className="advanced-row"><span>Model selection</span><select aria-label="Model selection" disabled={!assets} value={selectedModel} onChange={e => {
               const model = e.target.value;
               setState(s => ({ ...s, seats:s.seats.map((m,i) => m === HUMAN ? HUMAN : model === '__default' ? defaults[i] : model) }));
-            }}><option value="__default">{assets ? 'Default lineup' : 'Loading models…'}</option><option value="__custom" disabled>Custom lineup</option>{catalog.models.map(m => <option key={m.name} value={m.name} disabled={!m.available} title={m.unavailable_reason ?? undefined}>{m.display_name}{m.available ? '' : ' (unavailable)'}</option>)}</select></label>
-            <label className="advanced-row"><span>Your seat</span><select aria-label="Your seat" value={human ?? ''} onChange={e => setState(s => setHumanSeat(s,e.target.value ? Number(e.target.value.slice(1)) : null,catalog))}><option value="">None — watch</option>{Array.from({length:state.nPlayers},(_,i) => <option key={i} value={seatId(i)}>{seatId(i)}</option>)}</select></label>
-            <label className="advanced-row"><span>Seed <small>(optional)</small></span><input title="Live games use a fresh server seed to keep roles secret." aria-label="Seed" type="text" inputMode="numeric" placeholder="0" value={seed} onChange={e => setSeed(e.target.value)} aria-invalid={Boolean(seedError)} aria-describedby={seedError ? 'seed-error' : undefined} /></label>
-            {assets && <details className="advanced-lineup"><summary>Customize each AI seat</summary><div>{state.seats.slice(0,state.nPlayers).map((model,i) => model === HUMAN ? <p key={i}>{seatId(i)} · You</p> : <label key={i}>{seatId(i)}<select aria-label={`Model for ${seatId(i)}`} value={model} onChange={e => setState(s => ({ ...s, seats:s.seats.map((m,k) => k === i ? e.target.value : m) }))}>{catalog.models.map(m => <option key={m.name} value={m.name} disabled={!m.available}>{m.display_name}{m.available ? '' : ' (unavailable)'}</option>)}</select></label>)}</div></details>}
+            }}><option value="__default">{assets ? 'Default lineup' : 'Loading models…'}</option><option value="__custom" disabled>Custom lineup</option>{catalog.models.map(m => <option key={m.name} value={m.name} disabled={!m.available} title={m.unavailable_reason ?? undefined}>{modelLabel(m)}{m.available ? '' : ' (unavailable)'}</option>)}</select></label>
+            <label className="advanced-row"><span>Your seat</span><select aria-label="Your seat" value={human ?? ''} onChange={e => setState(s => setHumanSeat(s,e.target.value ? Number(e.target.value.slice(1)) : null,catalog))}><option value="">None — watch</option>{Array.from({length:state.nPlayers},(_,i) => <option key={i} value={seatId(i)}>Seat {i+1}</option>)}</select></label>
+            {assets && <details className="advanced-lineup"><summary>Customize each AI seat</summary><div>{state.seats.slice(0,state.nPlayers).map((model,i) => model === HUMAN ? <p key={i}>Seat {i+1} · You</p> : <label key={i}>Seat {i+1}<select aria-label={`Model for seat ${i+1}`} value={model} onChange={e => setState(s => ({ ...s, seats:s.seats.map((m,k) => k === i ? e.target.value : m) }))}>{catalog.models.map(m => <option key={m.name} value={m.name} disabled={!m.available}>{modelLabel(m)}{m.available ? '' : ' (unavailable)'}</option>)}</select></label>)}</div></details>}
           </fieldset>
         </div>
         <div className="advanced-feedback" aria-live="polite">
-          {seedError && <p id="seed-error" role="alert">{seedError}</p>}
           {assetError && <p role="alert">{assetError}</p>}
           {!assets && !assetError && <p>Loading the model catalog…</p>}
           {errors.length > 0 && <ul role="alert">{errors.map((message,i) => <li key={i}>{message}</li>)}</ul>}

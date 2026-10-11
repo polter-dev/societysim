@@ -50,10 +50,10 @@ describe("YourTurnPanel", () => {
   it("votes by name, with no JSON and no seat ids to type", () => {
     const pending: PendingAction = { kind: "vote", targets: ["p1", "p2", "abstain"], others: ["p1", "p2"], deadline: 0 };
     render(pending);
-    expect(box.textContent).toContain("Ava (p1)");
+    expect(box.textContent).toContain("Ava");
     expect(box.querySelector("input[type=number]")).toBeNull();
-    click(button("Bo (p2)"));
-    expect(button("Bo (p2)").getAttribute("aria-pressed")).toBe("true");
+    click(button("Bo"));
+    expect(button("Bo").getAttribute("aria-pressed")).toBe("true");
     send();
     expect(sent(pending)).toEqual({ ok: true, body: { action: { vote: "p2" } } });
   });
@@ -74,7 +74,7 @@ describe("YourTurnPanel", () => {
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(text, "Ava is lying.");
       text.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    click(button("Ava (p1)"));
+    click(button("Ava"));
     const ava = box.querySelector('.your-turn__suspicion fieldset[data-seat="p1"]')!;
     const bo = box.querySelector('.your-turn__suspicion fieldset[data-seat="p2"]')!;
     click(button("trust", bo));

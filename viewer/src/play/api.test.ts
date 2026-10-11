@@ -142,7 +142,8 @@ describe("buildAction", () => {
 
   it("labels players by name", () => {
     const players = [{ seat: "p1", name: "Ava", alive: true }];
-    expect(playerLabel(players, "p1")).toBe("Ava (p1)");
+    expect(playerLabel(players, "p1")).toBe("Ava");
+    expect(playerLabel(players, "p7")).toBe("Seat 8");
     expect(playerLabel(players, "abstain")).toBe("Abstain");
   });
 });

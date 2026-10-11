@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { getLimits } from '../play/api';
 import { playEnabled } from '../play/config';
 import type { Limits } from '../play/types';
-import playButton from './assets/play-button.png';
+import playButton from './assets/play-button.webp';
 import howButton from './assets/how-button.png';
 import aboutButton from './assets/about-button.png';
-import statusFrame from './assets/status-frame-clean.png';
+import statusFrame from './assets/status-frame-clean.webp';
 
 import './landing.css';
 

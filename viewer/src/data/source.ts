@@ -62,3 +62,23 @@ export function staticSource(urls: Record<string, string>): GameSource {
       (await fetchLog(url(id))).events.filter((e) => e.seq > afterSeq),
   };
 }
+
+/**
+ * Retry `loadGame` while it fails, for a visitor game opened right after `POST /api/games`: its
+ * Neon row lands a moment later (longer on a cold start), so the first loads say "unknown game".
+ */
+export function retryLoad<S extends GameSource>(source: S, tries = 30, delayMs = 2000): S {
+  return {
+    ...source,
+    loadGame: async (id) => {
+      for (let i = 1; ; i++) {
+        try {
+          return await source.loadGame(id);
+        } catch (err) {
+          if (i >= tries) throw err;
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+      }
+    },
+  };
+}

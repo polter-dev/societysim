@@ -64,7 +64,7 @@ export function PlayStart({
       {!modeLocked && <fieldset>
         <legend>How do you want to join?</legend>
         {[
-          [false, "Play (you start at seat p0)"],
+          [false, "Play one seat"],
           [true, "Watch"],
         ].map(([w, label]) => (
           <label key={String(w)}>

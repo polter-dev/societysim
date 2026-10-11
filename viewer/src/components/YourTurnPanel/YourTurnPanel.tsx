@@ -60,7 +60,7 @@ export function YourTurnPanel({ seat }: { seat: Seat }) {
     <section className="your-turn">
       <div className="your-turn__role">
         <h3>
-          Your turn · {me.name} ({me.seat}) <small style={{display:"block"}}>Your role: {me.role}</small>
+          {me.name} <small style={{display:"block"}}>Your role: {me.role}</small>
         </h3>
         <p>
           Day {me.day}, {me.phase}. {me.alive ? "You are alive." : "You are out."}

@@ -6,6 +6,7 @@ import labelsText from "../../../fixtures/sample_game.labels.jsonl?raw";
 import { Game } from "../App";
 import type { Event } from "../types/events";
 import { resetNeonAuth } from "./neonAuth";
+import { NEON_TIMEOUT_MS } from "./neonAuth";
 import { neonSource, withFallback } from "./neonSource";
 import { parseLog } from "./parse";
 import type { GameSource } from "./source";
@@ -316,6 +317,18 @@ describe("withFallback", () => {
     expect(await src.listGames()).toEqual([{ id: "static-1" }]);
     expect((await src.loadGame(ID)).events).toEqual(full);
     expect(await src.loadLabels!(ID)).toEqual([{ detail: "from static" }]);
+  });
+
+  it("falls back to the static list when Neon hangs", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal("fetch", () => new Promise(() => {}));
+      const p = withFallback(neonSource(), fallback).listGames();
+      await vi.advanceTimersByTimeAsync(NEON_TIMEOUT_MS + 1);
+      expect(await p).toEqual([{ id: "static-1" }]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps Neon when it works", async () => {

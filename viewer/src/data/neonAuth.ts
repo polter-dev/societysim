@@ -3,6 +3,22 @@
 
 const REFRESH_MARGIN_MS = 60_000;
 const FALLBACK_TTL_MS = 5 * 60_000;
+export const NEON_TIMEOUT_MS = 4000;
+
+/** fetch that aborts and rejects after NEON_TIMEOUT_MS, even if the fetch ignores the signal. */
+function timedFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const ctl = new AbortController();
+  let timer!: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      ctl.abort();
+      reject(new Error(`Neon request timed out after ${NEON_TIMEOUT_MS} ms`));
+    }, NEON_TIMEOUT_MS);
+  });
+  return Promise.race([fetch(url, { ...init, signal: ctl.signal }), timeout]).finally(() =>
+    clearTimeout(timer),
+  );
+}
 
 /** Accepts epoch seconds, epoch ms, numeric strings or ISO strings; null if unusable. */
 export function parseExpiresAt(v: unknown): number | null {
@@ -29,7 +45,7 @@ function env(name: "VITE_NEON_AUTH_URL" | "VITE_NEON_DATA_API_URL"): string {
 }
 
 async function fetchToken(): Promise<string> {
-  const res = await fetch(`${env("VITE_NEON_AUTH_URL")}/token/anonymous`);
+  const res = await timedFetch(`${env("VITE_NEON_AUTH_URL")}/token/anonymous`);
   if (!res.ok) throw new Error(`Neon auth failed: HTTP ${res.status}`);
   const body = (await res.json()) as { token?: string; expires_at?: unknown };
   if (!body.token) throw new Error("Neon auth returned no token");
@@ -63,7 +79,7 @@ export async function neonFetch(
   const send = async (force: boolean) => {
     const headers = new Headers(init.headers);
     headers.set("Authorization", `Bearer ${await getAnonToken(force)}`);
-    return fetch(url, { ...init, headers });
+    return timedFetch(url, { ...init, headers });
   };
   const res = await send(false);
   return res.status === 400 || res.status === 401 ? send(true) : res;

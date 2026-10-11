@@ -3,6 +3,7 @@ import {
   getAnonToken,
   parseExpiresAt,
   neonFetch,
+  NEON_TIMEOUT_MS,
   resetNeonAuth,
 } from "./neonAuth";
 
@@ -106,6 +107,28 @@ describe("neonFetch", () => {
     const res = await neonFetch("/events");
     expect(res.status).toBe(401);
     expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("rejects when the data request never answers", async () => {
+    fetchMock.mockImplementation((url: string) =>
+      url.startsWith(AUTH) ? Promise.resolve(tokenRes("t", 3_600_000)) : new Promise(() => {}),
+    );
+    const p = neonFetch("/games").then(
+      () => "ok",
+      (e: Error) => e.message,
+    );
+    await vi.advanceTimersByTimeAsync(NEON_TIMEOUT_MS + 1);
+    expect(await p).toMatch(/timed out/);
+  });
+
+  it("rejects when the token request never answers", async () => {
+    fetchMock.mockImplementation(() => new Promise(() => {}));
+    const p = neonFetch("/games").then(
+      () => "ok",
+      (e: Error) => e.message,
+    );
+    await vi.advanceTimersByTimeAsync(NEON_TIMEOUT_MS + 1);
+    expect(await p).toMatch(/timed out/);
   });
 
   it("errors clearly when the data API url is missing", async () => {

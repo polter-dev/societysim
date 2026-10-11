@@ -744,7 +744,7 @@ COST = 0.0003  # per call: below every allowed model's worst case (1024 output t
 class CostlyAgent:
     """A model seat that costs COST per call (and may be slow); counts what happened."""
 
-    log = {"done": 0, "cancelled": 0, "held": 0.0}
+    log = {"done": 0, "cancelled": 0, "held": 0.0, "started": 0}
 
     def __init__(self, state, seat, delay=0.0):
         self.inner, self.delay = RandomAgent(state, seat), delay
@@ -753,6 +753,7 @@ class CostlyAgent:
     async def act(self, turn) -> CompletionResult:
         worst = admission.call_worst_case(self.model, len(turn.prompt.encode()), 2048)
         assert worst >= COST
+        CostlyAgent.log["started"] += 1
         try:
             await asyncio.sleep(self.delay)
         except asyncio.CancelledError:
@@ -767,7 +768,7 @@ class CostlyAgent:
 
 @pytest.fixture
 def costly():
-    CostlyAgent.log = {"done": 0, "cancelled": 0, "held": 0.0}
+    CostlyAgent.log = {"done": 0, "cancelled": 0, "held": 0.0, "started": 0}
     return CostlyAgent.log
 
 
@@ -815,6 +816,31 @@ async def test_concurrent_calls_and_games_never_pass_the_cap(make_client, costly
         await finished(c, r.json()["game_id"])
     assert c.manager.ledger.spent_nanos <= c.manager.ledger.budget_nanos
     assert costly["done"] * COST <= 0.02
+
+
+async def test_call_cancelled_before_it_starts_leaves_no_hold():
+    """The game is cancelled (a leave, a forfeit) right after a call took its hold, before the
+    call's task has had its first step: the hold is still settled, not leaked."""
+    ledger = Ledger(0.005)
+    state = GameState(GameConfig(n_players=7, models=["qwen3-235b"] * 7))
+    ran = []
+
+    class Slow:
+        async def act(self, turn):
+            ran.append(turn)
+            await asyncio.Event().wait()
+
+    agent = MeteredAgent(Slow(), RandomAgent(state, "p1"), ledger, "g", lambda _: 0.001, set())
+    turn = Turn(action="vote", prompt="vote", others=["p2"], targets=["p2"])
+    task = asyncio.ensure_future(agent.act(turn))
+    await asyncio.sleep(0)  # act has taken the hold and is waiting for the call
+    assert ledger.spent_nanos == nanos(0.001)
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+    assert ran  # the call did start, and was cancelled in flight
+    assert ledger.games["g"] == pytest.approx(0.001)  # booked, as for any cancelled call
+    assert ledger.spent_nanos == nanos(0.001)
 
 
 async def test_forfeit_books_calls_in_flight(make_client, monkeypatch, costly):
@@ -883,11 +909,14 @@ async def test_leave_books_calls_in_flight(make_client, monkeypatch, costly):
     c = make_client(play=play(), agents=agents)
     started = await start(c)
     await until(c, started, lambda m: m["pending_action"])
+    async with asyncio.timeout(TIMEOUT):  # leave only once both slow calls are in flight
+        while costly["started"] < 2:
+            await asyncio.sleep(0.002)
     r = await c.post(f"/api/games/{started['game_id']}/leave", headers=auth(started["seat_token"]))
     assert r.status_code == 200
     session = await finished(c, started["game_id"])
     assert session.status == "forfeit" and not session.calls
-    assert costly["cancelled"] >= 1 and costly["done"] == 0
+    assert costly["cancelled"] == 2 and costly["done"] == 0
     booked = c.manager.ledger.games[started["game_id"]]
     assert booked == pytest.approx(costly["held"]) and booked > 0
 

@@ -14,6 +14,7 @@ import LeaderboardPage from "./pages/Leaderboard";
 import NewGamePage from "./pages/NewGame";
 import PlayPage, { PlayDock, PlayNavLink } from "./pages/Play";
 import ResearchPage from "./pages/Research";
+import { BatchSourceForm } from "./pages/BatchSourceForm";
 import BackgroundMusic from "./components/BackgroundMusic/BackgroundMusic";
 import TrailerPage, { AUDIO_INDEX_URL } from "./pages/Trailer";
 import "./pages/pages.css";
@@ -92,7 +93,7 @@ createRoot(document.getElementById("root")!).render(
     ) : (
       <main className={profileModel || page === "new" ? "info-page info-page--text" : "info-page"}>
         <h1 title={profileModel ?? undefined}>SocietySim {profileModel ? modelName(profileModel) : title}</h1>
-        <form method="get" className="batch-source"><label>Published batch base URL <input name="base" type="url" required defaultValue={dataBase.href} /></label><button type="submit">Load batch</button></form>
+        <BatchSourceForm base={dataBase.href} page={page} model={profileModel} />
         {profileModel ? (
           <ModelProfilePage metricsUrl={sibling("metrics.json")} model={profileModel} />
         ) : page === "research" ? (

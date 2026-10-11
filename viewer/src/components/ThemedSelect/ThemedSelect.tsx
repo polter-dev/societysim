@@ -76,7 +76,7 @@ export function ThemedSelect({ label, value, options, onChange, disabled = false
     return () => document.removeEventListener('pointerdown', outside);
   }, [open]);
 
-  useEffect(() => { if (open && active >= 0) list.current?.children[active]?.scrollIntoView?.({ block: 'nearest' }); }, [open, active]);
+  useEffect(() => { if (open && active >= 0) list.current?.children[active]?.scrollIntoView?.({ block: 'nearest' }); }, [open, active, place]);
 
   const typeAhead = (key: string) => {
     const now = Date.now();

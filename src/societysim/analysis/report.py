@@ -11,7 +11,8 @@ leaderboard.json (read by the viewer, T4.9 and T6.2):
       "games": int,                        # distinct games in the batch
       "label_sources": ["self_tag", "jev"],
       "wolf_side_advantage": {"overall": {mu, sigma, ordinal}, "sided": {...}} | null,
-      "models": [                          # sorted by openskill.ordinal, best first
+      "models": [                          # by openskill.ordinal, best first; null
+                                           # openskill (self-play only) last, by win_rate
         {
           "model": str,
           "games": int | null,             # distinct games the model played in (null if unknown)
@@ -20,7 +21,8 @@ leaderboard.json (read by the viewer, T4.9 and T6.2):
           "win_ci": [lo, hi] | null,       # Wilson 95%
           "wolf_win_rate": float | null,   # null when the model never played wolf
           "village_win_rate": float | null,
-          "openskill": {"mu": float, "sigma": float, "ordinal": float} | null,
+          "openskill": {"mu": float, "sigma": float, "ordinal": float} | null,  # null: only
+                                           # self-play games, which carry no rating signal
           "detection_auc": float | null,   # village seats: suspicion vs true wolf
           "detection_brier": float | null,
           "invalid_output_rate": float | null,   # rejected replies / model call attempts
@@ -502,7 +504,13 @@ def build_leaderboard(
                 },
             }
         )
-    rows.sort(key=lambda r: -(r["openskill"]["ordinal"] if r["openskill"] else float("-inf")))
+    # rated models first by ordinal; self-play-only models (no overall rating) after, by win rate
+    rows.sort(
+        key=lambda r: (
+            r["openskill"] is None,
+            -(r["openskill"]["ordinal"] if r["openskill"] else r["win_rate"] or 0.0),
+        )
+    )
     return {
         "schema": SCHEMA,
         "games": base["games"],
@@ -1029,6 +1037,10 @@ def render_markdown(
         "## Leaderboard",
         "",
         "Ranked by OpenSkill ordinal (equal-weight sides plus a side-advantage dummy player).",
+        "A game where one model sits on both sides (self-play) does not move that model's "
+        "rating, since it says nothing about how the model compares with others. A model with "
+        "only self-play games shows OpenSkill n/a and is listed after the rated models, by win "
+        "rate.",
         "",
     ]
     if metrics.get("unfinished_games"):

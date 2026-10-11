@@ -5,9 +5,13 @@ Moment types and scores:
 - lie_moved_vote: a self_tag/jev lie (false_role_claim, false_report, bussing) where village
   voters voted the way the lie implied. Uses `metrics.lie_success`; score = followed + moved
   - base_rate * voters (the followers you'd expect anyway). Kept only if followed > 0 and
-  score > 0. A lie labeled by both sources is one moment.
+  score > 0. A lie labeled by both sources is one moment: labels are matched on (type, liar,
+  statement), as `labeler.agreement` does, since a self-tag label sits on the tag event and a
+  Jev label on the statement. The self-tag label is scored (it names the exact target), and
+  the description says both sources flagged it.
 - wolf_survived_vote: a wolf lied on day d and the day's vote did not eliminate them. Score =
-  1 + votes cast against them + 2 if a non-wolf was eliminated instead.
+  1 + votes cast against them + 2 if a non-wolf was eliminated instead. If a fellow wolf was
+  voted out, the description says so.
 - doctor_save: the doctor saved the night-kill target. Score 3.
 - seer_led_elimination: the seer found a wolf and a later vote eliminated that wolf. Score =
   2 + votes cast against the wolf on that day.
@@ -22,8 +26,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from societysim.analysis.metrics import SUCCESS_TYPES, GameData, lie_success, load_batch
-from societysim.logging.events import Event, EventType
+from societysim.analysis.metrics import SOURCES, SUCCESS_TYPES, GameData, lie_success, load_batch
+from societysim.logging.events import Event, EventType, Label
 from societysim.roles import Role, SeatId
 
 RESOLUTIONS = (EventType.ELIMINATION, EventType.NO_ELIMINATION)
@@ -91,14 +95,16 @@ def _name(g: GameData, seat: str | None, role: str = "") -> str:
 
 
 def lie_moments(g: GameData) -> list[dict]:
-    out: dict[tuple, dict] = {}
+    out = []
     by_seq = g.by_seq
+    same_lie: dict[tuple, list[Label]] = {}
     for lb in g.labels:
-        if lb.source not in ("self_tag", "jev") or lb.label not in SUCCESS_TYPES:
+        if lb.source not in SOURCES or lb.label not in SUCCESS_TYPES:
             continue
-        key = (lb.label, lb.actor, lb.source_seq)
-        if key in out:
-            continue
+        stmt = by_seq[lb.source_seq].meta.statement_seq or lb.source_seq
+        same_lie.setdefault((lb.label, lb.actor, stmt), []).append(lb)
+    for lbs in same_lie.values():
+        lb = min(lbs, key=lambda x: SOURCES.index(x.source))  # self-tag first: exact target
         r = lie_success(g, lb)
         expected = r["base_followed"] / r["base_voters"] * r["voters"] if r["base_voters"] else 0
         score = r["followed"] + r["moved"] - expected
@@ -112,17 +118,21 @@ def lie_moments(g: GameData) -> list[dict]:
             f"{r['followed']}/{r['voters']} village voters followed{base}, "
             f"{r['moved']}/{r['comparisons']} suspicions moved."
         )
-        out[key] = _moment(
-            g,
-            "lie_moved_vote",
-            src.day,
-            (lb.source_seq, end.seq),
-            lb.actor,
-            src.target,
-            score,
-            desc,
+        if len({x.source for x in lbs}) > 1:
+            desc += " Both label sources (self-tag and Jev) flagged it."
+        out.append(
+            _moment(
+                g,
+                "lie_moved_vote",
+                src.day,
+                (lb.source_seq, end.seq),
+                lb.actor,
+                src.target,
+                score,
+                desc,
+            )
         )
-    return list(out.values())
+    return out
 
 
 def wolf_survival_moments(g: GameData) -> list[dict]:
@@ -140,7 +150,12 @@ def wolf_survival_moments(g: GameData) -> list[dict]:
             e.type is EventType.VOTE and e.day == day and e.target == wolf for e in g.events
         )
         swap = end.type is EventType.ELIMINATION and roles.get(end.target) is not Role.WOLF
-        outcome = f"{_name(g, end.target)} was eliminated instead" if swap else "nobody went out"
+        if end.type is EventType.NO_ELIMINATION:
+            outcome = "nobody went out"
+        elif swap:
+            outcome = f"{_name(g, end.target)} was eliminated instead"
+        else:
+            outcome = f"fellow wolf {_name(g, end.target)} was voted out instead"
         desc = (
             f"{_name(g, wolf, 'wolf')} lied on day {day} and survived the vote "
             f"({against} vote{'' if against == 1 else 's'} against); {outcome}."

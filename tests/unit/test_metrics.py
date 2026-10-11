@@ -406,8 +406,51 @@ async def test_random_agent_games(tmp_path):
         assert a["wins"] + a["draws"] + a["losses"] == a["games"] == 21
         assert 0 <= a["detection"]["brier"] <= 1
         assert a["invalid_output_rate"] > 0
-    # every seat is the same scripted model: self-play keeps one overall rating
-    assert len(m["openskill"]["overall"]) == 1
+    # every seat is the same scripted model: self-play gives no overall rating (n/a)
+    assert m["openskill"]["overall"] == {}
+    assert len(m["openskill"]["wolf"]) == len(m["openskill"]["village"]) == 1
+
+
+def _seated(game: GameData, gid: str, winner: str, models: dict[str, str]) -> GameData:
+    g = _with_models(_with_winner(game, winner), models)
+    g.events = [e.model_copy(update={"game_id": gid}) for e in g.events]
+    return g
+
+
+def _all(model: str) -> dict[str, str]:
+    return {f"p{i}": model for i in range(7)}
+
+
+def test_self_play_does_not_rate_the_model(game):
+    # A wins as both sides: the game says nothing about A against anyone else
+    os = openskill_ratings([_seated(game, "g0", "wolves", _all("A"))])
+    assert os["overall"] == {}
+    assert os["wolf_side"]["overall"]["mu"] > 0  # the side dummy still learns
+    assert os["wolf"]["A"]["mu"] > 25 > os["village"]["A"]["mu"]  # sided pools as before
+
+
+def test_self_play_game_count_does_not_order_models(game):
+    games = [
+        _seated(game, "g0", "wolves", _all("A")),
+        _seated(game, "g1", "villagers", _all("A")),
+        _seated(game, "g2", "wolves", _all("B")),
+    ]
+    assert openskill_ratings(games)["overall"] == {}
+
+
+def test_model_on_both_sides_keeps_its_rating_others_move(game):
+    # A is wolf p2 and villager p0; the rest are distinct one-side models
+    g = _seated(game, "g0", "wolves", {"p0": "A", "p2": "A"})
+    os = openskill_ratings([g])
+    assert "A" not in os["overall"]
+    assert os["overall"]["gemini-flash"]["mu"] > 25 > os["overall"]["llama-4-maverick"]["mu"]
+    assert os["overall"]["gemini-flash"]["sigma"] < 25 / 3
+    # a later game with A on one side rates A from the prior, untouched by the first game
+    later = _seated(game, "g1", "wolves", {"p2": "A"})
+    both = openskill_ratings([g, later])["overall"]["A"]
+    alone = openskill_ratings([later])["overall"]["A"]
+    assert both["sigma"] == pytest.approx(alone["sigma"], rel=0.01)
+    assert both["sigma"] > openskill_ratings([later, later])["overall"]["A"]["sigma"]
 
 
 def test_human_seat_is_not_ranked():

@@ -158,6 +158,58 @@ def test_model_game_counts_are_distinct_games():
     assert model_game_counts([g, g]) == {m: 1 for m in counts}  # same game twice is one game
 
 
+FIXTURE_MODELS = (
+    "qwen3-235b",
+    "llama-4-maverick",
+    "gemma-4-26b",
+    "gpt-oss-120b",
+    "deepseek-v3.1",
+    "gemini-flash-lite",  # before gemini-flash: it contains that name
+    "gemini-flash",
+)
+
+
+def _self_play_log(batch: Path, model: str, gid: str, winner: str = "wolves") -> None:
+    """The fixture game with every seat played by `model`."""
+    text = (FIX / "sample_game.jsonl").read_text(encoding="utf-8")
+    for m in FIXTURE_MODELS:
+        text = text.replace(f'"{m}"', f'"{model}"')
+    text = text.replace("fixture-0001", gid).replace('"winner":"wolves"', f'"winner":"{winner}"')
+    (batch / f"{gid}.jsonl").write_text(text, encoding="utf-8")
+
+
+def test_self_play_only_model_is_na_and_ranked_after_rated_models(tmp_path):
+    batch = _batch(tmp_path, labels=False)
+    _self_play_log(batch, "solo", "selfplay-1")
+    _self_play_log(batch, "solo", "selfplay-2")
+    out, m = _report(tmp_path, batch)
+    board = json.loads((out / "leaderboard.json").read_text())
+    assert board["models"][-1]["model"] == "solo"
+    assert board["models"][-1]["openskill"] is None
+    assert all(r["openskill"] for r in board["models"][:-1])
+    assert m["summary"]["top_openskill"]["model"] != "solo"
+    md = (out / "report.md").read_text(encoding="utf-8")
+    assert "does not move that model's rating" in md
+
+
+def test_self_play_only_batch_has_no_openskill_ranking(tmp_path):
+    batch = tmp_path / "batch"
+    batch.mkdir()
+    # A plays 3 games, C 2, B 1; B's village win gives it the best per-seat win rate
+    for gid in ("g1", "g2", "g3"):
+        _self_play_log(batch, "A", gid, "wolves")
+    _self_play_log(batch, "B", "g4", "villagers")
+    _self_play_log(batch, "C", "g5", "wolves")
+    _self_play_log(batch, "C", "g6", "villagers")
+    out, m = _report(tmp_path, batch)
+    board = json.loads((out / "leaderboard.json").read_text())
+    rows = board["models"]
+    assert all(r["openskill"] is None for r in rows)
+    assert [r["model"] for r in rows] == ["B", "C", "A"]  # by win rate, not by game count
+    assert m["summary"]["top_openskill"] is None
+    assert "Top OpenSkill" not in (out / "report.md").read_text(encoding="utf-8")
+
+
 def test_unknown_game_count_is_null_not_seats():
     metrics = compute_metrics([load_game(FIX / "sample_game.jsonl")])
     board = build_leaderboard(metrics)

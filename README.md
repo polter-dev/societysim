@@ -82,6 +82,18 @@ Marcus works on the engine, Seth on the runner and data, and Augustin on the vie
 
 Hugging Face serves most of the open models and hosts the public dataset; Cloudflare hosts the site. The project also uses [AMD GPUs](infra/amd/README.md), [Databricks](notebooks/databricks/README.md), [Neon](neon/schema.sql), ElevenLabs narration, TypeSafe Jev labels, Figma design, and Gemini and OpenAI models.
 
+## Prior art and models
+
+We built the engine fresh and borrowed ideas from earlier Werewolf and Mafia work:
+
+- Google [Werewolf Arena](https://arxiv.org/abs/2407.13943): replay viewer ideas.
+- [WOLF](https://arxiv.org/abs/2512.09187): event log layout and deception taxonomy.
+- Foaster Werewolf benchmark: Elo split by wolf and villager, speech tags.
+- Kaggle Game Arena Werewolf.
+- [Mini-Mafia](https://arxiv.org/abs/2509.23023): name and recency biases, which is why we shuffle neutral names by seed.
+
+Open models run through Hugging Face, including [Llama-4-Maverick](https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8) and [gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b).
+
 ## License
 
 Code is [MIT](LICENSE). Public game logs and labels are CC-BY-4.0; model outputs also fall under their providers' terms.

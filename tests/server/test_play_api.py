@@ -433,7 +433,7 @@ async def test_full_game_under_render_limits(make_client, monkeypatch):
     later_days = []
     async with make_client(agents=fake_llm) as c:
         assert c.manager.settings.play.max_active_per_ip == int(env["PLAY_MAX_ACTIVE_PER_IP"])
-        for _ in range(int(env["PLAY_MAX_GAMES_PER_IP_DAY"])):
+        for _ in range(min(int(env["PLAY_MAX_GAMES_PER_IP_DAY"]), 5)):  # 50/day would take ~75 s
             started = await start(c)
             seen = await play_out(c, started)
             session = await finished(c, started)

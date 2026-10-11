@@ -55,16 +55,16 @@ services:
       - key: PLAY_ALLOWED_MODELS
         value: "qwen3-235b,llama4-maverick,gemma4-26b,gpt-oss-120b,deepseek-v3.1,gemini-flash-lite,gpt-5-nano"
       - key: PLAY_RATE_PER_MIN
-        value: "120"
+        value: "600"
       - key: PLAY_MAX_ACTIVE_PER_IP
-        value: "1"
+        value: "3"
       - key: PLAY_MAX_GAMES_PER_IP_DAY
-        value: "5"
+        value: "50"
       - key: PLAY_MAX_CONCURRENT
         value: "4"
       - key: PLAY_MAX_GAME_MINUTES
         value: "45"
       - key: PLAY_DAILY_BUDGET_USD
-        value: "2.0"
+        value: "5.0"
       - key: PLAY_MAX_TOKENS
         value: "2048"

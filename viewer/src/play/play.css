@@ -678,8 +678,8 @@
 /* Watch games: a small floating control, so the anchored table layout keeps its full size */
 .watch-stop {
   position: fixed;
-  top: 10px;
-  right: 12px;
+  top: 14px;
+  left: 648px; /* in the top bar's gap: right of the site nav, left of View and the ambience toggle */
   z-index: 20;
   background: #2a1413;
   color: #fad1cb;

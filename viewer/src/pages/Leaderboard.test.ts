@@ -70,6 +70,15 @@ describe("LeaderboardTable profile links", () => {
   });
 });
 
+describe("LeaderboardTable styling hooks (#481)", () => {
+  it("puts each rank in a medallion span and makes the scroll box keyboard-focusable", () => {
+    const html = renderToStaticMarkup(createElement(LeaderboardTable, { board }));
+    expect(html).toContain('<td class="leaderboard-rank" data-rank="1"><span>1</span></td>');
+    expect(html).toContain('<td class="leaderboard-rank" data-rank="2"><span>2</span></td>');
+    expect(html).toMatch(/<div class="leaderboard-scroll"[^>]*tabindex="0"[^>]*role="region"[^>]*aria-label="Leaderboard table"/);
+  });
+});
+
 describe("Leaderboard page global board", () => {
   it("mounts the global board, even before the model table loads", () => {
     const html = renderToStaticMarkup(

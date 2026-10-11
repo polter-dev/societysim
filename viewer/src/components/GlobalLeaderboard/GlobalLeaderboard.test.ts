@@ -38,7 +38,7 @@ const render = (props: Partial<React.ComponentProps<typeof GlobalLeaderboard>> =
 describe("GlobalLeaderboard", () => {
   it("shows the Detectors tab by default, with unranked rows marked", () => {
     const html = render();
-    expect(html).toContain('aria-selected="true">Detectors');
+    expect(html).toMatch(/aria-selected="true"[^>]*>Detectors/);
     expect(html).toContain("<td>0.45</td><td>50% (n=8)</td>");
     expect(html).toMatch(/<tr data-ranked="false"><th scope="row"[^>]*>.*few/);
     expect(html).not.toContain("Lie success");
@@ -46,7 +46,7 @@ describe("GlobalLeaderboard", () => {
 
   it("shows the Liars tab", () => {
     const html = render({ initialTab: "liars" });
-    expect(html).toContain('aria-selected="true">Liars');
+    expect(html).toMatch(/aria-selected="true"[^>]*>Liars/);
     expect(html).toContain("<td>30%</td><td>83%</td><td>1.00</td><td>n/a (n=0)</td><td>75% (n=4)</td>");
   });
 

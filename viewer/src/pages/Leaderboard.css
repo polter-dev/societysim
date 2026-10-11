@@ -1,208 +1,108 @@
-/* Illustrated Leaderboard styling (Figma T4.0 frame 05 / Leaderboard).
-   Uses design tokens from controls.css and tokens.css. */
+/* Illustrated leaderboard (Figma T4.0 frame 05 / Leaderboard). Tokens come from ../controls.css.
+   pages.css loads after this file and styles `.info-page table/th/td/button` at (0,1,1), so the
+   cell and tab rules below carry at least (0,1,2) or two classes to win. */
 
 .leaderboard-container {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  width: 100%;
-}
-
-/* Stat banner / summary headline cards */
-.leaderboard-summary {
-  display: flex;
-  flex-wrap: wrap;
   gap: 16px;
-  margin: 0 0 16px;
 }
 
-.leaderboard-summary-card {
-  flex: 1 1 220px;
-  padding: 14px 18px;
-  border: 1px solid var(--accent-gold);
-  border-radius: var(--radius-panel);
-  background: linear-gradient(135deg, #0c3528, #051e20);
-  box-shadow: var(--rim);
-  color: var(--text-primary);
-}
-
-.leaderboard-summary-card dt {
-  font: 600 12px var(--font-heading);
-  font-variant: small-caps;
-  letter-spacing: 0.06em;
-  color: var(--accent-gold);
-  margin-bottom: 6px;
-  text-transform: uppercase;
-}
-
-.leaderboard-summary-card dd {
+.leaderboard-summary-text {
   margin: 0;
-  font: 700 20px var(--font-heading);
-  color: var(--text-primary);
-  letter-spacing: 0.02em;
 }
 
-.leaderboard-summary-card p {
-  margin: 6px 0 0;
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--text-secondary);
-}
-
-/* Main Table Container */
-.leaderboard-table-card {
+/* Table card: a gold-rimmed panel that scrolls sideways on its own, so the page never does. */
+.leaderboard-scroll,
+.global-leaderboard__scroll {
+  overflow-x: auto;
+  max-width: 100%;
   border: 1px solid var(--accent-gold);
   border-radius: var(--radius-panel);
   background: var(--night-panel);
-  box-shadow: var(--rim), 0 8px 24px rgba(0, 0, 0, 0.4);
-  overflow: hidden;
-}
-
-.leaderboard-scroll {
-  overflow-x: auto;
-  max-width: 100%;
+  box-shadow: var(--rim), 0 8px 24px rgb(0 0 0 / 40%);
   scrollbar-width: thin;
   scrollbar-color: var(--accent-gold) var(--night-panel);
 }
 
-.leaderboard-scroll::-webkit-scrollbar {
-  height: 8px;
-}
-
-.leaderboard-scroll::-webkit-scrollbar-track {
-  background: var(--night-panel);
-}
-
-.leaderboard-scroll::-webkit-scrollbar-thumb {
-  background: var(--accent-gold);
-  border-radius: 4px;
-}
-
-/* Table */
-.leaderboard-table {
+:is(.leaderboard-table, .global-leaderboard__table) {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
   text-align: left;
   font-size: 14px;
 }
 
-.leaderboard-table caption {
+:is(.leaderboard-table, .global-leaderboard__table) caption {
   caption-side: top;
   text-align: left;
-  padding: 16px 20px 10px;
+  padding: 16px 16px 10px;
+}
+
+.leaderboard-table caption {
   font: 700 18px var(--font-heading);
   font-variant: small-caps;
   letter-spacing: 0.04em;
   color: var(--accent-gold);
 }
 
-.leaderboard-table thead th {
-  padding: 12px 14px;
+.global-leaderboard__table caption {
+  font: 600 15px var(--font-heading);
+  color: var(--text-secondary);
+}
+
+:is(.leaderboard-table, .global-leaderboard__table) :is(thead, tbody) :is(th, td) {
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid rgb(212 179 92 / 20%);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+/* Headers may wrap to two lines, which keeps all eleven columns inside the 1100px page. */
+:is(.leaderboard-table, .global-leaderboard__table) thead th {
+  vertical-align: bottom;
   background: #04251e;
   border-bottom: 2px solid var(--accent-gold);
   color: var(--accent-gold);
   font: 600 13px var(--font-heading);
   font-variant: small-caps;
   letter-spacing: 0.06em;
-  white-space: nowrap;
 }
 
-.leaderboard-table thead th:first-child {
-  padding-left: 20px;
+:is(.leaderboard-table, .global-leaderboard__table) :is(thead, tbody) :is(th, td):first-child {
+  padding-left: 16px;
 }
 
-.leaderboard-table tbody tr {
-  transition: background-color 0.15s ease;
+:is(.leaderboard-table, .global-leaderboard__table) tbody tr:last-child > * {
+  border-bottom: 0;
 }
 
-.leaderboard-table tbody tr:nth-child(even) {
-  background: rgba(18, 60, 46, 0.25);
+:is(.leaderboard-table, .global-leaderboard__table) tbody tr:nth-child(even) {
+  background: rgb(18 60 46 / 25%);
 }
 
-.leaderboard-table tbody tr:hover {
-  background: rgba(18, 60, 46, 0.7);
+:is(.leaderboard-table, .global-leaderboard__table) tbody tr:hover {
+  background: rgb(18 60 46 / 70%);
 }
 
-.leaderboard-table tbody td,
-.leaderboard-table tbody th {
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(212, 179, 92, 0.2);
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-  vertical-align: middle;
-}
-
-.leaderboard-table tbody tr:last-child td,
-.leaderboard-table tbody tr:last-child th {
-  border-bottom: none;
-}
-
-.leaderboard-table tbody th[scope="row"] {
+/* Short names stay on one line; a long unknown id wraps at its hyphens rather than push the table wider. */
+:is(.leaderboard-table, .global-leaderboard__table) tbody th[scope="row"] {
+  min-width: 180px;
   font-weight: 600;
-  white-space: nowrap;
 }
 
-.leaderboard-table thead th:first-child,
-.leaderboard-table tbody td:first-child {
-  padding-left: 20px;
-}
-
-/* Rank column */
-.leaderboard-rank {
-  text-align: center;
-  font-weight: 600;
-  width: 52px;
-}
-
-.leaderboard-rank[data-rank="1"],
-.leaderboard-rank[data-rank="2"],
-.leaderboard-rank[data-rank="3"] {
-  position: relative;
-}
-
-.leaderboard-rank[data-rank="1"]::before,
-.leaderboard-rank[data-rank="2"]::before,
-.leaderboard-rank[data-rank="3"]::before {
-  content: "";
-  display: inline-block;
-  width: 24px;
-  height: 24px;
-  margin-right: 6px;
-  vertical-align: -5px;
-  border-radius: 50%;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-}
-
-.leaderboard-rank[data-rank="1"]::before {
-  background: radial-gradient(circle at 35% 35%, #fff6cc, #d4b35c 60%, #8c6e26);
-  border: 1px solid #ffe499;
-}
-
-.leaderboard-rank[data-rank="2"]::before {
-  background: radial-gradient(circle at 35% 35%, #ffffff, #d5ded9 60%, #76857e);
-  border: 1px solid #e2ece7;
-}
-
-.leaderboard-rank[data-rank="3"]::before {
-  background: radial-gradient(circle at 35% 35%, #ffd3b3, #cb8654 60%, #7d4420);
-  border: 1px solid #f0b080;
-}
-
-/* Model column */
-.leaderboard-table th[scope="row"] .model-avatar-img {
+:is(.leaderboard-table, .global-leaderboard__table) th[scope="row"] .model-avatar-img {
   border: 1px solid var(--accent-gold);
   border-radius: 50%;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 40%);
   vertical-align: middle;
-  margin-right: 8px;
+  margin-right: 6px;
 }
 
 .leaderboard-table th[scope="row"] a {
   color: var(--text-primary);
   text-decoration: none;
   border-bottom: 1px dotted var(--accent-gold);
-  transition: color 0.15s ease, border-bottom-color 0.15s ease;
 }
 
 .leaderboard-table th[scope="row"] a:hover {
@@ -210,7 +110,46 @@
   border-bottom-color: var(--focus-ring);
 }
 
-/* Global Rankings section */
+/* Win rate with its interval stays on one line. */
+.leaderboard-table tbody td:nth-child(5) {
+  white-space: nowrap;
+}
+
+/* Rank: gold, silver and bronze medallions carry the number for the top three. */
+.leaderboard-table tbody td.leaderboard-rank {
+  text-align: center;
+  font-weight: 700;
+}
+
+.leaderboard-rank > span {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+.leaderboard-rank:is([data-rank="1"], [data-rank="2"], [data-rank="3"]) > span {
+  color: #2a1606;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 40%);
+}
+
+.leaderboard-rank[data-rank="1"] > span {
+  background: radial-gradient(circle at 35% 35%, #fff6cc, #d4b35c 60%, #8c6e26);
+  border: 1px solid #ffe499;
+}
+
+.leaderboard-rank[data-rank="2"] > span {
+  background: radial-gradient(circle at 35% 35%, #fff, #d5ded9 60%, #76857e);
+  border: 1px solid #e2ece7;
+}
+
+.leaderboard-rank[data-rank="3"] > span {
+  background: radial-gradient(circle at 35% 35%, #ffd3b3, #cb8654 60%, #7d4420);
+  border: 1px solid #f0b080;
+}
+
+/* Global rankings section */
 .global-rankings {
   margin-top: 36px;
   display: flex;
@@ -219,14 +158,14 @@
 }
 
 .global-rankings h2 {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
   font: 700 24px var(--font-heading);
   font-variant: small-caps;
   letter-spacing: 0.04em;
   color: var(--accent-gold);
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 16px;
 }
 
 .global-rankings h2::after {
@@ -242,28 +181,29 @@
   font-size: 14px;
 }
 
-/* Global Leaderboard Component */
 .global-leaderboard {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 16px;
 }
 
+.global-leaderboard > :not(.global-leaderboard__tablist) {
+  align-self: stretch;
+}
+
+/* Segmented pill tabs. The focus ring comes from a11y.css / pages.css (3px #ffe499, 3px gap). */
 .global-leaderboard__tablist {
   display: inline-flex;
-  width: max-content;
+  gap: 4px;
   padding: 3px;
   border: 1px solid var(--accent-gold);
   border-radius: 999px;
   background: var(--marble);
   box-shadow: var(--rim);
-  gap: 4px;
 }
 
-.global-leaderboard__tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.global-leaderboard__tablist > .global-leaderboard__tab {
   min-height: var(--target-minimum);
   padding: 0 24px;
   border: 0;
@@ -274,115 +214,28 @@
   font-variant: small-caps;
   letter-spacing: 0.05em;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, filter 0.15s ease;
 }
 
-.global-leaderboard__tab:hover {
-  filter: brightness(1.2);
+.global-leaderboard__tablist > .global-leaderboard__tab:hover {
+  background: rgb(212 179 92 / 15%);
 }
 
-.global-leaderboard__tab[aria-selected="true"] {
+.global-leaderboard__tablist > .global-leaderboard__tab[aria-selected="true"] {
   background: linear-gradient(180deg, #e2c574, #b8963e);
   color: var(--night-panel);
   font-weight: 700;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 40%);
 }
 
-.global-leaderboard__tab:focus-visible {
-  outline: 3px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
-.global-leaderboard__scroll {
-  border: 1px solid var(--accent-gold);
-  border-radius: var(--radius-panel);
-  background: var(--night-panel);
-  box-shadow: var(--rim), 0 8px 24px rgba(0, 0, 0, 0.4);
-  overflow-x: auto;
-  max-width: 100%;
-  scrollbar-width: thin;
-  scrollbar-color: var(--accent-gold) var(--night-panel);
-}
-
-.global-leaderboard table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  text-align: left;
-  font-size: 14px;
-}
-
-.global-leaderboard caption {
-  caption-side: top;
-  text-align: left;
-  padding: 16px 20px 10px;
-  font: 600 15px var(--font-heading);
-  color: var(--text-secondary);
-}
-
-.global-leaderboard thead th {
-  padding: 12px 14px;
-  background: #04251e;
-  border-bottom: 2px solid var(--accent-gold);
-  color: var(--accent-gold);
-  font: 600 13px var(--font-heading);
-  font-variant: small-caps;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-}
-
-.global-leaderboard thead th:first-child {
-  padding-left: 20px;
-}
-
-.global-leaderboard tbody tr {
-  transition: background-color 0.15s ease;
-}
-
-.global-leaderboard tbody tr:nth-child(even) {
-  background: rgba(18, 60, 46, 0.25);
-}
-
-.global-leaderboard tbody tr:hover {
-  background: rgba(18, 60, 46, 0.7);
-}
-
-.global-leaderboard tbody td,
-.global-leaderboard tbody th {
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(212, 179, 92, 0.2);
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-  vertical-align: middle;
-}
-
-.global-leaderboard tbody tr:last-child td,
-.global-leaderboard tbody tr:last-child th {
-  border-bottom: none;
-}
-
-.global-leaderboard tbody th[scope="row"] {
-  font-weight: 600;
-  white-space: nowrap;
-  padding-left: 20px;
-}
-
-.global-leaderboard tbody th[scope="row"] .model-avatar-img {
-  border: 1px solid var(--accent-gold);
-  border-radius: 50%;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-  vertical-align: middle;
-  margin-right: 8px;
-}
-
-.global-leaderboard tr[data-ranked="false"] {
+/* Models under the games threshold sit last, dimmed and hatched. */
+.global-leaderboard__table tbody tr[data-ranked="false"] {
   opacity: 0.65;
   font-style: italic;
-  background: repeating-linear-gradient(45deg, rgba(212, 179, 92, 0.04) 0 4px, transparent 4px 8px);
+  background: repeating-linear-gradient(45deg, rgb(212 179 92 / 4%) 0 4px, transparent 4px 8px);
 }
 
-.global-leaderboard p[role="alert"],
-.leaderboard-alert {
+.global-leaderboard p[role="alert"] {
+  margin: 0;
   padding: 14px 18px;
   border: 1px solid var(--event-accusation);
   border-radius: var(--radius-control);
@@ -391,8 +244,8 @@
   font-size: 14px;
 }
 
-.global-leaderboard__status,
-.leaderboard-loading {
+.global-leaderboard__status {
+  margin: 0;
   padding: 24px;
   text-align: center;
   color: var(--text-secondary);

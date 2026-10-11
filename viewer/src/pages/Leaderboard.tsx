@@ -75,47 +75,46 @@ export function LeaderboardTable({
           : "Ranked by win rate over all finished games; small samples are noisy."}
         {side && ` Wolf-side advantage: mu ${num(side.mu)} (0 means the sides are even).`}
       </p>
-      <div className="leaderboard-table-card">
-        <div className="leaderboard-scroll" style={{ overflowX: "auto", maxWidth: "100%" }}>
-          <table className="leaderboard-table">
-            <caption>Leaderboard</caption>
-            <thead>
-              <tr>
-                <th scope="col">Rank</th>
-                <th scope="col">Model</th>
-                <th scope="col">Games</th>
-                <th scope="col">Seats</th>
-                <th scope="col">Win rate (95% CI)</th>
-                <th scope="col">Wolf win</th>
-                <th scope="col">Village win</th>
-                <th scope="col">OpenSkill</th>
-                <th scope="col">OpenSkill as wolf</th>
-                <th scope="col">OpenSkill as village</th>
-                <th scope="col">Detection AUC</th>
+      {/* Scrolls sideways on its own when the window is narrow; focusable so the keyboard can scroll it. */}
+      <div className="leaderboard-scroll" style={{ overflowX: "auto", maxWidth: "100%" }} tabIndex={0} role="region" aria-label="Leaderboard table">
+        <table className="leaderboard-table">
+          <caption>Leaderboard</caption>
+          <thead>
+            <tr>
+              <th scope="col">Rank</th>
+              <th scope="col">Model</th>
+              <th scope="col">Games</th>
+              <th scope="col">Seats</th>
+              <th scope="col">Win rate (95% CI)</th>
+              <th scope="col">Wolf win</th>
+              <th scope="col">Village win</th>
+              <th scope="col">OpenSkill</th>
+              <th scope="col">OpenSkill as wolf</th>
+              <th scope="col">OpenSkill as village</th>
+              <th scope="col">Detection AUC</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.model}>
+                <td className="leaderboard-rank" data-rank={i + 1}><span>{i + 1}</span></td>
+                <th scope="row" title={catalogLabel(r.model)}><ModelAvatar model={r.model} label={label(r.model)} size={28} /> {profileHref ? <a href={profileHref(r.model)}>{label(r.model)}</a> : label(r.model)}</th>
+                <td>{r.games ?? "n/a"}</td>
+                <td>{r.seats ?? "n/a"}</td>
+                <td>
+                  {pct(r.win_rate)}
+                  {r.win_ci && ` (${pct(r.win_ci[0])} to ${pct(r.win_ci[1])})`}
+                </td>
+                <td>{pct(r.wolf_win_rate)}</td>
+                <td>{pct(r.village_win_rate)}</td>
+                <td>{num(r.openskill?.ordinal)}</td>
+                <td>{num(bySide.wolf?.[r.model]?.ordinal)}</td>
+                <td>{num(bySide.village?.[r.model]?.ordinal)}</td>
+                <td>{num(r.detection_auc)}</td>
               </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={r.model}>
-                  <td className="leaderboard-rank" data-rank={i + 1}>{i + 1}</td>
-                  <th scope="row" title={catalogLabel(r.model)}><ModelAvatar model={r.model} label={label(r.model)} size={28} /> {profileHref ? <a href={profileHref(r.model)}>{label(r.model)}</a> : label(r.model)}</th>
-                  <td>{r.games ?? "n/a"}</td>
-                  <td>{r.seats ?? "n/a"}</td>
-                  <td>
-                    {pct(r.win_rate)}
-                    {r.win_ci && ` (${pct(r.win_ci[0])} to ${pct(r.win_ci[1])})`}
-                  </td>
-                  <td>{pct(r.wolf_win_rate)}</td>
-                  <td>{pct(r.village_win_rate)}</td>
-                  <td>{num(r.openskill?.ordinal)}</td>
-                  <td>{num(bySide.wolf?.[r.model]?.ordinal)}</td>
-                  <td>{num(bySide.village?.[r.model]?.ordinal)}</td>
-                  <td>{num(r.detection_auc)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

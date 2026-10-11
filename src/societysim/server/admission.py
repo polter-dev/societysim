@@ -135,7 +135,7 @@ def _check_limits(manager, ip: str, setup: GameSetup) -> None:
     running = [s for s in manager.games.values() if s.status == "running"]
     if len(running) >= play.max_concurrent:
         raise PlayError(503, "at_capacity", "All game tables are busy; try again in a few minutes")
-    if sum(s.client == ip for s in running) >= play.max_active_per_ip:
+    if sum(s.client == ip and s.holds_seat() for s in running) >= play.max_active_per_ip:
         raise PlayError(429, "active_game_exists", "You already have a game running")
     if manager.started_today(ip) >= play.max_games_per_ip_day:
         raise PlayError(

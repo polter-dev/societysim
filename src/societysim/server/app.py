@@ -221,6 +221,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise PlayError(422, "invalid_request", str(exc)) from None
         return Accepted()
 
+    @app.post("/api/games/{game_id}/leave")
+    async def leave(
+        game_id: str, authorization: Annotated[str | None, Header()] = None
+    ) -> Accepted:
+        """Give up the seat: the game ends as a forfeit, freeing the per-IP slot."""
+        manager.leave(session_for(game_id, authorization))
+        return Accepted()
+
     return app
 
 

@@ -834,6 +834,67 @@ async def test_forfeit_books_calls_in_flight(make_client, monkeypatch, costly):
     assert c.manager.ledger.spent_usd() == pytest.approx(booked)
 
 
+# --- Leaving a game (#510) ----------------------------------------------------------------------
+
+
+async def test_leave_ends_the_game_and_frees_the_ip_slot(make_client, tmp_path):
+    c = make_client(play=play(max_active_per_ip=1))
+    first = await start(c)
+    await until(c, first, lambda m: m["pending_action"])
+    err(await c.post("/api/games", json={}), 429, "active_game_exists")
+    url = f"/api/games/{first['game_id']}/leave"
+    err(await c.post(url), 401, "unauthorized")
+    err(await c.post(url, headers=auth("not-the-token")), 401, "unauthorized")
+    err(await c.post("/api/games/visitor-nope/leave", headers=auth("x")), 404, "game_not_found")
+    assert c.manager.games[first["game_id"]].status == "running"
+
+    r = await c.post(url, headers=auth(first["seat_token"]))
+    assert r.status_code == 200 and r.json() == {"accepted": True}
+    second = await start(c)  # the slot is free at once
+    session = await finished(c, first["game_id"])
+    assert session.status == "forfeit"
+    assert (await until(c, first, lambda m: True))["status"] == "forfeit"
+    r = await c.post(url, headers=auth(first["seat_token"]))  # an ended game: a no-op
+    assert r.status_code == 200 and session.status == "forfeit"
+    assert "game_end" not in {e["type"] for e in events(tmp_path, first["game_id"])}
+    meta = (tmp_path / "visitor" / f"{first['game_id']}.run_meta.json").read_text()
+    assert json.loads(meta)["forfeit"] is True
+    assert c.manager.games[second["game_id"]].status == "running"
+    assert c.manager.started_today(session.client) == 2  # leaving doesn't refund a daily game
+
+
+async def test_leave_books_calls_in_flight(make_client, monkeypatch, costly):
+    """p0 is a wolf (seed 7) and leaves on night 1 while the Seer's and Doctor's slow calls
+    run: they are cancelled and their worst-case holds booked, as for a forfeit."""
+    monkeypatch.setattr("societysim.server.manager.secrets.randbits", lambda n: 7)
+    agents = lambda cfg: (lambda st, s: CostlyAgent(st, s, delay=5), {})  # noqa: E731
+    c = make_client(play=play(), agents=agents)
+    started = await start(c)
+    await until(c, started, lambda m: m["pending_action"])
+    r = await c.post(f"/api/games/{started['game_id']}/leave", headers=auth(started["seat_token"]))
+    assert r.status_code == 200
+    session = await finished(c, started["game_id"])
+    assert session.status == "forfeit" and not session.calls
+    assert costly["cancelled"] >= 1 and costly["done"] == 0
+    booked = c.manager.ledger.games[started["game_id"]]
+    assert booked == pytest.approx(costly["held"]) and booked > 0
+
+
+async def test_dead_visitor_no_longer_holds_the_ip_slot(make_client):
+    """A visitor who is out watches an all-AI game; that doesn't block their next one. A
+    watch-only game still does (test_one_active_game_per_ip_and_daily_cap)."""
+    c = make_client(play=play(max_active_per_ip=1))
+    first = await start(c)
+    await until(c, first, lambda m: m["pending_action"])
+    err(await c.post("/api/games", json={}), 429, "active_game_exists")
+    session = c.manager.games[first["game_id"]]
+    session.game.state.alive.discard(first["seat"])  # as if voted out; the game runs on
+    second = await start(c)
+    assert session.status == "running"
+    await until(c, second, lambda m: m["pending_action"])
+    err(await c.post("/api/games", json={}), 429, "active_game_exists")  # the second holds it
+
+
 # --- Neon: public only while running ------------------------------------------------------------
 
 

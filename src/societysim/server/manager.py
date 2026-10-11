@@ -249,6 +249,14 @@ class Session:
     client: str = "unknown"  # the starting client's IP, for per-client limits
     calls: set[asyncio.Task] = field(default_factory=set)  # model calls in flight
 
+    def holds_seat(self) -> bool:
+        """Counts toward PLAY_MAX_ACTIVE_PER_IP: running, and watch-only or the visitor still
+        alive. A dead visitor's game runs on like a watch-only one, but nobody can make their
+        seat die at will, so it can't be used to fill the tables."""
+        return self.status == "running" and (
+            self.seat is None or self.seat in self.game.state.alive
+        )
+
     def authorized(self, token: str) -> bool:
         return self.token_hash is not None and hmac.compare_digest(
             self.token_hash, hash_token(token)
@@ -381,9 +389,11 @@ class GameManager:
             session.status = "failed"
         except Forfeit:
             session.status = "forfeit"
-        except asyncio.CancelledError:  # server shutdown
-            session.status = "failed"
-            raise
+        except asyncio.CancelledError:
+            if session.status != "forfeit":  # server shutdown; leave() sets forfeit first
+                session.status = "failed"
+                raise
+            asyncio.current_task().uncancel()
         except Exception as exc:  # by type only: provider text can echo request details
             log.error("game %s failed (%s)", session.game_id, type(exc).__name__)
             session.status = "failed"
@@ -473,6 +483,14 @@ class GameManager:
         if error := session.game._invalid(turn, parsed):  # the orchestrator's own check
             raise ValueError(error)
         session.agent.submit(parsed)
+
+    def leave(self, session: Session) -> None:
+        """The visitor gives up their seat: the game ends now as a forfeit, so it stops
+        spending and stops counting toward the per-IP limit. Calls in flight are cancelled
+        and their holds booked, as for any forfeit. An ended game is left as it is."""
+        if session.status == "running" and session.task and not session.task.done():
+            session.status = "forfeit"
+            session.task.cancel()
 
     def _prune(self) -> None:
         cutoff = time.time() - KEEP_FINISHED_S

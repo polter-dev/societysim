@@ -278,3 +278,8 @@
   .ledger-body { padding: 70px 12px 24px; }
   .global-rankings { padding: 16px; }
 }
+
+/* Narrow phones: the fixed nav 6px margin pushed it past the right edge. */
+@media (max-width: 480px) {
+  .site-nav.site-nav--float { margin: 0; max-width: calc(100vw - 24px); }
+}

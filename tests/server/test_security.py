@@ -351,6 +351,20 @@ def test_ip_hint_masks_the_address():
     assert security.ip_hint("unknown") == "unknown"
 
 
+@pytest.mark.parametrize("bad", ["%", "junk", "", "1.2.3", None, "fe80::zz%eth0"])
+def test_ip_hint_never_raises_on_garbage(bad):
+    assert security.ip_hint(bad) == "unknown"
+
+
+def test_scoped_ipv6_hint_and_client_ip():
+    assert security.ip_hint("fe80::1%eth0") == "fe80:0000:x::"
+    assert security.ip_hint("[fe80::1%eth0]:80") == "fe80:0000:x::"
+    trusted = (ipaddress.ip_network("10.0.0.0/8"),)
+    xff = {"X-Forwarded-For": "2001:db8::7%eth0"}
+    assert security.client_ip(scope("10.1.2.3", xff), trusted) == "2001:db8::7"
+    assert security.client_ip(scope("10.1.2.3", {"X-Forwarded-For": "%"}), trusted) == "10.1.2.3"
+
+
 async def test_limits_show_the_derived_ip_masked(make_client):
     """The live check for #332: /api/limits echoes the IP the limits key on, masked."""
     local = play(trusted_proxies=(ipaddress.ip_network("127.0.0.0/8"),))  # stands in for HF

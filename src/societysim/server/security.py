@@ -227,11 +227,14 @@ def redact(text: str) -> str:
 def _ip(text: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     """An address, also from the "1.2.3.4:5678" and "[2001:db8::1]:5678" forms some
     proxies write; None for anything else."""
+    if not isinstance(text, str):
+        return None
     text = text.strip()
     if text.startswith("["):
         text = text[1:].partition("]")[0]
     elif text.count(":") == 1:
         text = text.partition(":")[0]
+    text = text.partition("%")[0]  # drop an IPv6 zone id ("fe80::1%eth0")
     try:
         return ipaddress.ip_address(text)
     except ValueError:

@@ -9,3 +9,4 @@
 nav[aria-label='Pages']{box-sizing:border-box;max-width:calc(100% - 12px)!important;overflow-wrap:anywhere}
 
 .your-turn__player,.your-turn__abstain,.your-turn__suspicion button{background:#173c2b;color:#fff0c5;border:1px solid #9e8343;border-radius:8px;padding:8px;margin:4px;cursor:pointer}.your-turn button[aria-pressed=true]{background:#82692c;outline:2px solid #e3c576}.your-turn__pick{display:flex;flex-wrap:wrap}.your-turn__avatar{display:inline-grid;place-items:center;width:24px;height:24px;border:1px solid #baa25c;border-radius:50%}.your-turn__suspicion summary{cursor:pointer}
+.your-turn__ended a{color:#f4d590}.your-turn__ended .your-turn__new{display:inline-block;margin:6px 8px 0 0;padding:8px 14px;border:1px solid #d0ae5c;border-radius:8px;background:#28513b;color:#fff0c5;font-weight:600;text-decoration:none}

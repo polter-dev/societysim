@@ -133,6 +133,41 @@ describe("VITE_PLAY_API_URL set", () => {
     expect(String(url)).not.toContain("tok");
   });
 
+  it("resumes the seat after a refresh from the tab's stored token: no new start", async () => {
+    // A reload keeps ?game= and sessionStorage; a fresh mount is what the page does after one.
+    const vote = { kind: "vote", targets: ["p1"], others: ["p1"], deadline: Date.now() / 1000 + 60 };
+    const players = [{ seat: "p0", name: "You", alive: true }, { seat: "p1", name: "Ava", alive: true }];
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ ...me, phase: "vote", pending_action: vote, players })));
+    sessionStorage.setItem(TOKEN_PREFIX + "visitor-1", "tok");
+    await render(createElement(PlayDock, { gameId: "visitor-1" }));
+    expect(box.textContent).toContain("Your role: villager");
+    expect(box.querySelector(".your-turn__form")).not.toBeNull();
+    expect(box.textContent).toContain("Ava");
+    const api = fetchMock.mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith("https://play.example.test"));
+    expect(api).toEqual(["https://play.example.test/api/games/visitor-1/me"]); // no /api/games start
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe("Bearer tok");
+    expect(fetchMock.mock.calls.some(([, i]) => i?.method === "POST")).toBe(false);
+  });
+
+  it.each([404, 401])("shows the ended state with a start-new link when /me is %i", async (status) => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ error: "game_not_found" }), { status }));
+    sessionStorage.setItem(TOKEN_PREFIX + "g1", "tok");
+    await render(createElement(PlayDock, { gameId: "g1" }));
+    expect(box.textContent).toContain("This game has ended.");
+    expect(box.querySelector<HTMLAnchorElement>("a.your-turn__new")?.getAttribute("href")).toBe("?page=modes");
+    expect(box.querySelector('[role="alert"]')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the ended state with a start-new link once the game is over", async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ ...me, status: "finished", winner: "villagers" })));
+    sessionStorage.setItem(TOKEN_PREFIX + "g1", "tok");
+    await render(createElement(PlayDock, { gameId: "g1" }));
+    expect(box.textContent).toContain("Game finished: villagers win.");
+    expect(box.textContent).toContain("This game has ended.");
+    expect(box.querySelector("a.your-turn__new")).not.toBeNull();
+  });
+
   it("gives spectators (no seat token) no panel and no /me call", async () => {
     await render(createElement(PlayDock, { gameId: "g1" }));
     expect(box.innerHTML).toBe("");

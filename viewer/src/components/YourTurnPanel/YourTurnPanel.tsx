@@ -40,6 +40,24 @@ function PlayerButton({ players, seat, pressed, onClick }: {
   );
 }
 
+/** Same-site link to a page, keeping the ?base= / ?index= data source. */
+function pageHref(page: string) {
+  const q = new URLSearchParams(window.location.search);
+  const next = new URLSearchParams({ page });
+  for (const k of ["base", "index"]) if (q.has(k)) next.set(k, q.get(k)!);
+  return `?${next}`;
+}
+
+/** The game is over, or the server no longer has it (pruned, restarted): offer a new one. */
+function Ended() {
+  return (
+    <p role="status" className="your-turn__ended">
+      This game has ended. <a className="your-turn__new" href={pageHref("modes")}>Start a new game</a>{" "}
+      <a href={pageHref("games")}>Watch replays</a>
+    </p>
+  );
+}
+
 export function YourTurnPanel({ seat }: { seat: Seat }) {
   const { me, pending } = seat;
   const [draft, setDraft] = useState<Draft>({});
@@ -48,12 +66,7 @@ export function YourTurnPanel({ seat }: { seat: Seat }) {
   const key = pending ? `${pending.kind}:${pending.deadline}` : "";
   useEffect(() => { setDraft({}); if (key) setSent(false); }, [key]);
 
-  if (seat.gone) {
-    const q = new URLSearchParams(window.location.search);
-    const next = new URLSearchParams({ page: "games" });
-    for (const k of ["base", "index"]) if (q.has(k)) next.set(k, q.get(k)!);
-    return <section className="your-turn" role="status">This game has ended or expired. <a href={`?${next}`}>Watch replays</a></section>;
-  }
+  if (seat.gone) return <section className="your-turn"><Ended /></section>;
   if (!me) return <section className="your-turn">{seat.error ?? "Loading your seat..."}</section>;
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const needsText = pending?.kind === "statement" || pending?.kind === "wolf_chat";
@@ -75,10 +88,13 @@ export function YourTurnPanel({ seat }: { seat: Seat }) {
           Day {me.day}, {me.phase}. {me.alive ? "You are alive." : "You are out."}
         </p>
         {me.status !== "running" && (
-          <p>
-            Game {me.status}
-            {me.winner ? `: ${me.winner} win` : ""}.
-          </p>
+          <>
+            <p>
+              Game {me.status}
+              {me.winner ? `: ${me.winner} win` : ""}.
+            </p>
+            <Ended />
+          </>
         )}
       </div>
       {me.observation && <pre className="your-turn__private">{me.observation}</pre>}

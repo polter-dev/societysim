@@ -45,7 +45,7 @@ Before you start, have two tabs ready: the demo game (open it with `?mode=narrat
 | 1:15 | Replay, inspector | Click a wolf's seat. | "This is the private scratchpad next to what the wolf said out loud. Every turn also carries a suspicion score for every living player." |
 | 1:40 | Replay, narration | Turn narration on (narration controls under the table). Let one or two clips play. | "Narration never voices a player's private reasoning. By default it reads only public events. Wolf-chat and highlight clips exist only if they were generated with `--select`, and the viewer plays them only in Narrator view, never in villager view." Skip this step if the clips are missing for the demo game. |
 | 2:00 | Replay, lie label | Jump to the labeled lie pop-up, then the vote it moved. | "We label a lie by comparing the claim with the engine's truth. The raw log is never edited." |
-| 2:20 | Leaderboard | Open the page. Show win rate by model. `TODO(verify)`: global detectors/liars board once it is mounted on the page (issue to be linked); don't promise it until then. | `TODO(batch)`: the one row to point at and the number to say. |
+| 2:20 | Leaderboard | Open the page. Show win rate by model. Scroll to **Global rankings** and click the **Detectors** tab (best wolf detectors, as villagers), then **Liars** (best liars, as wolves). Needs the Neon deploy variables, and it is off when the URL has `?base=` or `?index=`. | `TODO(batch)`: the one row to point at and the number to say. For the Global rankings: "These two tables count every finished game on the site, visitor games included." It shows finished, non-scripted games only, and shows no player handles, only model names. Models with fewer than 5 games are listed last, unranked. `TODO(verify)` on the day that both tabs have rows. |
 | 2:45 | Research | Open the deception matrix. | "Rows are the liar model, columns are the listener. Each cell is how often the listener's vote followed the lie, against how often it followed a true claim." `TODO(batch)`: one cell to read out, with its n. Say "exploratory" if n is small. |
 | 3:15 | Model profile | From the leaderboard, click a model name. | "One page per model: how it does as wolf and as villager, how often it lies, how well its suspicion scores find the wolves." |
 | 3:30 | Spot the wolf | Back in a replay, open the "Spot the wolf" panel under the table, guess a seat, step forward. | "You get the same public information a villager had. Can you beat the models?" |
@@ -130,7 +130,7 @@ Don't plan on a live pod. AUP sessions are time-boxed, the first start downloads
 
 ### Neon: Best Use of Neon
 
-**Evidence:** Neon console SQL editor; `neon/schema.sql`; the live site reading the Data API; the `leaderboard`, `leaderboard_by_batch` and `lies_by_model` views (the detectors and liars views from #344 exist in Neon, but the page that shows them is not mounted yet; `TODO(verify)`, issue to be linked).
+**Evidence:** Neon console SQL editor; `neon/schema.sql`; the live site reading the Data API; the `leaderboard`, `leaderboard_by_batch` and `lies_by_model` views (the detectors and liars views from #344 feed the Global rankings tabs on the Leaderboard page, #366; `TODO(verify)` on the day).
 
 **Click path**
 1. Neon console, SQL editor: `select status, count(*) from games group by status;` then `select * from leaderboard;`.
@@ -168,7 +168,7 @@ Gemini is in the lineup and the Devpost draft lists the Gemini prize. No ticket 
 
 **Numbers**
 - Last look, 7-player self-play baseline (#35 note, 45 games): `gemini-flash` had the highest detection score, about 0.91, ahead of `deepseek` (0.85) and `llama4` (0.81). `TODO(verify)` against the report before saying it, and call it a 7-player self-play result.
-- Neon detectors/liars views last seen (#344): `gemini-flash-lite` the top detector, `gemini-flash` the top liar by suspicion received. These are not on the Leaderboard page yet, so quote them from the SQL editor only. `TODO(verify)` on the day.
+- Neon detectors/liars views last seen (#344): `gemini-flash-lite` the top detector, `gemini-flash` the top liar by suspicion received. They are also on the Leaderboard page under Global rankings (Detectors and Liars tabs). `TODO(verify)` on the day.
 - Honest caveat: `gemini-flash` calls were slow (45 to 389 s per call in the preflight, #35) and the free-tier rate limit is low. If asked, say so.
 - `TODO(batch)`: Gemini rows from the final mixed report.
 
@@ -229,7 +229,7 @@ Backup assets, all stored on the laptop, not only online:
 
 Free unless marked.
 
-- [ ] Run the site smoke check (#362): `uv run python scripts/site_smoke.py` against https://society-sim.us (the script is not on `main` yet; if it still isn't, check each page by hand: index, a replay, leaderboard, Research, a model profile, New game, Play, Spot the wolf). Note any failure and fix or avoid that page.
+- [ ] Run the site smoke check (#362): `uv run --extra smoke python scripts/site_smoke.py` against https://society-sim.us (the script comes from #362 / PR #370; if it is not on `main` yet, check each page by hand: index, a replay, leaderboard, Research, a model profile, New game, Play, Spot the wolf). Note any failure and fix or avoid that page.
 - [ ] `uv run societysim doctor` (paid: makes a tiny structured call to every model in `configs/models.yaml`, so cost is a few cents; read the output for any model with no working mode). To check one model: `--model 'gemini-*'`.
 - [ ] Warm the HF Space: open it and click through the index, a replay and the leaderboard until it's awake. A sleeping Space takes a minute to start. If the Space is paused or flagged, use the Cloudflare site and say nothing about the Space.
 - [ ] Check the play server: `curl <play URL>/api/limits`. `remaining_today` above 0 and `client_ip_hint` showing your own masked IP mean it's healthy.

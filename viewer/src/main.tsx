@@ -25,6 +25,7 @@ const indexUrl = new URL(indexParam ?? DEFAULT_INDEX_URL, dataBase).href;
 const staticGames = indexSource(indexUrl);
 // Neon (index, leaderboard, live games) when the build has both Neon URLs and the URL doesn't
 // pick a static batch with ?base= or ?index=. Neon errors fall back to the static files.
+// The global rankings board reads Neon directly, so it uses the same gate.
 const { VITE_NEON_DATA_API_URL, VITE_NEON_AUTH_URL } = import.meta.env;
 const neon =
   VITE_NEON_DATA_API_URL && VITE_NEON_AUTH_URL && !indexParam && !params.get("base")
@@ -68,7 +69,7 @@ createRoot(document.getElementById("root")!).render(
             metricsUrl={sibling("metrics.json")}
             loadBoard={neon?.loadBoard}
             profileHref={profileHref}
-            globalBoard={Boolean(VITE_NEON_DATA_API_URL && VITE_NEON_AUTH_URL)}
+            globalBoard={Boolean(neon)}
           />
         ) : page === "research" ? (
           <ResearchPage metricsUrl={sibling("metrics.json")} />

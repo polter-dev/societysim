@@ -12,7 +12,15 @@ ROOT = Path(__file__).parents[2]
 DOC = (ROOT / "docs/DATA_CONTRACT.md").read_text(encoding="utf-8")
 SQL = (ROOT / "neon/schema.sql").read_text(encoding="utf-8")
 TABLES = ("games", "events", "labels")
-VIEWS = ("leaderboard", "leaderboard_by_batch", "lies_by_model", "events_public", "labels_public")
+VIEWS = (
+    "leaderboard",
+    "leaderboard_by_batch",
+    "lies_by_model",
+    "events_public",
+    "labels_public",
+    "global_detectors",
+    "global_liars",
+)
 ANON = {"games", *VIEWS}  # events and labels only through events_public, labels_public (#323)
 SQL_TYPES = {"timestamptz": "timestamp with time zone"}
 

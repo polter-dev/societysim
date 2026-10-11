@@ -154,6 +154,149 @@ from labels l
 join games g on g.game_id = l.game_id
 where g.status = 'finished';
 
+-- Global leaderboard (#344): who spots wolves, who lies best. Batch and visitor games alike,
+-- finished and not scripted, as for leaderboard. Metric definitions: docs/DATA_CONTRACT.md.
+
+-- Internal (never granted to anonymous): one row per seat of a finished game, with whether the
+-- seat was still alive at the end (never eliminated or found dead).
+create or replace view finished_seats as
+select g.game_id,
+       s.key as seat,
+       s.value ->> 'model' as model,
+       s.value ->> 'role' = 'wolf' as wolf,
+       not exists (select 1 from events d
+                   where d.game_id = g.game_id and d.type in ('elimination', 'death_reveal')
+                     and d.event ->> 'target' = s.key) as survived
+from games g
+join events e on e.game_id = g.game_id and e.type = 'game_start'
+cross join lateral jsonb_each(e.event -> 'meta' -> 'seats') s
+where g.status = 'finished' and g.agents is distinct from 'scripted';
+
+-- Internal: each non-wolf seat's last suspicion of each day, one row per player it rated (the
+-- pairs metrics.py's detection reads).
+create or replace view finished_suspicion as
+with last_of_day as (
+    select distinct on (e.game_id, e.actor, e.day)
+           e.game_id, e.actor, e.event -> 'suspicion' as suspicion
+    from events e
+    join finished_seats j on j.game_id = e.game_id and j.seat = e.actor and not j.wolf
+    where jsonb_typeof(e.event -> 'suspicion') = 'array'
+    order by e.game_id, e.actor, e.day, e.seq desc
+)
+select l.game_id,
+       l.actor as judge,
+       x ->> 'player' as subject,
+       (x ->> 'p')::numeric as p
+from last_of_day l
+cross join lateral jsonb_array_elements(l.suspicion) x;
+
+-- Best wolf detectors: per model, over its non-wolf seats.
+create or replace view global_detectors as
+with played as (
+    select model, count(*) as village_games from finished_seats where not wolf group by model
+),
+judged as (
+    select j.model,
+           avg(f.p) filter (where s.wolf) - avg(f.p) filter (where not s.wolf) as gap
+    from finished_suspicion f
+    join finished_seats j on j.game_id = f.game_id and j.seat = f.judge
+    join finished_seats s on s.game_id = f.game_id and s.seat = f.subject
+    group by j.model
+),
+voted as (
+    select v.model, count(*) as votes, count(*) filter (where t.wolf) as wolf_votes
+    from events e
+    join finished_seats v on v.game_id = e.game_id and v.seat = e.actor and not v.wolf
+    join finished_seats t on t.game_id = e.game_id and t.seat = e.event ->> 'target'
+    where e.type = 'vote'
+    group by v.model
+)
+select p.model,
+       p.village_games,
+       round(j.gap, 3) as suspicion_gap,
+       coalesce(v.votes, 0) as votes,
+       round(v.wolf_votes::numeric / nullif(v.votes, 0), 3) as wolf_vote_rate,
+       p.village_games >= 5 as ranked
+from played p
+left join judged j using (model)
+left join voted v using (model)
+where p.model <> 'human';
+
+-- Best liars: per model, over its wolf seats. Lie success follows metrics.py share_followed.
+create or replace view global_liars as
+with played as (
+    select model, count(*) as wolf_games, count(*) filter (where survived) as survived
+    from finished_seats where wolf group by model
+),
+suspected as (
+    select w.model, avg(f.p) as p
+    from finished_suspicion f
+    join finished_seats w on w.game_id = f.game_id and w.seat = f.subject and w.wolf
+    group by w.model
+),
+voted as (
+    select w.model, count(*) as votes
+    from events e
+    join finished_seats w on w.game_id = e.game_id and w.seat = e.event ->> 'target' and w.wolf
+    join finished_seats v on v.game_id = e.game_id and v.seat = e.actor and not v.wolf
+    where e.type = 'vote'
+    group by w.model
+),
+told as (
+    select l.game_id, l.source, l.label_type, l.actor, l.source_seq, w.model,
+           src.day, src.type as src_type,
+           src.event ->> 'target' as src_target,
+           src.event -> 'meta' ->> 'result' as result
+    from labels l
+    join finished_seats w on w.game_id = l.game_id and w.seat = l.actor and w.wolf
+    join events src on src.game_id = l.game_id and src.seq = l.source_seq
+    where l.source in ('self_tag', 'jev')
+      and l.label_type in ('false_role_claim', 'false_report', 'bussing')
+),
+heard as (
+    select t.model,
+           t.source,
+           case
+               when t.label_type = 'bussing' then
+                   case when sw.wolf then e.event ->> 'target' = t.src_target
+                        else vt.wolf and e.event ->> 'target' <> t.actor end
+               when t.label_type = 'false_report' and t.src_type = 'seer_claim' then
+                   case when t.result = 'wolf' then e.event ->> 'target' = t.src_target
+                        else e.event ->> 'target' not in (t.src_target, t.actor) end
+               else e.event ->> 'target' <> t.actor
+           end as followed
+    from told t
+    join events e on e.game_id = t.game_id and e.type = 'vote' and e.day = t.day
+                 and e.seq > t.source_seq
+    join finished_seats v on v.game_id = e.game_id and v.seat = e.actor and not v.wolf
+    left join finished_seats vt on vt.game_id = e.game_id and vt.seat = e.event ->> 'target'
+    left join finished_seats sw on sw.game_id = t.game_id and sw.seat = t.src_target
+),
+fooled as (
+    select model,
+           count(*) filter (where source = 'self_tag') as self_tag_voters,
+           count(*) filter (where source = 'self_tag' and followed) as self_tag_followed,
+           count(*) filter (where source = 'jev') as jev_voters,
+           count(*) filter (where source = 'jev' and followed) as jev_followed
+    from heard
+    group by model
+)
+select p.model,
+       p.wolf_games,
+       round(s.p, 3) as suspicion_received,
+       round(p.survived::numeric / p.wolf_games, 3) as survival_rate,
+       round(coalesce(v.votes, 0)::numeric / p.wolf_games, 3) as votes_received_per_game,
+       coalesce(f.self_tag_voters, 0) as self_tag_lie_voters,
+       round(f.self_tag_followed::numeric / nullif(f.self_tag_voters, 0), 3) as self_tag_lie_success,
+       coalesce(f.jev_voters, 0) as jev_lie_voters,
+       round(f.jev_followed::numeric / nullif(f.jev_voters, 0), 3) as jev_lie_success,
+       p.wolf_games >= 5 as ranked
+from played p
+left join suspected s using (model)
+left join voted v using (model)
+left join fooled f using (model)
+where p.model <> 'human';
+
 -- Read-only access for the Data API's anonymous role (viewer, #40). Never grant writes.
 -- No direct select on events or labels (#323): anonymous reads events_public and labels_public.
 do $$
@@ -163,7 +306,8 @@ begin
         revoke all on events, labels from anonymous;
         grant select on games, events_public, labels_public, leaderboard to anonymous;
         grant select on leaderboard_by_batch, lies_by_model to anonymous;
-        revoke all on visitor_spend from anonymous;
+        grant select on global_detectors, global_liars to anonymous;
+        revoke all on visitor_spend, finished_seats, finished_suspicion from anonymous;
     end if;
     if exists (select 1 from pg_roles where rolname = 'authenticated') then
         revoke all on events, labels from authenticated;  -- unused by us; no way around the views

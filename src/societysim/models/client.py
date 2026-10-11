@@ -393,8 +393,11 @@ class LiteLLMClient:
                     if timed_out
                     else f"{type(error).__name__}: {error}"
                 )
+                # A content-policy refusal is the provider declining the request, not a reply
+                # from the model: same provider path as an outage, but never retried.
+                refused = isinstance(error, litellm.exceptions.ContentPolicyViolationError)
                 return CompletionResult(
-                    parsed=None, raw="", error=msg, provider_error=transient, usage=usage
+                    parsed=None, raw="", error=msg, provider_error=transient or refused, usage=usage
                 )
             delay = min(self.max_backoff_s, self.backoff_s * 2**attempt)
             await self.sleep(delay * (0.5 + self._jitter.random() / 2))

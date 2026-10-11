@@ -495,6 +495,31 @@ async def test_auth_failure_is_a_config_provider_error_not_an_invalid_reply(
     assert "missing or invalid API key for m" in result.error  # server/manager.py matches this
 
 
+async def test_content_policy_refusal_is_a_provider_error_not_an_invalid_reply(
+    monkeypatch, client, sleeps
+):
+    """#502: the provider refusing the request is not the model's reply. One call, no retry."""
+    err = litellm.exceptions.ContentPolicyViolationError(
+        "Invalid prompt: flagged as potentially violating our usage policy",
+        model="gpt-5-mini",
+        llm_provider="openai",
+    )
+    fake = mock(monkeypatch, err, reply(json.dumps(VOTE)))
+    result = await client.complete(spec(), MESSAGES, VoteResponse)
+
+    assert len(fake.calls) == 1 and sleeps.delays == []
+    assert result.parsed is None and result.provider_error
+    assert result.error and result.error.startswith("ContentPolicyViolationError")
+    assert not is_config_failure(result)  # a refusal must not stop a batch like a bad key
+
+
+async def test_other_bad_requests_are_still_the_models_problem(monkeypatch, client):
+    err = litellm.exceptions.BadRequestError("bad param", model="m", llm_provider="openai")
+    mock(monkeypatch, err)
+    result = await client.complete(spec(), MESSAGES, VoteResponse)
+    assert result.parsed is None and not result.provider_error
+
+
 async def test_missing_key_or_base_env_is_a_config_provider_error(monkeypatch, client):
     monkeypatch.delenv("AMD_VLLM_BASE_URL", raising=False)
     monkeypatch.delenv("AMD_API_KEY", raising=False)

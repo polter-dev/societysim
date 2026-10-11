@@ -27,7 +27,7 @@
 /* NarrationControls: a switch, then category chips. */
 .narration-controls.narration-controls{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;padding:6px 10px 8px;min-width:0;border:1px solid #a88a4699;border-radius:var(--radius-control);background:#04251e99}
 .narration-controls legend{padding:0 6px;font:600 13px var(--font-heading);font-variant:small-caps;letter-spacing:.06em;color:var(--accent-gold)}
-.narration-controls label{display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:0 10px;border:1px solid #a88a4666;border-radius:999px;cursor:pointer}
+.narration-controls label{display:inline-flex;align-items:center;gap:7px;min-height:30px;padding:0 10px;font-size:12px;border:1px solid #a88a4666;border-radius:999px;cursor:pointer}
 .narration-controls label:has(input:checked:not([role=switch])){border-color:var(--accent-gold);background:#c9a24f26}
 .narration-controls label:has(input:disabled){cursor:not-allowed;color:var(--text-secondary)}
 .narration-controls input[role=switch]{appearance:none;flex:none;width:38px;height:22px;margin:0;border:1.5px solid var(--accent-gold);border-radius:999px;background:radial-gradient(circle at 10px 50%,var(--text-secondary) 6px,transparent 7px) #04251e;cursor:pointer;transition:background-position .15s}
@@ -42,7 +42,7 @@
 .deception-sources button[aria-pressed=true]{background:linear-gradient(180deg,#e2c574,#b8963e);color:var(--night-panel)}
 .deception-matrix .deception-scroll{max-width:100%;overflow:auto;border:1px solid var(--accent-gold);border-radius:var(--radius-panel);background:var(--night-panel);box-shadow:var(--rim)}
 .deception-matrix table{border-collapse:separate;border-spacing:4px;padding:8px}
-.deception-matrix caption{caption-side:top;text-align:left;padding:0 0 10px;color:var(--text-primary);max-width:72ch}
+.deception-matrix caption{caption-side:top;text-align:left;padding:14px 14px 4px;color:var(--text-primary);max-width:72ch}
 .deception-matrix th,.deception-matrix td{border:0;border-radius:6px;padding:8px 10px}
 .deception-matrix thead th{vertical-align:bottom;font:600 12px var(--font-body);min-width:92px}
 .deception-matrix thead th:first-child{text-align:left;font:600 13px var(--font-heading);font-variant:small-caps;color:var(--accent-gold)}
@@ -86,7 +86,7 @@
 .setup-form .setup-seats .themed-select{flex:1;min-width:0}
 .setup-form .setup-human{flex:1;font-weight:600}
 .setup-form .setup-errors{margin:0;padding:10px 14px 10px 32px;border:1px solid var(--event-accusation);border-radius:var(--radius-control);background:#2b1612;color:#ffcbb1}
-.setup-form .setup-json{margin:0;max-height:240px;overflow:auto;padding:12px;border:1px solid #a88a4666;border-radius:var(--radius-control);background:#021a13;font-size:12px}
+.setup-form .setup-json{flex-basis:100%;margin:0;max-height:240px;overflow:auto;padding:12px;border:1px solid #a88a4666;border-radius:var(--radius-control);background:#021a13;font-size:12px}
 .setup-form .setup-dev{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
 .setup-form .setup-command{padding:8px 12px;border-radius:var(--radius-control);background:#021a13;color:var(--text-primary)}
 .setup-form details summary{cursor:pointer;font:600 14px var(--font-heading);font-variant:small-caps;color:var(--accent-gold)}

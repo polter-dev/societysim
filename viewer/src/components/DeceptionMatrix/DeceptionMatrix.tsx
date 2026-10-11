@@ -47,7 +47,7 @@ export function DeceptionMatrix({ matrix, minN = DEFAULT_MIN_N, initialSource = 
         <div className="deception-scroll">
         <table>
           <caption>
-            Vote-follow rate: how often a listener voted the way a lie implied (n = voters, greyed under {minN}).
+            Vote-follow rate: how often a listener voted the way a lie implied (n = voters; cells under {minN} are hatched and unshaded).
             {matrix.exploratory ? " Exploratory." : ""}
           </caption>
           <thead>

@@ -533,6 +533,17 @@ async def test_ledger_needs_a_salt_to_persist():
     assert await Ledger(2.0, persistent=True, ip_salt=SALT).load(db.connect)
 
 
+async def test_calls_open_at_midnight_book_against_the_new_day(monkeypatch):
+    ledger = Ledger(2.0)
+    first, second = ledger.try_reserve(0.10), ledger.try_reserve(0.20)
+    tomorrow = ledger_module._today() + timedelta(days=1)
+    monkeypatch.setattr(ledger_module, "_today", lambda: tomorrow)
+    await ledger.settle("g", first, 0.08)  # crossed midnight; its row is written under tomorrow
+    assert ledger.spent_usd() == pytest.approx(0.08 + 0.20)  # the other hold is still there
+    await ledger.settle("g", second, 0.05)
+    assert ledger.spent_usd() == pytest.approx(0.08 + 0.05)
+
+
 async def wait_ready(ledger: Ledger) -> None:
     async with asyncio.timeout(TIMEOUT):
         while not ledger.ready:

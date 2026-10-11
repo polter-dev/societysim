@@ -190,3 +190,81 @@ async def test_column_types_match_the_doc(db, view):
         view,
     )
     assert [(r["column_name"], r["data_type"]) for r in rows] == doc_columns(view)
+
+
+BULK_GAMES = 200  # copies of the fixture game, each with its own mix of 12 models
+
+
+async def _bulk_db(port: int) -> None:
+    """A second database with many finished games, for the plan check."""
+    su = await _connect(port, "postgres", "postgres")
+    try:
+        await su.execute("create database bulk owner writer")
+    finally:
+        await su.close()
+    w = await _connect(port, "writer", "bulk")
+    try:
+        await apply_schema(w)
+        await w.execute("insert into games (game_id, status) values ('g0', 'finished')")
+        await w.executemany(
+            "insert into events (game_id, seq, day, phase, type, actor, schema_version, event)"
+            " values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)",
+            [event_row(e) for e in _events("g0", False)],
+        )
+        await w.executemany(
+            "insert into labels (game_id, idx, label_type, actor, source_seq, source, label)"
+            " values ($1, $2, $3, $4, $5, $6, $7::jsonb)",
+            [label_row(i, lb) for i, lb in enumerate(_labels("g0", False))],
+        )
+        # Copy g0 BULK_GAMES times; in each copy's game_start, seat pN plays model m<(i+N)%12>.
+        await w.execute(
+            "insert into games (game_id, status)"
+            " select 'g' || i, 'finished' from generate_series(1, $1) i",
+            BULK_GAMES,
+        )
+        await w.execute(
+            "insert into events select 'g' || i, seq, day, phase, type, actor, schema_version,"
+            " case when type <> 'game_start' then event else jsonb_set(event, '{meta,seats}',"
+            "   (select jsonb_object_agg(key, jsonb_set(value, '{model}',"
+            "      to_jsonb('m' || (i + substr(key, 2)::int) % 12)))"
+            "    from jsonb_each(event -> 'meta' -> 'seats'))) end"
+            " from events, generate_series(1, $1) i where game_id = 'g0'",
+            BULK_GAMES,
+        )
+        await w.execute(
+            "insert into labels select 'g' || i, idx, label_type, actor, source_seq, source, label"
+            " from labels, generate_series(1, $1) i where game_id = 'g0'",
+            BULK_GAMES,
+        )
+        await w.execute("delete from games where game_id = 'g0'")  # cascades
+        await w.execute("analyze")
+    finally:
+        await w.close()
+
+
+def _aggregate_loops(node: dict) -> list[int]:
+    own = [node["Actual Loops"]] if "Aggregate" in node["Node Type"] else []
+    return own + [n for child in node.get("Plans", []) for n in _aggregate_loops(child)]
+
+
+@pytest.fixture(scope="module")
+def bulk(db):
+    asyncio.run(_bulk_db(db))
+    return db
+
+
+@pytest.mark.parametrize("view", ["global_detectors", "global_liars"])
+async def test_each_aggregate_runs_once(bulk, view):
+    """#447: global_liars timed out on the live Data API because the planner re-ran whole
+    per-model aggregates once per model (Actual Loops > 1), so its cost grew with models x games."""
+    conn = await _connect(bulk, "postgres", "bulk")
+    try:
+        async with conn.transaction():
+            await conn.execute("set local max_parallel_workers_per_gather = 0")
+            await conn.execute("set local role anonymous")
+            plan = await conn.fetchval(f"explain (analyze, format json) select * from {view}")
+            rows = await conn.fetch(f"select * from {view}")
+    finally:
+        await conn.close()
+    assert len(rows) == 12
+    assert set(_aggregate_loops(json.loads(plan)[0]["Plan"])) == {1}

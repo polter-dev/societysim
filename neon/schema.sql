@@ -45,6 +45,8 @@ create table if not exists labels (
 alter table games add column if not exists agents text;
 
 create index if not exists games_batch_idx on games (batch_id);
+-- The views look events up by game and type (game_start, vote, elimination, death_reveal) (#447).
+create index if not exists events_game_type_idx on events (game_id, type);
 
 -- Per model: seat-games in finished games, wins, win rate. A seat wins if its team won.
 -- Pools every batch and leaves out human seats and scripted games; use leaderboard_by_batch to compare fairly.
@@ -194,24 +196,28 @@ select l.game_id,
 from last_of_day l
 cross join lateral jsonb_array_elements(l.suspicion) x;
 
--- Best wolf detectors: per model, over its non-wolf seats.
+-- Best wolf detectors: per model, over its non-wolf seats. Materialized CTEs, as for
+-- global_liars below (#447).
 create or replace view global_detectors as
-with played as (
-    select model, count(*) as village_games from finished_seats where not wolf group by model
+with seats as materialized (
+    select game_id, seat, model, wolf from finished_seats
 ),
-judged as (
+played as materialized (
+    select model, count(*) as village_games from seats where not wolf group by model
+),
+judged as materialized (
     select j.model,
            avg(f.p) filter (where s.wolf) - avg(f.p) filter (where not s.wolf) as gap
     from finished_suspicion f
-    join finished_seats j on j.game_id = f.game_id and j.seat = f.judge
-    join finished_seats s on s.game_id = f.game_id and s.seat = f.subject
+    join seats j on j.game_id = f.game_id and j.seat = f.judge
+    join seats s on s.game_id = f.game_id and s.seat = f.subject
     group by j.model
 ),
-voted as (
+voted as materialized (
     select v.model, count(*) as votes, count(*) filter (where t.wolf) as wolf_votes
     from events e
-    join finished_seats v on v.game_id = e.game_id and v.seat = e.actor and not v.wolf
-    join finished_seats t on t.game_id = e.game_id and t.seat = e.event ->> 'target'
+    join seats v on v.game_id = e.game_id and v.seat = e.actor and not v.wolf
+    join seats t on t.game_id = e.game_id and t.seat = e.event ->> 'target'
     where e.type = 'vote'
     group by v.model
 )
@@ -227,32 +233,37 @@ left join voted v using (model)
 where p.model <> 'human';
 
 -- Best liars: per model, over its wolf seats. Lie success follows metrics.py share_followed.
+-- Each step is a materialized CTE so it runs once (#447): inlined, the planner misjudged the
+-- jsonb row counts and re-ran whole aggregates per model, past the Data API's statement timeout.
 create or replace view global_liars as
-with played as (
-    select model, count(*) as wolf_games, count(*) filter (where survived) as survived
-    from finished_seats where wolf group by model
+with seats as materialized (
+    select * from finished_seats
 ),
-suspected as (
+played as materialized (
+    select model, count(*) as wolf_games, count(*) filter (where survived) as survived
+    from seats where wolf group by model
+),
+suspected as materialized (
     select w.model, avg(f.p) as p
     from finished_suspicion f
-    join finished_seats w on w.game_id = f.game_id and w.seat = f.subject and w.wolf
+    join seats w on w.game_id = f.game_id and w.seat = f.subject and w.wolf
     group by w.model
 ),
-voted as (
+voted as materialized (
     select w.model, count(*) as votes
     from events e
-    join finished_seats w on w.game_id = e.game_id and w.seat = e.event ->> 'target' and w.wolf
-    join finished_seats v on v.game_id = e.game_id and v.seat = e.actor and not v.wolf
+    join seats w on w.game_id = e.game_id and w.seat = e.event ->> 'target' and w.wolf
+    join seats v on v.game_id = e.game_id and v.seat = e.actor and not v.wolf
     where e.type = 'vote'
     group by w.model
 ),
-told as (
+told as materialized (
     select l.game_id, l.source, l.label_type, l.actor, l.source_seq, w.model,
            src.day, src.type as src_type,
            src.event ->> 'target' as src_target,
            src.event -> 'meta' ->> 'result' as result
     from labels l
-    join finished_seats w on w.game_id = l.game_id and w.seat = l.actor and w.wolf
+    join seats w on w.game_id = l.game_id and w.seat = l.actor and w.wolf
     join events src on src.game_id = l.game_id and src.seq = l.source_seq
     where l.source in ('self_tag', 'jev')
       and l.label_type in ('false_role_claim', 'false_report', 'bussing')
@@ -272,11 +283,11 @@ heard as (
     from told t
     join events e on e.game_id = t.game_id and e.type = 'vote' and e.day = t.day
                  and e.seq > t.source_seq
-    join finished_seats v on v.game_id = e.game_id and v.seat = e.actor and not v.wolf
-    left join finished_seats vt on vt.game_id = e.game_id and vt.seat = e.event ->> 'target'
-    left join finished_seats sw on sw.game_id = t.game_id and sw.seat = t.src_target
+    join seats v on v.game_id = e.game_id and v.seat = e.actor and not v.wolf
+    left join seats vt on vt.game_id = e.game_id and vt.seat = e.event ->> 'target'
+    left join seats sw on sw.game_id = t.game_id and sw.seat = t.src_target
 ),
-fooled as (
+fooled as materialized (
     select model,
            count(*) filter (where source = 'self_tag') as self_tag_voters,
            count(*) filter (where source = 'self_tag' and followed) as self_tag_followed,

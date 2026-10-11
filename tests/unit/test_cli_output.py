@@ -190,3 +190,36 @@ def test_label_without_key_and_no_cache_falls_back_and_says_how_many_are_missing
     assert "26 statements have no cached Jev response" in result.output
     assert _jev_label_count(batch) == 0
     assert not (batch / "agreement.json").exists()
+
+
+def test_label_without_key_skips_cache_entry_whose_fingerprint_does_not_match(tmp_path, no_network):
+    batch = _batch(tmp_path)
+    _fake_jev_cache(batch)
+    events = read_log(FIXTURE)
+    stmts = [e for e in events if e.type is EventType.STATEMENT]
+    stale, good, legacy = stmts[0], stmts[1], stmts[2]
+    cache = jev.cache_dir_for(batch) / stale.game_id
+    for stmt, fp in [(stale, "0" * 16), (good, jev.fingerprint(good))]:
+        path = cache / f"{stmt.seq}.json"
+        path.write_text(json.dumps({**json.loads(path.read_text()), "fingerprint": fp}))
+    assert "fingerprint" not in json.loads((cache / f"{legacy.seq}.json").read_text())
+
+    result = CliRunner().invoke(app, ["label", str(batch)])
+
+    assert result.exit_code == 0, result.output
+    # the mismatched entry is a miss; verified and legacy entries still count
+    assert "from 25 cached statements; 1 statements had no cache entry" in result.output
+
+
+def test_cached_verdict_checks_fingerprint_but_trusts_legacy_entries(tmp_path):
+    entry = {"answers": {}}
+    d = tmp_path / "g1"
+    d.mkdir()
+    (d / "1.json").write_text(json.dumps(entry))
+    (d / "2.json").write_text(json.dumps({**entry, "fingerprint": jev._fingerprint("p1", "hi")}))
+    get = jev.cached_verdict
+    assert get(tmp_path, "g1", 1, "p1", "anything") == entry  # legacy: reused unverified
+    assert get(tmp_path, "g1", 2, "p1", "hi") is not None
+    assert get(tmp_path, "g1", 2, "p1", "changed") is None
+    assert get(tmp_path, "g1", 2, "p2", "hi") is None
+    assert get(tmp_path, "g1", 3, "p1", "hi") is None

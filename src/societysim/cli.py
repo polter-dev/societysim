@@ -550,13 +550,18 @@ def label(
         def cached_jev_for(events):
             start = next(e for e in events if e.type is EventType.GAME_START)
             stmts = [e for e in events if e.type is EventType.STATEMENT]
-            cached = [e for e in stmts if (cache / e.game_id / f"{e.seq}.json").is_file()]
-            hits[0] += len(cached)
-            misses[0] += len(stmts) - len(cached)
-            if not cached:
-                return {}
-            client = httpx.AsyncClient(transport=httpx.MockTransport(no_network))
             try:
+                cached = [
+                    e
+                    for e in stmts
+                    if jev.cached_verdict(cache, e.game_id, e.seq, e.actor, e.public_text or "")
+                    is not None
+                ]
+                hits[0] += len(cached)
+                misses[0] += len(stmts) - len(cached)
+                if not cached:
+                    return {}
+                client = httpx.AsyncClient(transport=httpx.MockTransport(no_network))
                 got = asyncio.run(
                     jev.classify_events([start, *cached], cache_dir=cache, client=client)
                 )

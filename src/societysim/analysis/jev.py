@@ -56,7 +56,30 @@ class JevResult(BaseModel):
 
 def fingerprint(stmt: Event) -> str:
     """Hash of what Jev is asked to read: who spoke and what they said."""
-    return hashlib.sha256(f"{stmt.actor}\0{stmt.public_text or ''}".encode()).hexdigest()[:16]
+    return _fingerprint(stmt.actor, stmt.public_text or "")
+
+
+def _fingerprint(actor: str, statement: str) -> str:
+    return hashlib.sha256(f"{actor}\0{statement}".encode()).hexdigest()[:16]
+
+
+def cached_verdict(
+    cache_dir: Path, game_id: str, seq: int, actor: str, statement: str
+) -> dict[str, Any] | None:
+    """The cached Jev response for one statement, or None if it is not usable.
+
+    The single owner of cache lookup. None means no entry, or an entry whose fingerprint doesn't
+    match this actor and statement. An entry with no fingerprint (written before they existed) is
+    returned as is. Reads only; never calls Jev. A file that isn't JSON raises ValueError.
+    """
+    path = cache_dir / game_id / f"{seq}.json"
+    if not path.is_file():
+        return None
+    cached = json.loads(path.read_text(encoding="utf-8"))
+    stored = cached.get("fingerprint")
+    if stored is not None and stored != _fingerprint(actor, statement):
+        return None
+    return cached
 
 
 def cache_dir_for(batch_dir: Path) -> Path:
@@ -176,23 +199,21 @@ async def classify_events(
     async def one(stmt: Event) -> JevResult | None:
         nonlocal unverified
         path = cache_dir / stmt.game_id / f"{stmt.seq}.json"
-        if path.exists():
-            cached = json.loads(path.read_text(encoding="utf-8"))
-            stored = cached.get("fingerprint")
-            if stored is None:
-                unverified += 1  # written before fingerprints existed: trusted, can't be checked
-                return parse_response(stmt, cached)
-            if stored == fingerprint(stmt):
-                return parse_response(stmt, cached)
-            if client is None and not key:
-                print(
-                    f"warning: {path} answered a different statement and TYPESAFE_API_KEY "
-                    f"is not set, Jev skipped for {stmt.game_id} seq {stmt.seq}",
-                    file=sys.stderr,
-                )
-                return None
-        elif client is None and not key:
-            raise RuntimeError(f"TYPESAFE_API_KEY is not set and {path} is not cached")
+        cached = cached_verdict(
+            cache_dir, stmt.game_id, stmt.seq, stmt.actor, stmt.public_text or ""
+        )
+        if cached is not None:
+            unverified += cached.get("fingerprint") is None  # old entry: trusted, can't be checked
+            return parse_response(stmt, cached)
+        if client is None and not key:
+            if not path.exists():
+                raise RuntimeError(f"TYPESAFE_API_KEY is not set and {path} is not cached")
+            print(
+                f"warning: {path} answered a different statement and TYPESAFE_API_KEY "
+                f"is not set, Jev skipped for {stmt.game_id} seq {stmt.seq}",
+                file=sys.stderr,
+            )
+            return None
         async with sem:
             data = await _post(http, build_request(stmt, names))
         result = parse_response(stmt, data)  # a malformed response raises and is not cached

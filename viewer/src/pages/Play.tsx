@@ -3,11 +3,15 @@ import { PlayStart } from "../components/PlayStart/PlayStart";
 import { YourTurnPanel } from "../components/YourTurnPanel/YourTurnPanel";
 import { playEnabled } from "../play/config";
 import { loadToken } from "../play/api";
+import { usePlayStatus } from "../play/usePlayStatus";
 import { useHumanSeat } from "../play/useHumanSeat";
 import { loadSetupAssets, type SetupAssets } from "../settings/setup";
 
 /** Nav entry: a link when play is on, a disabled "coming soon" label when it is not. */
 export function PlayNavLink({ href }: { href: string }) {
+  const status = usePlayStatus();
+  if (playEnabled() && status.kind === "offline")
+    return <span aria-disabled="true" title={status.message}>Play (offline)</span>;
   return playEnabled() ? (
     <a href={href}>Play</a>
   ) : (
@@ -29,11 +33,19 @@ export default function PlayPage({
   catalogUrl, schemaUrl, gamesHref, gameHref, go = (url) => window.location.assign(url),
 }: { catalogUrl: string; schemaUrl: string; gamesHref: string; gameHref: (id: string) => string; go?: (url: string) => void }) {
   const on = playEnabled();
+  const status = usePlayStatus();
   const [assets, setAssets] = useState<SetupAssets | undefined>();
   useEffect(() => {
     if (on) loadSetupAssets(catalogUrl, schemaUrl).then(setAssets, () => setAssets(undefined));
   }, [on, catalogUrl, schemaUrl]);
   if (!on) return <PlayComingSoon gamesHref={gamesHref} />;
+  if (status.kind === "offline" || status.kind === "closed")
+    return (
+      <section className="play-offline" role="status">
+        <p>{status.message}</p>
+        <p><a href={gamesHref}>Watch replays</a></p>
+      </section>
+    );
   // startGame saves the seat token in sessionStorage; the live table opens on the game page.
   return (
     <>

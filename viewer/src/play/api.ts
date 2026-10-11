@@ -113,3 +113,46 @@ export const postAction = (gameId: string, body: ActionBody) =>
     token: loadToken(gameId),
   });
 export const getLimits = () => call<Limits>("/api/limits");
+
+export type PlayStatus =
+  | { kind: "checking" }
+  | { kind: "online"; limits: Limits }
+  | { kind: "closed"; code: string; message: string }
+  | { kind: "offline"; message: string };
+
+export const OFFLINE_MESSAGE = "Live play is offline right now. You can still watch replays.";
+const CLOSED_CODES = ["play_disabled", "budget_exhausted", "at_capacity"];
+
+/**
+ * Probe GET /api/limits with a short timeout. Unreachable, timed out or non-JSON (e.g. a paused
+ * Hugging Face placeholder page, even with a 2xx status) is "offline". Never throws, never exposes raw text.
+ */
+export async function probePlay(timeoutMs = 5000): Promise<PlayStatus> {
+  const offline: PlayStatus = { kind: "offline", message: OFFLINE_MESSAGE };
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const res = await fetch(baseUrl() + "/api/limits", { signal: ctl.signal });
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch {
+      return offline;
+    }
+    const b = (body ?? {}) as Record<string, unknown>;
+    if (!res.ok) {
+      const code = typeof b.error === "string" ? b.error : "";
+      return CLOSED_CODES.includes(code) ? { kind: "closed", code, message: BY_CODE[code] } : offline;
+    }
+    if (typeof b.play_enabled !== "boolean" || typeof b.remaining_today !== "number") return offline;
+    const limits = b as unknown as Limits;
+    if (!limits.play_enabled) return { kind: "closed", code: "play_disabled", message: BY_CODE.play_disabled };
+    if (limits.remaining_today <= 0)
+      return { kind: "closed", code: "too_many_games_today", message: BY_CODE.too_many_games_today };
+    return { kind: "online", limits };
+  } catch {
+    return offline;
+  } finally {
+    clearTimeout(timer);
+  }
+}

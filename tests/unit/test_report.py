@@ -498,3 +498,30 @@ def test_humans_section_and_metrics_for_a_visitor_game(tmp_path):
     # no visitor handle or game id in what is published
     for text in (sec, json.dumps(h)):
         assert "Elif" not in text and "fixture-0001" not in text and "p4" not in text
+
+
+def test_reliability_table_and_leaderboard_carry_the_three_rates(tmp_path):
+    out = write_report(_batch(tmp_path))
+    md = (out / "report.md").read_text(encoding="utf-8")
+    table = md.split("## Cost and reliability")[1].split("\n\n")[1].splitlines()
+    head = [c.strip() for c in table[0].strip("|").split("|")]
+    assert head == [
+        "Model",
+        "Invalid attempts",
+        "Fallback rate",
+        "Retry success",
+        "Provider errors",
+        "USD per game",
+    ]
+    board = json.loads((out / "leaderboard.json").read_text())
+    metrics = json.loads((out / "metrics.json").read_text())
+    for row in board["models"]:
+        a = metrics["models"][row["model"]]["all"]
+        for key in ("invalid_output_rate", "fallback_rate", "retry_success_rate"):
+            assert row[key] == a[key]
+        assert row["invalid_attempt_rate"] == row["invalid_output_rate"]
+    gia = next(r for r in board["models"] if r["model"] == "gemini-flash-lite")
+    assert gia["invalid_attempt_rate"] == pytest.approx(1 / 7)
+    gloss = md.split("## leaderboard.json shape")[1]
+    assert all(k in gloss for k in ("invalid_attempt_rate", "fallback_rate", "retry_success_rate"))
+    Metrics.model_validate(metrics)

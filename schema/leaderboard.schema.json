@@ -112,6 +112,36 @@
             }
           ]
         },
+        "invalid_attempt_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fallback_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retry_success_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "cost_usd_per_game": {
           "anyOf": [
             {
@@ -138,6 +168,9 @@
         "detection_auc",
         "detection_brier",
         "invalid_output_rate",
+        "invalid_attempt_rate",
+        "fallback_rate",
+        "retry_success_rate",
         "cost_usd_per_game",
         "lie_rate"
       ],

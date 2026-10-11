@@ -3,6 +3,7 @@ on RandomAgent games. No API calls."""
 
 from functools import partial
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -763,3 +764,98 @@ def test_no_visitor_games_gives_an_empty_humans_summary():
 def test_compute_metrics_carries_the_humans_summary(m):
     assert m["humans"]["games"] == 0  # the fixture has no human seat
     assert set(m["humans"]["lies"]) == {"self_tag", "jev"}
+
+
+# --- fallback rate and retry success ---
+
+
+def _turns(seat: str, *turns: tuple) -> list:
+    """Events for one seat's turns. Each turn is (how it ended, rejected errors, attempts):
+    "ok" ends in a statement with usage, "fallback" in a fallback_action (reason
+    "invalid_output"), "provider_fallback" in one with reason "provider". A rejected error of
+    "provider" is logged with reason "provider", "legacy" as an old log's provider error text."""
+    out, seq = [], 100
+    for end, errors, attempts in turns:
+        usage = SimpleNamespace(attempts=attempts, input_tokens=0, output_tokens=0, cost_usd=0.0)
+        for n, err in enumerate(errors, 1):
+            reason = "provider" if err == "provider" else None
+            error = "ServiceUnavailableError: busy" if err == "legacy" else err
+            out.append(
+                _ev(seq, 1, EventType.INVALID_OUTPUT, seat, attempt=n, error=error, reason=reason)
+            )
+            seq += 1
+        if end == "ok":
+            out.append(_ev(seq, 1, EventType.STATEMENT, seat, usage=usage))
+        else:
+            reason = "provider" if end == "provider_fallback" else "invalid_output"
+            out.append(_ev(seq, 1, EventType.FALLBACK_ACTION, seat, reason=reason, usage=usage))
+        seq += 1
+    return out
+
+
+def _reliability(per_seat: dict[str, list]) -> dict:
+    seats = {s: (V, f"model-{s}") for s in per_seat} | {"pw": (W, "wolf-model")}
+    events = [_start(seats), *[e for evs in per_seat.values() for e in evs]]
+    events.append(_ev(999, 1, EventType.GAME_END, winner="villagers"))
+    return compute_metrics([GameData(events, [])])["models"]
+
+
+def test_fallback_rate_and_retry_success_count_turns_not_attempts():
+    # 6 turns: clean; bad then fixed (x2); bad twice -> fallback; bad then fixed; clean
+    p0 = _turns(
+        "p0",
+        ("ok", [], 1),
+        ("ok", ["bad json"], 2),
+        ("ok", ["bad json"], 2),
+        ("fallback", ["bad json", "bad json"], 2),
+        ("ok", ["bad json"], 2),
+        ("ok", [], 1),
+    )
+    row = _reliability({"p0": p0})["model-p0"]["all"]
+    assert row["invalid_output_rate"] == pytest.approx(5 / 10)  # 5 rejected / 10 attempts
+    assert row["invalid_attempt_rate"] == row["invalid_output_rate"]
+    assert row["fallback_rate"] == pytest.approx(1 / 6)
+    assert row["retry_success_rate"] == pytest.approx(3 / 4)
+
+
+def test_no_retries_means_no_retry_success_rate_and_no_fallbacks_means_zero():
+    row = _reliability({"p0": _turns("p0", ("ok", [], 1), ("ok", [], 1))})["model-p0"]["all"]
+    assert row["fallback_rate"] == 0
+    assert row["retry_success_rate"] is None
+    assert row["invalid_attempt_rate"] == 0
+
+
+def test_provider_errors_are_in_none_of_the_three_rates():
+    p0 = _turns(
+        "p0",
+        ("ok", [], 1),
+        ("fallback", ["bad json", "bad json"], 2),
+        ("provider_fallback", ["provider"], 3),  # the model never answered
+        ("provider_fallback", ["bad json", "provider"], 3),  # wrong once, then the provider died
+        ("provider_fallback", ["legacy"], 3),  # pre-reason log: classified by the error text
+    )
+    row = _reliability({"p0": p0})["model-p0"]["all"]
+    assert row["provider_errors"] == 3
+    assert row["invalid_attempt_rate"] == pytest.approx(3 / 3)  # 3 rejected / 3 attempts
+    assert row["fallback_rate"] == pytest.approx(1 / 2)  # the clean turn and the real fallback
+    assert row["retry_success_rate"] == 0  # one retry, lost
+    assert row["provider_error_rate"] == pytest.approx(3 / 6)
+
+
+def test_legacy_provider_error_then_accepted_reply_is_a_turn_but_not_a_retry():
+    p0 = _turns("p0", ("ok", ["legacy"], 2), ("ok", [], 1))
+    row = _reliability({"p0": p0})["model-p0"]["all"]
+    assert row["fallback_rate"] == 0
+    assert row["retry_success_rate"] is None
+    assert row["invalid_attempt_rate"] == 0
+
+
+def test_rates_are_per_model_and_old_logs_without_usage_give_null():
+    nano = _turns("p0", ("ok", [], 1), ("fallback", ["x", "x"], 2))
+    clean = _turns("p1", ("ok", [], 1), ("ok", [], 1))
+    old = [_ev(300, 1, EventType.STATEMENT, "p2")]  # no usage on any event
+    models = _reliability({"p0": nano, "p1": clean, "p2": old})
+    assert models["model-p0"]["all"]["fallback_rate"] == pytest.approx(1 / 2)
+    assert models["model-p1"]["all"]["fallback_rate"] == 0
+    assert models["model-p2"]["all"]["fallback_rate"] is None
+    assert models["model-p2"]["all"]["retry_success_rate"] is None

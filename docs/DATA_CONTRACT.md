@@ -174,7 +174,10 @@ Each row of `models`:
 | `wolf_win_rate`, `village_win_rate` | number \| null | Null if it never played that side |
 | `openskill` | Rating \| null | Overall pool |
 | `detection_auc`, `detection_brier` | number \| null | Village seats: suspicion vs true wolf |
-| `invalid_output_rate` | number \| null | Invalid outputs per model call attempt |
+| `invalid_output_rate` | number \| null | Rejected model replies per model call attempt. A retry that works still counts, so this overstates the turns a model lost. Provider errors are not in it |
+| `invalid_attempt_rate` | number \| null | The same number as `invalid_output_rate`, under a clearer name. Added in an additive change; old consumers keep reading `invalid_output_rate` |
+| `fallback_rate` | number \| null | Turns that ended in a fallback move / turns. A turn is one model call (up to two attempts). Provider errors are in neither count |
+| `retry_success_rate` | number \| null | Retries whose second attempt was accepted / retries. A retry is a turn whose first attempt the model got wrong. Null when there were no retries |
 | `cost_usd_per_game` | number \| null | Per seat-game |
 | `lie_rate` | `{self_tag: number\|null, jev: number\|null}` | Lies per statement. Null when that source has no labels in the batch |
 
@@ -218,7 +221,9 @@ GroupStats: `games`, `wins`, `draws`, `losses` (integers, per seat); `win_rate`,
 `statements` (integer); `lies` (`{self_tag: Lies, jev: Lies}`); `detection`
 (`{n, brier, auc, by_day: {"<day>": {n, brier, auc}}}`, day keys are strings); `persuasion`
 (`{exploratory: true, accusations, voters, hits, share}`); and per-seat averages that can be
-null: `survival_days`, `night_targeted`, `voted_out`, `invalid_output_rate`, `tokens_per_game`,
+null: `survival_days`, `night_targeted`, `voted_out`, `invalid_output_rate`,
+`invalid_attempt_rate` (same number), `fallback_rate`, `retry_success_rate` (the three are as in
+the leaderboard table above and leave provider errors out), `tokens_per_game`,
 `cost_usd_per_game`.
 
 Lies: `lies` (integer), `by_type` (lie type -> count, only types seen), `lie_rate` (per

@@ -23,7 +23,10 @@ leaderboard.json (read by the viewer, T4.9 and T6.2):
           "openskill": {"mu": float, "sigma": float, "ordinal": float} | null,
           "detection_auc": float | null,   # village seats: suspicion vs true wolf
           "detection_brier": float | null,
-          "invalid_output_rate": float | null,
+          "invalid_output_rate": float | null,   # rejected replies / model call attempts
+          "invalid_attempt_rate": float | null,  # same number, clearer name
+          "fallback_rate": float | null,         # turns that ended in a fallback move / turns
+          "retry_success_rate": float | null,    # accepted retries / retries
           "cost_usd_per_game": float | null,
           "lie_rate": {"self_tag": float | null, "jev": float | null}
         }
@@ -132,7 +135,10 @@ class BoardRow(_Out):
     openskill: Rating | None
     detection_auc: Num
     detection_brier: Num
-    invalid_output_rate: Num
+    invalid_output_rate: Num  # rejected replies per model call attempt; same as the next
+    invalid_attempt_rate: Num
+    fallback_rate: Num  # turns that ended in a fallback move / turns
+    retry_success_rate: Num  # retries whose second attempt was accepted / retries
     cost_usd_per_game: Num
     lie_rate: LieRate
 
@@ -208,7 +214,10 @@ class GroupStats(_Out):
     survival_days: Num
     night_targeted: Num
     voted_out: Num
-    invalid_output_rate: Num  # excludes provider errors
+    invalid_output_rate: Num  # rejected replies per model call attempt; excludes provider errors
+    invalid_attempt_rate: Num  # same number as invalid_output_rate
+    fallback_rate: Num  # turns that ended in a fallback move / turns; excludes provider errors
+    retry_success_rate: Num  # retries whose second attempt was accepted / retries
     provider_errors: int  # calls that failed at the provider (5xx, 429, timeout) after retries
     provider_error_rate: Num
     tokens_per_game: Num
@@ -420,6 +429,11 @@ def _pct(x: float | None) -> str:
     return "n/a" if x is None else f"{x * 100:.0f}%"
 
 
+def _pct1(x: float | None) -> str:
+    """One decimal, for the reliability rates: 2 fallbacks in 330 turns is 0.6%, not 1%."""
+    return "n/a" if x is None else f"{x * 100:.1f}%"
+
+
 def _num(x: float | None, nd: int = 2) -> str:
     return "n/a" if x is None else f"{x:.{nd}f}"
 
@@ -477,6 +491,9 @@ def build_leaderboard(
                 "detection_auc": groups.get("village", {}).get("detection", {}).get("auc"),
                 "detection_brier": groups.get("village", {}).get("detection", {}).get("brier"),
                 "invalid_output_rate": a.get("invalid_output_rate"),
+                "invalid_attempt_rate": a.get("invalid_attempt_rate"),
+                "fallback_rate": a.get("fallback_rate"),
+                "retry_success_rate": a.get("retry_success_rate"),
                 "cost_usd_per_game": a.get("cost_usd_per_game"),
                 "lie_rate": {
                     # no labels from a source means unknown, not a 0% lie rate
@@ -1137,17 +1154,33 @@ def render_markdown(
         "",
     ]
     lines += _table(
-        ["Model", "Invalid output rate", "Provider errors", "USD per game"],
+        [
+            "Model",
+            "Invalid attempts",
+            "Fallback rate",
+            "Retry success",
+            "Provider errors",
+            "USD per game",
+        ],
         [
             [
                 r["model"],
-                _pct(r["invalid_output_rate"]),
+                _pct1(r["invalid_attempt_rate"]),
+                _pct1(r["fallback_rate"]),
+                _pct1(r["retry_success_rate"]),
                 _provider_errors(metrics["models"].get(r["model"], {}).get("all")),
                 "n/a" if r["cost_usd_per_game"] is None else f"{r['cost_usd_per_game']:.4f}",
             ]
             for r in board["models"]
         ],
     )
+    lines += [
+        "Invalid attempts: rejected replies per model call. A retry that works still counts, so "
+        "this overstates the damage. Fallback rate: turns that ended in a fallback move. Retry "
+        "success: retries whose second attempt was accepted. Provider errors are in none of "
+        "the three.",
+        "",
+    ]
     if speed:
         lines += _speed(speed)
     lines += [
@@ -1167,7 +1200,10 @@ def render_markdown(
         "`models` (best OpenSkill ordinal first) has `model`, `games` (distinct games), `seats` "
         "(seats filled, which is what win rate is counted over), `win_rate`, `win_ci`, "
         "`wolf_win_rate`, `village_win_rate`, `openskill {mu, sigma, ordinal}`, `detection_auc`, "
-        "`detection_brier`, `invalid_output_rate`, `cost_usd_per_game` and "
+        "`detection_brier`, `invalid_output_rate` (rejected replies per model call attempt, so a "
+        "retry that works still counts; `invalid_attempt_rate` is the same number), "
+        "`fallback_rate` (turns that ended in a fallback move), `retry_success_rate` (retries "
+        "whose second attempt was accepted), `cost_usd_per_game` and "
         "`lie_rate {self_tag, jev}`, plus top-level `wolf_side_advantage`. "
         "Any value can be null when there is no data. The full "
         "field list is in the `analysis/report.py` docstring.",

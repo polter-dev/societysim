@@ -405,6 +405,36 @@
             }
           ]
         },
+        "invalid_attempt_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fallback_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retry_success_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "provider_errors": {
           "type": "integer"
         },
@@ -454,6 +484,9 @@
         "night_targeted",
         "voted_out",
         "invalid_output_rate",
+        "invalid_attempt_rate",
+        "fallback_rate",
+        "retry_success_rate",
         "provider_errors",
         "provider_error_rate",
         "tokens_per_game",

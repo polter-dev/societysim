@@ -177,6 +177,12 @@ class Row:
         0  # invalid_output events with reason "provider": the model never answered
     )
     attempts: int = 0  # model calls, not counting those that ended in a provider error
+    # turns = one model call (up to two attempts) that ended in a reply or a fallback move; a
+    # turn lost to a provider error is in none of these four
+    turns: int = 0
+    fallbacks: int = 0  # turns that ended in a fallback move after two rejected attempts
+    retries: int = 0  # turns whose first attempt the model got wrong, so a second was made
+    retry_wins: int = 0  # retries whose second attempt was accepted
     input_tokens: int = 0
     output_tokens: int = 0
     cost_usd: float = 0.0
@@ -300,6 +306,22 @@ def lie_success(game: GameData, label: Label, seen_base: set | None = None) -> d
     return out
 
 
+def _count_turn(row: Row, e: Event, failures: list[bool]) -> bool:
+    """Close one turn. `e` carries the turn's usage (the reply's event, or the fallback_action);
+    `failures` flags each rejected attempt before it as provider-caused or not. A fallback is
+    the provider's if it says so or (older logs) its last rejection reads that way. Returns
+    True for such a turn, whose usage is the failed calls and not a model attempt."""
+    fallback = e.type is EventType.FALLBACK_ACTION
+    if fallback and (e.meta.reason == "provider" or (failures and failures[-1])):
+        return True  # the model never answered: none of turns, fallbacks, retries
+    row.turns += 1
+    row.fallbacks += fallback
+    if failures and not failures[0]:  # a model error on attempt 1 means attempt 2 was made
+        row.retries += 1
+        row.retry_wins += not fallback
+    return False
+
+
 def game_rows(game: GameData) -> dict[str, Row]:
     """One Row per seat for one game."""
     events, roles = game.events, game.roles
@@ -313,6 +335,7 @@ def game_rows(game: GameData) -> dict[str, Row]:
         row.losses = int(winner is not None and not row.wins and not row.draws)
         row.survival_days = final_day
 
+    failed: dict[str, list[bool]] = defaultdict(list)  # seat -> provider flag per rejected attempt
     accused: dict[tuple[str, int], set[str]] = defaultdict(set)
     accused_day: dict[tuple[str, int], int] = {}
     last_susp: dict[tuple[str, int], Event] = {}
@@ -329,7 +352,9 @@ def game_rows(game: GameData) -> dict[str, Row]:
         if e.type is EventType.STATEMENT:
             row.statements += 1
         if e.type is EventType.INVALID_OUTPUT:
-            if is_provider_failure(e.meta.reason, e.meta.error):  # also pre-reason logs
+            provider = is_provider_failure(e.meta.reason, e.meta.error)  # also pre-reason logs
+            failed[e.actor].append(provider)
+            if provider:
                 row.provider_errors += 1
             else:
                 row.invalid += 1
@@ -340,8 +365,7 @@ def game_rows(game: GameData) -> dict[str, Row]:
         if e.suspicion is not None and roles[e.actor] is not Role.WOLF:
             last_susp[(e.actor, e.day)] = e
         if u := e.meta.usage:
-            # the usage of a provider fallback is the failed call(s): not a model attempt
-            if not (e.type is EventType.FALLBACK_ACTION and e.meta.reason == "provider"):
+            if not _count_turn(row, e, failed.pop(e.actor, [])):
                 row.attempts += u.attempts
             row.input_tokens += u.input_tokens
             row.output_tokens += u.output_tokens
@@ -702,7 +726,13 @@ def summarize(row: Row) -> dict:
         "survival_days": _ratio(row.survival_days, row.games),
         "night_targeted": _ratio(row.night_targeted, row.games),
         "voted_out": _ratio(row.voted_out, row.games),
+        # invalid_output_rate and invalid_attempt_rate: rejected model replies per model call
+        # attempt. A retry that works still counts here, so it overstates the turns lost; see
+        # fallback_rate. None of the rates below count provider errors.
         "invalid_output_rate": _ratio(row.invalid, row.attempts),
+        "invalid_attempt_rate": _ratio(row.invalid, row.attempts),
+        "fallback_rate": _ratio(row.fallbacks, row.turns),  # turns that ended in a fallback move
+        "retry_success_rate": _ratio(row.retry_wins, row.retries),  # retries that were accepted
         "provider_errors": row.provider_errors,
         "provider_error_rate": _ratio(row.provider_errors, row.attempts + row.provider_errors),
         "tokens_per_game": _ratio(row.input_tokens + row.output_tokens, row.games),

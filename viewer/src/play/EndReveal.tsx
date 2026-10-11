@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { modelName } from '../data/modelNames';
 import type { Event, Label } from '../types/events';
 import { deriveScene, type Mode } from '../scene/deriveScene';
 
@@ -36,7 +37,7 @@ export function EndReveal({events,labels,idx,mode}: {events:Event[];labels:Label
   return <section className="game-reveal" aria-labelledby="game-reveal-title">
     <h2 id="game-reveal-title">The village revealed</h2>
     <p>{scene.winner === 'wolves' ? 'The Werewolves won.' : scene.winner === 'villagers' ? 'The village won.' : 'The game ended in a draw.'}</p>
-    <table><thead><tr><th>Player</th><th>Model</th><th>Role</th></tr></thead><tbody>{scene.players.map(p => <tr key={p.id}><td>{p.name}</td><td>{p.model}</td><td>{p.role ?? 'Not recorded'}</td></tr>)}</tbody></table>
+    <table><thead><tr><th>Player</th><th>Model</th><th>Role</th></tr></thead><tbody>{scene.players.map(p => <tr key={p.id}><td>{p.name}</td><td title={p.model}>{modelName(p.model)}</td><td>{p.role ?? 'Not recorded'}</td></tr>)}</tbody></table>
     {mode === "narrator" && <>
     {human && <><h3>Who fooled you</h3><p>Your last recorded wolf ratings, compared with the revealed roles.</p>{fooled.length ? <ul>{fooled.map(p => <li key={p.id}>{p.name} was a Werewolf. You rated them {Math.round(p.p*100)}% likely to be a wolf.</li>)}</ul> : <p>No Werewolf had a recorded rating below 50% from you.</p>}</>}
     <details><summary>Hidden reasoning and wolf chat</summary>{shown.filter(e => e.private_reasoning || e.type === 'wolf_chat').map(e => <div key={e.seq}><h4>Day {e.day} · {scene.players.find(p => p.id === e.actor)?.name ?? e.actor}</h4>{e.private_reasoning && <pre>{e.private_reasoning}</pre>}{e.type === 'wolf_chat' && <p>{e.public_text}</p>}</div>)}{!shown.some(e => e.private_reasoning) && <p>Hidden reasoning has not arrived in this log yet.</p>}</details>

@@ -21,7 +21,7 @@
   /* table region height, then the width the table would use at that height */
   --gs-th:calc(100dvh - var(--gs-top) - var(--gs-counter) - var(--gs-bar) - 2 * var(--gs-gap));
   /* side panels take what the table leaves, within bounds */
-  --gs-side:clamp(206px,calc((100vw - var(--gs-turn) - 760 * var(--gs-th) / 720 - 2 * var(--gs-gap)) / 2),18vw);
+  --gs-side:clamp(220px,calc((100vw - var(--gs-turn) - 760 * var(--gs-th) / 720 - 2 * var(--gs-gap)) / 2),18vw);
   --gs-left:var(--gs-side);
   --gs-right:var(--gs-side);
   --gs-tw:calc(100vw - var(--gs-left) - var(--gs-right) - var(--gs-turn) - 2 * var(--gs-gap));
@@ -68,7 +68,7 @@
   .illustrated-shell .event-roster{--s:calc(var(--gs-right) / 698);right:var(--gs-turn);width:var(--gs-right);border-width:calc(208 * var(--s)) calc(118 * var(--s)) calc(170 * var(--s));border-image:url("./assets/new/event%20menu.png") 208 118 170 fill/1/0 stretch}
   .illustrated-shell :is(.roster,.event-roster) .panel-art{display:none}
   .illustrated-shell :is(.roster,.event-roster) .panel-content{position:absolute;inset:0;padding:0 2px}
-  .illustrated-shell :is(.roster,.event-roster) .panel-content h2{margin:0 0 clamp(4px,1dvh,12px);font:700 clamp(14px,2.1dvh,26px) Georgia,serif;letter-spacing:.04em;white-space:nowrap}
+  .illustrated-shell :is(.roster,.event-roster) .panel-content h2{margin:0 0 clamp(4px,1dvh,12px);font:700 min(clamp(14px,2.1dvh,26px),12cqw) Georgia,serif;letter-spacing:.04em;white-space:nowrap}
 
   /* Agents: all ten fit without scrolling from 1366 x 768 up. Sizes follow the height. */
   .illustrated-shell .agent-list{flex:1;display:flex;flex-direction:column;justify-content:space-between;gap:0;overflow:hidden auto;scrollbar-width:none;padding:0}

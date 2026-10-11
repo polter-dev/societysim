@@ -62,7 +62,8 @@ function Seat({ p, i, n, model, selected, speaking, onSelect }: SeatProps) {
       data-alive={p.alive}
       data-revealed={p.revealed}
       data-speaking={speaking || undefined}
-      data-plate={y < 50 ? "above" : "below"}
+      // Only the three top chairs hang the plate above; the side chairs above center would hit their upper neighbour.
+      data-plate={y < 35 ? "above" : "below"}
       style={{ left: `${x}%`, top: `${y}%` }}
     >
       <button type="button" aria-pressed={selected} aria-haspopup="dialog" aria-label={seatLabel(p, model, speaking)} data-testid="seat-button" onClick={() => onSelect?.(p.id)}>

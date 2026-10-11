@@ -625,7 +625,7 @@ plain English the server wrote itself (never provider text, a stack trace or a k
 | `active_game_exists` | 429 | Your IP already has a game running |
 | `too_many_games_today` | 429 | Your IP's games for this UTC day are used up; `Retry-After` is the time to midnight UTC |
 | `at_capacity` | 503 | All game slots are busy |
-| `budget_exhausted` | 503 | Today's spend cap is reached (or the spend ledger is unreachable) |
+| `budget_exhausted` | 503 | Today's spend cap is reached (or the Neon ledger is unreachable, or a write to it failed and has not been retried yet) |
 | `play_disabled` | 503 | Play is switched off |
 | `internal_error` | 500 | A bug; nothing else is said |
 
@@ -634,10 +634,17 @@ Limits, all set by env on the server (defaults in brackets):
 - `PLAY_RATE_PER_MIN` [120]: requests per minute per IP, token bucket. Poll `/me` at most once
   a second.
 - `PLAY_MAX_ACTIVE_PER_IP` [1], `PLAY_MAX_GAMES_PER_IP_DAY` [5], `PLAY_MAX_CONCURRENT` [4]
-  running games in all. Watch-only games count the same.
+  running games in all. Watch-only games count the same. The daily count per IP is kept in
+  Neon (`visitor_starts`, not readable through the Data API), so a restart doesn't reset it.
+  It is stored under an HMAC-SHA256 of the IP keyed with `PLAY_IP_SALT` (a secret, at least 16
+  characters; `openssl rand -hex 32`), never the IP; earlier days' rows are deleted at load.
+  With Neon on and no salt, visitor games are refused (`budget_exhausted`).
 - `PLAY_MAX_GAME_MINUTES` [45]: a longer game is ended (`status: "failed"`).
 - `PLAY_DAILY_BUDGET_USD` [2.00]: model spend per UTC day, booked per call in Neon
-  (`visitor_spend`, not readable through the Data API). A game starts only if what is left
+  (`visitor_spend`, not readable through the Data API). If a write to Neon fails, no new game
+  starts and running games' AI turns go to scripted agents until a retry (with backoff, up to
+  a minute apart) writes the row; a row is never counted twice. A call that failed or timed
+  out books its worst case for each attempt. A game starts only if what is left
   covers its estimate (the batch runner's price prior). Each model call first holds its worst
   case (a token per prompt byte plus 2000, and the full output cap, at the model's price) and
   runs only if that fits; the hold then settles to the real cost. So spend never passes the

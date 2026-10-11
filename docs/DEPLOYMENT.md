@@ -30,7 +30,7 @@ After a deploy, check `curl https://polter-dev-societysim-play.hf.space/api/limi
 `render.yaml` describes the same server as one Render web service, built from `server/Dockerfile`, a single instance (game state is in memory, so never scale out). The Dockerfile listens on `$PORT` when set (Render sets it) and on 7860 otherwise, so the Space is unchanged.
 
 1. In the Render dashboard: New, Blueprint, pick this repo, apply.
-2. Paste the secrets Render asks for: `PLAY_OPENAI_API_KEY`, `PLAY_HF_TOKEN`, `PLAY_GEMINI_API_KEY`, `TURNSTILE_SECRET_KEY`, `NEON_DATABASE_URL`, `PLAY_ALERT_WEBHOOK_URL`. The limits (`PLAY_*`) have defaults in the file.
+2. Paste the secrets Render asks for: `PLAY_OPENAI_API_KEY`, `PLAY_HF_TOKEN`, `PLAY_GEMINI_API_KEY`, `TURNSTILE_SECRET_KEY`, `NEON_DATABASE_URL`, `PLAY_ALERT_WEBHOOK_URL`, `PLAY_IP_SALT` (`openssl rand -hex 32`; it keys the per-IP daily count stored in Neon, and without it visitor games are refused). The limits (`PLAY_*`) have defaults in the file.
 3. Once it's live, set the repo variable `VITE_PLAY_API_URL` to the Render URL (`https://societysim-play.onrender.com`, or whatever Render assigned) and redeploy the site. The uptime workflow reads the same variable.
 4. Checks, with `$URL` as the Render URL:
    - `curl $URL/api/limits`: `remaining_today` above 0, and `client_ip_hint` is your own public IP, masked, not `10.x.x.x` or a Cloudflare address (`172.64-71.x.x`, `104.16-31.x.x`).

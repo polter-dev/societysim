@@ -25,6 +25,10 @@ services:
         sync: false
       - key: PLAY_ALERT_WEBHOOK_URL
         sync: false
+      # Keys the per-IP daily game count stored in Neon (an HMAC of the IP, never the IP).
+      # Without it visitor games are refused. Generate with `openssl rand -hex 32`.
+      - key: PLAY_IP_SALT
+        sync: false
       # Trust only Render's private hop, and take the client from CF-Connecting-IP, which
       # Render always sets. Trusting Cloudflare's ranges would let a visitor's own Cloudflare
       # Worker or WARP exit forge X-Forwarded-For. See README, "Deploy on Render".

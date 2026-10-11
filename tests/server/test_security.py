@@ -29,8 +29,8 @@ from societysim.config import GameConfig  # noqa: E402
 from societysim.engine.state import GameState  # noqa: E402
 from societysim.models.client import CompletionResult, Usage  # noqa: E402
 from societysim.server import admission, security  # noqa: E402
-from societysim.server import manager as manager_module  # noqa: E402
 from societysim.server import ledger as ledger_module  # noqa: E402
+from societysim.server import manager as manager_module  # noqa: E402
 from societysim.server.app import create_app  # noqa: E402
 from societysim.server.ledger import (
     Ledger,  # noqa: E402

@@ -95,7 +95,7 @@ class Ledger:
         if connect is None:
             return False
         if len(self._salt) < MIN_SALT:
-            log.warning("PLAY_IP_SALT unset or under %d characters; refusing visitor games", MIN_SALT)
+            log.warning("PLAY_IP_SALT unset or under %d characters; no visitor games", MIN_SALT)
             return False
         try:
             async with self._lock:
@@ -112,7 +112,7 @@ class Ledger:
                 self.starts[key] = max(self.starts.get(key, 0), int(row["games"]))
             self.ready = True
         except Exception as exc:  # the message may hold the DSN: log the type only
-            log.warning("visitor ledger unavailable (%s); refusing visitor games", type(exc).__name__)
+            log.warning("visitor ledger unavailable (%s); no visitor games", type(exc).__name__)
             await self._drop()
         return self.ready
 

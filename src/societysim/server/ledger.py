@@ -149,9 +149,10 @@ class Ledger:
         self._roll()
         return max(0, self.budget_nanos - self.spent_nanos) / 1e9
 
-    def remaining_today(self) -> int:
-        """Games of the default estimate still affordable today (GET /api/limits)."""
-        left = self.remaining_usd()
+    def remaining_today(self, committed_usd: float = 0.0) -> int:
+        """Games of the default estimate still affordable today (GET /api/limits), after
+        `committed_usd`: what the running games are still expected to spend."""
+        left = self.remaining_usd() - committed_usd
         if left <= 0:
             return 0
         if self.game_estimate_usd <= 0:

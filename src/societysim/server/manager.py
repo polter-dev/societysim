@@ -244,7 +244,7 @@ class Session:
     logger: EventLogger
     seat: str | None  # None for a watch-only game
     agent: WebHumanAgent | None
-    token_hash: bytes | None
+    token_hash: bytes | None  # the seat token's, or a watch-only game's leave token's
     status: Status = "running"
     reason: str = ""  # why it ended: "leave", "turn timeouts", an exception type...
     started_at: float = field(default_factory=time.time)
@@ -328,8 +328,9 @@ class GameManager:
     def start(
         self, setup: GameSetup, watch_only: bool, client: str = "unknown"
     ) -> tuple[Session, str | None]:
-        """Start a game in the background. Returns the session and the visitor's seat token
-        (None when watching). Raises ValueError for a setup this server can't run."""
+        """Start a game in the background. Returns the session and its token: the visitor's
+        seat token, or for a watch-only game a token that only /leave accepts (#642). Raises
+        ValueError for a setup this server can't run."""
         self._prune()
         data = setup.model_dump()
         data["seed"] = secrets.randbits(53)
@@ -361,15 +362,15 @@ class GameManager:
             sinks.append(
                 NeonSink(s.batch_id, connect=self.neon_connect, agents="llm", public_only=True)
             )
-        agent = token = None
+        agent = None
         if seat is not None:
             agent = WebHumanAgent(s.turn_timeout, s.max_timeouts)
             make_agent = _seat(make_agent, seat, agent)
             sinks = [human.HumanSink(sink, seat) for sink in sinks]
-            token = secrets.token_urlsafe(32)  # 256 bits; only its hash is kept
+        token = secrets.token_urlsafe(32)  # 256 bits; only its hash is kept
         logger = EventLogger(game_id, sinks)
         game = Game(cfg, make_agent, logger, colors, _presentations())
-        session = Session(game_id, game, logger, seat, agent, token and hash_token(token))
+        session = Session(game_id, game, logger, seat, agent, hash_token(token))
         session.client, session.calls = client, calls
         session.task = asyncio.create_task(self._run(session))
         self.games[game_id] = session
@@ -498,9 +499,10 @@ class GameManager:
         session.agent.submit(parsed)
 
     def leave(self, session: Session) -> None:
-        """The visitor gives up their seat: the game ends now as a forfeit, so it stops
-        spending and stops counting toward the per-IP limit. Calls in flight are cancelled
-        and their holds booked, as for any forfeit. An ended game is left as it is."""
+        """The visitor gives up their seat or stops watching: the game ends now as a
+        forfeit, so it stops spending and frees its table and the per-IP slot. Calls in flight
+        are cancelled and their holds booked, as for any forfeit. An ended game is left as it
+        is."""
         if session.status == "running" and session.task and not session.task.done():
             session.status, session.reason = "forfeit", "leave"
             session.task.cancel()

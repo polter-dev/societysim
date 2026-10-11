@@ -520,7 +520,7 @@ to them). All bodies are JSON and closed: an unknown key is a 422. Every error i
 | `POST /api/games` | none (Turnstile token in the body) | `StartGame` | `StartedGame` |
 | `GET /api/games/{id}/me` | seat token | | `Me` |
 | `POST /api/games/{id}/action` | seat token | `ActionBody` | `{"accepted": true}` |
-| `POST /api/games/{id}/leave` | seat token | | `{"accepted": true}` |
+| `POST /api/games/{id}/leave` | seat token or watch token | | `{"accepted": true}` |
 | `GET /api/limits` | none | | `{"play_enabled": bool, "remaining_today": int, "client_ip_hint": str, "allowed_models": [str]}` (model ids visitors may use, sorted) |
 | `GET /api/health` | none | | `{"ok": true, "providers_ready": {"<provider>": bool}, "games_running": int}` (a key is present for that provider; never the key. `games_running`: games in memory a deploy would end) |
 
@@ -535,9 +535,11 @@ to them). All bodies are JSON and closed: an unknown key is a 422. Every error i
   the role deal. Without `watch_only`, `human_seat` defaults to `p0`; with `seats`, one seat must
   have model `"human"`. A watch-only game must not have a human seat.
 - `turnstile_token`: at most 2048 characters. Checked by the admission step (#281).
-- Response: `{"game_id": "visitor-<16 hex>", "seat": "p0", "seat_token": "<43 chars>"}`;
-  `seat` and `seat_token` are null for a watch-only game. The token is 256 random bits and the
-  server keeps only its SHA-256, so it can't be shown again. Keep it for the rest of the game.
+- Response: `{"game_id": "visitor-<16 hex>", "seat": "p0", "seat_token": "<43 chars>",
+  "watch_token": null}`. A watch-only game gets `seat` and `seat_token` null and a
+  `watch_token` instead, which only `POST /leave` accepts (`/me` and `/action` give 401), so a
+  watcher can stop the game. Either token is 256 random bits and the server keeps only its
+  SHA-256, so it can't be shown again. Keep it for the rest of the game.
 - Errors: 422 bad setup (the message names each problem), 400 for a model outside the allowlist,
   and the limits below (403, 429, 503).
 
@@ -599,17 +601,17 @@ Same auth. The body holds the `action` shape a model sends for `pending_action.k
 
 ### Leaving: `POST /api/games/{id}/leave`
 
-Send `Authorization: Bearer <seat_token>` with no body. The visitor gives up their seat and the
-game ends now as a forfeit: `status: "forfeit"` on `/me`, the log stops without `game_end`,
+Send `Authorization: Bearer <seat_token>` (or `<watch_token>` for a watch-only game) with no
+body. The visitor gives up their seat, or stops watching, and the game ends now as a forfeit: `status: "forfeit"` on `/me`, the log stops without `game_end`,
 run_meta gets `forfeit: true`, and Neon marks the game `failed` (same as the timeout forfeit
 below). Model calls in flight are cancelled and the calls already made are still booked. The
-game stops counting toward the per-IP active limit at once, so the visitor can start a new one;
-the daily count is not refunded.
+game stops counting toward the per-IP active limit and `PLAY_MAX_CONCURRENT` at once, so the
+visitor can start a new one; the daily count is not refunded.
 
 - Response: `{"accepted": true}` (200). Calling it again, or on a game that already ended, is a
   200 no-op and leaves the status as it was.
-- Errors: 404 for an unknown game, 401 for a missing or wrong token, a token from another game,
-  or any token on a watch-only game.
+- Errors: 404 for an unknown game, 401 for a missing or wrong token or a token from another
+  game.
 
 ### Timeouts
 
@@ -659,14 +661,15 @@ Limits, all set by env on the server (defaults in brackets):
   (`visitor_spend`, not readable through the Data API). If a write to Neon fails, no new game
   starts and running games' AI turns go to scripted agents until a retry (with backoff, up to
   a minute apart) writes the row; a row is never counted twice. A call that failed or timed
-  out books its worst case for each attempt. A game starts only if what is left
-  covers its estimate (the batch runner's price prior). Each model call first holds its worst
+  out books its worst case for each attempt. A game starts only if what is left,
+  minus what the running games are still expected to spend (each one's estimate less what it
+  has booked so far), covers its estimate (the batch runner's price prior). Each model call first holds its worst
   case (a token per prompt byte plus 2000, and the full output cap, at the model's price) and
   runs only if that fits; the hold then settles to the real cost. So spend never passes the
   cap. When a call doesn't fit, that AI turn is played by a scripted agent and the game
   finishes. A failed call's error is stored, sent to Neon and put in the retry prompt only as a
   category (`provider_error`, `timeout`, `invalid_output`), never the provider's text. `remaining_today` in
-  `/api/limits` is how many default games that leaves.
+  `/api/limits` is how many default games that leaves, after the running games' share.
 - `PLAY_ALLOWED_MODELS` [qwen3-235b, llama4-maverick, gemma4-26b, gpt-oss-120b, deepseek-v3.1,
   gemini-flash-lite, gpt-5-nano]: Basic mode uses the default lineup minus anything not allowed.
   `PLAY_MAX_TOKENS` [2048] caps each call.

@@ -50,6 +50,9 @@ class StartedGame(_Strict):
     game_id: str
     seat: SeatId | None  # null when watching
     seat_token: str | None  # send as "Authorization: Bearer <seat_token>"; null when watching
+    # A watch-only game's token instead (#642): it works on /leave only, so a watcher can stop
+    # the game. Null when playing a seat.
+    watch_token: str | None = None
 
 
 class PendingAction(_Strict):
@@ -141,12 +144,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.manager = manager
     security.install(app, play)
 
-    def session_for(game_id: str, authorization: str | None) -> Session:
+    def session_for(game_id: str, authorization: str | None, seat: bool = True) -> Session:
+        """The game the token is for. `seat`: only a seat token will do (a watch-only game's
+        token works on /leave only)."""
         session = manager.games.get(game_id)
         if session is None:
             raise PlayError(404, "game_not_found", "no such game")
         scheme, _, token = (authorization or "").partition(" ")
-        if scheme.lower() != "bearer" or not session.authorized(token.strip()):
+        if (
+            scheme.lower() != "bearer"
+            or not session.authorized(token.strip())
+            or (seat and session.seat is None)
+        ):
             raise PlayError(401, "unauthorized", "bad or missing seat token")
         return session
 
@@ -162,7 +171,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         await watch.kill_switch(settings.play_enabled)  # the uptime check polls this
         return Limits(
             play_enabled=settings.play_enabled,
-            remaining_today=manager.ledger.remaining_today(),
+            remaining_today=manager.ledger.remaining_today(admission.committed_usd(manager)),
             client_ip_hint=security.ip_hint(
                 security.client_ip(request, play.trusted_proxies, play.client_ip_header)
             ),
@@ -178,7 +187,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             session, token = manager.start(admitted.setup, body.watch_only, admitted.client)
         except ValueError as exc:
             raise PlayError(422, "invalid_request", str(exc)) from None
-        return StartedGame(game_id=session.game_id, seat=session.seat, seat_token=token)
+        watching = session.seat is None
+        return StartedGame(
+            game_id=session.game_id,
+            seat=session.seat,
+            seat_token=None if watching else token,
+            watch_token=token if watching else None,
+        )
 
     @app.get("/api/games/{game_id}/me")
     async def me(game_id: str, authorization: Annotated[str | None, Header()] = None) -> Me:
@@ -231,8 +246,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def leave(
         game_id: str, authorization: Annotated[str | None, Header()] = None
     ) -> Accepted:
-        """Give up the seat: the game ends as a forfeit, freeing the per-IP slot."""
-        manager.leave(session_for(game_id, authorization))
+        """Give up the seat, or stop watching: the game ends as a forfeit, freeing the per-IP
+        slot and the table."""
+        manager.leave(session_for(game_id, authorization, seat=False))
         return Accepted()
 
     return app
@@ -265,7 +281,10 @@ def play_api_json_schema() -> dict[str, Any]:
                 "request": "ActionBody",
                 "response": "Accepted",
             },
-            "POST /api/games/{id}/leave": {"auth": "seat_token", "response": "Accepted"},
+            "POST /api/games/{id}/leave": {
+                "auth": "seat_token or watch_token",
+                "response": "Accepted",
+            },
             "GET /api/limits": {"response": "Limits"},
             "GET /api/health": {"response": "Health"},
         },

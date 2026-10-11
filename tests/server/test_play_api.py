@@ -238,11 +238,57 @@ async def test_auth_failures(make_client):
         assert (await c.post(f"{url}/action", json={}, headers=auth("nope"))).status_code == 401
         assert (await c.get("/api/games/visitor-0/me", headers=auth(token))).status_code == 404
 
+        assert started["watch_token"] is None
         watch = await start(c, watch_only=True)
         assert watch["seat"] is None and watch["seat_token"] is None
         r = await c.get(f"/api/games/{watch['game_id']}/me", headers=auth("None"))
         assert r.status_code == 401
         await finished(c, watch)
+
+
+class Stuck(RandomAgent):
+    """A model seat that never answers, so a watch-only game keeps running."""
+
+    async def act(self, turn):
+        await asyncio.Event().wait()
+
+
+async def test_watch_token_ends_a_watch_game_and_frees_its_slots(make_client, monkeypatch):
+    """#642: a watch-only game's token stops it through /leave, and nothing else: a watcher
+    has no seat view and no moves. Leaving frees the IP's slot and the table at once."""
+    monkeypatch.setenv("PLAY_MAX_ACTIVE_PER_IP", "1")
+    monkeypatch.setenv("PLAY_MAX_CONCURRENT", "2")
+    async with make_client(agents=lambda cfg: (Stuck, {})) as c:
+        watch = await start(c, watch_only=True)
+        token = watch["watch_token"]
+        assert watch["seat"] is None and watch["seat_token"] is None
+        assert isinstance(token, str) and len(token) == 43
+        url = f"/api/games/{watch['game_id']}"
+        assert (await c.post("/api/games", json={})).json()["error"] == "active_game_exists"
+
+        assert (await c.get(f"{url}/me", headers=auth(token))).status_code == 401
+        r = await c.post(f"{url}/action", json={}, headers=auth(token))
+        assert r.status_code == 401
+        elsewhere = httpx.ASGITransport(app=c._transport.app, client=("203.0.113.9", 1))
+        async with httpx.AsyncClient(
+            transport=elsewhere, base_url="http://test", headers=c.headers
+        ) as c2:
+            other = await start(c2, watch_only=True)  # another visitor's watch game
+        r = await c.post(f"/api/games/{other['game_id']}/leave", headers=auth(token))
+        assert r.status_code == 401  # only its own game
+        assert (await c.post("/api/games", json={})).json()["error"] == "at_capacity"
+
+        session = c.manager.games[watch["game_id"]]
+        async with asyncio.timeout(TIMEOUT):  # the game has started and its calls are in flight
+            while not session.calls:
+                await asyncio.sleep(0.002)
+        r = await c.post(f"{url}/leave", headers=auth(token))
+        assert r.status_code == 200 and r.json() == {"accepted": True}
+        assert session.status == "forfeit" and session.reason == "leave"
+        played = await start(c)  # the IP's slot and a table are free at once
+        assert played["seat"] == "p0" and played["watch_token"] is None
+        assert (await finished(c, watch)).status == "forfeit"
+        assert c.manager.games[other["game_id"]].status == "running"
 
 
 async def test_refresh_reattaches_with_the_seat_token(make_client):

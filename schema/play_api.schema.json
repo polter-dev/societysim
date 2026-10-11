@@ -17,7 +17,7 @@
       "response": "Accepted"
     },
     "POST /api/games/{id}/leave": {
-      "auth": "seat_token",
+      "auth": "seat_token or watch_token",
       "response": "Accepted"
     },
     "GET /api/limits": {
@@ -606,6 +606,18 @@
             }
           ],
           "title": "Seat Token"
+        },
+        "watch_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Watch Token"
         }
       },
       "required": [

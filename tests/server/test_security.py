@@ -805,8 +805,9 @@ async def test_concurrent_calls_and_games_never_pass_the_cap(make_client, costly
     assert ledger.spent_nanos == 0  # all five settled to their real cost
 
     # Several games started at once share one budget; the holds keep the total under it.
+    # Admission lets in only what the budget covers (#641), so the cap is lowered after.
     c = make_client(play=play(), agents=lambda cfg: (CostlyAgent, {}))
-    c.manager.ledger.budget_nanos = nanos(admission.estimate_usd(GameSetup()) + 0.002)
+    c.manager.ledger.budget_nanos = nanos(3 * admission.estimate_usd(GameSetup()) + 0.002)
     games = await asyncio.gather(
         *(c.post("/api/games", json={"watch_only": True}) for _ in range(3))
     )
@@ -816,6 +817,43 @@ async def test_concurrent_calls_and_games_never_pass_the_cap(make_client, costly
         await finished(c, r.json()["game_id"])
     assert c.manager.ledger.spent_nanos <= c.manager.ledger.budget_nanos
     assert costly["done"] * COST <= 0.02
+
+
+class Stuck(RandomAgent):
+    async def act(self, turn):
+        await asyncio.Event().wait()
+
+
+async def test_running_games_commit_their_estimate(make_client, monkeypatch):
+    """#641: a budget for about two games admits two concurrent games, not one per table. The
+    third start is refused until a game ends, and /api/limits counts the same way."""
+    monkeypatch.setattr(admission, "call_worst_case", lambda *a: 0.0)  # no holds in flight
+    # Every game estimated the same (the real one depends on the seed's seat shuffle).
+    estimate = 0.1
+    monkeypatch.setattr(admission, "estimate_usd", lambda setup: estimate)
+    c = make_client(play=play(daily_budget_usd=2.6 * estimate), agents=lambda cfg: (Stuck, {}))
+    c.manager.ledger.game_estimate_usd = estimate
+    assert (await c.get("/api/limits")).json()["remaining_today"] == 2
+    first = await start(c, watch_only=True)
+    assert (await c.get("/api/limits")).json()["remaining_today"] == 1
+    await start(c, watch_only=True)
+    assert (await c.get("/api/limits")).json()["remaining_today"] == 0
+    err(await c.post("/api/games", json={"watch_only": True}), 503, "budget_exhausted")
+
+    # What a running game has booked comes off its commitment, not twice off the budget.
+    await c.manager.ledger.settle(first["game_id"], 0, estimate / 2)
+    assert admission.committed_usd(c.manager) == pytest.approx(1.5 * estimate)
+    assert (await c.get("/api/limits")).json()["remaining_today"] == 0
+
+    session = c.manager.games[first["game_id"]]
+    async with asyncio.timeout(TIMEOUT):  # the game has started and its calls are in flight
+        while not session.calls:
+            await asyncio.sleep(0.002)
+    c.manager.leave(session)
+    await finished(c, first["game_id"])
+    assert (await c.get("/api/limits")).json()["remaining_today"] == 1
+    third = await start(c, watch_only=True)  # admitted again once a game ended
+    assert c.manager.games[third["game_id"]].status == "running"
 
 
 async def test_call_cancelled_before_it_starts_leaves_no_hold():

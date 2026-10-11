@@ -12,7 +12,7 @@ from functools import cache
 
 from fastapi import Request
 
-from societysim.config import ModelSpec
+from societysim.config import GameConfig, ModelSpec
 from societysim.server import security
 from societysim.server.security import PlayError
 from societysim.setup import DEFAULT_LINEUP, HUMAN, REGISTRY, GameSetup
@@ -57,7 +57,7 @@ def call_worst_case(model: str, prompt_bytes: int, max_tokens: int) -> float:
     return estimate_cost(spec, prompt_bytes + PROMPT_OVERHEAD_TOKENS, out)
 
 
-def estimate_usd(setup: GameSetup) -> float:
+def estimate_usd(setup: GameSetup | GameConfig) -> float:
     """Prior USD of a whole game: the batch price prior summed over its model seats."""
     from societysim.batch.runner import PRIOR_CALLS_PER_SEAT
 
@@ -84,6 +84,18 @@ def allowed_setup(setup: GameSetup, allowed: frozenset[str]) -> GameSetup:
             f"allowed: {', '.join(sorted(allowed))}",
         )
     return setup
+
+
+def committed_usd(manager) -> float:
+    """What the running games are still expected to spend: each one's estimate minus what it
+    has booked so far (#641). Admission and `remaining_today` set it aside, so a new game
+    doesn't start on budget the running ones will need."""
+    booked = manager.ledger.games
+    return sum(
+        max(0.0, estimate_usd(s.game.state.config) - booked.get(s.game_id, 0.0))
+        for s in manager.games.values()
+        if s.status == "running"
+    )
 
 
 def default_estimate(allowed: frozenset[str]) -> float:
@@ -144,5 +156,5 @@ def _check_limits(manager, ip: str, setup: GameSetup) -> None:
             f"That's {play.max_games_per_ip_day} games today; come back tomorrow",
             {"Retry-After": _until_midnight()},
         )
-    if ledger.remaining_usd() < estimate_usd(setup):
+    if ledger.remaining_usd() - committed_usd(manager) < estimate_usd(setup):
         raise PlayError(503, "budget_exhausted", BUDGET_MESSAGE)

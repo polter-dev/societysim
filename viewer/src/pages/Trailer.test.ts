@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { parseIndex } from "../audio/narration";
-import TrailerPage, { G0043, GAME_ID, narratedBetween, stepAt, TIMELINE, TrailerFrame, trailerState } from "./Trailer";
+import TrailerPage, { clipsBetween, G0043, GAME_ID, stepAt, TIMELINE, TrailerFrame, trailerState } from "./Trailer";
 
 const seqs = new Set(G0043.map((e) => e.seq));
 const seats = G0043[0].meta.seats!;
@@ -13,7 +13,7 @@ const stepIndex = (pred: (step: (typeof TIMELINE)[number]) => boolean) => TIMELI
 const frame = (idx: number) => renderToStaticMarkup(createElement(TrailerFrame, { state: trailerState(TIMELINE, idx) }));
 
 describe("trailer timeline", () => {
-  it("is 45 to 60 seconds, starts at 0 and never runs backwards", () => {
+  it("is 45 to 60 seconds muted (about 67 with Hugo's 16 s clip), starts at 0 and never runs backwards", () => {
     expect(TIMELINE[0].t).toBe(0);
     for (let i = 1; i < TIMELINE.length; i++) expect(TIMELINE[i].t).toBeGreaterThanOrEqual(TIMELINE[i - 1].t);
     const end = TIMELINE.at(-1)!;
@@ -34,10 +34,36 @@ describe("trailer timeline", () => {
     }
   });
 
-  it("plays only narrator clips that ship with the game", () => {
-    const narrated = narratedBetween(TIMELINE, -1, TIMELINE.length - 1);
-    expect(narrated).toEqual([1, 14, 68, 79]);
-    for (const seq of narrated) expect(audioIndex.clips.find((c) => c.seq === seq && c.category === "narrator")).toBeTruthy();
+  it("plays only clips that ship with the game: the narrator lines and Hugo's own voice on seq 48", () => {
+    const clips = clipsBetween(TIMELINE, -1, TIMELINE.length - 1);
+    expect(clips).toEqual([
+      { seq: 1, category: "narrator" },
+      { seq: 14, category: "narrator" },
+      { seq: 48, category: "speech" },
+      { seq: 68, category: "narrator" },
+      { seq: 79, category: "narrator" },
+    ]);
+    for (const c of clips) expect(audioIndex.clips.find((x) => x.seq === c.seq && x.category === c.category)).toBeTruthy();
+  });
+
+  it("voices only public statements, by their own speaker, and holds the clock for each so it is never cut off", () => {
+    const spoken = TIMELINE.flatMap((step, i) => (step.kind === "speak" ? [{ seq: step.data.seq, t: step.t, i }] : []));
+    expect(spoken.length).toBeGreaterThan(0);
+    for (const { seq, t, i } of spoken) {
+      const event = G0043.find((e) => e.seq === seq)!;
+      expect(event).toMatchObject({ type: "statement", visibility: "public" });
+      const clip = audioIndex.clips.find((c) => c.seq === seq && c.category === "speech")!;
+      expect(clip.speaker).toBe(event.actor);
+      expect(clip.text).toBe(event.public_text);
+      // The table shows the statement while it is voiced ...
+      expect(trailerState(TIMELINE, i).seq).toBe(seq);
+      // ... and a wait comes before the next clip or the notes card, which stays silent.
+      const rest = TIMELINE.slice(i + 1);
+      const wait = rest.findIndex((step) => step.kind === "wait");
+      expect(wait).toBeGreaterThanOrEqual(0);
+      expect(rest[wait].t).toBeGreaterThanOrEqual(t);
+      expect(rest.slice(0, wait).some((step) => step.kind === "narrate" || step.kind === "speak" || (step.kind === "notes" && step.data.text !== null))).toBe(false);
+    }
   });
 
   it("embeds no private data: the one notes line is Hugo's seq 48 and the reveal matches the recorded roles", () => {
@@ -67,8 +93,8 @@ describe("trailer timeline", () => {
     expect(stepAt(TIMELINE, -1)).toBe(-1);
     expect(stepAt(TIMELINE, 0)).toBe(1); // seq 1 and its narration share t=0
     expect(stepAt(TIMELINE, 1000)).toBe(TIMELINE.length - 1);
-    expect(narratedBetween(TIMELINE, -1, stepAt(TIMELINE, 0))).toEqual([1]);
-    expect(narratedBetween(TIMELINE, stepAt(TIMELINE, 0), stepAt(TIMELINE, 5.2))).toEqual([14]);
+    expect(clipsBetween(TIMELINE, -1, stepAt(TIMELINE, 0))).toEqual([{ seq: 1, category: "narrator" }]);
+    expect(clipsBetween(TIMELINE, stepAt(TIMELINE, 0), stepAt(TIMELINE, 4.7))).toEqual([{ seq: 14, category: "narrator" }]);
   });
 });
 

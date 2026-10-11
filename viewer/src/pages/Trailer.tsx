@@ -15,8 +15,8 @@
  * Only public events are embedded (G0043). The single private line is Hugo's seq-48 reasoning, already
  * public in the replay's narrator mode; the issue asks for it as the reveal.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
-import { clipsForSeq, clipUrl, loadIndex, type NarrationIndex } from "../audio/narration";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { clipsForSeq, clipUrl, type Enabled, loadIndex, type NarrationIndex } from "../audio/narration";
 import { type AudioLike, createPlayer } from "../audio/player";
 import { Arrows } from "../components/Arrows/Arrows";
 import { AvatarMedallion } from "../components/AvatarMedallion/AvatarMedallion";
@@ -79,6 +79,10 @@ export const G0043: Event[] = [
 export type Step =
   | { t: number; kind: "seq"; data: { seq: number } }
   | { t: number; kind: "narrate"; data: { seq: number } }
+  /** The player's own voice (the `speech` clip) for a public statement. */
+  | { t: number; kind: "speak"; data: { seq: number } }
+  /** Hold the clock until the running clip ends (#627 style), so no voice is cut off. Instant when muted. */
+  | { t: number; kind: "wait"; data: Record<string, never> }
   | { t: number; kind: "title"; data: { text: string | null } }
   | { t: number; kind: "seats"; data: { lit: number } }
   | { t: number; kind: "caption"; data: { text: string | null } }
@@ -90,37 +94,43 @@ export type Step =
 
 const s = <K extends Step["kind"]>(t: number, kind: K, data: Extract<Step, { kind: K }>["data"]): Step => ({ t, kind, data }) as Step;
 
-/** The whole trailer, in seconds. Pure data: the page only plays it. */
+/**
+ * The whole trailer, in seconds of muted time. Pure data: the page only plays it. With sound, the `wait`
+ * after Hugo's line holds the clock until his 16 s clip ends, so the whole thing runs about 67 s.
+ * The vote run-up statements (seq 50 to 65) are 14 to 28 s each; none fits, so only Hugo is voiced.
+ */
 export const TIMELINE: Step[] = [
   s(0, "seq", { seq: 1 }),
   s(0, "narrate", { seq: 1 }),
   s(0.8, "title", { text: "Ten AI models.\nTwo are wolves." }),
-  s(5, "title", { text: null }),
-  s(5.2, "seq", { seq: 14 }),
-  s(5.2, "narrate", { seq: 14 }),
-  ...Array.from({ length: 10 }, (_, i) => s(5.6 + i * 0.75, "seats", { lit: i + 1 })),
-  s(13.4, "caption", { text: "Hugo, Gemini Flash, is a wolf. Nobody knows yet." }),
-  s(15.5, "caption", { text: null }),
-  s(15.5, "seq", { seq: 48 }),
-  s(18, "seq", { seq: 49 }),
-  // Hugo's private reasoning on seq 48, as the replay's narrator mode shows it.
-  s(22, "notes", { seq: 48, text: "If I defend Iris blatantly, I'll be tied to her." }),
-  s(27.2, "notes", { seq: 48, text: null }),
-  s(27.2, "seq", { seq: 68 }),
-  s(27.2, "narrate", { seq: 68 }),
-  ...Array.from({ length: 10 }, (_, i) => s(30 + i * 0.38, "seq", { seq: 69 + i })),
-  s(34.2, "seq", { seq: 79 }),
-  s(34.2, "narrate", { seq: 79 }),
-  s(37.8, "reveal", { wolves: ["p2", "p5"] }),
-  s(37.8, "caption", { text: "Iris was his partner. Hugo voted with the village." }),
-  s(42, "caption", { text: null }),
-  s(42, "card", { card: "stats" }),
-  s(42.6, "stat", { value: "356", label: "lies said out loud" }),
-  s(45.4, "stat", { value: "40% vs 71%", label: "lies followed, against no lie" }),
-  s(48.2, "stat", { value: "65%", label: "Gemini Flash win rate" }),
-  s(52, "card", { card: "cta" }),
-  s(56, "card", { card: "end" }),
-  s(59, "end", {}),
+  s(4.5, "title", { text: null }),
+  s(4.7, "seq", { seq: 14 }),
+  s(4.7, "narrate", { seq: 14 }),
+  ...Array.from({ length: 10 }, (_, i) => s(5.1 + i * 0.6, "seats", { lit: i + 1 })),
+  s(11.5, "caption", { text: "Hugo, Gemini Flash, is a wolf. Nobody knows yet." }),
+  s(13.5, "caption", { text: null }),
+  s(13.5, "seq", { seq: 48 }),
+  s(13.5, "speak", { seq: 48 }),
+  s(15.5, "seq", { seq: 49 }),
+  s(16, "wait", {}),
+  // Hugo's private reasoning on seq 48, as the replay's narrator mode shows it. Never voiced.
+  s(17.5, "notes", { seq: 48, text: "If I defend Iris blatantly, I'll be tied to her." }),
+  s(22.5, "notes", { seq: 48, text: null }),
+  s(22.5, "seq", { seq: 68 }),
+  s(22.5, "narrate", { seq: 68 }),
+  ...Array.from({ length: 10 }, (_, i) => s(25 + i * 0.38, "seq", { seq: 69 + i })),
+  s(29.2, "seq", { seq: 79 }),
+  s(29.2, "narrate", { seq: 79 }),
+  s(32.8, "reveal", { wolves: ["p2", "p5"] }),
+  s(32.8, "caption", { text: "Iris was his partner. Hugo voted with the village." }),
+  s(37, "caption", { text: null }),
+  s(37, "card", { card: "stats" }),
+  s(37.6, "stat", { value: "356", label: "lies said out loud" }),
+  s(40.4, "stat", { value: "40% vs 71%", label: "lies followed, against no lie" }),
+  s(43.2, "stat", { value: "65%", label: "Gemini Flash win rate" }),
+  s(47, "card", { card: "cta" }),
+  s(51, "card", { card: "end" }),
+  s(54, "end", {}),
 ];
 
 export interface TrailerState {
@@ -144,7 +154,7 @@ export function trailerState(steps: Step[], idx: number): TrailerState {
   for (const step of steps.slice(0, idx + 1)) {
     switch (step.kind) {
       case "seq": st = { ...st, seq: step.data.seq }; break;
-      case "narrate": break;
+      case "narrate": case "speak": case "wait": break;
       case "title": st = { ...st, title: step.data.text }; break;
       case "seats": st = { ...st, lit: step.data.lit }; break;
       case "caption": st = { ...st, caption: step.data.text }; break;
@@ -165,24 +175,48 @@ export function stepAt(steps: Step[], t: number): number {
   return i;
 }
 
-/** Narrator clip seqs started by steps (from, to]. */
-export const narratedBetween = (steps: Step[], from: number, to: number) =>
-  steps.slice(from + 1, to + 1).flatMap((step) => (step.kind === "narrate" ? [step.data.seq] : []));
+/** Clips started by steps (from, to]: narrator lines and players' own voices, in step order. */
+export const clipsBetween = (steps: Step[], from: number, to: number): { seq: number; category: "narrator" | "speech" }[] =>
+  steps.slice(from + 1, to + 1).flatMap((step): { seq: number; category: "narrator" | "speech" }[] =>
+    step.kind === "narrate" ? [{ seq: step.data.seq, category: "narrator" }] : step.kind === "speak" ? [{ seq: step.data.seq, category: "speech" }] : []);
+
+/** Narrator lines and public speech only; wolf chat and highlights would leak hidden roles. */
+const PUBLIC_VOICES: Enabled = { narrator: true, speech: true, wolf_chat: false, highlight: false };
 
 const seqIndex = (seq: number) => G0043.findIndex((e) => e.seq === seq);
 
-/** Runs the timeline against the wall clock. `run` increments to (re)start; 0 is idle. */
-function useTimeline(steps: Step[], run: number) {
+/**
+ * Runs the timeline against the wall clock. `run` increments to (re)start; 0 is idle.
+ * `apply` gets each batch of same-instant steps as it lands (to start its clips); a batch with a `wait`
+ * step then holds the clock until `whenIdle` fires, and later steps shift by the time held.
+ */
+function useTimeline(steps: Step[], run: number, apply: (from: number, to: number) => void, whenIdle: (cb: () => void) => () => void) {
   const [idx, setIdx] = useState(-1);
   useEffect(() => {
     if (!run) return;
     setIdx(-1);
+    let i = -1;
+    let timer = 0;
+    let cancelWait = () => {};
+    let held = 0;
     const t0 = performance.now();
-    // Steps sharing a time land in one timer, so a batch is never half-applied.
-    const times = [...new Set(steps.map((step) => step.t))];
-    const timers = times.map((t) => window.setTimeout(() => setIdx(stepAt(steps, t)), Math.max(0, t * 1000 - (performance.now() - t0))));
-    return () => timers.forEach(clearTimeout);
-  }, [steps, run]);
+    const fire = () => {
+      // Steps sharing a time land in one batch, so it is never half-applied.
+      const from = i;
+      const t = steps[i + 1].t;
+      while (i + 1 < steps.length && steps[i + 1].t === t) i++;
+      setIdx(i);
+      apply(from, i);
+      if (!steps.slice(from + 1, i + 1).some((step) => step.kind === "wait")) return schedule();
+      const heldAt = performance.now();
+      cancelWait = whenIdle(() => { held += performance.now() - heldAt; schedule(); });
+    };
+    const schedule = () => {
+      if (i + 1 < steps.length) timer = window.setTimeout(fire, Math.max(0, steps[i + 1].t * 1000 + held - (performance.now() - t0)));
+    };
+    schedule();
+    return () => { clearTimeout(timer); cancelWait(); };
+  }, [steps, run, apply, whenIdle]);
   return idx;
 }
 
@@ -260,21 +294,21 @@ export default function TrailerPage({ audioIndexUrl = AUDIO_INDEX_URL }: { audio
   const [sound, setSound] = useState(false);
   const [index, setIndex] = useState<NarrationIndex | null>(null);
   const [paused, setPaused] = useState(false);
-  const idx = useTimeline(TIMELINE, run);
-  const state = useMemo(() => trailerState(TIMELINE, idx), [idx]);
   const soundRef = useRef(sound);
   soundRef.current = sound;
-  const played = useRef(-1);
+  const indexRef = useRef(index);
+  indexRef.current = index;
   const player = useMemo(() => createPlayer(() => new Audio() as AudioLike, (c) => clipUrl(audioIndexUrl, c)), [audioIndexUrl]);
+  // Each batch of steps starts its clips, once, while sound is on. Only public categories: the notes card stays silent.
+  const apply = useCallback((from: number, to: number) => {
+    const clips = clipsBetween(TIMELINE, from, to);
+    if (soundRef.current && clips.length) player.play(clips.flatMap((c) => clipsForSeq(indexRef.current, c.seq, "villager", PUBLIC_VOICES).filter((clip) => clip.category === c.category)));
+  }, [player]);
+  const idx = useTimeline(TIMELINE, run, apply, player.whenIdle);
+  const state = useMemo(() => trailerState(TIMELINE, idx), [idx]);
 
   useEffect(() => { loadIndex(audioIndexUrl).then(setIndex); }, [audioIndexUrl]);
-  // Every narrate step passed since the last render starts its clip, once, while sound is on.
-  useEffect(() => {
-    const seqs = narratedBetween(TIMELINE, played.current, idx);
-    played.current = idx;
-    if (soundRef.current && seqs.length) player.play(seqs.flatMap((seq) => clipsForSeq(index, seq, "narrator")));
-  }, [idx, index, player]);
-  useEffect(() => { played.current = -1; player.stop(); }, [run, player]);
+  useEffect(() => { player.stop(); }, [run, player]);
   useEffect(() => () => player.stop(), [player]);
 
   const start = (withSound: boolean) => { setSound(withSound); setRun((r) => r + 1); };

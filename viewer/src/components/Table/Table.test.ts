@@ -35,6 +35,12 @@ describe("Table on the fixture", () => {
     expect(s.p5).toContain("gemini-flash");
   });
 
+  it("shows the short model name on the plate, with the full id on hover and in the seat's name", () => {
+    const s = seats(render(0, "narrator"));
+    expect(s.p0).toContain('<span class="seat-model" title="qwen3-235b">Qwen3 235B</span>');
+    expect(label(s.p0)).toBe("Ava, qwen3-235b, alive, seer");
+  });
+
   it("marks each seat's button for the live smoke check (the <li> is a zero-size anchor)", () => {
     const s = seats(render(0, "villager"));
     for (const li of Object.values(s)) expect(li).toContain('data-testid="seat-button"');

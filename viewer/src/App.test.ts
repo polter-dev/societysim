@@ -137,6 +137,14 @@ describe("App villager view", () => {
     for (const part of ["Accusations and revealed votes", "Chat log", "Vote tally", "Inspector: Ava", "Game timeline"])
       expect(html).toContain(part);
   });
+
+  it("puts stepping, the timeline and the three pop-ups in one bottom bar (#440)", () => {
+    const html = renderWithControls(events.findIndex((e) => e.seq === 54), "villager", null);
+    const bar = html.slice(html.indexOf('<div class="replay-bar">'), html.indexOf('<div class="illustrated-shell'));
+    for (const part of ["Next beat", 'aria-label="Game timeline"', "Narration on", 'aria-label="Chat log"', 'class="spotwolf"'])
+      expect(bar).toContain(part);
+    expect(bar.match(/<details class="replay-pop [^"]*" name="replay-pop">/g)).toHaveLength(3);
+  });
 });
 
 describe("mode-only data behind Arrows, Tally and Speech", () => {

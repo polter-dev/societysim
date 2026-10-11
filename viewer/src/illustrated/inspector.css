@@ -1,30 +1,10 @@
-.roster .panel-content{display:flex;flex-direction:column;overflow:hidden}.agent-list{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;scrollbar-width:thin}.agent-list>li{display:block;flex:none}.agent-button{display:flex;align-items:center;gap:8px;width:100%;padding:0;border:0;background:transparent;text-align:left}.inspector-dialog{width:min(1200px,96vw,130svh);max-width:none;max-height:96svh;background:transparent;border:0;padding:0;margin:auto;color:#eee6b9;overflow:auto}.inspector-dialog::backdrop{background:#00181180}.inspector-board{position:relative;aspect-ratio:2266/1632;container-type:inline-size}.inspector-art{position:absolute;inset:0;width:100%;height:100%}.inspector-mobile-heading,.inspector-history>h3,.inspector-goals>h3,.inspector-analysis>h3{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.inspector-close{position:absolute;right:2%;top:5.5%;width:7%;height:8%;background:transparent;border:0;border-radius:50%}.inspector-close span{opacity:0}.inspector-profile{position:absolute;left:27%;top:21%;width:20%;height:17%;overflow:auto}.inspector-profile h3{font-size:4cqw;text-transform:uppercase}.inspector-profile p{font-size:1.5cqw;margin:4px 0 10px}.status-badge,.role-badge{display:block;padding:4px 12px;border-radius:20px;width:max-content;font-size:1.6cqw;margin-top:5px;background:#3e7648}.role-badge{background:#245e80}.inspector-stats{position:absolute;left:14.5%;top:40%;width:33%;height:17%;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:7% 6%;margin:0}.inspector-stats div{text-align:center;padding-left:17%}.inspector-stats dt{font:1.3cqw Georgia;text-transform:uppercase}.inspector-stats dd{margin:6px 0 0;font-size:1.6cqw}.inspector-history{position:absolute;left:52%;top:26%;width:37.5%;height:33%}.inspector-goals{position:absolute;left:10.5%;top:67%;width:36%;height:18%}.inspector-analysis{position:absolute;left:52%;top:69%;width:37%;height:16%}.inspector-scroll{height:100%;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#c4a052 #06291e;padding:4px;font-size:1.5cqw;line-height:1.5}.inspector-history ul{display:flex;flex-direction:column;gap:10px}.decision-card{flex:none;aspect-ratio:875/172;background-size:100% 100%;position:relative}.decision-card>div{position:absolute;inset:23% 7% 20% 27%;overflow:auto;line-height:1.1}.decision-card small,.decision-card p{font-size:1.1cqw}.decision-card h4{font-size:1.5cqw;text-transform:uppercase}.mock-note{font-size:.85em;opacity:.65;margin-top:12px}
-@media(max-width:600px){.inspector-dialog{width:94vw;background:#062b20;border:1px solid #c4a052;border-radius:18px}.inspector-board{aspect-ratio:auto;display:flex;flex-direction:column;gap:20px;padding:24px}.inspector-art{display:none}.inspector-mobile-heading,.inspector-history>h3,.inspector-goals>h3,.inspector-analysis>h3{position:static;width:auto;height:auto;clip-path:none;overflow:visible;font-size:21px;margin-bottom:12px}.inspector-close{top:10px;right:10px;width:36px;height:36px;border:1px solid #c4a052;background:#062b20}.inspector-close span{opacity:1;font-size:26px}.inspector-profile,.inspector-stats,.inspector-history,.inspector-goals,.inspector-analysis{position:static;width:auto;height:auto}.inspector-profile h3{font-size:32px}.inspector-profile p,.status-badge,.role-badge{font-size:16px}.inspector-stats{gap:16px}.inspector-stats div{padding:0}.inspector-stats dt{font-size:14px}.inspector-stats dd{font-size:20px}.inspector-scroll{max-height:240px;font-size:16px}.decision-card small,.decision-card p{font-size:10px}.decision-card h4{font-size:13px}.decision-card{min-height:70px}}
-/* Align content to the four artwork cells, with a dedicated icon gutter. */
-@media(min-width:601px){
- .inspector-profile{left:27%;top:21%;width:20%;height:17%;overflow:visible}
- .inspector-profile h3{font-size:3.6cqw;line-height:1.1}
- .inspector-profile p{font-size:1.45cqw;margin:6px 0 10px}
- .inspector-stats{left:9.4%;top:40.4%;width:37.4%;height:16.6%;gap:8% 3%}
- .inspector-stats div{padding:0 5% 0 29%;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0}
- .inspector-stats dt{font-size:1.15cqw;line-height:1.2;white-space:normal;text-align:center}
- .inspector-stats dd{font-size:1.9cqw;line-height:1.1;margin:6px 0 0}
- .decision-card>div{inset:25% 9% 22% 27%;overflow:hidden;display:flex;flex-direction:column;justify-content:center;gap:2px}
- .decision-card h4{font-size:1.15cqw;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
- .decision-card small,.decision-card p{font-size:.95cqw;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-}
-.profile-badges{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.status-badge,.role-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;margin:0;border:1px solid #92ac65;border-radius:7px;font-size:clamp(11px,1.3cqw,16px);line-height:1.2;box-shadow:inset 0 1px 0 #ffffff18,0 2px 4px #0004;background:linear-gradient(#244933,#122e22);color:#d9ebc1;width:auto}
-.status-badge>span{color:#a9d777;font-size:.8em}
-.role-badge{border-color:#ad945d;color:#f1dfab;background:linear-gradient(#2c3b37,#142b25)}
-.role-badge svg{width:16px;height:16px;flex:none}
-@media(max-width:600px){.status-badge,.role-badge{font-size:14px}.decision-card>div{inset:24% 8% 20% 27%;overflow:hidden}.decision-card h4{font-size:11px}.decision-card small,.decision-card p{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
-/* Fit metadata, title, and note inside each decision banner's gold boundaries. */
-.decision-card{aspect-ratio:875/172;min-height:0}
-.decision-card>div{inset:24% 9% 23% 27%;display:grid;grid-template-rows:1fr 1.15fr 1fr;align-items:center;gap:0;overflow:hidden}
-.decision-card small,.decision-card h4,.decision-card p{margin:0;min-width:0;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-@media(min-width:601px){.decision-card small,.decision-card p{font-size:.8cqw}.decision-card h4{font-size:1.05cqw}}
-@media(max-width:600px){.decision-card{min-height:70px}.decision-card small,.decision-card p{font-size:8px}.decision-card h4{font-size:10px}}
-/* The notes export includes extra bottom padding outside its gold frame. */
-.decision-card.decision-notes>div{top:22%;bottom:35%;left:27%;right:9%}
-.roster .agent-list{scrollbar-width:auto;scrollbar-color:#d9b45a #0b2a1d;padding:0 4px 6px 0}.roster .agent-list::-webkit-scrollbar{width:8px}.roster .agent-list::-webkit-scrollbar-track{background:#0b2a1d;border-radius:4px}.roster .agent-list::-webkit-scrollbar-thumb{background:#d9b45a;border-radius:4px}.illustrated-shell .roster .agent-button{margin:4px 0}.roster .agent-button small{margin-top:2px}.roster .agent-button .medallion{width:24%!important}
+/* Agents and Game events panels: list basics at every width. Desktop sizing is in layout.css;
+   the player dialog has its own PlayerProfile.css. */
+.roster .panel-content{display:flex;flex-direction:column;overflow:hidden}
+.agent-list{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;scrollbar-width:thin;scrollbar-color:#d9b45a #0b2a1d}
+.agent-list>li{display:block;flex:none}
+.agent-button{display:flex;align-items:center;gap:8px;width:100%;padding:0;border:0;background:transparent;text-align:left}
+.illustrated-shell .roster .agent-button{margin:4px 0}
+.roster .agent-button small{margin-top:2px}
+.roster .agent-button .medallion{width:24%!important}
+.decision-card{flex:none;aspect-ratio:875/172;background-size:100% 100%;position:relative}

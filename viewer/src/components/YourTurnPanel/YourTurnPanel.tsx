@@ -9,7 +9,17 @@ import { ModelAvatar, useModelLabel } from "../ModelAvatar/ModelAvatar";
 import type { Player } from "../../play/types";
 import type { useHumanSeat } from "../../play/useHumanSeat";
 
+import { art } from "../../illustrated/assets";
+
 type Seat = ReturnType<typeof useHumanSeat>;
+
+function roleArt(role: string): string | undefined {
+  if (role === "wolf" || role === "werewolf") return art("new/event_werewolf 1.png");
+  if (role === "doctor") return art("new/event_protection 1.png");
+  if (role === "seer") return art("new/event_investigation 1.png");
+  if (role === "villager") return art("inspector/05_group.png");
+  return undefined;
+}
 
 const PICK_LABEL: Record<string, string> = {
   vote: "Vote to eliminate",
@@ -84,18 +94,24 @@ export function YourTurnPanel({ seat }: { seat: Seat }) {
   };
   const rate = (s: string, level: Level) =>
     set({ suspicion: { ...draft.suspicion, [s]: draft.suspicion?.[s] === level ? undefined : level } });
+  const icon = roleArt(me.role);
 
   return (
     <section className="your-turn">
-      <div className="your-turn__role">
-        <h3>
-          {me.name} <small style={{display:"block"}}>Your role: {me.role}</small>
-        </h3>
-        <p>
-          Day {me.day}, {me.phase}. {me.alive ? "You are alive." : "You are out."}
-        </p>
+      <div className="your-turn__role" data-role={me.role}>
+        <div className="your-turn__role-header">
+          {icon && <img src={icon} alt="" className="your-turn__role-icon" />}
+          <div>
+            <h3>
+              {me.name} <small style={{display:"block"}}>Your role: {me.role}</small>
+            </h3>
+            <p>
+              Day {me.day}, {me.phase}. {me.alive ? "You are alive." : "You are out."}
+            </p>
+          </div>
+        </div>
         {me.status === "running" && (
-          <button type="button" className="your-turn__abstain" onClick={() => void leave()}>
+          <button type="button" className="your-turn__abstain your-turn__leave" onClick={() => void leave()}>
             Leave game
           </button>
         )}
@@ -109,7 +125,11 @@ export function YourTurnPanel({ seat }: { seat: Seat }) {
           </>
         )}
       </div>
-      {me.observation && <pre className="your-turn__private">{me.observation}</pre>}
+      {me.observation && (
+        <div className="your-turn__dispatch">
+          <pre className="your-turn__private">{me.observation}</pre>
+        </div>
+      )}
       {seat.error && <p role="alert">{seat.error}</p>}
 
       {sent && !pending && <p role="status" className="your-turn__sent">Move sent. Waiting for the village…</p>}
@@ -121,10 +141,16 @@ export function YourTurnPanel({ seat }: { seat: Seat }) {
             void seat.submit(draft).then(accepted => { if (accepted) setSent(true); });
           }}
         >
-          <p>
-            Your move: {MOVE[pending.kind]}
-            {seat.secondsLeft !== null && <span aria-live="off"> ({seat.secondsLeft}s left)</span>}
-          </p>
+          <div className="your-turn__move-row">
+            <p className="your-turn__move-lead">
+              Your move: {MOVE[pending.kind]}
+              {seat.secondsLeft !== null && (
+                <span className={`your-turn__clock ${seat.secondsLeft <= 15 ? "your-turn__clock--urgent" : ""}`} aria-live="off">
+                  <span aria-hidden="true">⏱</span> ({seat.secondsLeft}s left)
+                </span>
+              )}
+            </p>
+          </div>
           <small>Auto-move if time runs out. Each turn allows 90 seconds.</small>
           {needsText && (
             <label>
@@ -169,7 +195,7 @@ export function YourTurnPanel({ seat }: { seat: Seat }) {
               <fieldset key={o} data-seat={o}>
                 <legend>{playerLabel(players, o)}</legend>
                 {(Object.keys(LEVELS) as Level[]).map((level) => (
-                  <button key={level} type="button" aria-pressed={draft.suspicion?.[o] === level} onClick={() => rate(o, level)}>
+                  <button key={level} type="button" data-level={level} aria-pressed={draft.suspicion?.[o] === level} onClick={() => rate(o, level)}>
                     {level}
                   </button>
                 ))}

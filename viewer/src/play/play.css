@@ -1,12 +1,602 @@
 /* Visitor start and private seat controls share the village's gold and emerald palette. */
-.play-start{max-width:720px;padding:24px;background:linear-gradient(135deg,#0c3528,#051e20);border:1px solid #ba974b;border-radius:18px;color:#eee3bc}.play-start fieldset{border:1px solid #8d783e;border-radius:9px;margin:0 0 16px;padding:12px}.play-start label{display:inline-flex;align-items:center;gap:7px;margin:6px 16px 6px 0}.play-start>button{display:block;margin:18px auto 0;min-width:220px;min-height:52px;font:22px Georgia;background:#153f2e;color:#fff0c5;border:2px solid #bfa04e;border-radius:12px;cursor:pointer}.play-start>button:disabled{opacity:.55;cursor:not-allowed}.play-start__limits,.play-start__status{text-align:center}.play-start [role=alert]{color:#ffcbb1}.play-nav{font-weight:700;font-size:18px}.play-start input:focus-visible,.play-start button:focus-visible,.your-turn :focus-visible{outline:3px solid #ffe499;outline-offset:3px}
-.your-turn{position:relative;color:#f4e9c6;background:linear-gradient(135deg,#103a2c,#05231f);border:1px solid #bb9748;border-radius:16px;padding:18px;font:14px/1.5 system-ui,sans-serif;box-sizing:border-box}.your-turn h3{font:700 23px/1.2 Georgia;margin:0 0 8px}.your-turn p{margin:6px 0}.your-turn__role{border-bottom:1px solid #8d743c;padding-bottom:12px;margin-bottom:12px}.your-turn__private{font:13px/1.55 system-ui;white-space:pre-wrap;max-height:160px;overflow:auto;padding:10px;background:#021d1880;border-radius:8px}.your-turn__form{display:grid;gap:12px}.your-turn__form label{display:grid;gap:4px}.your-turn__form textarea{width:100%;box-sizing:border-box;min-height:85px;resize:vertical;background:#06281e;color:#fff0c5;border:1px solid #9e8343;border-radius:8px;padding:8px;font:inherit}.your-turn__form select{width:100%;background:#06281e;color:#fff0c5;border:1px solid #9e8343;border-radius:8px;padding:8px;font:inherit}.your-turn__form fieldset{border:1px solid #8d743c;border-radius:8px;padding:10px;min-width:0}.your-turn__form fieldset label{display:flex;align-items:center;gap:8px;margin:7px 0}.your-turn__form input[type=range]{min-width:70px;flex:1;accent-color:#d4b35c}.your-turn__form output{width:3em;text-align:right}.your-turn__form button{border:1px solid #d0ae5c;border-radius:8px;padding:10px;background:#28513b;color:#fff0c5;font:600 15px system-ui;cursor:pointer}.your-turn [role=alert]{color:#ffcbb1}.your-turn__sent{color:#d0edba;border:1px solid #7e9a5a;border-radius:8px;padding:10px}.your-turn__clock{font-weight:600;color:#f4d590}.your-turn__form small{color:#c2cdb5}
+.play-start {
+  max-width: 720px;
+  padding: 24px;
+  background: linear-gradient(135deg, #0c3528, #051e20);
+  border: 1px solid #ba974b;
+  border-radius: 18px;
+  color: #eee3bc;
+}
+.play-start fieldset {
+  border: 1px solid #8d783e;
+  border-radius: 9px;
+  margin: 0 0 16px;
+  padding: 12px;
+}
+.play-start label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 6px 16px 6px 0;
+}
+.play-start > button {
+  display: block;
+  margin: 18px auto 0;
+  min-width: 220px;
+  min-height: 52px;
+  font: 22px Georgia;
+  background: #153f2e;
+  color: #fff0c5;
+  border: 2px solid #bfa04e;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.play-start > button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.play-start__limits,
+.play-start__status {
+  text-align: center;
+}
+.play-start [role="alert"] {
+  color: #ffcbb1;
+}
+.play-nav {
+  font-weight: 700;
+  font-size: 18px;
+}
+.play-start input:focus-visible,
+.play-start button:focus-visible,
+.your-turn :focus-visible {
+  outline: 3px solid #ffe499;
+  outline-offset: 3px;
+}
 
-.game-reveal{position:relative;z-index:4;margin:16px auto;padding:20px;width:min(80%,850px);box-sizing:border-box;color:#f1e6bc;background:#052b22f5;border:1px solid #c09c4e;border-radius:16px;font:14px/1.5 system-ui}.game-reveal h2,.game-reveal h3{font-family:Georgia}.game-reveal table{width:100%;border-collapse:collapse}.game-reveal th,.game-reveal td{padding:6px 10px;border-bottom:1px solid #a78a3f50;text-align:left}.game-reveal summary{cursor:pointer}.game-reveal details{margin:14px 0}.game-reveal pre{white-space:pre-wrap;font:inherit}.game-reveal a{color:#f4d382}.game-reveal__actions{display:flex;gap:14px;flex-wrap:wrap;align-items:center}.game-reveal__actions button{font:inherit}
-@media(max-width:820px){.play-replay .your-turn{position:relative;top:auto;right:auto;width:calc(100% - 24px);max-width:680px;max-height:65svh;margin:12px auto}.play-replay:has(.your-turn) .replay-app{width:100%}.play-replay:has(.your-turn) .illustrated-shell{right:0}.play-replay:has(.your-turn) .replay-table,.play-replay:has(.your-turn) .replay-controls,.play-replay:has(.your-turn) .replay-chat{width:min(90vw,660px)}.game-reveal{width:94%;padding:14px}.play-start{padding:16px}}
-.play-start__status[role=status]::before,.advanced-feedback [role=status]::before{content:'';display:inline-block;width:12px;height:12px;margin-right:8px;border:2px solid #8c773e;border-top-color:#ffe9a3;border-radius:50%;vertical-align:-2px;animation:play-loading .9s linear infinite}@keyframes play-loading{to{rotate:360deg}}
+/* In-game "Your turn" panel */
+.your-turn {
+  position: relative;
+  color: #f4e9c6;
+  background: linear-gradient(135deg, #103a2c, #05231f);
+  border: 1px solid #bb9748;
+  border-radius: 16px;
+  padding: 18px;
+  font: 14px/1.5 system-ui, sans-serif;
+  box-sizing: border-box;
+}
+.your-turn h3 {
+  font: 700 23px/1.2 Georgia, serif;
+  margin: 0 0 4px;
+}
+.your-turn p {
+  margin: 4px 0;
+}
+.your-turn__role {
+  border-bottom: 1px solid #8d743c;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+}
+.your-turn__role-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.your-turn__role-icon {
+  height: 44px;
+  width: auto;
+  max-width: 180px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 8px #000c);
+  flex-shrink: 0;
+}
+.your-turn__role[data-role="wolf"],
+.your-turn__role[data-role="werewolf"] {
+  border-left: 4px solid #d94336;
+  padding-left: 10px;
+}
+.your-turn__role[data-role="seer"] {
+  border-left: 4px solid #5788e6;
+  padding-left: 10px;
+}
+.your-turn__role[data-role="doctor"] {
+  border-left: 4px solid #36b56f;
+  padding-left: 10px;
+}
+.your-turn__role[data-role="villager"] {
+  border-left: 4px solid #d4b35c;
+  padding-left: 10px;
+}
 
+.your-turn__dispatch {
+  background: rgba(3, 29, 24, 0.85);
+  border: 1px solid #7a6332;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 8px 0;
+}
+.your-turn__private {
+  font: 13px/1.55 system-ui, sans-serif;
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow: auto;
+  padding: 6px;
+  background: #021d1880;
+  border-radius: 6px;
+  color: #faedd0;
+  margin: 0;
+}
 
+.your-turn__move-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0;
+}
+.your-turn__move-lead {
+  margin: 0;
+  font-weight: 600;
+  color: #f7edd4;
+}
+.your-turn__clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  background: #092f23;
+  border: 1px solid #d4b35c;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 13px;
+  color: #ffe6a3;
+}
+.your-turn__clock--urgent {
+  background: #4a1512;
+  border-color: #f26252;
+  color: #ffd8d2;
+  animation: clock-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes clock-pulse {
+  from { box-shadow: 0 0 4px #f2625266; }
+  to { box-shadow: 0 0 12px #f26252cc; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .your-turn__clock--urgent {
+    animation: none;
+  }
+}
 
-.your-turn__player,.your-turn__abstain,.your-turn__suspicion button{background:#173c2b;color:#fff0c5;border:1px solid #9e8343;border-radius:8px;padding:8px;margin:4px;cursor:pointer}.your-turn button[aria-pressed=true]{background:#82692c;outline:2px solid #e3c576}.your-turn__pick{display:flex;flex-wrap:wrap}.your-turn__avatar{display:inline-grid;place-items:center;width:24px;height:24px;border:1px solid #baa25c;border-radius:50%}.your-turn__suspicion summary{cursor:pointer}
-.your-turn__ended a{color:#f4d590}.your-turn__ended .your-turn__new{display:inline-block;margin:6px 8px 0 0;padding:8px 14px;border:1px solid #d0ae5c;border-radius:8px;background:#28513b;color:#fff0c5;font-weight:600;text-decoration:none}
+.your-turn__form {
+  display: grid;
+  gap: 12px;
+}
+.your-turn__form label {
+  display: grid;
+  gap: 4px;
+}
+.your-turn__form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 85px;
+  resize: vertical;
+  background: #06281e;
+  color: #fff0c5;
+  border: 1px solid #9e8343;
+  border-radius: 8px;
+  padding: 8px;
+  font: inherit;
+}
+.your-turn__form select {
+  width: 100%;
+  background: #06281e;
+  color: #fff0c5;
+  border: 1px solid #9e8343;
+  border-radius: 8px;
+  padding: 8px;
+  font: inherit;
+}
+.your-turn__form fieldset {
+  border: 1px solid #8d743c;
+  border-radius: 8px;
+  padding: 10px;
+  min-width: 0;
+}
+.your-turn__form fieldset label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 7px 0;
+}
+.your-turn__form button[type="submit"] {
+  border: 1px solid #d0ae5c;
+  border-radius: 8px;
+  padding: 10px;
+  background: #28513b;
+  color: #fff0c5;
+  font: 600 15px system-ui;
+  cursor: pointer;
+}
+.your-turn__form button[type="submit"]:hover {
+  background: #34684c;
+}
+.your-turn [role="alert"] {
+  color: #ffcbb1;
+}
+.your-turn__sent {
+  color: #d0edba;
+  border: 1px solid #7e9a5a;
+  border-radius: 8px;
+  padding: 10px;
+}
+.your-turn__form small {
+  color: #c2cdb5;
+}
+
+.your-turn__player,
+.your-turn__abstain {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #0d2b1f;
+  color: #fff0c5;
+  border: 1px solid #7c6431;
+  border-radius: 8px;
+  padding: 7px 11px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.your-turn__player:hover,
+.your-turn__abstain:hover {
+  background: #174230;
+  border-color: #bfa154;
+}
+.your-turn button[aria-pressed="true"],
+.your-turn__player[aria-pressed="true"],
+.your-turn__abstain[aria-pressed="true"] {
+  background: #735a22;
+  border-color: #f7d57c;
+  outline: 2px solid #f7d57c;
+  box-shadow: 0 0 10px rgba(247, 213, 124, 0.4);
+}
+.your-turn__abstain {
+  background: #1c2723;
+  border-color: #607369;
+  color: #d4e0db;
+}
+.your-turn__leave {
+  margin-top: 8px;
+  background: #2a1413;
+  border-color: #7b3630;
+  color: #fad1cb;
+}
+.your-turn__leave:hover {
+  background: #3e1b19;
+  border-color: #b04941;
+}
+.your-turn__pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.your-turn__avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #baa25c;
+  border-radius: 50%;
+  font-size: 12px;
+}
+
+.your-turn__suspicion summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #f7e6b5;
+}
+.your-turn__suspicion fieldset {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+  border: 0;
+  padding: 4px 0;
+}
+.your-turn__suspicion legend {
+  font-weight: 600;
+  font-size: 13px;
+  color: #e9dec0;
+  margin-bottom: 2px;
+}
+.your-turn__suspicion button {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.your-turn__suspicion button[data-level="suspicious"],
+.your-turn__suspicion button:nth-of-type(1) {
+  background: #381615;
+  border: 1px solid #8c3632;
+  color: #ffd0cb;
+}
+.your-turn__suspicion button[data-level="suspicious"][aria-pressed="true"],
+.your-turn__suspicion button:nth-of-type(1)[aria-pressed="true"] {
+  background: #6a1f1b;
+  border-color: #e04b43;
+  box-shadow: 0 0 8px #e04b4366;
+}
+.your-turn__suspicion button[data-level="unsure"],
+.your-turn__suspicion button:nth-of-type(2) {
+  background: #2f2b13;
+  border: 1px solid #7d7031;
+  color: #faebba;
+}
+.your-turn__suspicion button[data-level="unsure"][aria-pressed="true"],
+.your-turn__suspicion button:nth-of-type(2)[aria-pressed="true"] {
+  background: #665b1b;
+  border-color: #d6bf47;
+  box-shadow: 0 0 8px #d6bf4766;
+}
+.your-turn__suspicion button[data-level="trust"],
+.your-turn__suspicion button:nth-of-type(3) {
+  background: #0f3624;
+  border: 1px solid #3b7e56;
+  color: #c9eed6;
+}
+.your-turn__suspicion button[data-level="trust"][aria-pressed="true"],
+.your-turn__suspicion button:nth-of-type(3)[aria-pressed="true"] {
+  background: #195e3a;
+  border-color: #55c782;
+  box-shadow: 0 0 8px #55c78266;
+}
+.your-turn__ended a {
+  color: #f4d590;
+}
+.your-turn__ended .your-turn__new {
+  display: inline-block;
+  margin: 6px 8px 0 0;
+  padding: 8px 14px;
+  border: 1px solid #d0ae5c;
+  border-radius: 8px;
+  background: #28513b;
+  color: #fff0c5;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+/* End-of-game reveal */
+.game-reveal {
+  position: relative;
+  z-index: 4;
+  margin: 16px auto;
+  padding: 24px;
+  width: min(85%, 860px);
+  box-sizing: border-box;
+  color: #f6eed5;
+  background: linear-gradient(135deg, rgba(6, 40, 31, 0.96), rgba(3, 23, 19, 0.98));
+  border: 1px solid #d4b35c;
+  border-radius: 18px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  font: 14px/1.55 system-ui, sans-serif;
+}
+.game-reveal__header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #7a6332;
+  margin-bottom: 16px;
+}
+.game-reveal__crest {
+  height: 52px;
+  width: auto;
+  max-width: 220px;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 12px #000c);
+}
+.game-reveal h2 {
+  font: 700 26px/1.2 Georgia, serif;
+  margin: 0 0 4px;
+  color: #f7e6b5;
+}
+.game-reveal__outcome {
+  font: 600 17px/1.3 Georgia, serif;
+  margin: 0;
+  color: #ffe499;
+}
+.game-reveal__table-card {
+  margin: 14px 0;
+  overflow-x: auto;
+  background: rgba(3, 25, 20, 0.6);
+  border: 1px solid #635028;
+  border-radius: 10px;
+}
+.game-reveal table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.game-reveal th,
+.game-reveal td {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(167, 138, 63, 0.3);
+  text-align: left;
+}
+.game-reveal th {
+  font: 600 13px Georgia, serif;
+  color: #d8c28a;
+  background: rgba(2, 18, 14, 0.5);
+}
+.game-reveal__player-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.game-reveal__role-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+  background: #103325;
+  border: 1px solid #486a58;
+  color: #d1eadb;
+}
+.game-reveal__role-tag.game-reveal__role-wolf {
+  background: #421614;
+  border-color: #9c3c36;
+  color: #ffd4cf;
+}
+.game-reveal__role-tag.game-reveal__role-seer {
+  background: #162a4a;
+  border-color: #3b639e;
+  color: #d4e4ff;
+}
+.game-reveal__role-tag.game-reveal__role-doctor {
+  background: #123d28;
+  border-color: #348a58;
+  color: #c8f2da;
+}
+.game-reveal__fooled-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0;
+  display: grid;
+  gap: 8px;
+}
+.game-reveal__fooled-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(56, 18, 15, 0.6);
+  border: 1px solid #9e3d36;
+  border-radius: 8px;
+  color: #ffd8d2;
+  font-weight: 500;
+}
+.game-reveal__fooled-icon {
+  font-size: 20px;
+}
+.game-reveal__accordion {
+  margin: 12px 0;
+  background: rgba(3, 23, 18, 0.5);
+  border: 1px solid #635028;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.game-reveal__accordion summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #f7e6b5;
+}
+.game-reveal__actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #7a6332;
+}
+.game-reveal__action-again,
+.game-reveal__action-copy,
+.game-reveal__action-share,
+.game-reveal__actions a,
+.game-reveal__actions button {
+  padding: 9px 18px;
+  border-radius: 8px;
+  font: 600 14px system-ui, sans-serif;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+.game-reveal__action-again {
+  background: linear-gradient(180deg, #e7c97a, #b8963e);
+  color: #1c1406;
+  border: 1px solid #ffe499;
+}
+.game-reveal__action-again:hover {
+  filter: brightness(1.1);
+}
+.game-reveal__action-copy {
+  background: #143e2e;
+  color: #fff0c5;
+  border: 1px solid #8c7438;
+}
+.game-reveal__action-copy:hover {
+  background: #1c523d;
+}
+.game-reveal__action-share {
+  color: #f4d382;
+  border: 1px solid transparent;
+}
+.game-reveal__action-share:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 820px) {
+  .play-replay .your-turn {
+    position: relative;
+    top: auto;
+    right: auto;
+    width: calc(100% - 24px);
+    max-width: 680px;
+    max-height: 65svh;
+    margin: 12px auto;
+  }
+  .play-replay:has(.your-turn) .replay-app {
+    width: 100%;
+  }
+  .play-replay:has(.your-turn) .illustrated-shell {
+    right: 0;
+  }
+  .play-replay:has(.your-turn) .replay-table,
+  .play-replay:has(.your-turn) .replay-controls,
+  .play-replay:has(.your-turn) .replay-chat {
+    width: min(90vw, 660px);
+  }
+  .game-reveal {
+    width: 94%;
+    padding: 14px;
+  }
+  .your-turn__role-header {
+    flex-wrap: wrap;
+  }
+  .your-turn__role-icon {
+    height: 36px;
+    max-width: 140px;
+  }
+  .play-start {
+    padding: 16px;
+  }
+}
+
+.play-start__status[role="status"]::before,
+.advanced-feedback [role="status"]::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border: 2px solid #8c773e;
+  border-top-color: #ffe9a3;
+  border-radius: 50%;
+  vertical-align: -2px;
+  animation: play-loading 0.9s linear infinite;
+}
+@keyframes play-loading {
+  to {
+    rotate: 360deg;
+  }
+}

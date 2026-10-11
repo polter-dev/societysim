@@ -126,4 +126,14 @@ describe("LeaderboardTable ranking (#395)", () => {
     expect(html).toMatch(/> Llama 4 Maverick<\/th>/);
     expect(html).not.toContain("Instruct-FP8 · huggingface<");
   });
+
+  it("survives a missing models array, a missing games count and bad numbers", () => {
+    const bad = { schema: 1 } as unknown as Board;
+    const html = renderToStaticMarkup(createElement(LeaderboardTable, { board: bad }));
+    expect(html).toContain("No models in this board");
+    expect(html).toContain("n/a games");
+    const odd = { ...board, models: [row({ model: "alpha", win_rate: NaN, openskill: { mu: 1, sigma: 1, ordinal: "3.1" as unknown as number } })] };
+    const h2 = renderToStaticMarkup(createElement(LeaderboardTable, { board: odd }));
+    expect(h2).not.toMatch(/NaN|undefined/);
+  });
 });

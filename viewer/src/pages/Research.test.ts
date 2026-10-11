@@ -34,4 +34,27 @@ describe("Research", () => {
     expect(html).toContain("deception-matrix");
     expect(html).toContain("95% CI");
   });
+
+  it("shows n/a for null, missing or non-finite numbers", () => {
+    const h = Object.fromEntries(
+      headlines({ ...summary, cost_usd: null, games: undefined, top_openskill: { model: "m", ordinal: null } } as unknown as Summary),
+    );
+    expect(h["Cost"]).toBe("n/a");
+    expect(h["Games"]).toBe("n/a (1 unfinished)");
+    expect(h["Top OpenSkill"]).toContain("(n/a)");
+    expect(Object.values(h).join(" ")).not.toMatch(/NaN|undefined|null/);
+  });
+
+  it("keeps the headlines when the matrix is absent", () => {
+    const html = renderToStaticMarkup(createElement(ResearchView, { summary, matrix: null }));
+    expect(html).toContain("Top OpenSkill");
+    expect(html).toContain("Matrix unavailable");
+    expect(html).not.toContain('role="alert"');
+  });
+
+  it("keeps the headlines and reports a malformed matrix below them", () => {
+    const html = renderToStaticMarkup(createElement(ResearchView, { summary, matrix: null, matrixError: "bad shape" }));
+    expect(html.indexOf("Top OpenSkill")).toBeLessThan(html.indexOf("bad shape"));
+    expect(html).toContain('role="alert"');
+  });
 });

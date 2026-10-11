@@ -15,21 +15,24 @@ export interface Summary {
   top_wolf_win: { model: string; win_rate: number; seats: number } | null;
 }
 
-const pct = (x: number | null) => (x == null ? "n/a" : `${Math.round(x * 100)}%`);
+const fin = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
+const pct = (x: number | null | undefined) => (fin(x) ? `${Math.round(x * 100)}%` : "n/a");
+const fixed = (x: number | null | undefined) => (fin(x) ? x.toFixed(2) : "n/a");
 
 /** [label, value] pairs for the report headline strip. */
 export function headlines(s: Summary): [string, string][] {
   return [
-    ["Games", `${s.games}${s.unfinished_games ? ` (${s.unfinished_games} unfinished)` : ""}`],
+    ["Games", `${fin(s.games) ? s.games : "n/a"}${fin(s.unfinished_games) && s.unfinished_games ? ` (${s.unfinished_games} unfinished)` : ""}`],
     ["Wolf wins", pct(s.wolf_win_share)],
     ["Village wins", pct(s.village_win_share)],
-    ["Top OpenSkill", s.top_openskill ? `${modelName(s.top_openskill.model)} (${s.top_openskill.ordinal.toFixed(2)})` : "n/a"],
+    ["Top OpenSkill", s.top_openskill ? `${modelName(s.top_openskill.model)} (${fixed(s.top_openskill.ordinal)})` : "n/a"],
     ["Best wolf", s.top_wolf_win ? `${modelName(s.top_wolf_win.model)} (${pct(s.top_wolf_win.win_rate)})` : "n/a"],
-    ["Cost", `$${s.cost_usd.toFixed(2)}`],
+    ["Cost", fin(s.cost_usd) ? `$${s.cost_usd.toFixed(2)}` : "n/a"],
   ];
 }
 
-export function ResearchView({ summary, matrix }: { summary: Summary | null; matrix: Matrix }) {
+/** `matrix` is null when the batch has none; `matrixError` says why a present one failed to parse. */
+export function ResearchView({ summary, matrix, matrixError }: { summary: Summary | null; matrix: Matrix | null; matrixError?: string }) {
   const [minN, setMinN] = useState(DEFAULT_MIN_N);
   return (
     <>
@@ -44,26 +47,36 @@ export function ResearchView({ summary, matrix }: { summary: Summary | null; mat
         </dl>
       )}
       <h2>Who fools whom</h2>
-      <label>
-        Minimum voters per cell{" "}
-        <input type="number" min={1} value={minN} onChange={(e) => setMinN(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
-      </label>
-      <DeceptionMatrix matrix={matrix} minN={minN} />
+      {matrixError ? (
+        <p role="alert">Could not read the deception matrix: {matrixError}</p>
+      ) : !matrix ? (
+        <p>Matrix unavailable: no deception data in this batch.</p>
+      ) : (
+        <>
+          <label>
+            Minimum voters per cell{" "}
+            <input type="number" min={1} value={minN} onChange={(e) => setMinN(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
+          </label>
+          <DeceptionMatrix matrix={matrix} minN={minN} />
+        </>
+      )}
     </>
   );
 }
 
 /** Loads metrics.json and shows the headlines and the deception matrix. */
 export default function ResearchPage({ metricsUrl }: { metricsUrl: string }) {
-  const [data, setData] = useState<{ summary: Summary | null; matrix: Matrix } | null>(null);
+  const [data, setData] = useState<{ summary: Summary | null; matrix: Matrix | null; matrixError?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     fetchJson<{ summary?: Summary; deception_matrix?: unknown }>(metricsUrl).then(
       (m) => {
+        const summary = m.summary ?? null;
+        if (m.deception_matrix == null) return setData({ summary, matrix: null });
         try {
-          setData({ summary: m.summary ?? null, matrix: parseDeceptionMatrix(m.deception_matrix) });
+          setData({ summary, matrix: parseDeceptionMatrix(m.deception_matrix) });
         } catch (err) {
-          setError(err instanceof Error ? err.message : String(err));
+          setData({ summary, matrix: null, matrixError: err instanceof Error ? err.message : String(err) });
         }
       },
       (err: Error) => setError(err.message),

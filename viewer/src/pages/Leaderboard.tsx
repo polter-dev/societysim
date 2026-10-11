@@ -48,8 +48,9 @@ export interface BySide {
   village?: Record<string, Rating>;
 }
 
-const pct = (x: number | null | undefined) => (x == null ? "n/a" : `${Math.round(x * 100)}%`);
-const num = (x: number | null | undefined) => (x == null ? "n/a" : x.toFixed(2));
+const fin = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
+const pct = (x: number | null | undefined) => (fin(x) ? `${Math.round(x * 100)}%` : "n/a");
+const num = (x: number | null | undefined) => (fin(x) ? x.toFixed(2) : "n/a");
 
 /** `profileHref(model)` links each model name to its profile page; omit it for plain names. */
 export function LeaderboardTable({
@@ -65,19 +66,21 @@ export function LeaderboardTable({
   // Short name in the row; the catalog's long name (or the id) on hover.
   const label = modelName;
   const side = board.wolf_side_advantage?.overall;
-  const byOpenSkill = board.models.some((r) => r.openskill);
+  const models = board.models ?? [];
+  const byOpenSkill = models.some((r) => r.openskill);
   // Rank follows the metric the caption names, whatever order the file was written in.
   const metric = (r: BoardRow) => (byOpenSkill ? r.openskill?.ordinal : r.win_rate) ?? -Infinity;
-  const rows = [...board.models].sort((a, b) => metric(b) - metric(a));
+  const rows = [...models].sort((a, b) => metric(b) - metric(a));
   return (
     <div className="leaderboard-container">
       <p className="leaderboard-summary-text">
-        {board.games} games.{" "}
+        {fin(board.games) ? board.games : "n/a"} games.{" "}
         {byOpenSkill
           ? "Ranked by OpenSkill ordinal (mu minus three sigma). Win rates carry a Wilson 95% interval; small batches are noisy."
           : "Ranked by win rate over all finished games; small samples are noisy."}
         {side && ` Wolf-side advantage: mu ${num(side.mu)} (0 means the sides are even).`}
       </p>
+      {models.length === 0 && <p>No models in this board.</p>}
       <div className="leaderboard-table-card">
         <div className="leaderboard-scroll" style={{ overflowX: "auto", maxWidth: "100%" }} tabIndex={0} role="region" aria-label="Leaderboard table">
           <table className="leaderboard-table">

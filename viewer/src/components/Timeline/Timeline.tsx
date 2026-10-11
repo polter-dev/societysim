@@ -25,13 +25,24 @@ export interface TimelineProps {
   onStep?: (type: "next" | "prev" | "first" | "last") => void;
   /** Reports autoplay on/off so chat can leave the live regions while it runs. */
   onPlayingChange?: (playing: boolean) => void;
+  /**
+   * Narration hook: `cb` runs once the beat's clips have finished or failed (at once when none are playing).
+   * Autoplay stays on a beat until its dwell has passed and the clips are done, plus a short gap.
+   * Returns a cancel function. Without it, autoplay uses the dwell alone.
+   */
+  narrationIdle?: (cb: () => void) => () => void;
 }
+
+/** Pause after a narrated clip ends before the next beat. */
+export const CLIP_GAP_MS = 300;
+/** A clip that never ends (stalled load) cannot hold autoplay longer than this. */
+export const MAX_CLIP_HOLD_MS = 20000;
 
 const BEAT_KEYS: Record<string, "next" | "prev" | "first" | "last"> = {
   ArrowLeft: "prev", ArrowDown: "prev", ArrowRight: "next", ArrowUp: "next", Home: "first", End: "last",
 };
 const EMPTY_LABELS: Label[] = [];
-export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqChange, seq: controlled, onSeek, onStep, onPlayingChange }: TimelineProps) {
+export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqChange, seq: controlled, onSeek, onStep, onPlayingChange, narrationIdle }: TimelineProps) {
   const isControlled = onSeek !== undefined;
   const [ownSeq, ownSet] = useSeqParam(events, !isControlled);
   const seq = isControlled ? (controlled ?? null) : ownSeq;
@@ -61,12 +72,30 @@ export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqCha
       return;
     }
     const current = events[index];
-    const timer = window.setTimeout(() => {
+    const advance = () => {
       const next = stepSeq(events, seq, 1);
       if (next !== null) setSeq(next);
-    }, current ? stepDelayMs(current, mode, speed) : 1000 / speed);
-    return () => window.clearTimeout(timer);
-  }, [events, index, last, mode, playing, seq, setSeq, speed]);
+    };
+    const timers: number[] = [];
+    let cancelWait = () => {};
+    // Dwell first (shortened by speed); then, if a narrated clip is still playing, wait for it so it is never cut.
+    timers.push(
+      window.setTimeout(() => {
+        if (!narrationIdle) return advance();
+        let sync = true;
+        cancelWait = narrationIdle(() => {
+          if (sync) return advance();
+          timers.push(window.setTimeout(advance, CLIP_GAP_MS));
+        });
+        sync = false;
+        timers.push(window.setTimeout(advance, MAX_CLIP_HOLD_MS));
+      }, current ? stepDelayMs(current, mode, speed) : 1000 / speed),
+    );
+    return () => {
+      cancelWait();
+      timers.forEach((t) => window.clearTimeout(t));
+    };
+  }, [events, index, last, mode, narrationIdle, playing, seq, setSeq, speed]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     const tag = (event.target as HTMLElement).tagName;

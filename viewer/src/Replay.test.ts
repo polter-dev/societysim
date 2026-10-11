@@ -22,14 +22,16 @@ const clips = [
 let root: Root;
 let box: HTMLElement;
 let played: string[];
-let audio: { onended: (() => void) | null } | null;
+let paused: string[];
+let playImpl: () => unknown;
+let audio: { onended: (() => void) | null; onerror: (() => void) | null } | null;
 /** Finish the clip that is playing, so the player moves on to the next one. */
 const finishClips = () => act(() => { for (let i = 0; i < 5; i++) audio?.onended?.(); });
 
-function mount(mode: Mode = "villager") {
+function mount(mode: Mode = "villager", evs = events) {
   act(() =>
     root.render(
-      createElement(Replay, { events, labels: [], mode, selected: null, onSelect: () => {}, audioUrl: INDEX }),
+      createElement(Replay, { events: evs, labels: [], mode, selected: null, onSelect: () => {}, audioUrl: INDEX }),
     ),
   );
 }
@@ -41,6 +43,8 @@ const flush = () => act(async () => void (await new Promise((r) => setTimeout(r,
 
 beforeEach(() => {
   played = [];
+  paused = [];
+  playImpl = () => {};
   audio = null;
   window.history.replaceState(null, "", "/");
   vi.stubGlobal("fetch", async () => ({ ok: true, json: async () => ({ game_id: "g", clips }) }));
@@ -60,8 +64,12 @@ beforeEach(() => {
       get src() {
         return this._src;
       }
-      play() {}
-      pause() {}
+      play() {
+        return playImpl();
+      }
+      pause() {
+        paused.push(this._src.split("/").pop()!);
+      }
     },
   );
   box = document.createElement("div");
@@ -173,6 +181,88 @@ describe("Replay narration", () => {
     mount();
     await flush();
     expect(box.querySelector<HTMLInputElement>(".narration-controls input")?.disabled).toBe(true);
+  });
+});
+
+describe("Replay autoplay with narration", () => {
+  // Real logs: the death_reveal (seq 8) has no public_text, so its beat gets the 1000 ms base dwell.
+  const realEvents = events.map((e) => (e.seq === 8 ? { ...e, public_text: null } : e));
+  const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+  const beat = () => label()!.match(/^beat (\d+) \//)![1];
+
+  /** Open at seq 8's beat, narration on or off, then autoplay at 1x with fake timers. */
+  async function autoplay(narration: boolean) {
+    window.history.replaceState(null, "", "/?step=8");
+    mount("villager", realEvents);
+    await flush();
+    if (narration) act(() => void (box.querySelector(".narration-controls input") as HTMLInputElement).click());
+    vi.useFakeTimers();
+    click("button[aria-label='Play playback']");
+    return beat();
+  }
+  afterEach(() => vi.useRealTimers());
+
+  it("waits for a clip longer than the dwell, then a short gap", async () => {
+    const start = await autoplay(true);
+    expect(played).toEqual(["dawn.mp3"]);
+    wait(1000); // dwell over, clip still playing
+    wait(15000);
+    expect(beat()).toBe(start);
+    expect(paused).toEqual([]); // never cut
+    act(() => audio!.onended!());
+    wait(299);
+    expect(beat()).toBe(start);
+    wait(1);
+    expect(beat()).not.toBe(start);
+  });
+
+  it("moves on at the dwell when the clip is shorter", async () => {
+    const start = await autoplay(true);
+    wait(200);
+    act(() => audio!.onended!());
+    wait(799);
+    expect(beat()).toBe(start);
+    wait(1);
+    expect(beat()).not.toBe(start);
+  });
+
+  it("is the plain dwell with narration off", async () => {
+    const start = await autoplay(false);
+    wait(999);
+    expect(beat()).toBe(start);
+    wait(1);
+    expect(beat()).not.toBe(start);
+  });
+
+  it("does not stall on a clip that errors", async () => {
+    const start = await autoplay(true);
+    wait(1000);
+    expect(beat()).toBe(start);
+    act(() => audio!.onerror!());
+    wait(300);
+    expect(beat()).not.toBe(start);
+  });
+
+  it("does not stall when the browser blocks playback", async () => {
+    playImpl = () => Promise.reject(new Error("NotAllowedError"));
+    const start = await autoplay(true);
+    await act(async () => void (await Promise.resolve()));
+    wait(999);
+    expect(beat()).toBe(start);
+    wait(1);
+    expect(beat()).not.toBe(start);
+  });
+
+  it("Pause and manual steps cut the clip at once", async () => {
+    const start = await autoplay(true);
+    wait(1000);
+    click("button[aria-label='Pause playback']");
+    expect(beat()).toBe(start);
+    wait(30000);
+    expect(beat()).toBe(start);
+    click(".step-next");
+    expect(beat()).not.toBe(start);
+    expect(paused).toContain("dawn.mp3");
   });
 });
 

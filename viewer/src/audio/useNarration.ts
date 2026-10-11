@@ -54,6 +54,8 @@ export function useNarration(indexUrl: string | null, at: number | { first: numb
     on,
     setOn,
     enabled,
+    /** See `createPlayer().whenIdle`: autoplay holds the next beat until the clips have finished. */
+    whenIdle: player.whenIdle,
     setCategory: (c: Category, v: boolean) => setEnabled((e) => ({ ...e, [c]: v })),
   };
 }

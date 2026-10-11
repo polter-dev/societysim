@@ -69,7 +69,7 @@ createRoot(document.getElementById("root")!).render(
     {baseError && <p role="alert">Could not use batch base: {baseError}</p>}
     {!home && !modes && !advanced && !joining && !trailer && <nav aria-label="Pages" className={ledger ? "site-nav site-nav--float" : "site-nav"}>
       <a href={href({})}>Home</a><a href={href({page:"games"})}>Games</a><a href={href({ page: "leaderboard" })}>Leaderboard</a><a href={href({ page: "research" })}>Research</a>
-      <a href={href({ page: "new" })}>New game</a><PlayNavLink href={href({ page: "modes" })} />
+      <PlayNavLink href={href({ page: "modes" })} />
       <a href={href({ page: "replay" })}>Open a log file</a>
     </nav>}
     {home ? <LandingPage href={href}/> : trailer ? <TrailerPage audioIndexUrl={new URL(AUDIO_INDEX_URL, new URL(import.meta.env.BASE_URL, location.href)).href}/> : modes ? <ModeSelection href={href}/> : advanced ? <AdvancedSetup href={href} catalogUrl={catalogUrl} schemaUrl={schemaUrl}/> : ledger ? (

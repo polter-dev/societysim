@@ -71,3 +71,12 @@ describe("main.tsx model page heading", () => {
     expect(h1.getAttribute("title")).toBe("gemini-flash");
   });
 });
+
+describe("main.tsx site nav", () => {
+  it("has no New game tab", async () => {
+    await loadMain("?page=leaderboard", false);
+    const labels = [...document.querySelectorAll('nav[aria-label="Pages"] a')].map((a) => a.textContent);
+    expect(labels).toContain("Leaderboard");
+    expect(labels).not.toContain("New game");
+  });
+});

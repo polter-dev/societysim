@@ -743,8 +743,15 @@ def publish(
     private: Annotated[
         bool, typer.Option("--private/--public", help="Visibility if the repo is created.")
     ] = True,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Publish even if the batch is still running."),
+    ] = False,
 ) -> None:
     """Push BATCH_DIR (runs/<batch>) logs, labels and a dataset card to a HF Dataset.
+
+    Only finished games (with a game_end) are published; unfinished ones are skipped, even with
+    --force.
 
     Needs HF_TOKEN with write access. Safe to re-run: files are named per game, so a re-upload
     overwrites them. Run `societysim label` first to include labels.
@@ -764,11 +771,15 @@ def publish(
         _echo(f"not a directory: {batch_dir}")
         raise typer.Exit(1)
     try:
-        n = publish_batch(batch_dir, repo, token, private=private)
+        n = publish_batch(batch_dir, repo, token, private=private, force=force)
     except ValueError as e:
         _echo(str(e))
         raise typer.Exit(1) from None
-    _echo(f"published {n['games']} games, {n['events']} events, {n['labels']} labels to {repo}")
+    skipped = f" ({n['skipped']} unfinished skipped)" if n["skipped"] else ""
+    _echo(
+        f"published {n['games']} games, {n['events']} events, {n['labels']} labels to {repo}"
+        f"{skipped}"
+    )
 
 
 if __name__ == "__main__":

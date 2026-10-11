@@ -23,7 +23,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from societysim.analysis.labeler import read_log
-from societysim.logging.events import Label
+from societysim.logging.events import EventType, Label
 from societysim.logging.textio import read_text_lenient
 
 LICENSE = "cc-by-4.0"
@@ -156,14 +156,26 @@ classifier) or `engine` (game facts alone).
 """
 
 
+def _is_running(batch_dir: Path) -> bool:
+    try:
+        meta = json.loads(read_text_lenient(batch_dir / "run_meta.json"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(meta, dict) and meta.get("status") == "running"
+
+
 def build_staging(batch_dir: Path, out: Path, existing: dict | None = None) -> dict[str, int]:
     """Write the repo layout for batch_dir into out. Returns this batch's counts.
 
+    Only finished games (a game_end event) are staged: an unfinished game is replayed on resume
+    with the same roles, so its log must not go public. Skipped games are counted under "skipped".
+    A skipped game that an earlier publish already put on the hub keeps its manifest record.
     `existing` is the repo's manifest so far; README.md and manifest.json cover it plus this batch.
     """
     logs = sorted(p for p in batch_dir.glob("*.jsonl") if not p.name.endswith(".labels.jsonl"))
     games: dict[str, dict] = {}
-    n = {"games": 0, "events": 0, "labels": 0}
+    n = {"games": 0, "events": 0, "labels": 0, "skipped": 0}
+    unfinished: set[str] = set()
     for sub in ("jsonl", "events", "labels"):
         (out / "data" / sub).mkdir(parents=True, exist_ok=True)
     for path in logs:
@@ -171,6 +183,11 @@ def build_staging(batch_dir: Path, out: Path, existing: dict | None = None) -> d
         if not events:
             continue
         gid = events[0].game_id
+        if not any(e.type is EventType.GAME_END for e in events):
+            print(f"warning: {path.name} has no game_end, not published")
+            unfinished.add(gid)
+            n["skipped"] += 1
+            continue
         labels_path = path.with_name(f"{gid}.labels.jsonl")
         labels = _read_labels(labels_path)
         games[gid] = _game_record(events, labels)
@@ -187,7 +204,14 @@ def build_staging(batch_dir: Path, out: Path, existing: dict | None = None) -> d
         n["events"] += len(events)
         n["labels"] += len(labels)
     if not n["games"]:
-        raise ValueError(f"no game logs found in {batch_dir}")
+        raise ValueError(
+            f"no finished game logs found in {batch_dir} ({n['skipped']} unfinished skipped)"
+        )
+    # no surprise deletes: a game published earlier keeps its manifest record, as its files stay
+    for v in (existing or {}).get("batches", {}).values():
+        for gid, rec in v["games"].items():
+            if gid in unfinished and gid not in games:
+                games[gid] = rec
     manifest = _merge_manifest(existing or {}, batch_dir.name, games)
     (out / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     (out / "README.md").write_text(dataset_card(manifest), encoding="utf-8")
@@ -225,8 +249,18 @@ def publish_batch(
     token: str,
     private: bool = True,
     api_factory: Callable[..., object] | None = None,
+    force: bool = False,
 ) -> dict[str, int]:
-    """Upload batch_dir to the dataset repo repo_id. Re-running overwrites the same paths."""
+    """Upload batch_dir's finished games to the dataset repo repo_id. Re-running overwrites paths.
+
+    A batch whose run_meta.json says "running" is refused unless force. Force never lets an
+    unfinished game through.
+    """
+    if _is_running(batch_dir) and not force:
+        raise ValueError(
+            f"{batch_dir.name} is still running (run_meta.json status 'running'); "
+            "wait for it to finish, or pass --force to publish its finished games now"
+        )
     if api_factory is None:
         from huggingface_hub import HfApi as api_factory
     api = api_factory(token=token)

@@ -233,6 +233,78 @@ def test_game_without_labels_deletes_stale_shards(tmp_path):
     ]
 
 
+def _unfinished(b, game_id="fixture-0002"):
+    """Add a second game to batch b: the fixture cut off before game_end."""
+    lines = (FIXTURES / "sample_game.jsonl").read_text(encoding="utf-8").splitlines()
+    cut = [ln for ln in lines if json.loads(ln)["type"] != "game_end"]
+    assert len(cut) < len(lines)
+    text = "\n".join(cut).replace("fixture-0001", game_id) + "\n"
+    (b / f"{game_id}.jsonl").write_text(text, encoding="utf-8", newline="")
+
+
+def test_unfinished_game_is_not_published(tmp_path, capsys):
+    b = batch(tmp_path)
+    _unfinished(b)
+    n = publish.publish_batch(b, "org/ds", "tok", api_factory=FakeHub)
+    assert n["games"] == 1 and n["skipped"] == 1
+    assert "fixture-0002.jsonl has no game_end" in capsys.readouterr().out
+    assert not any("fixture-0002" in k for k in FakeHub.repo)
+    assert list(manifest()["batches"]["batch"]["games"]) == ["fixture-0001"]
+    assert "1 games" in FakeHub.repo["README.md"].decode()
+
+
+def test_batch_with_only_unfinished_games_is_refused(tmp_path):
+    b = batch(tmp_path)
+    (b / "fixture-0001.jsonl").unlink()
+    _unfinished(b)
+    with pytest.raises(ValueError, match="no finished game"):
+        publish.publish_batch(b, "org/ds", "tok", api_factory=FakeHub)
+    assert FakeHub.repo == {}
+
+
+def test_running_batch_refused_without_force(tmp_path):
+    b = batch(tmp_path)
+    _unfinished(b)
+    (b / "run_meta.json").write_text(json.dumps({"status": "running"}), encoding="utf-8")
+    with pytest.raises(ValueError, match="still running"):
+        publish.publish_batch(b, "org/ds", "tok", api_factory=FakeHub)
+    assert FakeHub.calls == [] and FakeHub.repo == {}
+    # force publishes the finished game only; the unfinished log still stays out
+    n = publish.publish_batch(b, "org/ds", "tok", api_factory=FakeHub, force=True)
+    assert n["games"] == 1 and n["skipped"] == 1
+    assert not any("fixture-0002" in k for k in FakeHub.repo)
+
+
+def test_cli_running_batch_needs_force(tmp_path, monkeypatch):
+    monkeypatch.setenv("HF_TOKEN", "tok")
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    monkeypatch.setattr("huggingface_hub.HfApi", FakeHub)
+    b = batch(tmp_path)
+    _unfinished(b)
+    (b / "run_meta.json").write_text(json.dumps({"status": "running"}), encoding="utf-8")
+    r = CliRunner().invoke(app, ["publish", str(b), "--repo", "org/ds"])
+    assert r.exit_code == 1 and "still running" in r.output and FakeHub.calls == []
+    r = CliRunner().invoke(app, ["publish", str(b), "--repo", "org/ds", "--force"])
+    assert r.exit_code == 0, r.output
+    assert "published 1 games" in r.output and "1 unfinished skipped" in r.output
+    assert not any("fixture-0002" in k for k in FakeHub.repo)
+
+
+def test_game_published_earlier_is_kept_when_now_unfinished(tmp_path):
+    b = batch(tmp_path)
+    done = (FIXTURES / "sample_game.jsonl").read_text(encoding="utf-8")
+    (b / "fixture-0002.jsonl").write_text(
+        done.replace("fixture-0001", "fixture-0002"), encoding="utf-8", newline=""
+    )
+    publish.publish_batch(b, "org/ds", "tok", api_factory=FakeHub)
+    assert set(manifest()["batches"]["batch"]["games"]) == {"fixture-0001", "fixture-0002"}
+    # the same game_id is replayed and cut off: its hub files and manifest entry stay
+    _unfinished(b)
+    before = dict(FakeHub.repo)
+    publish.publish_batch(b, "org/ds", "tok", api_factory=FakeHub)
+    assert FakeHub.repo == before
+
+
 def test_dataset_card_says_ten_seats(tmp_path):
     FakeHub.repo, FakeHub.calls = {}, []
     publish.publish_batch(batch(tmp_path), "org/ds", "tok", api_factory=FakeHub)

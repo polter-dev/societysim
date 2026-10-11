@@ -192,7 +192,7 @@ async def test_full_game_as_a_human_seat(make_client, tmp_path):
 
     events, meta = read_log(tmp_path, started["game_id"])
     assert events[-1]["type"] == "game_end"
-    assert meta["agents"] == "llm" and meta["models"][0] == "human" and "forfeit" not in meta
+    assert meta["agents"] == "scripted" and meta["models"][0] == "human" and "forfeit" not in meta
     said = p0(events, "statement")
     assert said and all(e["public_text"] == SAY for e in said)
     # No suspicion given: logged as null, never a made-up 0.5.
@@ -437,7 +437,7 @@ async def test_abandoned_game_is_forfeit(make_client, tmp_path):
         await finished(c, started)
         assert c.manager.ledger.games.get(started["game_id"], 0) == 0
     events, meta = read_log(tmp_path, started["game_id"])
-    assert meta["forfeit"] is True and meta["agents"] == "llm"
+    assert meta["forfeit"] is True and meta["agents"] == "scripted"
     assert "game_end" not in {e["type"] for e in events}
     # Two turns fell back; the third timeout in a row ended the game.
     assert len(p0(events, "fallback_action")) == 2
@@ -642,3 +642,26 @@ async def test_wide_visitor_seed_stays_private_and_replays(make_client, tmp_path
             assert not any(str(seed) in t for t in texts)
             runs.append([(e["type"], e["actor"], e.get("target")) for e in events])
     assert runs[0] == runs[1]
+
+
+async def test_budget_fallback_turns_are_counted_and_tagged_scripted(make_client, tmp_path):
+    """#640: a budget that runs out mid-game hands AI turns to the scripted fallback; the
+    game's run_meta counts them and tags it so the model rankings leave it out."""
+
+    class Paid:  # an LLM stand-in that costs $0.001 a call
+        def __init__(self, state, seat):
+            self.inner, self.model = RandomAgent(state, seat), state.models[seat]
+
+        async def act(self, turn):
+            r = await self.inner.act(turn)
+            return r.model_copy(update={"usage": Usage(model=self.model, cost_usd=0.001)})
+
+    async with make_client(agents=lambda cfg: (Paid, {}), turn_timeout=0.05) as c:
+        started = await start(c, watch_only=True)
+        c.manager.ledger.budget_nanos = 10_000_000  # $0.01: the cap hits mid-game
+        await finished(c, started)
+        events, meta = read_log(tmp_path, started["game_id"])
+    fell_back = sum(1 for e in events if (e["meta"].get("usage") or {}).get("model") == "scripted")
+    assert fell_back > 0
+    assert meta["budget_fallback_turns"] == fell_back
+    assert meta["agents"] == "scripted"

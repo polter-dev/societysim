@@ -35,6 +35,7 @@ from societysim.agents import human
 from societysim.agents.base import Agent, AgentFactory
 from societysim.agents.prompts import RESPONSE_MODELS
 from societysim.agents.schemas import SuspicionEntry, TargetResponse
+from societysim.agents.scripted import MODEL as SCRIPTED_MODEL
 from societysim.agents.scripted import RandomAgent
 from societysim.config import GameConfig, Presentation
 from societysim.engine.state import GameState
@@ -454,11 +455,20 @@ class GameManager:
             log.warning("game %s: labelling failed (%s)", session.game_id, type(exc).__name__)
 
     def _tag(self, session: Session) -> None:
-        """run_meta like `play --agents llm` writes it, plus `forfeit: true` for one."""
+        """run_meta like `play --agents llm` writes it, plus `forfeit: true` for one and
+        `budget_fallback_turns` (agents becomes "scripted" if any)."""
         path = self.settings.runs_dir / self.settings.batch_id / f"{session.game_id}.run_meta.json"
         try:
             meta = json.loads(path.read_text(encoding="utf-8"))
-            meta["agents"] = "llm"
+            # AI turns the budget fallback played: the game stays out of the model rankings
+            # (agents "scripted", as the views and the labeler already drop those).
+            fell_back = sum(
+                1
+                for e in session.game.events
+                if e.meta.usage and e.meta.usage.model == SCRIPTED_MODEL
+            )
+            meta["agents"] = "scripted" if fell_back else "llm"
+            meta["budget_fallback_turns"] = fell_back
             if session.status == "forfeit":
                 meta["forfeit"] = True
             path.write_text(json.dumps(meta, indent=2), encoding="utf-8")

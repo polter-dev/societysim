@@ -660,7 +660,7 @@ Limits, all set by env on the server (defaults in brackets):
 - `PLAY_DAILY_BUDGET_USD` [2.00]: model spend per UTC day, booked per call in Neon
   (`visitor_spend`, not readable through the Data API). If a write to Neon fails, no new game
   starts and running games' AI turns go to scripted agents until a retry (with backoff, up to
-  a minute apart) writes the row; a row is never counted twice. A call that failed or timed
+  a minute apart) writes the row; a row is never counted twice. A game with any such scripted turn is tagged `agents: "scripted"` and `budget_fallback_turns: N` in its run_meta, so it is left out of the model rankings. A call that failed or timed
   out books its worst case for each attempt. A game starts only if what is left,
   minus what the running games are still expected to spend (each one's estimate less what it
   has booked so far), covers its estimate (the batch runner's price prior). Each model call first holds its worst

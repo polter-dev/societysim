@@ -118,6 +118,7 @@ cross join lateral (select value from jsonb_each(e.event -> 'meta' -> 'seats') w
 where g.status = 'finished' and g.agents is distinct from 'scripted'
   and l.source in ('self_tag', 'jev')
   and l.label_type in ('false_role_claim', 'false_report', 'bussing', 'hidden_knowledge')
+  and seat.value ->> 'model' <> 'human'
 group by g.batch_id, seat.value ->> 'model', l.source, l.label_type;
 
 -- Visitor play spend (#281): one row per booked model call, plus a row per game for anything

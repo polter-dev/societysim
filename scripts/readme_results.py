@@ -129,12 +129,17 @@ def render(batches: list[Path]) -> str:
 def update_readme(readme: Path, batches: list[Path]) -> bool:
     """Rewrite the block between the markers. Returns True if the file changed."""
     text = read_text_lenient(readme)
+    # Keep the file's line endings: a CRLF README stays CRLF, an LF one stays LF.
+    crlf = "\r\n" in text
+    text = text.replace("\r\n", "\n")
     start, end = text.find(START), text.find(END)
     if start == -1 or end == -1 or end < start:
         raise SystemExit(f"{readme}: results markers not found ({START} ... {END})")
     new = text[: start + len(START)] + "\n" + render(batches) + "\n" + text[end:]
     if new == text:
         return False
+    if crlf:
+        new = new.replace("\n", "\r\n")
     readme.write_bytes(new.encode("utf-8"))
     return True
 

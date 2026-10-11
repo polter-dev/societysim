@@ -138,3 +138,18 @@ def test_missing_report_is_an_error_not_a_crash(tmp_path, capsys):
     readme.write_text(README, encoding="utf-8")
     assert rr.main([str(tmp_path / "nope"), "--readme", str(readme)]) == 1
     assert readme.read_text(encoding="utf-8") == README
+
+
+@pytest.mark.parametrize("eol", [b"\r\n", b"\n"])
+def test_keeps_the_readmes_line_endings(tmp_path, eol):
+    batch = _batch(tmp_path)
+    readme = tmp_path / "README.md"
+    readme.write_bytes(README.replace("\n", "\r\n" if eol == b"\r\n" else "\n").encode())
+    assert rr.update_readme(readme, [batch]) is True
+    data = readme.read_bytes()
+    assert b"alpha" in data
+    other = b"\n" if eol == b"\r\n" else b"\r\n"
+    # no mix: strip every eol of the expected kind and none of the other kind remains
+    assert other not in data.replace(eol, b"")
+    assert data.count(b"\n") == data.count(eol)
+    assert rr.update_readme(readme, [batch]) is False

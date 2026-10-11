@@ -58,7 +58,15 @@ class Route:
 ROUTES = [
     Route("index", "", "games", "main table a[href*='game=']"),
     Route("replay", "?game={game}", "", SEL_SEATS, ("game",)),
-    Route("step deep link", "?game={game}&step={step}", "", SEL_SEATS, ("game", "step")),
+    # mode=villager is the spectator view (modeFromSearch in viewer/src); explicit so a changed
+    # default can't swap in the narrator view
+    Route(
+        "step deep link",
+        "?game={game}&step={step}&mode=villager",
+        "",
+        SEL_SEATS,
+        ("game", "step"),
+    ),
     Route("leaderboard", "?page=leaderboard", "leaderboard", "table caption"),
     Route("research", "?page=research", "research", ".deception-matrix"),
     Route("model profile", "?page=model&model={model}", "{model}", "main h2", ("model",)),
@@ -106,6 +114,25 @@ def role_leaks(cards: list[dict]) -> list[str]:
         for c in cards
         if c["revealed"] != "true" and ROLE_WORDS.search(c["text"])
     ]
+
+
+def wolf_chat_texts(log_text: str) -> list[str]:
+    """public_text of every wolf_chat event in a game log: text a spectator must never see."""
+    out = []
+    for line in log_text.splitlines():
+        if not line.strip():
+            continue
+        ev = json.loads(line)
+        if ev.get("type") == "wolf_chat" and (ev.get("public_text") or "").strip():
+            out.append(ev["public_text"].strip())
+    return out
+
+
+def wolf_chat_leaks(page_text: str, texts: list[str]) -> list[str]:
+    """Wolf-chat lines (first 40 chars) found in the page text, whitespace-insensitive."""
+    squash = lambda t: " ".join(t.split())  # noqa: E731
+    body = squash(page_text)
+    return [squash(t)[:40] for t in texts if squash(t) in body]
 
 
 def step_beat(label: str) -> int | None:
@@ -157,10 +184,10 @@ def run(
                     fetched[name] = r.text()
             except PwError as e:
                 add("data", name, False, str(e).splitlines()[0])
+        log_text = ""
         try:
             index = json.loads(fetched.get("index.json", "[]"))
             board = json.loads(fetched.get("leaderboard.json", "{}"))
-            log_text = ""
             if index:
                 r = ctx.request.get(page_url(base, index[0]["file"]))
                 add("data", index[0]["file"], r.status == 200, f"HTTP {r.status}")
@@ -210,7 +237,7 @@ def run(
                 got = page.locator(SEL_H1).first.inner_text()
                 add(route.name, "heading", want in got.lower(), got)
 
-            extra(page, route, values, add, strict_play)
+            extra(page, route, values, add, strict_play, log_text)
             page.wait_for_timeout(500)  # let late fetches and effects throw
             add(route.name, "console", not errors, "; ".join(errors[:3]) or "no errors")
             page.close()
@@ -218,7 +245,9 @@ def run(
     return out
 
 
-def extra(page, route: Route, values: dict[str, str], add, strict_play: bool) -> None:
+def extra(
+    page, route: Route, values: dict[str, str], add, strict_play: bool, log_text: str = ""
+) -> None:
     n = route.name
     if n == "index":
         add(
@@ -243,6 +272,8 @@ def extra(page, route: Route, values: dict[str, str], add, strict_play: bool) ->
             add(n, "step controls", beat is not None, label)
         if n == "replay":
             hidden_info(page, n, add)
+        else:
+            mid_game_hidden_info(page, n, add, log_text)
     elif n == "leaderboard":
         rows = page.locator("table tbody tr").count()
         add(n, "rows", rows >= 1, f"{rows} models")
@@ -288,13 +319,47 @@ def extra(page, route: Route, values: dict[str, str], add, strict_play: bool) ->
         )
 
 
-def hidden_info(page, name: str, add) -> None:
-    """Villager (spectator) view before game end: no role names on seats that are not revealed."""
-    cards = page.evaluate(
+def seat_cards(page) -> list[dict]:
+    return page.evaluate(
         """() => [...document.querySelectorAll('[data-seat]')].map(li => ({
             seat: li.dataset.seat, revealed: li.dataset.revealed,
             text: (li.querySelector('[data-role-card]') || li).innerText}))"""
     )
+
+
+def mid_game_hidden_info(page, name: str, add, log_text: str) -> None:
+    """Spectator view on a ?step= deep link before game end.
+
+    Each check fails rather than passes when there is nothing to look at: no seats rendered, no
+    unrevealed seat, or no wolf_chat in the log to look for.
+    """
+    cards = seat_cards(page)
+    hidden = [c for c in cards if c["revealed"] != "true"]
+    leaks = role_leaks(cards)
+    add(
+        name,
+        "mid-game roles",
+        len(cards) >= 5 and bool(hidden) and not leaks,
+        "; ".join(leaks) or f"{len(hidden)} of {len(cards)} seats unrevealed, no role names",
+    )
+    texts = wolf_chat_texts(log_text)
+    shown = page.locator("[data-channel='wolves']").count()
+    found = wolf_chat_leaks(page.inner_text("body"), texts)
+    add(
+        name,
+        "mid-game wolf chat",
+        len(cards) >= 5 and bool(texts) and not shown and not found,
+        "; ".join(found)
+        or (f"{shown} wolf-channel entries" if shown else "")
+        or (
+            f"none of {len(texts)} wolf_chat lines on the page" if texts else "no wolf_chat in log"
+        ),
+    )
+
+
+def hidden_info(page, name: str, add) -> None:
+    """Villager (spectator) view before game end: no role names on seats that are not revealed."""
+    cards = seat_cards(page)
     leaks = role_leaks(cards)
     add(
         name,

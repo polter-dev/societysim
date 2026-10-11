@@ -77,14 +77,20 @@ CHANNEL = os.environ.get("SITE_SMOKE_CHANNEL")
 SEATS = ["p0", "p1", "p2", "p3", "p4", "p5", "p6"]
 
 
-def _seats(leak: bool) -> str:
+WOLF_LINE = "Ava feels like a power role, take her out tonight"
+
+
+def _seats(leak, step: bool = False) -> str:
+    """leak: False, True (a role on an unrevealed seat) or "wolf" (wolf chat on the step link)."""
     cards = "".join(
         f'<li data-seat="{s}" data-revealed="false"><button>{s}'
-        f"<span data-role-card>{'Wolf' if leak and s == 'p2' else '? role unknown'}</span></button></li>"
+        f"<span data-role-card>{'Wolf' if leak is True and s == 'p2' else '? role unknown'}"
+        "</span></button></li>"
         for s in SEATS
     )
+    wolf = f"<p>{WOLF_LINE}</p>" if leak == "wolf" and step else ""
     return (
-        f"<ul>{cards}</ul><span class='step-label'>beat {{beat}} / 9</span>"
+        wolf + f"<ul>{cards}</ul><span class='step-label'>beat {{beat}} / 9</span>"
         "<details class='replay-spotwolf'><summary>Spot the wolf</summary><section class='spotwolf'>"
         "<ul class='spotwolf-seats'>"
         + "".join(f"<li><button aria-pressed='false'>{s}</button></li>" for s in SEATS)
@@ -97,7 +103,9 @@ def _seats(leak: bool) -> str:
 def _page(query: dict, leak: bool) -> str:
     page, step = query.get("page", [""])[0], query.get("step")
     if "game" in query:
-        body = "<h1>SocietySim viewer</h1>" + _seats(leak).replace("{beat}", "4" if step else "1")
+        body = "<h1>SocietySim viewer</h1>" + _seats(leak, bool(step)).replace(
+            "{beat}", "4" if step else "1"
+        )
     elif page == "leaderboard":
         body = "<h1>SocietySim leaderboard</h1><table><caption>Leaderboard</caption><tbody><tr><td>m1</td></tr></tbody></table>"
     elif page == "research":
@@ -118,7 +126,12 @@ def _serve(leak: bool):
         "/index.json": json.dumps([{"game_id": "g1", "file": "g1.jsonl"}]),
         "/leaderboard.json": json.dumps({"models": [{"model": "m1"}]}),
         "/metrics.json": "{}",
-        "/g1.jsonl": "\n".join(json.dumps({"seq": i}) for i in range(9)),
+        "/g1.jsonl": "\n".join(
+            json.dumps({"seq": i, "type": "wolf_chat", "public_text": WOLF_LINE})
+            if i == 1
+            else json.dumps({"seq": i, "type": "statement", "public_text": "hi"})
+            for i in range(9)
+        ),
     }
 
     class H(BaseHTTPRequestHandler):
@@ -175,6 +188,66 @@ def test_run_passes_on_a_healthy_site(browser_ready):
     }
 
 
+def test_mid_game_hidden_info_checks_run_and_pass(browser_ready):
+    results = {(r.page, r.check): r for r in _run(leak=False)}
+    for check in ("mid-game roles", "mid-game wolf chat"):
+        assert results["step deep link", check].ok
+    assert "7 of 7" in results["step deep link", "mid-game roles"].detail
+
+
+def test_mid_game_fails_when_wolf_chat_shows_on_the_step_link(browser_ready):
+    failed = [r for r in _run(leak="wolf") if not r.ok]
+    assert [(r.page, r.check) for r in failed] == [("step deep link", "mid-game wolf chat")]
+
+
+def test_mid_game_checks_fail_rather_than_pass_with_nothing_to_check():
+    class Page:
+        def __init__(self, cards):
+            self.cards = cards
+
+        def evaluate(self, _js):
+            return self.cards
+
+        def locator(self, _sel):
+            return type("L", (), {"count": lambda self: 0})()
+
+        def inner_text(self, _sel):
+            return ""
+
+    got = []
+
+    def add(page, check, ok, detail=""):
+        got.append((check, ok))
+
+    cards = [{"seat": f"p{i}", "revealed": "false", "text": "?"} for i in range(7)]
+    log = json.dumps({"seq": 1, "type": "wolf_chat", "public_text": "x"})
+    smoke.mid_game_hidden_info(Page([]), "n", add, log)  # no seats rendered
+    smoke.mid_game_hidden_info(Page(cards), "n", add, "")  # no wolf_chat to look for
+    smoke.mid_game_hidden_info(Page(cards), "n", add, log)  # healthy
+    assert got == [
+        ("mid-game roles", False),
+        ("mid-game wolf chat", False),
+        ("mid-game roles", True),
+        ("mid-game wolf chat", False),
+        ("mid-game roles", True),
+        ("mid-game wolf chat", True),
+    ]
+
+
+def test_wolf_chat_helpers():
+    events = [
+        {"type": "wolf_chat", "public_text": "take  Ben tonight"},
+        {"type": "statement", "public_text": "hello"},
+    ]
+    log = "\n".join(json.dumps(e) for e in events)
+    assert smoke.wolf_chat_texts(log) == ["take  Ben tonight"]
+    assert smoke.wolf_chat_leaks("x take Ben\ntonight y", ["take  Ben tonight"])
+    assert not smoke.wolf_chat_leaks("hello", ["take Ben tonight"])
+
+
 def test_run_fails_when_an_unrevealed_seat_shows_a_role(browser_ready):
     failed = [r for r in _run(leak=True) if not r.ok]
-    assert [(r.page, r.check) for r in failed] == [("replay", "hidden info")]
+    assert [(r.page, r.check) for r in failed] == [
+        ("replay", "hidden info"),
+        ("step deep link", "mid-game roles"),
+    ]

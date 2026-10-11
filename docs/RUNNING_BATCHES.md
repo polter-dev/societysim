@@ -108,7 +108,7 @@ uv run societysim sync-neon runs/<batch_id>                     # needs NEON_DAT
 - **Tests never see real keys** (#336). `pytest` strips every key, token and DSN from the environment and turns off `.env` loading. Don't set `SOCIETYSIM_LIVE=1` to get around this. It puts the real keys back and runs the tests marked `live`, which call paid APIs and real databases. Only set it for a single deliberate live check, and unset it after.
 - **Neon migrations** go through `sync-neon --migrate` only. Without `--apply` it prints the SQL and runs nothing. `--migrate --apply` changes the live database and needs Seth and Marcus to say OK first.
 - **`--prune` is a dry run first.** `sync-neon --prune` lists partial, fixture and test games (partial means older than `--older-than-hours`, default 6) and deletes nothing. Read the list, then add `--apply`. `--batch <id>` adds a test batch to the list; `sync-neon --delete <game_id>` removes one game.
-- Don't run paid commands (`--agents llm`, `doctor`, Jev `label`, `narrate` without `--dry-run`) without checking the dry-run estimate and your `budget_usd` first.
+- Don't run paid commands (`--agents llm`, `doctor`, Jev `label`, `uv run python -m societysim.analysis.narrate <game_id>.jsonl` or `--build-bank --yes` without `--dry-run`, which are billed per character) without checking the dry-run estimate and your `budget_usd` first.
 - Keys stay in `.env`. Don't put `NEON_DATABASE_URL` in a CI variable or a viewer build; it can write.
 
 ## 7. Windows notes

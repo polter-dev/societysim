@@ -33,6 +33,7 @@ from openskill.models import PlackettLuce
 from societysim.analysis.labeler import read_log
 from societysim.logging.events import Event, EventType, Label, LabelType
 from societysim.logging.textio import read_text_lenient
+from societysim.models.client import is_provider_failure
 from societysim.roles import Role
 
 LIE_TYPES = (
@@ -328,7 +329,7 @@ def game_rows(game: GameData) -> dict[str, Row]:
         if e.type is EventType.STATEMENT:
             row.statements += 1
         if e.type is EventType.INVALID_OUTPUT:
-            if e.meta.reason == "provider":
+            if is_provider_failure(e.meta.reason, e.meta.error):  # also pre-reason logs
                 row.provider_errors += 1
             else:
                 row.invalid += 1

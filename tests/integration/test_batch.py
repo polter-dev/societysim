@@ -922,11 +922,21 @@ def test_cli_batch_prints_a_progress_line_per_game(tmp_path, monkeypatch):
 class HealthyFake(PricedFake):
     """Valid replies built from the legal ids in the prompt; models in `bad` answer garbage."""
 
-    def __init__(self, bad=()):
+    def __init__(self, bad=(), provider_down=()):
         super().__init__()
         self.bad = set(bad)
+        self.provider_down = set(provider_down)  # answer with an exhausted-retries 503
 
     async def complete(self, model, messages, response_model) -> CompletionResult:
+        if model.name in self.provider_down:
+            usage = Usage(model=model.name, input_tokens=100, output_tokens=20, attempts=6)
+            return CompletionResult(
+                parsed=None,
+                raw="",
+                error="ServiceUnavailableError: HF is down",
+                provider_error=True,
+                usage=usage,
+            )
         if model.name in self.bad:
             usage = Usage(model=model.name, input_tokens=100, output_tokens=20)
             return CompletionResult(parsed=None, raw="nope", error="bad json", usage=usage)
@@ -982,6 +992,24 @@ async def test_invalid_model_trips_the_breaker_and_names_it(tmp_path):
     assert meta["status"] == "stopped_invalid"
     assert meta["invalid_output"] == res["invalid_output"]
     assert meta["invalid_stop"] == res["invalid_stop"]
+
+
+async def test_provider_errors_alone_do_not_trip_the_breaker(tmp_path):
+    c = cfg(n_games=4, max_concurrency=1, **LIMIT)
+    res = await run_batch(c, SPECS, HealthyFake(provider_down="b"), runs_dir=tmp_path)
+    assert res["status"] == "completed" and res["invalid_stop"] is None
+    assert "b" not in res["invalid_output"]  # no model calls, no invalids
+    events = [json.loads(x) for x in (tmp_path / "t/t-g0000.jsonl").read_text().splitlines()]
+    assert any(e["meta"].get("reason") == "provider" for e in events)  # they were logged
+
+
+async def test_model_errors_still_trip_the_breaker_next_to_provider_errors(tmp_path):
+    c = cfg(n_games=8, max_concurrency=1, **LIMIT)
+    fake = HealthyFake(bad="b", provider_down="a")
+    res = await run_batch(c, SPECS, fake, runs_dir=tmp_path)
+    assert res["status"] == "stopped_invalid"
+    assert res["invalid_stop"].startswith("b: 100.0% invalid output")
+    assert "a" not in res["invalid_output"]
 
 
 async def test_breaker_waits_for_the_minimum_number_of_calls(tmp_path):

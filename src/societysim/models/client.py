@@ -214,6 +214,22 @@ def estimate_cost(spec: ModelSpec, input_tokens: int, output_tokens: int) -> flo
     return in_cost + out_cost
 
 
+# Error text of provider failures logged before meta.reason: "provider" existed (T5.2 logs).
+_LEGACY_PROVIDER_ERRORS = (
+    "ServiceUnavailableError",
+    "RateLimitError",
+    "InternalServerError",
+    "APIConnectionError",
+    "Timeout:",
+)
+
+
+def is_provider_failure(reason: str | None, error: str | None) -> bool:
+    """True for an invalid_output event caused by the provider, not the model's reply: it has
+    `reason: "provider"`, or (older logs) an error text starting with a provider exception."""
+    return reason == "provider" or bool(error and error.startswith(_LEGACY_PROVIDER_ERRORS))
+
+
 def _transient(e: Exception) -> bool:
     """Provider trouble rather than a bad request: 5xx, 429, timeouts, dropped connections."""
     import litellm

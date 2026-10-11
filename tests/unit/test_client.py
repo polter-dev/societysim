@@ -15,6 +15,7 @@ from societysim.models.client import (
     _Limiter,
     estimate_cost,
     extract_json,
+    is_provider_failure,
     limit_key,
     litellm_model_name,
     request_kwargs,
@@ -304,6 +305,16 @@ async def test_retries_exhausted_returns_error(monkeypatch, sleeps):
     assert result.error and result.error.startswith("RateLimitError")
     assert result.usage.attempts == 3
     assert result.provider_error
+
+
+def test_is_provider_failure_reads_reason_or_legacy_error_text():
+    assert is_provider_failure("provider", None)
+    assert is_provider_failure(None, "ServiceUnavailableError: HuggingfaceException - busy")
+    assert is_provider_failure(None, "RateLimitError: slow down")
+    assert is_provider_failure(None, "Timeout: m took longer than 120 s")
+    assert not is_provider_failure(None, "1 validation error for VoteResponse")
+    assert not is_provider_failure("invalid_output", "empty reply")
+    assert not is_provider_failure(None, None)
 
 
 async def test_503_backs_off_and_exhausted_503_is_a_provider_error(monkeypatch, sleeps):

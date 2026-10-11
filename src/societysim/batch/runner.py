@@ -30,7 +30,7 @@ from societysim.logging.events import EventType
 from societysim.logging.sinks.jsonl import JsonlSink
 from societysim.logging.sinks.neon import Connect, NeonSink
 from societysim.logging.textio import read_text_lenient
-from societysim.models.client import CompletionResult, ModelClient
+from societysim.models.client import CompletionResult, ModelClient, is_provider_failure
 from societysim.orchestrator import run_game
 
 log = logging.getLogger(__name__)
@@ -117,15 +117,26 @@ def game_costs(path: Path) -> Counter[str] | None:
 
 
 def game_invalid(path: Path, models: list[str]) -> dict[str, list[int]]:
-    """Per model in a finished game log: [invalid_output events, model attempts]. `models` is the
-    game's model per seat p0..; a log that cannot be read counts as nothing."""
+    """Per model in a finished game log: [invalid_output events, model attempts], provider errors
+    excluded from both. `models` is the game's model per seat p0..; a log that cannot be read
+    counts as nothing."""
     out: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     try:
         for line in read_text_lenient(path).splitlines():
             e = json.loads(line)
-            if e["type"] == EventType.INVALID_OUTPUT and e.get("actor"):
+            meta = e.get("meta") or {}
+            # Provider failures (5xx, 429, timeout) are not the model's fault: ProviderDown
+            # covers outages, so they count neither as invalid nor as model calls.
+            if (
+                e["type"] == EventType.INVALID_OUTPUT
+                and e.get("actor")
+                and not is_provider_failure(meta.get("reason"), meta.get("error"))
+            ):
                 out[models[int(e["actor"][1:])]][0] += 1
-            if usage := (e.get("meta") or {}).get("usage"):
+            provider_fallback = e["type"] == EventType.FALLBACK_ACTION and (
+                meta.get("reason") == "provider"
+            )
+            if (usage := meta.get("usage")) and not provider_fallback:
                 out[usage["model"]][1] += usage.get("attempts", 1)
     except (OSError, ValueError, KeyError, IndexError):
         return {}

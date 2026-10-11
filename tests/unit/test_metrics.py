@@ -304,6 +304,32 @@ def test_provider_errors_are_reported_apart_from_invalid_output(game):
     assert row["provider_error_rate"] > 0
 
 
+def test_pre_reason_provider_errors_are_classified_by_error_text(game):
+    """T5.2 logs have no reason field; their provider failures start with the exception name."""
+    last = game.events[-1]
+    common = dict(game_id=last.game_id, t=last.t, day=last.day, phase=last.phase, actor="p3")
+    base = compute_metrics([game])["models"]["gpt-oss-120b"]["all"]
+
+    def run(error):
+        meta = EventMeta(action="vote", attempt=1, error=error)
+        ev = Event(
+            seq=last.seq + 1,
+            type=EventType.INVALID_OUTPUT,
+            visibility=Visibility.NARRATOR,
+            meta=meta,
+            **common,
+        )
+        got = compute_metrics([GameData([*game.events, ev], game.labels)])
+        return got["models"]["gpt-oss-120b"]["all"]
+
+    legacy = run("ServiceUnavailableError: HuggingfaceException - busy")
+    assert legacy["provider_errors"] == 1
+    assert legacy["invalid_output_rate"] == base["invalid_output_rate"]
+    model_error = run("1 validation error for VoteResponse")
+    assert model_error["provider_errors"] == 0
+    assert model_error["invalid_output_rate"] > base["invalid_output_rate"]
+
+
 def _with_winner(game: GameData, winner: str) -> GameData:
     end = game.events[-1]
     meta = EventMeta(**{**end.meta.model_dump(), "winner": winner})

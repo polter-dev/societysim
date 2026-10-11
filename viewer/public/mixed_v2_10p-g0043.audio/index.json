@@ -4,7 +4,17 @@
   "output_format": "mp3_44100_64",
   "voices": {
     "narrator": "N2lVS1w4EtoT3dr4eOWO",
-    "narrator_night": "SOYHLrjzK2X1ezoPC6cr"
+    "narrator_night": "SOYHLrjzK2X1ezoPC6cr",
+    "p0": "cjVigY5qzO86Huf0OWal",
+    "p1": "pNInz6obpgDQGcFmaJgB",
+    "p2": "JBFqnCBsd6RMkjVDRZzb",
+    "p3": "IKne3meq5aSn9XLyUdCD",
+    "p4": "pFZP5JQG7iQjIQuC4Bku",
+    "p5": "cgSgspJ2msm6clMCkdW9",
+    "p6": "Xb7hH8MSUJpSbSDYk0k2",
+    "p7": "cjVigY5qzO86Huf0OWal",
+    "p8": "pNInz6obpgDQGcFmaJgB",
+    "p9": "JBFqnCBsd6RMkjVDRZzb"
   },
   "clips": [
     {
@@ -33,6 +43,186 @@
       "voice_id": "N2lVS1w4EtoT3dr4eOWO",
       "text": "Day 1. The village wakes.",
       "file": "3c28e64e935ae38dfc8ffd82fe7df91b48957d5e.mp3"
+    },
+    {
+      "seq": 15,
+      "category": "speech",
+      "speaker": "p7",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Good morning. Last night no one died, which is a relief. I protected someone, but I won't say who yet. Let's share information carefully and avoid jumping to conclusions. Stay calm and logical.",
+      "file": "e1761df5b223a6c8abda553a4e2f2ed815f4f002.mp3"
+    },
+    {
+      "seq": 18,
+      "category": "speech",
+      "speaker": "p8",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "Good morning. It's a good start that no one died. Jude (p7), thanks for stepping up as Doctor. I'm the Seer, and I checked Gia (p0) last night; she is not a wolf. Let's keep track of who is confirmed safe while we look for the wolves.",
+      "file": "8216836e3d361c5fa0e8a3e2ccec64ce7092a469.mp3"
+    },
+    {
+      "seq": 21,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "Glad no one died. p7 and p8 have both claimed roles already. If p8 is the Seer, that's a great start with p0 being cleared. I'm a villager, so I'll be watching to see if any contradictions arise from these claims.",
+      "file": "d03694506dadb03222c09b1b9419092e649fdc20.mp3"
+    },
+    {
+      "seq": 23,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "Great news that we had no deaths last night. With p7 claiming Doctor and p8 claiming Seer checking p0 clear, we have strong early information if both claims hold up. I'm a simple villager here to help solve this puzzle. Let's see if anyone counter-claims either role before taking anything as absolute truth.",
+      "file": "cdfbcab2865b5c42a8678fd6fd0ba0986a3d98f3.mp3"
+    },
+    {
+      "seq": 25,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gpt-oss-120b",
+      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+      "text": "I hear p7 claim Doctor and p8 claim Seer. If p8 is truthful, p0 is safe. I\u2019m cautious about both claims until we get more evidence. No accusations from me right now.",
+      "file": "e64365a34929d5ded19369eb1df19e820d32f841.mp3"
+    },
+    {
+      "seq": 26,
+      "category": "speech",
+      "speaker": "p2",
+      "voice": "gpt-oss-120b",
+      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+      "text": "I think we should be cautious about p8's claim; the Seer could be lying and the report about p0 might be false. Let's keep an eye on p8 and watch for inconsistencies.",
+      "file": "fbfeb2b1d70ceef9124e43529bf9603087876b00.mp3"
+    },
+    {
+      "seq": 29,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Thanks, Ben (p8), for confirming I'm clear. I trust that for now. Iris (p2), accusing the Seer so early without evidence seems suspicious. Let's not target those giving info. I'm a villager and urge caution in dismissing real roles.",
+      "file": "255863a4427d24072201558bcab3a360fcf5363f.mp3"
+    },
+    {
+      "seq": 32,
+      "category": "speech",
+      "speaker": "p4",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "It is good that no one died last night, potentially thanks to our claimed Doctor, Jude (p7). Ben (p8) has claimed Seer and cleared Gia (p0). While Iris (p2) urges caution against p8, it's a bit early to call p8 a liar without more evidence. I am a simple villager and will keep an open mind while watching for inconsistencies.",
+      "file": "e4d77d54dec3b1e56a0315bb21fad51e95a8f21d.mp3"
+    },
+    {
+      "seq": 34,
+      "category": "speech",
+      "speaker": "p6",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "It's a productive start with roles being claimed early. If p7 and p8 are telling the truth, we have a strong foundation. I'm a villager and I'll be watching closely to see if any contradictions emerge between the claims and future information. I'm not ready to vote or accuse anyone just yet.",
+      "file": "85c4b84c3c6949fbef85ac4ba35758cb2987f4f0.mp3"
+    },
+    {
+      "seq": 36,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "Good morning. No death is a positive start. Ben (p8) claiming Seer and clearing Gia (p0) is helpful if true. Iris (p2) accusing Ben without evidence seems suspicious. I'm a villager and urge caution in dismissing role claims prematurely. Let's gather more info before voting.",
+      "file": "44fdf22bee345667ffc51a6b5b565d5cb02509b8.mp3"
+    },
+    {
+      "seq": 39,
+      "category": "speech",
+      "speaker": "p4",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "Iris (p2) is still pushing hard against Ben (p8) without much justification. While skepticism is fine, attacking the claimed Seer right away is risky. Let's see if anyone else has counter-claims or further insights before making any rash moves.",
+      "file": "374d94ea85f8ae33f67a94aefd1e94a6a41316f1.mp3"
+    },
+    {
+      "seq": 42,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Thanks, Ben (p8) and Jude (p7) for stepping forward. Ben confirming me as safe helps. Iris (p2), accusing the Seer so early without cause is suspicious. I support Ben and Jude's claims. Let's watch for contradictions and avoid targeting those sharing info.",
+      "file": "df7e0353985c8bddaa50ef2f711cb62cb333c040.mp3"
+    },
+    {
+      "seq": 45,
+      "category": "speech",
+      "speaker": "p7",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Ben (p8) reporting Gia (p0) clear aligns with my protection last night. No death means my protect worked, likely on Gia. Iris (p2), accusing the Seer without cause is suspicious. I stand by my doctor claim. Let's watch for lies and protect cooperation.",
+      "file": "f8b9cf5beda7312a7a580c41f0e78c714346492b.mp3"
+    },
+    {
+      "seq": 48,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "I understand the suspicion on p2; pushing immediately against an uncontested Seer claim without offering an alternative explanation or counter-claim definitely looks defensive. That said, let's keep our eyes open and make sure we don't tunnel vision completely before hearing everyone's thoughts.",
+      "file": "bdc7ac6d02f12312232fd0280f9c8763a5bddb14.mp3"
+    },
+    {
+      "seq": 50,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "Ben's Seer claim and Gia's clearance are valuable if true. Iris's immediate accusation without evidence is suspicious and could be wolf behavior. I support the role claims for now and urge caution in dismissing them. Let's gather more info before voting.",
+      "file": "d8a3ab10a6ce053fe516b84b6308318ec847cd83.mp3"
+    },
+    {
+      "seq": 54,
+      "category": "speech",
+      "speaker": "p8",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "Iris (p2), your immediate and baseless attack on my Seer claim is very suspicious. Why try to discredit a role that has already provided a clear result for Gia (p0)? I stand by my check. Jude (p7) and I are providing the village with essential information; attacking the Seer without a counter-claim or evidence is typical wolf behavior to sow doubt. I urge everyone to consider why p2 is so eager to invalidate the Seer.",
+      "file": "eb1667d390f17c4c9c160eab61e6bd2e2229f683.mp3"
+    },
+    {
+      "seq": 58,
+      "category": "speech",
+      "speaker": "p6",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "It is interesting that so many people are converging on p2. While skepticism is healthy, p2's immediate attempt to discredit p8 without offering a counter-claim does look suspicious. I'll continue to watch the role claims of p7 and p8 closely to see if any contradictions arise, but for now, I'm staying cautious.",
+      "file": "18f9d00f185884b64d3a87caa3aaea7e543ce586.mp3"
+    },
+    {
+      "seq": 60,
+      "category": "speech",
+      "speaker": "p2",
+      "voice": "gpt-oss-120b",
+      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+      "text": "Ben's sudden seer claim and immediate report feel rushed; a real seer would be more cautious. The protection claim by Jude also lacks evidence. I think we should keep an eye on Ben and not trust his report until we see more. Until then, let's not rush to vote.",
+      "file": "b6369b032014ff163ca09451de5198e9b6899fe8.mp3"
+    },
+    {
+      "seq": 63,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gpt-oss-120b",
+      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+      "text": "I suspect Iris (p2) because she immediately attacks the claimed Seer without evidence, while others provide consistent role claims. The seer report about Gia (p0) seems plausible. I vote to eliminate p2.",
+      "file": "fa364f539d434a361631b236becb893ba6bcad30.mp3"
+    },
+    {
+      "seq": 65,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "I agree that p2's immediate and baseless attacks on the claimed Seer and Doctor are highly suspicious. Without a counter-claim or evidence, trying to invalidate the only source of information we have is a classic wolf strategy. I'm leaning towards p2 being a wolf. Let's see if anyone else has a role to reveal, otherwise, p2 is the most logical target for today.",
+      "file": "7d45a3d73f77ee21af7e210743b78f743f09dbfd.mp3"
     },
     {
       "seq": 68,
@@ -80,6 +270,150 @@
       "file": "bb6d580c4b68d35b41c6899ef728ceb4f509fa23.mp3"
     },
     {
+      "seq": 87,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Ben (p8) confirmed me as not a wolf, and Jude protected me\u2014so the wolves know I'm safe. Jude's death confirms he was doctor. Ben's report is credible. We should trust his future checks. Cleo (p6) seemed hesitant to support Iris's lynch, which worries me. Let's stay united and follow Ben's leads.",
+      "file": "0695c6881625c40c0475c13d7453387318b99771.mp3"
+    },
+    {
+      "seq": 89,
+      "category": "speech",
+      "speaker": "p4",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "RIP Jude (p7), our doctor. Losing him hurts, but Ben (p8) is still here as our claimed Seer. Gia (p0) brings up a valid point about Cleo's (p6) hesitation yesterday. Cleo, care to explain your stance on Iris? Let's hear from Ben on his new check.",
+      "file": "db0c516accc87c3b7c534d8e76b268fd34223e07.mp3"
+    },
+    {
+      "seq": 92,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "Losing Jude (p7) confirms the Doctor role and solidifies Ben (p8) as our Seer. I agree with Gia (p0) and Elif (p4)\u2014Cleo (p6) definitely appeared hesitant during the push on Iris (p2) yesterday. I'd like to hear Cleo's explanation, but primarily we should wait to hear Ben's Night 2 inspection result before committing our votes.",
+      "file": "569672f01acdc6c7c2eeea49184559faf2495581.mp3"
+    },
+    {
+      "seq": 95,
+      "category": "speech",
+      "speaker": "p6",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "I wasn't hesitant; I was observing the consensus. It's strange that p0, p4, and p5 are immediately turning on me for simply being analytical. This feels like a deflection attempt. Let's not lose focus. Ben (p8) is our Seer, and Jude's death was a major loss. We need Ben's Night 2 results before we start accusing villagers without cause. Let's wait for the Seer's information.",
+      "file": "e3f6355e8b8df9dcf93866244eb5d21e6e23f536.mp3"
+    },
+    {
+      "seq": 100,
+      "category": "speech",
+      "speaker": "p8",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "I have checked Finn (p1) and he is not a wolf. That means we have p0 and p1 confirmed safe. We need to look closely at the remaining players. While Cleo (p6) is being questioned, we should remain objective. Let's analyze the behavior of those who haven't been checked yet: p3, p4, p5, p6, and p9. One of them is the remaining wolf.",
+      "file": "574d33ba232001fe249d5d252f742f7f9f938d17.mp3"
+    },
+    {
+      "seq": 103,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "Thanks Ben (p8) for the clear. With p0 and p1 confirmed safe, we can focus on the others. Cleo (p6), the group is questioning your hesitation on Day 1; a clearer explanation would help. However, I'm wary of a sudden dogpile on one person without new evidence. Let's see if anyone else has observations about p3, p4, p5, or p9 before we decide on a vote.",
+      "file": "3fabdcf72b1c16da2941362b2cb99347e359ae85.mp3"
+    },
+    {
+      "seq": 106,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gpt-oss-120b",
+      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+      "text": "Ben's check shows p0 and p1 are safe. The only remaining suspect is p6, whose defensive stance and heavy accusations lack evidence. I vote to lynch Cleo (p6).",
+      "file": "eba9c210762d65114e3ff7794e5297d532f4822e.mp3"
+    },
+    {
+      "seq": 109,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "Ben's checks confirm p0 and p1 are safe. Cleo's hesitation yesterday might just be caution, not wolfiness. Dev pushing to lynch Cleo immediately without discussion feels off. Let's hear from others before voting. We should consider all unchecked players: p3, p4, p5, p6, p9.",
+      "file": "2a43b985347eee1d4dad7ced4ad94393c80d29f0.mp3"
+    },
+    {
+      "seq": 112,
+      "category": "speech",
+      "speaker": "p8",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "p0 and p1 are confirmed safe. While many suspect p6, we must be careful not to blindly follow a dogpile. Dev's (p9) immediate demand to lynch Cleo without further deliberation is concerning and feels like an attempt to rush a kill. Ava (p3) makes a fair point. Let's look at the behavior of p3, p4, p5, p6, and p9 carefully. I'm currently most wary of p9's aggression.",
+      "file": "d9e2940b55ae40d880aef671d74fb07aac0561ad.mp3"
+    },
+    {
+      "seq": 115,
+      "category": "speech",
+      "speaker": "p4",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "Ben makes a great point. Dev (p9) pushing for an immediate lynch on Cleo without letting discussion breathe looks very much like a wolf trying to railroad a quick elimination. With p0 and p1 confirmed safe by our Seer, we need to examine aggressive rush tactics. Dev's behavior warrants serious scrutiny right now.",
+      "file": "bb268ee880a69ff7e6ee951da3376907a8db9d34.mp3"
+    },
+    {
+      "seq": 119,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gpt-oss-120b",
+      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+      "text": "Ben's checks cleared p0 and p1, so they are safe. Cleo's repeated accusations without evidence and her defensive stance make her the most suspicious among unchecked players. I vote to lynch Cleo (p6).",
+      "file": "fbbc6c169a38688c038f169c250f83aeafd82d71.mp3"
+    },
+    {
+      "seq": 122,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "I agree with Ben (p8), Ava (p3), and Elif (p4). Dev's (p9) insistence on immediately railroading Cleo (p6) without evaluating other possibilities is distinctly opportunistic. While Cleo's initial hesitation caught our attention, tunneling and rushing a lynch like Dev is doing is much more damaging to town discussion. Dev (p9) definitely deserves our primary scrutiny right now.",
+      "file": "82dcaec58671e43eb5146a990e07323438d354fc.mp3"
+    },
+    {
+      "seq": 125,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "Dev (p9), your insistence on lynching Cleo (p6) without any new evidence, especially after Ben (p8) warned against a dogpile, is very suspicious. This kind of railroading is often a wolf tactic to force a mistake. I agree with Ben, Ava, and Hugo; Dev's aggression is the most concerning behavior right now. Let's prioritize scrutinizing p9.",
+      "file": "94469cf3ea4f6782a3ecc478afd556242b3cdeb7.mp3"
+    },
+    {
+      "seq": 128,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Ben's checks are consistent and vital. Dev (p9) pushing to lynch Cleo (p6) despite Ben's warning about rush tactics is highly suspicious. That behavior harms town. I now see Dev as the biggest threat. Let\u2019s focus on Dev (p9) and avoid being misled.",
+      "file": "4a4ba4b421892d8c6c1f0309fe6d94f2866f3052.mp3"
+    },
+    {
+      "seq": 131,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "Ben's checks confirm p0 and p1 are safe. Dev's rush to lynch Cleo without discussion is highly suspicious and feels like wolf behavior. We should scrutinize Dev (p9) closely and not jump to conclusions on Cleo. Let's consider all unchecked players carefully.",
+      "file": "c8666efd99d7bc0d3c516d7cc179f44cdc305251.mp3"
+    },
+    {
+      "seq": 134,
+      "category": "speech",
+      "speaker": "p6",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "I agree with the shift in focus. My hesitation yesterday was merely analytical, not suspicious. However, Dev's (p9) immediate and aggressive demand to lynch me, especially after Ben (p8) cautioned against such dogpiling, is much more alarming. It looks like an attempt to force a lynch and eliminate a potential villager. I'm siding with the majority in scrutinizing Dev (p9) right now.",
+      "file": "047105ec753f7a3fece21ad4b257c075a7ae01d2.mp3"
+    },
+    {
       "seq": 137,
       "category": "narrator",
       "speaker": "narrator",
@@ -125,6 +459,114 @@
       "file": "4feae53f92cd6b30bb09f11047fd43d653533f28.mp3"
     },
     {
+      "seq": 153,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "Losing Ben (p8) hurts, but his checks left us in a clear spot: p0 and p1 are confirmed not wolves. That means the final wolf has to be among p3, p4, p6, or me. Cleo (p6) was heavily scrutinized yesterday before Dev's aggressive tunnel caused a mislynch on a villager. We shouldn't forget that Cleo was under heavy suspicion prior to that distraction. Cleo, Ava (p3), and Elif (p4)\u2014where do you stand today?",
+      "file": "444974087936dd1f1bd36a870e50da63eff14dfb.mp3"
+    },
+    {
+      "seq": 156,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "Ben's checks confirm p0 and p1 are safe. Wolves are among p4, p5, p6. Cleo was suspicious yesterday, but Dev's mislynch makes me wary. Hugo pushing Cleo hard might be genuine or wolf. Elif was also on Dev. Need discussion to avoid another mistake.",
+      "file": "bd17b1c7239bf7980dc014f80f4a6498f7318a35.mp3"
+    },
+    {
+      "seq": 161,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "Since Ben confirmed Gia and me, the wolf is among p3, p4, p5, and p6. We can't afford another mistake like p9. Hugo is pushing Cleo, but we should consider if that's a wolf trying to lead a dogpile or a villager following a lead. Cleo, what is your defense? Elif and Ava, your input is crucial here. Let's be methodical.",
+      "file": "855701c57b4475409975b4b96f0ecc876fcef960.mp3"
+    },
+    {
+      "seq": 164,
+      "category": "speech",
+      "speaker": "p6",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "With Ben (p8) gone, we must be extremely careful. p0 and p1 are confirmed safe, so the last wolf is among p3, p4, p5, and me. Hugo (p5) and Finn (p1) are both targeting me, which feels like a potential dogpile. Ava (p3) is also being very non-committal. We need to find the wolf without another mislynch. I am a villager and I want to see more concrete reasoning before we vote.",
+      "file": "5363a248822040ee7ccfec247f8878678d09ad2f.mp3"
+    },
+    {
+      "seq": 166,
+      "category": "speech",
+      "speaker": "p4",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "With Ben gone, we have confirmed safe players in p0 and p1. The remaining wolf is among p3, p5, p6, and myself. Cleo has faced persistent suspicion, while Hugo and Finn are driving the pressure against her today. We must be very careful not to blindly follow another dogpile like we did with Dev. Cleo, can you give us more insight into your reads? Let's analyze carefully before voting.",
+      "file": "b0f78ce786d6fa6832f82e82854ce0fb41a1e0f9.mp3"
+    },
+    {
+      "seq": 169,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Ben confirmed p0 and p1 safe, so the wolf is among p3\u2013p6. Ava\u2019s accusations on three players feel evasive. Hugo and Elif pushing Cleo is concerning after Dev\u2019s mislynch. Let\u2019s not repeat that. Cleo asked for discussion\u2014good. Ava\u2019s behavior stands out as the most suspicious.",
+      "file": "97e3c981d3d55c347fa501f532413c823dbe4525.mp3"
+    },
+    {
+      "seq": 172,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "Gia (p0) makes a valid point regarding Ava (p3). Ava's scattershot accusations across three different players definitely look like hedging bets rather than taking a stand. Cleo (p6) has been defensive, but Ava trying to stay uncommitted while casting suspicion everywhere could easily be the wolf trying to blend into the background. Ava (p3), why spread your vote across three targets instead of making a clear case against one?",
+      "file": "719c2d9845c674f32e501515d9a17bfdbd4eac86.mp3"
+    },
+    {
+      "seq": 175,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Ben confirmed p0 and p1 safe, so the wolf is among p3\u2013p6. Ava accusing three players without focus looks like hedge betting. Hugo and Elif pushing Cleo risks repeating Dev's mislynch. Ava\u2019s evasiveness is the most suspicious.",
+      "file": "c8ce22eaa580b78e0092171e8128109c7617e5de.mp3"
+    },
+    {
+      "seq": 178,
+      "category": "speech",
+      "speaker": "p6",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "Ben's checks are vital: p0 and p1 are safe. That leaves p3, p4, p5, and me. While I've been under fire, I'm noticing Ava's (p3) pattern. She's accusing p4, p5, and me all at once without any specific reasoning. That kind of hedging is exactly what a wolf does to avoid being caught in a lie. We need to focus on someone with a clear pattern rather than scattershot accusations.",
+      "file": "a5b127e88143091de0af6ce0a2486681ee3d11a8.mp3"
+    },
+    {
+      "seq": 181,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "Ava (p3), your approach is concerning. Accusing p4, p5, and p6 simultaneously without providing specific evidence for any of them feels like hedging. While I want to avoid another mislynch, this scattershot strategy is a classic wolf tactic to avoid being pinned down. If you're a villager, why are you not focusing your suspicion? I'm starting to find this evasiveness more suspicious than Cleo's defensiveness.",
+      "file": "66fdb414de2fdb127f640c0ffa8d29a86d50ad6d.mp3"
+    },
+    {
+      "seq": 184,
+      "category": "speech",
+      "speaker": "p4",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "I see the point being raised against Ava (p3). Accusing multiple players at once without deep justification does look like hedging, which is a common wolf tactic. With p0 and p1 confirmed safe by Ben, and Dev unfortunately being a mislynch, we need to be very precise today. Ava, your scattershot accusations need clarification. Why spread your suspicions so thin?",
+      "file": "efc19de62093c9da643d91d853ecfee861c5d2ea.mp3"
+    },
+    {
+      "seq": 187,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "I see my broad accusations were misinterpreted. With p0 and p1 confirmed safe, the wolf is among p4, p5, p6. Cleo has been suspicious since day 1 and defended aggressively. Hugo and Elif pushing Cleo might be correct. I'll focus: Cleo is my top suspect.",
+      "file": "641da8dbb5b6d95ff6a1a7adb9b9c28112a3838f.mp3"
+    },
+    {
       "seq": 190,
       "category": "narrator",
       "speaker": "narrator",
@@ -168,6 +610,78 @@
       "voice_id": "N2lVS1w4EtoT3dr4eOWO",
       "text": "Day 4. The village wakes.",
       "file": "7ecf02ba7c58fe3f2ac5a5f628229490e429503a.mp3"
+    },
+    {
+      "seq": 203,
+      "category": "speech",
+      "speaker": "p4",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "Ben cleared p1 as safe, and now p0 is dead. That leaves p5, p6, and myself as the remaining options outside the confirmed clear. We need to figure out which of p5 or p6 is the remaining wolf alongside the ones we already caught.",
+      "file": "8705ea0e600c13cbd55b12ce343ace57423c693c.mp3"
+    },
+    {
+      "seq": 207,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "With p0, p3, p8, p9, and p7 all gone, the remaining wolf must be among p4, p5, or p6. Cleo (p6) has been consistently suspicious and often defensive. Elif (p4) is now pointing at both p5 and p6. Hugo (p5), you've been relatively quiet; what is your take on the remaining suspects? We need to be precise to avoid another mistake like p9 or p3.",
+      "file": "ab1ee993aa7ad95d89c4057a748a821434737d66.mp3"
+    },
+    {
+      "seq": 210,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "I agree with Finn (p1). Cleo (p6) has been under scrutiny since Day 2 for defensive reactions and evading focus when Dev (p9) was pushed. While Elif (p4) suddenly casting doubt on both of us looks hasty, p6's entire voting history and constant deflection make her the most probable remaining wolf. We cannot afford another mislynch, and p6 is clearly the most consistent lead.",
+      "file": "2095c2342c439003201d5f3130e809092b0db67b.mp3"
+    },
+    {
+      "seq": 213,
+      "category": "speech",
+      "speaker": "p6",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "I've been the target since Day 2, but let's look at the logic. Ben cleared p1 and p0. That leaves p4, p5, and me. Elif (p4) is playing it safe by accusing both of us, which is suspicious. Hugo (p5) and Finn (p1) are pushing hard for me. If I'm a villager, one of you is definitely a wolf. We need to stop the dogpile and find the real threat.",
+      "file": "4d2013160d1e5ead14e6d6f9d755a267843bad66.mp3"
+    },
+    {
+      "seq": 217,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "Cleo (p6), your strategy has been defensive since the start. While you warn against a dogpile, the consistency of suspicion from multiple players is hard to ignore. Elif (p4) and Hugo (p5) have both pointed towards you. If we are to avoid another mistake, we must look at who has consistently deflected. I still believe p6 is the most likely wolf remaining.",
+      "file": "94d6898d19eff11d5fde947549b08e8b5ccfdd95.mp3"
+    },
+    {
+      "seq": 220,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "Cleo (p6), pointing fingers at everyone who suspects you won't clear your name. You've deflected every single day, and trying to paint Finn (p1) and me as conspirators ignores the reality that your survival on Day 2 came at Dev's (p9) expense. Finn is completely right\u2014your consistent defensiveness and shifting blame point directly to you. Let's unite our votes on Cleo (p6) and finish this.",
+      "file": "b1cd2409a520656e08e93fae5a4dc7a44699087c.mp3"
+    },
+    {
+      "seq": 223,
+      "category": "speech",
+      "speaker": "p6",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "If Ben's (p8) checks are correct, Finn (p1) is safe. That leaves p4 and p5 as the only possible wolves. Everyone is dogpiling me, but if I am a villager, then one of you is lying. Elif (p4) is being non-committal by accusing both of us, and Hugo (p5) is being very aggressive. We need to decide between p4 and p5, not just target me.",
+      "file": "83ef9e8c2ff23c15b4af58cb93fa3fcd22095b85.mp3"
+    },
+    {
+      "seq": 227,
+      "category": "speech",
+      "speaker": "p4",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "Finn is confirmed safe by Ben's check. That leaves Hugo (p5) and Cleo (p6). Cleo has been under fire for multiple days and is now trying to turn it around on Hugo and myself. While her defense points out a potential dogpile, her consistency in deflecting rather than providing concrete town logic makes her the most probable remaining wolf alongside Iris. Let's secure the final wolf.",
+      "file": "012d36d79a4b4402fac678249b21535b4fc08347.mp3"
     },
     {
       "seq": 230,

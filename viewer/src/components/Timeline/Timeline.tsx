@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { type Mode } from "../../scene/deriveScene";
 import type { Event, Label } from "../../types/events";
+import { stepDelayMs } from "./dwell";
 import { buildTimelineGroups } from "./markers";
 import { indexForSeq, stepSeq } from "./seq";
 import { useSeqParam } from "./useSeqParam";
@@ -59,12 +60,13 @@ export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqCha
       setPlaying(false);
       return;
     }
-    const timer = window.setInterval(() => {
+    const current = events[index];
+    const timer = window.setTimeout(() => {
       const next = stepSeq(events, seq, 1);
       if (next !== null) setSeq(next);
-    }, 1000 / speed);
-    return () => window.clearInterval(timer);
-  }, [events, last, playing, seq, setSeq, speed]);
+    }, current ? stepDelayMs(current, mode, speed) : 1000 / speed);
+    return () => window.clearTimeout(timer);
+  }, [events, index, last, mode, playing, seq, setSeq, speed]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     const tag = (event.target as HTMLElement).tagName;

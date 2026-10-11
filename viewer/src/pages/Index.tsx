@@ -29,8 +29,8 @@ export function GameList({ games, href, showWinners = false }: ListProps) {
               {g.live && <span className="live-badge"> ● Live</span>}
             </th>
             <td>{g.models?.join(", ") ?? "?"}</td>
-            <td>{g.days ?? "?"}</td>
-            <td>{g.live ? "playing" : showWinners ? (g.winner ?? "none") : "hidden"}</td>
+            <td>{g.days ?? "n/a"}</td>
+            <td>{g.live ? "playing" : showWinners ? (g.winner === undefined ? "n/a" : (g.winner ?? "none")) : "hidden"}</td>
           </tr>
         ))}
       </tbody>

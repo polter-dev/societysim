@@ -21,6 +21,7 @@ interface GameRow {
   status: string;
   models: unknown;
   agents?: string | null;
+  winner?: string | null;
   rows: Event[];
 }
 
@@ -44,7 +45,7 @@ function fakeNeon(games: Record<string, GameRow>) {
       if (id) return json(all.filter(([g]) => g === id).map(([, g]) => ({ status: g.status, models: g.models })));
       if (p.get("status") === "eq.finished")
         return json(all.filter(([, g]) => g.status === "finished" && g.agents !== "scripted").map(([g]) => ({ game_id: g })));
-      return json(all.map(([g, v]) => ({ game_id: g, models: v.models, status: v.status })));
+      return json(all.map(([g, v]) => ({ game_id: g, models: v.models, status: v.status, winner: v.winner ?? null })));
     }
     if (table === "events_public") {
       let rows = games[id!]?.rows ?? [];
@@ -94,12 +95,20 @@ describe("neonSource, finished games", () => {
     expect((await src.loadLabels!(ID)).length).toBe(labelRows.length);
   });
 
-  it("lists games with models and a live flag, never roles or winners", async () => {
-    const asked = fakeNeon({ [ID]: { status: "finished", models: MODELS, rows: full }, g2: running() });
+  it("lists games with models, a live flag and finished winners only, never roles", async () => {
+    const asked = fakeNeon({
+      [ID]: { status: "finished", models: MODELS, rows: full, winner: "wolves" },
+      g2: { ...running(), winner: "villagers" },
+    });
     const games = await neonSource().listGames();
-    expect(asked[0]).toBe(`${API}/games?select=game_id,models,status&order=started_at.desc.nullslast`);
-    expect(games.find((g) => g.id === "g2")?.live).toBe(true);
-    expect(games.find((g) => g.id === ID)).toEqual({ id: ID, models: [...new Set(MODELS)].sort(), live: false });
+    expect(asked[0]).toBe(`${API}/games?select=game_id,models,status,winner&order=started_at.desc.nullslast`);
+    expect(games.find((g) => g.id === "g2")).not.toHaveProperty("winner");
+    expect(games.find((g) => g.id === ID)).toEqual({
+      id: ID,
+      models: [...new Set(MODELS)].sort(),
+      live: false,
+      winner: "wolves",
+    });
   });
 
   it("builds the board from the leaderboard view and counts finished non-scripted games", async () => {

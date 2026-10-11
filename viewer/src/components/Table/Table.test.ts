@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import fixture from "../../../../fixtures/sample_game.jsonl?raw";
 import { parseLog } from "../../data/parse";
 import { deriveScene, type Mode } from "../../scene/deriveScene";
-import { seatPosition, Table } from "./Table";
+import { seatPosition, TABLE_BOX, Table } from "./Table";
 
 const events = parseLog(fixture).events;
 const render = (seq: number, mode: Mode) =>
@@ -19,19 +19,28 @@ const seats = (html: string) =>
       .slice(1)
       .map((li) => [li.match(/data-seat="(p\d)"/)![1], li]),
   );
-// The role card is the last span in the seat button, before the optional "dead" line.
-const card = (li: string) => li.match(/data-role-card="[^"]*"[^>]*>(.*?)<\/span>(?:<span[^>]*>dead<\/span>)?<\/button>/)![1];
+// The role chip's text, and the seat button's accessible name.
+const card = (li: string) => li.match(/data-role-card="[^"]*"[^>]*>(.*?)<\/span>/)![1];
+const label = (li: string) => li.match(/aria-label="([^"]*)"/)![1];
 
 describe("Table on the fixture", () => {
-  it("shows every seat with name, model and model color", () => {
+  it("shows every seat as a medallion with name and model", () => {
     const s = seats(render(0, "narrator"));
     expect(Object.keys(s)).toEqual(["p0", "p1", "p2", "p3", "p4", "p5", "p6"]);
-    expect(s.p0).toContain("Ava");
+    expect(s.p0).toContain('class="medallion"');
+    expect(s.p0).toContain("avatars/qwen3-235b.webp");
+    expect(s.p0).toContain("<strong>Ava</strong>");
     expect(s.p0).toContain("qwen3-235b");
-    expect(s.p0).toContain("#4f8ef7");
-    expect(s.p5).toContain("Finn");
+    expect(s.p5).toContain("<strong>Finn</strong>");
     expect(s.p5).toContain("gemini-flash");
-    expect(s.p5).toContain("#ec4899");
+  });
+
+  it("names each seat with name, model, status and only the roles this mode shows", () => {
+    expect(label(seats(render(0, "narrator")).p2)).toBe("Cleo, gemma-4-26b, alive, wolf");
+    expect(label(seats(render(14, "villager")).p2)).toBe("Cleo, gemma-4-26b, alive");
+    const dead = seats(render(104, "villager"));
+    expect(label(dead.p0)).toBe("Ava, qwen3-235b, eliminated, seer");
+    expect(label(dead.p6)).toBe("Gia, gemini-flash-lite, eliminated, villager");
   });
 
   it("narrator mode shows every role", () => {
@@ -45,19 +54,19 @@ describe("Table on the fixture", () => {
   it("villager mode shows no role before any reveal", () => {
     const html = render(14, "villager");
     for (const role of ["Seer", "Wolf", "Doctor", "Villager"]) expect(html).not.toContain(role);
-    for (const li of Object.values(seats(html))) expect(card(li)).toContain("role unknown");
+    for (const role of ["seer", "wolf", "doctor", "villager"]) expect(html).not.toContain(`, ${role}"`);
+    for (const li of Object.values(seats(html))) expect(card(li)).toBe("?");
   });
 
-  it("dead players are greyed out with their revealed role, others stay hidden", () => {
+  it("dead players get the dead medallion and their revealed role, others stay hidden", () => {
     const s = seats(render(104, "villager")); // p0 killed (seer), p6 eliminated (villager)
     expect(s.p0).toContain('data-alive="false"');
-    expect(s.p0).toContain("grayscale");
-    expect(s.p0).toContain(">dead<");
+    expect(s.p0).toContain('class="medallion" data-alive="false"');
+    expect(s.p0).toContain('data-revealed="true"');
     expect(card(s.p0)).toBe("Seer");
     expect(card(s.p6)).toBe("Villager");
-    expect(s.p1).toContain('data-alive="true"');
-    expect(s.p1).not.toContain("grayscale");
-    expect(card(s.p2)).toContain("role unknown");
+    expect(s.p1).toContain('class="medallion" data-alive="true"');
+    expect(card(s.p2)).toBe("?");
   });
 
   it("game end reveals every role in villager mode", () => {
@@ -73,6 +82,21 @@ describe("Table on the fixture", () => {
     expect(s.p0).toContain('<button type="button" aria-pressed="false"');
   });
 
+  it("marks the current speaker, and nobody outside discussion", () => {
+    const speaking = (html: string) =>
+      Object.entries(seats(html))
+        .filter(([, li]) => li.includes("data-speaking"))
+        .map(([id]) => id);
+    expect(speaking(render(15, "villager"))).toEqual(["p4"]); // p4 opens day 1
+    expect(speaking(render(43, "villager"))).toEqual([]); // vote
+  });
+
+  it("hangs the name plate above upper seats and below lower ones", () => {
+    const s = seats(render(0, "narrator"));
+    expect(s.p0).toContain('data-plate="above"');
+    expect(s.p3).toContain('data-plate="below"');
+  });
+
   it("tint follows the phase", () => {
     expect(render(0, "narrator")).toContain('data-tint="night"'); // setup
     expect(render(9, "villager")).toContain('data-tint="night"');
@@ -82,12 +106,27 @@ describe("Table on the fixture", () => {
 });
 
 describe("seatPosition", () => {
-  it("puts seat 0 at the top and spaces seats evenly on one circle", () => {
-    const top = seatPosition(0, 7);
-    expect(top.x).toBeCloseTo(50);
-    expect(top.y).toBeCloseTo(10);
-    const r = (i: number) => Math.hypot(seatPosition(i, 7).x - 50, seatPosition(i, 7).y - 50);
-    for (let i = 0; i < 7; i++) expect(r(i)).toBeCloseTo(40);
-    expect(seatPosition(2, 4)).toEqual({ x: 50, y: 90 });
+  // Chair cushion centers read off table2.png (1672 x 941 image px), clockwise from the top.
+  const CHAIRS_PX = [
+    [837, 210], [1020, 260], [1122, 390], [1127, 550], [1030, 685],
+    [836, 737], [642, 685], [542, 550], [550, 390], [657, 260],
+  ];
+  const toPx = ({ x, y }: { x: number; y: number }) => [836 + ((x - 50) * TABLE_BOX) / 100, 941 / 2 + ((y - 50) * TABLE_BOX) / 100];
+  const chairOf = (i: number, n: number) => {
+    const [x, y] = toPx(seatPosition(i, n));
+    return CHAIRS_PX.findIndex(([cx, cy]) => Math.hypot(x - cx, y - cy) < 15);
+  };
+
+  it("puts ten seats on the ten chairs of the artwork, in order", () => {
+    expect(Array.from({ length: 10 }, (_, i) => chairOf(i, 10))).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  it("seats smaller games in the same chairs, spread out, leaving the rest empty", () => {
+    for (const n of [7, 8, 9]) {
+      const used = Array.from({ length: n }, (_, i) => chairOf(i, n));
+      expect(used).not.toContain(-1);
+      expect(used).toEqual([...new Set(used)].sort((a, b) => a - b)); // distinct, still clockwise
+      for (let i = 1; i < n; i++) expect(used[i] - used[i - 1]).toBeLessThanOrEqual(2);
+    }
   });
 });

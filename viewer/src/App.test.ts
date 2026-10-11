@@ -71,8 +71,8 @@ function load(text: string, labelsJsonl: string) {
       found.push("private section");
     if (html.includes("data-label-type")) found.push("lie label");
     const revealed = revealedAt(idx);
-    for (const [, seat, body] of html.matchAll(/<li data-seat="(p\d+)"[^>]*>(.*?)<\/li>/g)) {
-      if (!revealed.has(seat) && !body.includes("role unknown")) found.push(`role: ${seat}`);
+    for (const [, seat, body] of html.matchAll(/<li [^>]*data-seat="(p\d+)"[^>]*>(.*?)<\/li>/g)) {
+      if (!revealed.has(seat) && !/data-role-card="[^"]*">\?<\/span>/.test(body)) found.push(`role: ${seat}`);
     }
     return found;
   }

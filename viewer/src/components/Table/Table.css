@@ -1,0 +1,32 @@
+/* The table box: a square laid over the artwork's chair ring (see TABLE_BOX in Table.tsx). cqw sizes scale with it. */
+.round-table{position:relative;width:100%;aspect-ratio:1;container-type:inline-size;color:#f2e7ba;pointer-events:none}
+.round-table>ul{list-style:none;margin:0;padding:0}
+.table-seat{position:absolute;width:0;height:0}
+/* The button is the medallion; the portrait's center (49.5%, 43% of the frame) sits on the chair. */
+.round-table .table-seat>button{position:absolute;left:0;top:0;width:12cqw;aspect-ratio:144/158;padding:0;margin:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer;translate:-49.5% -43%;pointer-events:auto;transition:filter .2s}
+.round-table .table-seat .medallion{width:100%!important;height:100%!important;filter:drop-shadow(0 .5cqw .9cqw #000c)}
+.round-table .medallion-portrait{transition:box-shadow .3s}
+/* Name plate: over the frame's lower flourish, between the chair and the table edge. */
+.seat-plate{position:absolute;left:50%;top:80%;translate:-50% 0;width:17cqw;box-sizing:border-box;padding:.35cqw .7cqw .45cqw;display:flex;flex-direction:column;align-items:center;gap:.15cqw;background:#03271eee;border:1px solid #ac8b45;border-radius:.8cqw;box-shadow:0 .4cqw 1.2cqw #000a;line-height:1.15;text-align:center}
+/* Upper seats hang the plate over the frame's top flourish instead, away from the candles on the table's far rim. */
+.table-seat[data-plate=above] .seat-plate{top:auto;bottom:95%}
+.seat-name{display:flex;align-items:center;justify-content:center;gap:.6cqw;max-width:100%}
+.seat-name strong{font:700 clamp(11px,1.75cqw,17px) Georgia,serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seat-role{flex:none;font-size:clamp(9px,1.25cqw,12px);padding:0 .6cqw;border:1px solid #ac8b4599;border-radius:999px;color:#e9d9a4}
+.seat-model{max-width:100%;font-size:clamp(9px,1.3cqw,12px);color:#cad6be;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Speaking: a soft gold glow around the portrait. */
+.table-seat[data-speaking] .medallion-portrait{box-shadow:0 0 0 .35cqw #ffd97a,0 0 2.4cqw .8cqw #ffc94a99;animation:seat-glow 2.4s ease-in-out infinite alternate}
+.table-seat[data-speaking] .seat-plate{border-color:#ffd97a}
+@keyframes seat-glow{to{box-shadow:0 0 0 .35cqw #ffd97a,0 0 3.2cqw 1.2cqw #ffc94a66}}
+/* Selected (open in the Inspector) and keyboard focus: a pale gold ring on the portrait, never a box. */
+.round-table .table-seat>button[aria-pressed=true] .medallion-portrait{box-shadow:0 0 0 .35cqw #fff0c2}
+.replay-app .round-table .table-seat>button:focus-visible{outline:none}
+.round-table .table-seat>button:focus-visible .medallion-portrait{box-shadow:0 0 0 3px #03271e,0 0 0 6px #ffe499}
+.round-table .table-seat>button:hover{filter:brightness(1.12)}
+/* Eliminated: the medallion's own dead state (AvatarMedallion.css) plus a dimmed, struck-through plate. */
+.table-seat[data-alive=false] .seat-plate{background:#101a16ee;border-color:#6b6150}
+.table-seat[data-alive=false] .seat-name strong{color:#a9a48f;text-decoration:line-through;text-decoration-color:#a9a48f99;text-decoration-thickness:1px}
+.table-seat[data-alive=false] .seat-model{color:#8d968a}
+.round-table .medallion::after{font-size:1.9cqw}
+.table-seat[data-revealed=true] .seat-role{font-weight:700;color:#f2e7ba;border-color:#ac8b45}
+@media(prefers-reduced-motion:reduce){.table-seat[data-speaking] .medallion-portrait{animation:none}.round-table .table-seat>button,.round-table .medallion-portrait{transition:none}}

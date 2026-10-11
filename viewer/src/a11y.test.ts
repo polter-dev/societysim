@@ -54,7 +54,9 @@ describe("axe on the composed viewer", () => {
 
   it("catches a real violation (so the cases above can fail)", async () => {
     const window = mount(idxOf(15), "villager", null);
-    window.document.querySelector('[data-seat="p0"] button')!.textContent = "";
+    const seat = window.document.querySelector('[data-seat="p0"] button')!;
+    seat.textContent = "";
+    seat.removeAttribute("aria-label");
     expect((await violations(window)).map((v) => v.id)).toContain("button-name");
   });
 });

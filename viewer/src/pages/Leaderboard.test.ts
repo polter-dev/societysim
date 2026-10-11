@@ -53,6 +53,18 @@ describe("LeaderboardTable", () => {
     expect(html).toContain("Wolf-side advantage: mu 25.00");
   });
 
+  it("shows the seat count next to the side win rates, bare rate without counts", () => {
+    const b = { ...board, models: [row({ model: "nano", wolf_win_rate: 0, village_win_rate: 0.5 })] };
+    const withN = renderToStaticMarkup(
+      createElement(LeaderboardTable, { board: b, sideGames: { nano: { wolf: 2, village: 11 } } }),
+    );
+    expect(withN).toContain("<td>0% (n=2)</td>");
+    expect(withN).toContain("<td>50% (n=11)</td>");
+    const bare = renderToStaticMarkup(createElement(LeaderboardTable, { board: b }));
+    expect(bare).toContain("<td>0%</td>");
+    expect(bare).toContain("<td>50%</td>");
+  });
+
   it("shows n/a for missing values instead of zero", () => {
     const html = renderToStaticMarkup(createElement(LeaderboardTable, { board: { ...board, models: [row({})] } }));
     expect(html).not.toMatch(/>0%|>0\.00/);

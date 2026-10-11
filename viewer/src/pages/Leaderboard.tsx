@@ -48,18 +48,24 @@ export interface BySide {
   village?: Record<string, Rating>;
 }
 
+/** Seat counts per side from metrics.json `models[<model>].wolf|village.games`. */
+export type SideGames = Record<string, { wolf?: number; village?: number }>;
+
 const fin = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
 const pct = (x: number | null | undefined) => (fin(x) ? `${Math.round(x * 100)}%` : "n/a");
+const withN = (rate: number | null | undefined, n: unknown) => (fin(n) ? `${pct(rate)} (n=${n})` : pct(rate));
 const num = (x: number | null | undefined) => (fin(x) ? x.toFixed(2) : "n/a");
 
 /** `profileHref(model)` links each model name to its profile page; omit it for plain names. */
 export function LeaderboardTable({
   board,
   bySide = {},
+  sideGames = {},
   profileHref,
 }: {
   board: Board;
   bySide?: BySide;
+  sideGames?: SideGames;
   profileHref?: (model: string) => string;
 }) {
   const catalogLabel = useModelLabel();
@@ -113,8 +119,8 @@ export function LeaderboardTable({
                     {pct(r.win_rate)}
                     {r.win_ci && ` (${pct(r.win_ci[0])} to ${pct(r.win_ci[1])})`}
                   </td>
-                  <td>{pct(r.wolf_win_rate)}</td>
-                  <td>{pct(r.village_win_rate)}</td>
+                  <td>{withN(r.wolf_win_rate, sideGames[r.model]?.wolf)}</td>
+                  <td>{withN(r.village_win_rate, sideGames[r.model]?.village)}</td>
                   <td>{num(r.openskill?.ordinal)}</td>
                   <td>{num(bySide.wolf?.[r.model]?.ordinal)}</td>
                   <td>{num(bySide.village?.[r.model]?.ordinal)}</td>
@@ -184,13 +190,24 @@ export default function LeaderboardPage({
 }) {
   const [board, setBoard] = useState<Board | null>(null);
   const [bySide, setBySide] = useState<BySide>({});
+  const [sideGames, setSideGames] = useState<SideGames>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fromFiles = () => {
       fetchJson<Board>(leaderboardUrl).then(setBoard, (err: Error) => setError(err.message));
-      fetchJson<{ openskill?: BySide }>(metricsUrl).then(
-        (m) => setBySide(m.openskill ?? {}),
+      fetchJson<{
+        openskill?: BySide;
+        models?: Record<string, { wolf?: { games?: number }; village?: { games?: number } }>;
+      }>(metricsUrl).then(
+        (m) => {
+          setBySide(m.openskill ?? {});
+          setSideGames(
+            Object.fromEntries(
+              Object.entries(m.models ?? {}).map(([k, v]) => [k, { wolf: v?.wolf?.games, village: v?.village?.games }]),
+            ),
+          );
+        },
         () => {}, // optional: the by-side columns show n/a
       );
     };
@@ -209,7 +226,7 @@ export default function LeaderboardPage({
             ) : !board ? (
               <p className="leaderboard-loading">Loading leaderboard...</p>
             ) : (
-              <LeaderboardTable board={board} bySide={bySide} profileHref={profileHref} />
+              <LeaderboardTable board={board} bySide={bySide} sideGames={sideGames} profileHref={profileHref} />
             )}
           </div>
           <GlobalSection enabled={globalBoard} />

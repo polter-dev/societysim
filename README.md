@@ -88,11 +88,11 @@ We built the engine fresh and borrowed ideas from earlier Werewolf and Mafia wor
 
 - Google [Werewolf Arena](https://arxiv.org/abs/2407.13943): replay viewer ideas.
 - [WOLF](https://arxiv.org/abs/2512.09187): event log layout and deception taxonomy.
-- Foaster Werewolf benchmark: Elo split by wolf and villager, speech tags.
-- Kaggle Game Arena Werewolf.
-- [Mini-Mafia](https://arxiv.org/abs/2509.23023): name and recency biases, which is why we shuffle neutral names by seed.
+- [Foaster Werewolf benchmark](https://werewolf.foaster.ai/): Elo split by wolf and villager, speech tags.
+- Kaggle Game Arena Werewolf ([arXiv 2609.31473](https://arxiv.org/abs/2609.31473)): the model of a public leaderboard from mixed-model games.
+- [Mini-Mafia](https://arxiv.org/abs/2509.23023): name and recency biases, which is why we shuffle names by seed, drawn from feminine, masculine or neutral pools matched to each avatar.
 
-Open models run through Hugging Face, including [Llama-4-Maverick](https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8) and [gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b).
+Open models run through Hugging Face, [Qwen3-235B-A22B-Instruct-2507](https://huggingface.co/Qwen/Qwen3-235B-A22B-Instruct-2507), [Llama-4-Maverick](https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8), [Gemma 4 26B-A4B](https://huggingface.co/google/gemma-4-26B-A4B-it), [gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) and [DeepSeek-V3.1](https://huggingface.co/deepseek-ai/DeepSeek-V3.1).
 
 ## License
 

@@ -26,9 +26,9 @@ export function DeceptionMatrix({ matrix, minN = DEFAULT_MIN_N, initialSource = 
   const { liars, listeners } = sortAxes(matrix, source);
   const label = useModelLabel();
   const model = (m: string, size: number) => (
-    <span className="deception-model">
+    <span className="deception-model" title={m}>
       <ModelAvatar model={m} label={label(m)} size={size} />
-      {label(m)}
+      <span className="deception-name">{label(m)}</span>
     </span>
   );
 

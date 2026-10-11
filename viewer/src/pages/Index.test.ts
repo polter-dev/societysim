@@ -26,6 +26,14 @@ describe("GameList", () => {
     expect(html).toContain("<td>3</td>");
   });
 
+  it("shows display names with the raw ids on hover", () => {
+    const html = renderToStaticMarkup(
+      createElement(GameList, { games: [{ id: "g7", models: ["llama4-maverick", "gemini-flash"] }], href: () => "" }),
+    );
+    expect(html).toContain('title="llama4-maverick, gemini-flash"');
+    expect(html).toContain(">Llama 4 Maverick, Gemini Flash<");
+  });
+
   it("hides the winner until asked and never shows roles", () => {
     const hidden = render(false);
     expect(hidden).not.toContain("wolves");

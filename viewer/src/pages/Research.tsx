@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_MIN_N, parseDeceptionMatrix, type DeceptionMatrix as Matrix } from "../data/deception";
+import { modelName } from "../data/modelNames";
 import { fetchJson } from "../data/staticSource";
 import { DeceptionMatrix } from "../components/DeceptionMatrix/DeceptionMatrix";
 
@@ -22,8 +23,8 @@ export function headlines(s: Summary): [string, string][] {
     ["Games", `${s.games}${s.unfinished_games ? ` (${s.unfinished_games} unfinished)` : ""}`],
     ["Wolf wins", pct(s.wolf_win_share)],
     ["Village wins", pct(s.village_win_share)],
-    ["Top OpenSkill", s.top_openskill ? `${s.top_openskill.model} (${s.top_openskill.ordinal.toFixed(2)})` : "n/a"],
-    ["Best wolf", s.top_wolf_win ? `${s.top_wolf_win.model} (${pct(s.top_wolf_win.win_rate)})` : "n/a"],
+    ["Top OpenSkill", s.top_openskill ? `${modelName(s.top_openskill.model)} (${s.top_openskill.ordinal.toFixed(2)})` : "n/a"],
+    ["Best wolf", s.top_wolf_win ? `${modelName(s.top_wolf_win.model)} (${pct(s.top_wolf_win.win_rate)})` : "n/a"],
     ["Cost", `$${s.cost_usd.toFixed(2)}`],
   ];
 }

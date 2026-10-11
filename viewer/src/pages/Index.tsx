@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { modelName } from "../data/modelNames";
 import type { GameSource, GameSummary } from "../data/source";
 
 interface ListProps {
@@ -28,7 +29,7 @@ export function GameList({ games, href, showWinners = false }: ListProps) {
               <a href={href(g.id)}>{g.id}</a>
               {g.live && <span className="live-badge"> ● Live</span>}
             </th>
-            <td>{g.models?.join(", ") ?? "?"}</td>
+            <td title={g.models?.join(", ")}>{g.models?.map(modelName).join(", ") ?? "?"}</td>
             <td>{g.days ?? "n/a"}</td>
             <td>{g.live ? "playing" : showWinners ? (g.winner === undefined ? "n/a" : (g.winner ?? "none")) : "hidden"}</td>
           </tr>

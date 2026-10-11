@@ -12,8 +12,8 @@ const summary: Summary = {
   cost_usd: 1.234,
   wolf_win_share: 0.25,
   village_win_share: null,
-  top_openskill: { model: "alpha", ordinal: 2.9 },
-  top_wolf_win: null,
+  top_openskill: { model: "llama4-maverick", ordinal: 2.9 },
+  top_wolf_win: { model: "gemini-flash", win_rate: 0.5, seats: 4 },
 };
 
 describe("Research", () => {
@@ -22,8 +22,8 @@ describe("Research", () => {
     expect(h["Games"]).toBe("12 (1 unfinished)");
     expect(h["Wolf wins"]).toBe("25%");
     expect(h["Village wins"]).toBe("n/a");
-    expect(h["Top OpenSkill"]).toBe("alpha (2.90)");
-    expect(h["Best wolf"]).toBe("n/a");
+    expect(h["Top OpenSkill"]).toBe("Llama 4 Maverick (2.90)");
+    expect(h["Best wolf"]).toBe("Gemini Flash (50%)");
     expect(h["Cost"]).toBe("$1.23");
   });
 

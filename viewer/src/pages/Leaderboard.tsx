@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ModelAvatar, useModelLabel } from "../components/ModelAvatar/ModelAvatar";
 import { GlobalLeaderboard } from "../components/GlobalLeaderboard/GlobalLeaderboard";
 import { useGlobalBoard } from "../data/globalBoard";
 import { fetchJson } from "../data/staticSource";
@@ -55,6 +56,7 @@ export function LeaderboardTable({
   bySide?: BySide;
   profileHref?: (model: string) => string;
 }) {
+  const label = useModelLabel();
   const side = board.wolf_side_advantage?.overall;
   return (
     <>
@@ -86,7 +88,7 @@ export function LeaderboardTable({
           {board.models.map((r, i) => (
             <tr key={r.model}>
               <td>{i + 1}</td>
-              <th scope="row">{profileHref ? <a href={profileHref(r.model)}>{r.model}</a> : r.model}</th>
+              <th scope="row"><ModelAvatar model={r.model} label={label(r.model)} size={28} /> {profileHref ? <a href={profileHref(r.model)}>{label(r.model)}</a> : label(r.model)}</th>
               <td>{r.games ?? "n/a"}</td>
               <td>{r.seats ?? "n/a"}</td>
               <td>

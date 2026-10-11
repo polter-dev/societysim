@@ -4,6 +4,7 @@
 // Everything comes from useHumanSeat; the live table itself uses the existing Neon live mode.
 import { useEffect, useState } from "react";
 import { ABSTAIN, type Draft, LEVELS, type Level, MAX_TEXT, playerLabel } from "../../play/action";
+import { ModelAvatar, useModelLabel } from "../ModelAvatar/ModelAvatar";
 import type { Player } from "../../play/types";
 import type { useHumanSeat } from "../../play/useHumanSeat";
 
@@ -30,9 +31,11 @@ function PlayerButton({ players, seat, pressed, onClick }: {
   players: Player[]; seat: string; pressed: boolean; onClick: () => void;
 }) {
   const label = playerLabel(players, seat);
+  const modelLabel = useModelLabel();
+  const model = players.find((p) => p.seat === seat)?.model;
   return (
     <button type="button" className="your-turn__player" data-seat={seat} aria-pressed={pressed} onClick={onClick}>
-      <span className="your-turn__avatar" aria-hidden="true">{label.slice(0, 1)}</span> {label}
+      {model ? <ModelAvatar model={model} label={modelLabel(model)} size={24} alive={players.find((p) => p.seat === seat)?.alive} /> : <span className="your-turn__avatar" aria-hidden="true">{label.slice(0, 1)}</span>} {label}
     </button>
   );
 }

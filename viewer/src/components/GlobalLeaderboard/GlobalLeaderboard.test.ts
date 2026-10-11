@@ -33,7 +33,7 @@ describe("GlobalLeaderboard", () => {
     const html = render();
     expect(html).toContain('aria-selected="true">Detectors');
     expect(html).toContain("<td>0.45</td><td>50% (n=8)</td>");
-    expect(html).toMatch(/<tr data-ranked="false"><th scope="row">few/);
+    expect(html).toMatch(/<tr data-ranked="false"><th scope="row">.*few/);
     expect(html).not.toContain("Lie success");
   });
 

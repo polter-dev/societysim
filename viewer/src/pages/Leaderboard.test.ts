@@ -59,7 +59,7 @@ describe("LeaderboardTable profile links", () => {
     const html = renderToStaticMarkup(
       createElement(LeaderboardTable, { board, profileHref: (m: string) => `?page=model&model=${m}` }),
     );
-    expect(html).toContain('<th scope="row"><a href="?page=model&amp;model=alpha">alpha</a></th>');
+    expect(html).toContain('<a href="?page=model&amp;model=alpha">alpha</a></th>');
     expect(renderToStaticMarkup(createElement(LeaderboardTable, { board }))).not.toContain("<a ");
   });
 });

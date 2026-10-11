@@ -3,6 +3,8 @@ import type { Scene, Mode } from '../scene/deriveScene';
 import type { Event } from '../types/events';
 import { inspect } from '../components/Inspector/Inspector';
 import { art } from './assets';
+import { AvatarMedallion } from '../components/AvatarMedallion/AvatarMedallion';
+import { useModelLabel } from '../components/ModelAvatar/ModelAvatar';
 import { eventPresentation, playerStatistics } from './presentation';
 import ForestTable from './ForestTable';
 import './scenery.css';
@@ -10,6 +12,7 @@ import './inspector.css';
 import './viewer.css';
 
 export function IllustratedShell({ scene, onSelect }: { scene: Scene; onSelect: (id: string) => void }) {
+  const label = useModelLabel();
   const [collapsed, setCollapsed] = useState(false);
   const [paused, setPaused] = useState(false);
   const [eventSeq, setEventSeq] = useState<number | null>(null);
@@ -20,7 +23,7 @@ export function IllustratedShell({ scene, onSelect }: { scene: Scene; onSelect: 
     <div className="day-counter" key={`${scene.day}-${scene.phase}`}><img src={art(`new/${night ? 'night_counter 1.png' : 'day_counter-v2.png'}`)} alt=""/><span>{scene.phase === 'setup' ? 'Gathering the village' : `${night ? 'Night' : 'Day'} ${scene.day} · ${scene.phase === 'vote' ? 'Voting' : night ? 'Nightfall' : 'Discussion'}`}{scene.winner && ` · ${scene.winner} win`}</span></div>
     <section id="agent-roster" className="roster" aria-label="Agents" inert={collapsed} aria-hidden={collapsed}>
       <img className="panel-art" src={art('new/agent menu-1.png')} alt=""/>
-      <div className="panel-content"><h2>Agents</h2><ul className="agent-list">{scene.players.map(p => <li key={p.id}><button className="agent-button" onClick={() => onSelect(p.id)}><span className="avatar"><img src={art('model_frame.png')} alt=""/><span>{p.name.slice(0,1)}</span></span><span><strong>{p.name}</strong><small>{p.model}</small><small>{p.alive ? '● Alive' : '† Eliminated'}</small></span></button></li>)}</ul></div>
+      <div className="panel-content"><h2>Agents</h2><ul className="agent-list">{scene.players.map(p => <li key={p.id}><button className="agent-button" data-alive={p.alive} onClick={() => onSelect(p.id)}><AvatarMedallion model={p.model} label={label(p.model)} alive={p.alive}/><span><strong>{p.name}</strong><small>{label(p.model)}</small><small>{p.alive ? '● Alive' : '† Eliminated'}</small></span></button></li>)}</ul></div>
     </section>
     <button className="roster-toggle" aria-expanded={!collapsed} aria-controls="agent-roster" aria-label={collapsed ? 'Expand agents' : 'Collapse agents'} onClick={() => setCollapsed(!collapsed)}><img src={art(`new/Arrow_${collapsed ? 'Right' : 'Left'} 1.png`)} alt=""/></button>
     <section className="event-roster" aria-label="Game events"><img className="panel-art" src={art('new/event menu.png')} alt=""/><div className="panel-content"><h2>Game events</h2><ol className="event-list">{[...scene.log].reverse().map(e => {const item = eventPresentation(e, scene);return <li key={e.seq}><button className={`decision-card ${item.image === '10_notes.png' ? 'decision-notes' : ''}`} style={{backgroundImage:`url("${art(`inspector/${item.image}`)}")`}} onClick={() => setEventSeq(e.seq)}><span><small>{e.phase === 'night' ? 'Night' : 'Day'} {e.day} · {item.actor}</small><strong>{item.title}</strong><small>{item.text}</small></span></button></li>})}</ol></div></section>

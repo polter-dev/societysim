@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { DECEPTION_SOURCES, DEFAULT_MIN_N, belowThreshold } from "../../data/deception";
-import { type ModelProfile as Profile, type PairRow, avatarFor, loadModelProfile } from "../../data/models";
+import { ModelAvatar, useModelLabel } from "../ModelAvatar/ModelAvatar";
+import { type ModelProfile as Profile, type PairRow, loadModelProfile } from "../../data/models";
 
 const pct = (x: number | null | undefined) => (x == null ? "n/a" : `${Math.round(x * 100)}%`);
 const num = (x: number | null | undefined) => (x == null ? "n/a" : x.toFixed(2));
@@ -44,18 +45,12 @@ export interface ModelProfileProps {
 
 /** Unstyled model profile. Style via the class names and data attributes. */
 export function ModelProfile({ profile: p, minN = DEFAULT_MIN_N }: ModelProfileProps) {
-  const avatar = avatarFor(p.model);
+  const label = useModelLabel();
   return (
     <article className="model-profile" data-model={p.model}>
       <header>
-        {avatar ? (
-          <img className="model-avatar" src={avatar} alt="" />
-        ) : (
-          <span className="model-avatar" data-placeholder="true" aria-hidden="true">
-            {p.model.charAt(0).toUpperCase()}
-          </span>
-        )}
-        <h2>{p.model}</h2>
+        <ModelAvatar model={p.model} label={label(p.model)} size={96} />
+        <h2>{label(p.model)}</h2>
       </header>
       <dl>
         <dt>Games</dt>

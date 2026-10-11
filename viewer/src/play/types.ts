@@ -26,6 +26,8 @@ export interface Player {
   seat: string;
   name: string;
   alive: boolean;
+  /** Public model id (or "human"); absent until the play API sends it. */
+  model?: string;
 }
 export interface Me {
   game_id: string;

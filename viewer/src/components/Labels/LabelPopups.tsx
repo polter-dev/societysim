@@ -30,6 +30,16 @@ export interface SeqRange {
   last: number;
 }
 
+/** Past this many labels of one type in a beat they share one pop-up, so a vote beat stays readable. */
+export const MAX_SEPARATE_LABELS = 2;
+
+/** Group labels by type; a type with more than MAX_SEPARATE_LABELS becomes one group, the rest stay single. */
+export function groupLabels(labels: Label[]): Label[][] {
+  const byType = new Map<string, Label[]>();
+  for (const l of labels) byType.set(l.label, [...(byType.get(l.label) ?? []), l]);
+  return [...byType.values()].flatMap((g) => (g.length > MAX_SEPARATE_LABELS ? [g] : g.map((l) => [l])));
+}
+
 const pretty = (s: string) => s.replace(/_/g, " ");
 
 /**
@@ -57,18 +67,22 @@ export function LabelPopups({
 }) {
   const shown = visibleLabels(labels, scene, mode, sources, range);
   const n = scene.players.length;
-  const perSeat = new Map<string, number>(); // stack same-seat popups, not every popup
+  const perAnchor = new Map<string, number>(); // stack popups that share a spot
   return (
     <div style={{ position: "relative", width: "100%", maxWidth: 640 }}>
       {children}
       {/* Always mounted, even empty: screen readers miss live regions that appear with their content. */}
       <div aria-live={playing ? "off" : "polite"} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-        {shown.map((l, k) => {
-          const stack = perSeat.get(l.actor) ?? 0;
-          perSeat.set(l.actor, stack + 1);
-          const i = scene.players.findIndex((p) => p.id === l.actor);
+        {groupLabels(shown).map((group, k) => {
+          const l = group[0];
+          const many = group.length > 1;
+          // A group has no single seat; it sits at the table center.
+          const anchor = many ? "" : l.actor;
+          const stack = perAnchor.get(anchor) ?? 0;
+          perAnchor.set(anchor, stack + 1);
+          const i = many ? -1 : scene.players.findIndex((p) => p.id === l.actor);
           const { x, y } = i < 0 ? { x: 50, y: 50 } : seatPosition(i, n);
-          // Pop toward the table center so it stays inside the box; stack same-seat popups.
+          // Pop toward the table center so it stays inside the box; stack same-spot popups.
           const style: CSSProperties = {
             position: "absolute",
             left: `${x}%`,
@@ -85,20 +99,34 @@ export function LabelPopups({
             lineHeight: 1.3,
             pointerEvents: "auto",
           };
+          const lowest = Math.min(...group.map((g) => g.confidence));
           return (
             <aside
               key={`${l.label}-${l.source}-${l.actor}-${k}`}
               role="note"
-              data-label-for={l.actor}
+              data-label-for={group.map((g) => g.actor).join(" ")}
               data-label-type={l.label}
               data-label-source={l.source}
+              data-label-count={many ? group.length : undefined}
               style={style}
             >
-              <strong>{pretty(l.label)}</strong> · {seatName(scene.players, l.actor)}
+              <strong>{pretty(l.label)}</strong>
+              {many ? ` ×${group.length}` : ""} · {group.map((g) => seatName(scene.players, g.actor)).join(", ")}
               <div>
-                {pretty(l.source)} · {Math.round(l.confidence * 100)}% confidence
+                {pretty(l.source)} · {Math.round(lowest * 100)}% confidence
               </div>
-              <div>{l.detail}</div>
+              {many ? (
+                <details>
+                  <summary>Details</summary>
+                  <ul style={{ margin: 0, paddingLeft: "1.2em" }}>
+                    {group.map((g, j) => (
+                      <li key={j}>{g.detail}</li>
+                    ))}
+                  </ul>
+                </details>
+              ) : (
+                <div>{l.detail}</div>
+              )}
             </aside>
           );
         })}

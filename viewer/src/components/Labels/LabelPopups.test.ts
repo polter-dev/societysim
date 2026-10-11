@@ -9,7 +9,7 @@ import { parseLog } from "../../data/parse";
 import { deriveScene, type Mode } from "../../scene/deriveScene";
 import { buildBeats } from "../../state/stepper";
 import { Table } from "../Table/Table";
-import { LabelPopups, visibleLabels } from "./LabelPopups";
+import { groupLabels, LabelPopups, visibleLabels } from "./LabelPopups";
 
 const events = parseLog(fixture).events;
 const labels = parseLabels(labelsText);
@@ -96,7 +96,8 @@ describe("LabelPopups over a stepper beat", () => {
     expect(b.lastSeq).toBeGreaterThan(102); // the beat ends on the elimination
     const { html: h, shown } = beatHtml(events, 98, "narrator");
     expect(shown.map((l) => l.source_seq)).toEqual([98, 99, 101, 102]);
-    expect(h.match(/data-label-type="mis_elimination"/g)).toHaveLength(4);
+    expect(h).toContain('data-label-count="4"'); // four of one type share a single pop-up
+    for (const seq of [98, 99, 101, 102]) expect(h).toContain(labels.find((l) => l.source_seq === seq)!.detail);
   });
 
   it("a claim followed by a retry still shows its label", () => {
@@ -113,6 +114,29 @@ describe("LabelPopups over a stepper beat", () => {
       expect(shown).toEqual([]);
       expect(h).not.toContain("data-label-for");
     }
+  });
+
+  it("seven labels on a vote beat render a bounded number of pop-ups, all still reachable", () => {
+    const base = labels.find((l) => l.label === "mis_elimination")!;
+    const seven = Array.from({ length: 7 }, (_, k) => ({
+      ...base,
+      actor: `p${k}`,
+      source_seq: 98 + (k % 6),
+      detail: `voter ${k} voted out a villager`,
+    }));
+    const b = beatOf(events, 98);
+    const scene = deriveScene(events, b.endIdx, "narrator");
+    const range = { first: b.firstSeq, last: b.lastSeq };
+    const h = renderToStaticMarkup(createElement(LabelPopups, { scene, labels: seven, mode: "narrator", range }));
+    expect(h.match(/<aside/g)).toHaveLength(1);
+    expect(h).toContain("×7");
+    expect(h).toContain('data-label-count="7"');
+    for (let k = 0; k < 7; k++) expect(h).toContain(`voter ${k} voted out a villager`);
+    for (const p of scene.players.slice(0, 7)) expect(h).toContain(p.name);
+    const v = renderToStaticMarkup(createElement(LabelPopups, { scene: deriveScene(events, b.endIdx, "villager"), labels: seven, mode: "villager", range }));
+    expect(v).not.toContain("<aside");
+    // two labels of a type stay separate
+    expect(groupLabels(seven.slice(0, 2)).map((g) => g.length)).toEqual([1, 1]);
   });
 
   it("without a range only the shown event matches", () => {

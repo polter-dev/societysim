@@ -1,0 +1,200 @@
+{
+  "game_id": "mixed_v2_10p-g0008",
+  "model_id": "eleven_flash_v2_5",
+  "output_format": "mp3_44100_64",
+  "voices": {
+    "narrator": "N2lVS1w4EtoT3dr4eOWO",
+    "narrator_night": "SOYHLrjzK2X1ezoPC6cr"
+  },
+  "clips": [
+    {
+      "seq": 1,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "Night 1. The village sleeps.",
+      "file": "c27ca0c1984731b0e3587efc1a9b8bd6cef9e59e.mp3"
+    },
+    {
+      "seq": 13,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Dev, the Seer, was found dead.",
+      "file": "93415f083029c6b5c651859896e2f762379a20b5.mp3"
+    },
+    {
+      "seq": 14,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 1. The village wakes.",
+      "file": "3c28e64e935ae38dfc8ffd82fe7df91b48957d5e.mp3"
+    },
+    {
+      "seq": 69,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 1. Time to vote.",
+      "file": "50bb2dbe1551c36d70df0374a53a1afb08132c82.mp3"
+    },
+    {
+      "seq": 79,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Cleo, a wolf.",
+      "file": "ad0ec8843353e7ea96f034e02d235523912ed257.mp3"
+    },
+    {
+      "seq": 80,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "Night 2. The village sleeps.",
+      "file": "5eb6f9a8edc27da499995f2a943cf8667d1c6411.mp3"
+    },
+    {
+      "seq": 84,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Gia, a villager, was found dead.",
+      "file": "5742b62824d126a822d4dc16bb8b9886f8d922ff.mp3"
+    },
+    {
+      "seq": 85,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 2. The village wakes.",
+      "file": "bb6d580c4b68d35b41c6899ef728ceb4f509fa23.mp3"
+    },
+    {
+      "seq": 129,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 2. Time to vote.",
+      "file": "3c67f5d733bf17628bac2338ebb08410f94e6f98.mp3"
+    },
+    {
+      "seq": 137,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Iris, a villager.",
+      "file": "e1becaf73aa068808c1114eb81395a9ff8d6aaaa.mp3"
+    },
+    {
+      "seq": 138,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "Night 3. The village sleeps.",
+      "file": "cf63a48f8d9d5de84554e5c176205f8c3fdf1ff2.mp3"
+    },
+    {
+      "seq": 142,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Ben, a villager, was found dead.",
+      "file": "b4e12d4f0ecc9991227223fe2b6d57efb2b5fb21.mp3"
+    },
+    {
+      "seq": 143,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 3. The village wakes.",
+      "file": "4feae53f92cd6b30bb09f11047fd43d653533f28.mp3"
+    },
+    {
+      "seq": 173,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 3. Time to vote.",
+      "file": "88314a649c215047a68ce43f1081c8bb4049d83c.mp3"
+    },
+    {
+      "seq": 179,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Jude, the Doctor.",
+      "file": "8de29943fad0047bd5b8b497d856750b8ea04fe3.mp3"
+    },
+    {
+      "seq": 180,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "Night 4. The village sleeps.",
+      "file": "3bf20ec07097493b501a035bb391fe64916ec814.mp3"
+    },
+    {
+      "seq": 183,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator_night",
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "text": "The wolves struck. Finn, a villager, was found dead.",
+      "file": "eedb73217c21ed1a201a365809ced84315f57b8b.mp3"
+    },
+    {
+      "seq": 184,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 4. The village wakes.",
+      "file": "7ecf02ba7c58fe3f2ac5a5f628229490e429503a.mp3"
+    },
+    {
+      "seq": 203,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "Day 4. Time to vote.",
+      "file": "06a9ed41c5bb3ea60c69a898e12ff17f9fa46f86.mp3"
+    },
+    {
+      "seq": 207,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village voted out Hugo, a wolf.",
+      "file": "3c97c858eba0695f6059d7079a2a154b4bb0b77b.mp3"
+    },
+    {
+      "seq": 208,
+      "category": "narrator",
+      "speaker": "narrator",
+      "voice": "narrator",
+      "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+      "text": "The village wins. Every wolf is dead.",
+      "file": "495a0894ae10a4fe2d98028da216992f59199236.mp3"
+    }
+  ]
+}

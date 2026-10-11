@@ -50,10 +50,9 @@
   position: relative;
   z-index: 1;
   display: flex;
-  flex: 1;
+  flex: 1 0 auto;
   flex-direction: column;
   width: 100%;
-  min-height: 100%;
   margin: 0;
   padding: 48px 28px 16px;
   box-sizing: border-box;
@@ -93,26 +92,24 @@
 
 .ledger-stage {
   display: flex;
-  flex: 1;
+  flex: 1 0 auto;
   flex-direction: column;
   gap: 8px;
   width: 100%;
-  min-height: 0;
 }
 
+/* Each box in the standings chain grows into spare height but never shrinks below its rows. */
 .ledger-main {
   display: flex;
-  flex: 1;
+  flex: 1 0 auto;
   flex-direction: column;
-  min-height: 0;
 }
 
 .leaderboard-container {
   display: flex;
-  flex: 1;
+  flex: 1 0 auto;
   flex-direction: column;
   gap: 8px;
-  min-height: 0;
 }
 
 .leaderboard-summary-text {
@@ -126,18 +123,19 @@
 
 .leaderboard-table-card {
   display: flex;
-  flex: 1;
+  flex: 1 0 auto;
   flex-direction: column;
-  min-height: 0;
   background: transparent;
   border: 0;
   box-shadow: none;
 }
 
+.leaderboard-scroll {
+  flex: 1 0 auto;
+}
+
 .leaderboard-scroll,
 .global-leaderboard__scroll {
-  flex: 1;
-  min-height: 0;
   overflow: auto;
   max-width: 100%;
   scrollbar-width: thin;
@@ -242,9 +240,35 @@
   letter-spacing: 0.02em;
 }
 
-.leaderboard-rank[data-rank="1"] { color: #ffe499; }
-.leaderboard-rank[data-rank="2"] { color: #f4f7f5; }
-.leaderboard-rank[data-rank="3"] { color: #f0c09a; }
+/* Gold, silver and bronze medallions carry the number for the top three (#483). */
+.leaderboard-rank > span {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+
+.leaderboard-rank:is([data-rank="1"], [data-rank="2"], [data-rank="3"]) > span {
+  color: #2a1606;
+  text-shadow: none;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 50%);
+}
+
+.leaderboard-rank[data-rank="1"] > span {
+  background: radial-gradient(circle at 35% 35%, #fff6cc, #d4b35c 60%, #8c6e26);
+  border: 1px solid #ffe499;
+}
+
+.leaderboard-rank[data-rank="2"] > span {
+  background: radial-gradient(circle at 35% 35%, #fff, #d5ded9 60%, #76857e);
+  border: 1px solid #e2ece7;
+}
+
+.leaderboard-rank[data-rank="3"] > span {
+  background: radial-gradient(circle at 35% 35%, #ffd3b3, #cb8654 60%, #7d4420);
+  border: 1px solid #f0b080;
+}
 
 .leaderboard-table tbody td:last-child,
 .global-leaderboard tbody td:last-child,
@@ -369,7 +393,7 @@
 
 .global-leaderboard__tab:focus-visible {
   outline: 3px solid #ffe499;
-  outline-offset: 2px;
+  outline-offset: 3px;
 }
 
 .global-leaderboard[data-tab="detectors"] tbody tr:nth-child(odd) {

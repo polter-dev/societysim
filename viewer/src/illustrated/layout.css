@@ -12,8 +12,8 @@
 :root{
   --gs-gap:clamp(6px,.5vw,12px);
   --gs-top:clamp(44px,4.6dvh,56px);
-  --gs-counter:clamp(38px,6dvh,80px);
-  --gs-bar:clamp(84px,10.5dvh,124px);
+  --gs-counter:clamp(34px,6dvh,80px);
+  --gs-bar:clamp(78px,10.5dvh,124px);
   --gs-turn:0px;
   /* chrome and bar text, and their control height: 12px / 28px up to ~1900 wide, 16px / 40px at 2560 */
   --gs-ui:clamp(12px,.62vw,16px);
@@ -21,7 +21,7 @@
   /* table region height, then the width the table would use at that height */
   --gs-th:calc(100dvh - var(--gs-top) - var(--gs-counter) - var(--gs-bar) - 2 * var(--gs-gap));
   /* side panels take what the table leaves, within bounds */
-  --gs-side:clamp(220px,calc((100vw - var(--gs-turn) - 760 * var(--gs-th) / 720 - 2 * var(--gs-gap)) / 2),18vw);
+  --gs-side:clamp(170px,calc((100vw - var(--gs-turn) - 760 * var(--gs-th) / 720 - 2 * var(--gs-gap)) / 2),18vw);
   --gs-left:var(--gs-side);
   --gs-right:var(--gs-side);
   --gs-tw:calc(100vw - var(--gs-left) - var(--gs-right) - var(--gs-turn) - 2 * var(--gs-gap));
@@ -35,7 +35,7 @@
   --gs-line:#ac8b45;
 }
 /* The your-turn panel gets its own column; a collapsed Agents panel leaves a thin rail. */
-:root:has(.play-replay .your-turn){--gs-turn:clamp(268px,21vw,420px)}
+:root:has(.play-replay .your-turn){--gs-turn:clamp(240px,21vw,420px)}
 :root:has(.illustrated-shell.agents-collapsed){--gs-left:44px}
 
 @media (min-width:1001px){
@@ -61,6 +61,12 @@
   /* --- table region ---------------------------------------------------------------------------- */
   .replay-app .replay-table{position:fixed;z-index:1;left:var(--gs-tx);top:var(--gs-ty);width:var(--gs-tw);height:var(--gs-th);pointer-events:none}
   .replay-app .replay-table>div{position:absolute!important;left:50%;top:50%;translate:-50% -50%;width:calc(800 * var(--apx))!important;max-width:none!important}
+  /* Small tables (125% zoom with the your-turn column): plates keep a readable width and the name
+     never truncates; a long revealed-role chip gives way first. */
+  .replay-app .round-table .seat-plate{width:max(17cqw,100px)}
+  .replay-app .round-table .table-seat:not([data-plate=above]) .seat-plate{top:74%}
+  .replay-app .round-table .seat-name strong{flex:none;overflow:visible}
+  .replay-app .round-table .seat-role{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
   /* --- side panels: the frame art is 9-sliced, so corners and crests keep their shape --------- */
   .illustrated-shell .roster,.illustrated-shell .event-roster{position:absolute;top:calc(var(--gs-top) - var(--gs-gap));bottom:var(--gs-bar);height:auto;aspect-ratio:auto;margin:0;box-sizing:border-box;border-style:solid;z-index:2}

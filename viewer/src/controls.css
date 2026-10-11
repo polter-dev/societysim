@@ -4,8 +4,8 @@
   --marble:radial-gradient(ellipse at 35% 30%,#0b3f2c,#04251e 85%);--rim:inset 0 0 0 2px #04251e,inset 0 0 0 3px #c9a24f55}
 
 /* Shared primitives. Focus rings come from a11y.css. 44 px targets (--target-minimum) throughout. Doubled class selectors beat the page-wide `.replay-app button` / `.info-page input` rules. */
-:is(.narration-controls,.setup-form) input[type=checkbox]{appearance:none;flex:none;width:20px;height:20px;margin:0;padding:0;border:1.5px solid var(--accent-gold);border-radius:5px;background:#04251e center/14px no-repeat;cursor:pointer}
-:is(.narration-controls,.setup-form) input[type=checkbox]:checked{background-color:var(--accent-gold);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5' fill='none' stroke='%2303271e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+:is(.narration-controls,.setup-form,.info-page) input[type=checkbox]{appearance:none;flex:none;width:20px;height:20px;margin:0;padding:0;border:1.5px solid var(--accent-gold);border-radius:5px;background:#04251e center/14px no-repeat;cursor:pointer}
+:is(.narration-controls,.setup-form,.info-page) input[type=checkbox]:checked{background-color:var(--accent-gold);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5' fill='none' stroke='%2303271e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
 :is(.narration-controls,.setup-form) input:disabled{opacity:.45;cursor:not-allowed}
 .gold-button.gold-button{min-height:var(--target-minimum);padding:0 18px;border:1px solid var(--accent-gold);border-radius:999px;background:var(--marble);box-shadow:var(--rim);color:var(--text-primary);font:600 14px var(--font-heading);font-variant:small-caps;letter-spacing:.04em;cursor:pointer}
 .gold-button.gold-button:disabled{opacity:.45;cursor:not-allowed;filter:none}

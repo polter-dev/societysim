@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from societysim.analysis.jev import fingerprint
 from societysim.analysis.metrics import compute_metrics, load_game
 from societysim.analysis.report import (
     Metrics,
@@ -16,6 +17,7 @@ from societysim.analysis.report import (
     write_report,
 )
 from societysim.cli import app
+from societysim.logging.events import EventType
 
 FIX = Path(__file__).parents[2] / "fixtures"
 
@@ -587,22 +589,73 @@ def _add_mirror_jev(batch: Path) -> None:
     labels.write_text("".join(json.dumps(r) + "\n" for r in rows + mirror), encoding="utf-8")
 
 
-def test_jev_coverage_is_per_game_and_reported(tmp_path):
-    # two copies of the sample game, Jev read only the first (#493)
-    batch = _batch(tmp_path)
+def _cache_jev(batch: Path, name: str = "sample_game", keep: int | None = None) -> int:
+    """Jev cache entries (what `label` reads) for the first `keep` statements of a game, all of
+    them when keep is None. Returns how many were written."""
+    game = load_game(batch / f"{name}.jsonl")
+    stmts = [e for e in game.events if e.type is EventType.STATEMENT]
+    for e in stmts[:keep]:
+        f = batch / ".cache" / "jev" / e.game_id / f"{e.seq}.json"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps({"fingerprint": fingerprint(e)}), encoding="utf-8")
+    return len(stmts[:keep])
+
+
+def _two_games(batch: Path) -> None:
+    """Add a copy of the sample game (and its labels) under another game id."""
     for suffix in (".jsonl", ".labels.jsonl"):
         text = (batch / f"sample_game{suffix}").read_text(encoding="utf-8")
         (batch / f"second{suffix}").write_text(
             text.replace("fixture-0001", "fixture-0002"), encoding="utf-8"
         )
+
+
+def test_jev_coverage_is_per_statement_and_reported(tmp_path):
+    # two copies of the sample game, Jev read only the first (#493)
+    batch = _batch(tmp_path)
+    _two_games(batch)
     _add_mirror_jev(batch)
+    n = _cache_jev(batch)
     out, m = _report(tmp_path, batch)
     lies = m["by_group"]["all"]["lies"]
     assert lies["jev"]["lie_rate"] == pytest.approx(lies["self_tag"]["lie_rate"])
     sm = m["summary"]["lies"]
     assert sm["jev"]["statements"] * 2 == sm["self_tag"]["statements"]
     md = (out / "report.md").read_text(encoding="utf-8")
-    assert "jev labeled 1 of 2 games" in md
+    assert f"jev read {n} of {2 * n} statements" in md
+
+
+def test_partly_read_game_counts_only_the_statements_jev_read(tmp_path):
+    # jev labels sit on statements of a game whose cache holds only some of its statements:
+    # the unread ones are not clean ones (#619)
+    batch = _batch(tmp_path)
+    _add_mirror_jev(batch)
+    full = _cache_jev(batch)
+    shutil.rmtree(batch / ".cache")
+    n = _cache_jev(batch, keep=10)
+    assert 0 < n < full
+    out, m = _report(tmp_path, batch)
+    assert m["summary"]["lies"]["jev"]["statements"] == n
+    lies = m["by_group"]["all"]["lies"]["jev"]
+    assert lies["lie_rate"] == pytest.approx(lies["lies"] / n)
+    md = (out / "report.md").read_text(encoding="utf-8")
+    assert f"jev read {n} of {full} statements" in md
+
+
+def test_game_read_in_full_with_no_jev_lie_counts_as_covered(tmp_path):
+    batch = _batch(tmp_path)  # self-tag labels only: Jev read everything and found no lie
+    n = _cache_jev(batch)
+    _, m = _report(tmp_path, batch)
+    assert m["summary"]["lies"]["jev"]["statements"] == n
+    assert m["by_group"]["all"]["lies"]["jev"]["lie_rate"] == 0.0
+
+
+def test_game_with_no_jev_cache_is_not_covered(tmp_path):
+    batch = _batch(tmp_path)
+    _add_mirror_jev(batch)  # labels but no cache: nothing shows Jev read these statements
+    _, m = _report(tmp_path, batch)
+    assert m["summary"]["lies"]["jev"]["statements"] == 0
+    assert m["by_group"]["all"]["lies"]["jev"]["lie_rate"] is None
 
 
 def test_no_coverage_note_for_self_tag_only_batch(tmp_path):
@@ -614,8 +667,9 @@ def test_no_coverage_note_for_self_tag_only_batch(tmp_path):
     assert "labeled" not in md
 
 
-def test_no_coverage_note_when_jev_labeled_every_game(tmp_path):
+def test_no_coverage_note_when_jev_read_every_statement(tmp_path):
     batch = _batch(tmp_path)
     _add_mirror_jev(batch)
+    _cache_jev(batch)
     md = (write_report(batch) / "report.md").read_text(encoding="utf-8")
-    assert "labeled" not in md
+    assert "jev read" not in md

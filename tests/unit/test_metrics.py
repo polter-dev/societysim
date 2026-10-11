@@ -1,6 +1,7 @@
 """Metrics on the hand-written fixture (expected values worked out by hand from the log) and
 on RandomAgent games. No API calls."""
 
+import json
 from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from societysim.agents.scripted import RandomAgent
+from societysim.analysis import jev as jev_module
 from societysim.analysis.labeler import JevReport, JevVerdict, label_game
 from societysim.analysis.metrics import (
     GameData,
@@ -108,6 +110,11 @@ def test_lie_rate_counts_self_tag_lies_per_statement(m):
     assert m["by_group"]["all"]["lies"]["jev"]["lies"] == 0
 
 
+def _statement_seqs(game: GameData) -> frozenset[int]:
+    """Every statement of the game: what Jev read when its cache covers the whole game."""
+    return frozenset(e.seq for e in game.events if e.type is EventType.STATEMENT)
+
+
 def test_lie_sources_are_reported_side_by_side_not_summed(game):
     # Jev agrees on the role claim only, and adds a hidden_knowledge of its own on p0
     jev = [
@@ -115,7 +122,7 @@ def test_lie_sources_are_reported_side_by_side_not_summed(game):
         for lb in game.labels
         if lb.label in (LabelType.FALSE_ROLE_CLAIM, LabelType.HIDDEN_KNOWLEDGE)
     ]
-    m = compute_metrics([GameData(game.events, game.labels + jev)])
+    m = compute_metrics([GameData(game.events, game.labels + jev, _statement_seqs(game))])
     flash = m["models"]["gemini-flash"]["all"]["lies"]
     assert flash["self_tag"]["lies"] == 2 and flash["jev"]["lies"] == 1
     assert flash["jev"]["by_type"] == {"false_role_claim": 1}
@@ -1074,10 +1081,10 @@ def test_jev_false_report_with_an_unreadable_target_is_left_out_not_a_role_claim
 def _mirror_jev_game(game) -> GameData:
     """A game Jev read and agreed with the self-tags on every statement (#493)."""
     jev = [lb.model_copy(update={"source": "jev"}) for lb in game.labels if lb.source == "self_tag"]
-    return GameData(game.events, game.labels + jev)
+    return GameData(game.events, game.labels + jev, _statement_seqs(game))
 
 
-def test_jev_numbers_cover_only_games_jev_labeled(game):
+def test_jev_numbers_cover_only_games_jev_read(game):
     read = _mirror_jev_game(game)
     unread = GameData(game.events, game.labels)  # self-tag only: Jev never saw it
     alone = compute_metrics([read])
@@ -1101,3 +1108,59 @@ def test_self_tag_numbers_do_not_change_when_jev_labels_exist_elsewhere(game):
         got = mixed["models"][model]["all"]["lies"]["self_tag"]
         assert got == groups["all"]["lies"]["self_tag"]
     assert mixed["by_group"]["all"]["statements"] == plain["by_group"]["all"]["statements"]
+
+
+def _jev_rate(g: GameData) -> float | None:
+    return compute_metrics([g])["by_group"]["all"]["lies"]["jev"]["lie_rate"]
+
+
+def test_jev_rate_counts_only_statements_jev_read(game):
+    # Jev read one statement (seq 17) and found a seer report in it: 2 lies. The other 25
+    # statements were never read, so they are not clean ones (#619). Before: 2/26.
+    seer = JevVerdict(claim_role=Role.SEER, seer_report=JevReport(target="p0", result="wolf"))
+    labels = label_game(game.events, {17: seer})
+    assert sum(lb.source == "jev" for lb in labels) == 2
+    assert _jev_rate(GameData(game.events, labels, frozenset({17}))) == pytest.approx(2 / 1)
+    four = frozenset({17, *sorted(_statement_seqs(game) - {17})[:3]})
+    assert _jev_rate(GameData(game.events, labels, four)) == pytest.approx(2 / 4)
+
+
+def test_game_jev_read_in_full_with_no_lie_is_in_the_denominator(game):
+    # no jev label at all, but every statement was read and found clean: rate 0, not dropped
+    read = GameData(game.events, label_game(game.events, None), _statement_seqs(game))
+    assert _jev_rate(read) == 0.0
+    mirror = _mirror_jev_game(game)
+    mixed = compute_metrics([read, mirror])["by_group"]["all"]["lies"]["jev"]["lie_rate"]
+    assert mixed == pytest.approx(_jev_rate(mirror) / 2)  # the clean game doubles the denominator
+
+
+def test_game_with_no_jev_cache_entries_is_not_in_the_denominator(game):
+    unread = GameData(game.events, label_game(game.events, None))
+    assert _jev_rate(unread) is None
+    mirror = _mirror_jev_game(game)
+    mixed = compute_metrics([unread, mirror])["by_group"]["all"]["lies"]["jev"]["lie_rate"]
+    assert mixed == pytest.approx(_jev_rate(mirror))
+
+
+def _write_cache(cache: Path, game: GameData, seqs: set[int], fingerprint: str | None = "ok"):
+    for e in game.events:
+        if e.seq in seqs:
+            f = cache / e.game_id / f"{e.seq}.json"
+            f.parent.mkdir(parents=True, exist_ok=True)
+            fp = jev_module.fingerprint(e) if fingerprint == "ok" else fingerprint
+            f.write_text(json.dumps({"fingerprint": fp}), encoding="utf-8")
+
+
+def test_load_game_reads_jev_coverage_from_the_batch_cache(game, tmp_path):
+    batch = tmp_path / "batch"
+    batch.mkdir()
+    (batch / FIXTURE.name).write_bytes(FIXTURE.read_bytes())
+    assert load_game(batch / FIXTURE.name).jev_read == frozenset()  # no cache at all
+    stmts = sorted(_statement_seqs(game))
+    cache = batch / ".cache" / "jev"
+    _write_cache(cache, game, set(stmts[:5]))
+    _write_cache(cache, game, {stmts[5]}, fingerprint="stale")  # statement changed since
+    _write_cache(cache, game, {stmts[6]}, fingerprint=None)  # old entry: trusted
+    (cache / game.game_id / f"{stmts[7]}.json").write_text("not json", encoding="utf-8")
+    got = load_game(batch / FIXTURE.name).jev_read
+    assert got == frozenset(stmts[:5] + [stmts[6]])

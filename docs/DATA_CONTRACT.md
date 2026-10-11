@@ -179,7 +179,7 @@ Each row of `models`:
 | `fallback_rate` | number \| null | Turns that ended in a fallback move / turns. A turn is one model call (up to two attempts). Provider errors are in neither count |
 | `retry_success_rate` | number \| null | Retries whose second attempt was accepted / retries. A retry is a turn whose first attempt the model got wrong. Null when there were no retries |
 | `cost_usd_per_game` | number \| null | Per seat-game |
-| `lie_rate` | `{self_tag: number\|null, jev: number\|null}` | Lies per statement. Null when that source has no labels in the batch. `jev` counts only statements in games that have a jev label (games Jev never read are left out, #493) |
+| `lie_rate` | `{self_tag: number\|null, jev: number\|null}` | Lies per statement. Null when that source has no labels in the batch. `jev` counts only statements Jev read: those with a usable entry in the batch's Jev cache (`<batch>/.cache/jev/<game_id>/<seq>.json`, fingerprint matching). A statement with no entry is left out, even in a game that has jev labels; a game Jev read in full with no lie counts (#619) |
 
 ```json
 {"schema": 1, "games": 3, "label_sources": ["self_tag", "jev"],

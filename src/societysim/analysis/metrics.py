@@ -38,6 +38,7 @@ from pathlib import Path
 
 from openskill.models import PlackettLuce
 
+from societysim.analysis.jev import cache_dir_for, cached_verdict
 from societysim.analysis.labeler import _SAYS_VILLAGER, read_log
 from societysim.logging.events import Event, EventType, Label, LabelType
 from societysim.logging.textio import read_text_lenient
@@ -74,6 +75,9 @@ HUMAN = "human"  # model name of a --human-seat; never ranked
 class GameData:
     events: list[Event]
     labels: list[Label]
+    # seqs of the statements Jev actually read: the ones with a usable entry in the batch's Jev
+    # cache (#619). Empty means Jev read nothing, whatever the labels say.
+    jev_read: frozenset[int] = frozenset()
 
     @property
     def game_id(self) -> str:
@@ -94,8 +98,8 @@ class GameData:
 
     @property
     def labeled_sources(self) -> set[str]:
-        """Sources with a label in this game. A game Jev read is told apart from one it never
-        saw only by having a jev label: the labels file has no per-game marker (#493)."""
+        """Sources with a label in this game. Says nothing about what Jev read: a statement Jev
+        read and found clean has no label. That is `jev_read` (#619)."""
         return {lb.source for lb in self.labels}
 
     @property
@@ -113,7 +117,26 @@ def load_game(path: Path) -> GameData:
         if lpath.exists()
         else []
     )
-    return GameData(events, labels)
+    return GameData(events, labels, jev_read_seqs(events, cache_dir_for(path.parent)))
+
+
+def jev_read_seqs(events: list[Event], cache_dir: Path) -> frozenset[int]:
+    """Seqs of the statements with a usable Jev cache entry. The labels file can't say: a
+    statement Jev read and found clean has no jev label, and `label --no-jev` labels only the
+    statements that are cached (#619)."""
+    if not (cache_dir / events[0].game_id).is_dir():
+        return frozenset()
+    read = set()
+    for e in events:
+        if e.type is not EventType.STATEMENT:
+            continue
+        try:
+            hit = cached_verdict(cache_dir, e.game_id, e.seq, e.actor or "", e.public_text or "")
+        except ValueError:  # a cache file that isn't JSON: not a read
+            continue
+        if hit is not None:
+            read.add(e.seq)
+    return frozenset(read)
 
 
 def load_finished(batch_dir: Path) -> tuple[list[tuple[Path, GameData]], int]:
@@ -179,7 +202,7 @@ class Row:
     draws: int = 0
     losses: int = 0
     statements: int = 0
-    jev_statements: int = 0  # statements in games Jev labeled: the jev lie rate's denominator
+    jev_statements: int = 0  # statements Jev read: the jev lie rate's denominator
     lies: Counter = field(default_factory=Counter)  # (source, label type)
     lie_success: Counter = field(default_factory=Counter)  # (source, LS_KEYS item)
     detection: list[tuple[int, float, int]] = field(default_factory=list)  # (day, p, is_wolf)
@@ -402,7 +425,6 @@ def game_rows(game: GameData) -> dict[str, Row]:
     final_day = events[-1].day
     winner = game.winner
 
-    jev_covered = "jev" in game.labeled_sources
     for seat, row in rows.items():
         team = "wolves" if roles[seat] is Role.WOLF else "villagers"
         row.wins, row.draws = int(winner == team), int(winner == "draw")
@@ -425,7 +447,7 @@ def game_rows(game: GameData) -> dict[str, Row]:
             continue
         if e.type is EventType.STATEMENT:
             row.statements += 1
-            row.jev_statements += jev_covered
+            row.jev_statements += e.seq in game.jev_read
         if e.type is EventType.INVALID_OUTPUT:
             provider = is_provider_failure(e.meta.reason, e.meta.error)  # also pre-reason logs
             failed[e.actor].append(provider)
@@ -764,7 +786,7 @@ def _ratio(k: float, n: float) -> float | None:
 def _lies(row: Row, source: str) -> dict:
     by_type = {t: n for (src, t), n in row.lies.items() if src == source}
     ls = {k: row.lie_success[(source, k)] for k in LS_KEYS}
-    # Jev only reads some games: its rate is over the statements of those games, not all of them.
+    # Jev may not have read every statement: its rate is over the ones it read.
     statements = row.jev_statements if source == "jev" else row.statements
     return {
         "lies": sum(by_type.values()),

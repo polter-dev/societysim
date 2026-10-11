@@ -80,6 +80,15 @@ def test_reporting_the_wolf_clears_hidden_knowledge():
     assert not any(lb.label == "hidden_knowledge" for lb in label_game(events))
 
 
+def test_silent_fallback_statement_is_not_hidden_knowledge():
+    events = _events()
+    events[16].public_text = "(silent)"  # Ava's turn fell back; she never spoke
+    events[16].meta.fallback = True
+    jev = _jev_from_self_tags(events)
+    hidden = {k for k in _keys(label_game(events, jev)) if k[0] == "hidden_knowledge"}
+    assert not any(k[2] == 16 for k in hidden)
+
+
 def test_eliminating_a_wolf_is_not_mis_elimination():
     events = _events()
     events[104].target = "p5"

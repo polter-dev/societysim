@@ -228,11 +228,13 @@ def _engine_labels(game: _Game) -> list[Label]:
 def label_game(events: list[Event], jev: Jev | None = None) -> list[Label]:
     """All labels for one game, sorted by source_seq. Without Jev: self-tags and engine only."""
     game = _Game(events)
-    statements = [(s, 1.0) for s in game.statements]
+    # A fallback statement is "(silent)": the model never spoke, so it hides nothing.
+    spoken = [s for s in game.statements if not s.meta.fallback]
+    statements = [(s, 1.0) for s in spoken]
     labels = _claim_labels(game, _self_tags(game), "self_tag", statements)
     labels += _engine_labels(game)
     if jev is not None:
-        covered = [(s, jev[s.seq].confidence) for s in game.statements if s.seq in jev]
+        covered = [(s, jev[s.seq].confidence) for s in spoken if s.seq in jev]
         labels += _claim_labels(game, _jev_tags(game, jev), "jev", covered)
     return sorted(labels, key=lambda lb: (lb.source_seq, lb.label, lb.source, lb.actor))
 

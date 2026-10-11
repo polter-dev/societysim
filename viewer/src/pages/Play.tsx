@@ -28,11 +28,28 @@ export function PlayComingSoon({ gamesHref }: { gamesHref: string }) {
   );
 }
 
+/**
+ * True only when this page load is a fresh navigation from the mode picker (same-origin referrer is
+ * ?page=modes). A pasted link, link-preview bot, prefetch or reload has no such referrer or is a reload.
+ */
+export function cameFromModePicker(): boolean {
+  try {
+    const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    if (nav && nav.type !== "navigate") return false;
+    if (!document.referrer) return false;
+    const ref = new URL(document.referrer);
+    return ref.origin === window.location.origin && ref.searchParams.get("page") === "modes";
+  } catch {
+    return false;
+  }
+}
+
 /** Start screen. Advanced settings need the model list; if it won't load, Basic and Watch still work. */
 export default function PlayPage({
-  catalogUrl, schemaUrl, gamesHref, gameHref, initialMode = "basic", go = (url) => window.location.replace(url),
-}: { initialMode?: "basic" | "watch" | "advanced"; catalogUrl: string; schemaUrl: string; gamesHref: string; gameHref: (id: string) => string; go?: (url: string) => void }) {
+  catalogUrl, schemaUrl, gamesHref, gameHref, initialMode = "basic", go = (url) => window.location.replace(url), picked = cameFromModePicker,
+}: {picked?: () => boolean;  initialMode?: "basic" | "watch" | "advanced"; catalogUrl: string; schemaUrl: string; gamesHref: string; gameHref: (id: string) => string; go?: (url: string) => void }) {
   const on = playEnabled();
+  const [auto] = useState(() => initialMode !== "advanced" && picked());
   const status = usePlayStatus();
   const [assets, setAssets] = useState<SetupAssets | undefined>();
   useEffect(() => {
@@ -52,7 +69,7 @@ export default function PlayPage({
     <>
       <h2>{initialMode === "watch" ? "Watch the village" : "Join the village"}</h2>
 <p>{initialMode === "watch" ? "Start an all-AI game and spectate live." : "Play one seat against nine AI models. You see your own role and private information; the full reveal comes at the end."}</p>
-      <PlayStart autoStart={initialMode !== "advanced"} modeLocked initialMode={initialMode} assets={assets} onStarted={(game) => go(gameHref(game.game_id))} />
+      <PlayStart autoStart={auto} modeLocked initialMode={initialMode} assets={assets} onStarted={(game) => go(gameHref(game.game_id))} />
     </>
   );
 }

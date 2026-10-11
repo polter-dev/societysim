@@ -52,7 +52,7 @@ afterEach(() => {
 });
 
 const page = (go = vi.fn()) =>
-  createElement(PlayPage, { catalogUrl: "c.json", schemaUrl: "s.json", gamesHref: "?", gameHref: (id: string) => `?game=${id}`, go });
+  createElement(PlayPage, { catalogUrl: "c.json", schemaUrl: "s.json", gamesHref: "?", gameHref: (id: string) => `?game=${id}`, go, picked: () => true });
 
 describe("VITE_PLAY_API_URL unset", () => {
   beforeEach(() => vi.stubEnv("VITE_PLAY_API_URL", ""));
@@ -166,5 +166,46 @@ describe("VITE_PLAY_API_URL set", () => {
     await render(createElement(PlayDock, { gameId: "g1" }));
     expect(box.innerHTML).toBe("");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("auto-start only after the mode picker", () => {
+  beforeEach(() => vi.stubEnv("VITE_PLAY_API_URL", "https://play.test/api"));
+  const posts = () => fetchMock.mock.calls.filter(([, init]) => init?.method === "POST");
+  const props = { catalogUrl: "c.json", schemaUrl: "s.json", gamesHref: "?", gameHref: (id: string) => `?game=${id}` };
+
+  it.each(["basic", "watch"] as const)("a cold load of mode=%s starts nothing until Start is clicked", async (initialMode) => {
+    const go = vi.fn();
+    await render(createElement(PlayPage, { ...props, initialMode, go }));
+    expect(posts()).toHaveLength(0);
+    const start = [...box.querySelectorAll("button")].find((b) => b.textContent === "Start game")!;
+    expect(start).toBeTruthy();
+    await act(async () => start.click());
+    await settle();
+    expect(posts()).toHaveLength(1);
+    expect(go).toHaveBeenCalledWith("?game=visitor-1");
+  });
+
+  it("starts right after the bot check when the mode was picked in this tab", async () => {
+    const go = vi.fn();
+    await render(createElement(PlayPage, { ...props, initialMode: "watch", picked: () => true, go }));
+    expect(posts()).toHaveLength(1);
+    expect(go).toHaveBeenCalledWith("?game=visitor-1");
+  });
+
+  it("detects a picker navigation only from a fresh same-origin ?page=modes referrer", async () => {
+    const { cameFromModePicker } = await import("./Play");
+    const ref = (v: string) => Object.defineProperty(document, "referrer", { value: v, configurable: true });
+    ref("");
+    expect(cameFromModePicker()).toBe(false);
+    ref(`${window.location.origin}/?page=modes`);
+    expect(cameFromModePicker()).toBe(true);
+    ref("https://evil.test/?page=modes");
+    expect(cameFromModePicker()).toBe(false);
+    const spy = vi.spyOn(performance, "getEntriesByType").mockReturnValue([{ type: "reload" } as PerformanceNavigationTiming]);
+    ref(`${window.location.origin}/?page=modes`);
+    expect(cameFromModePicker()).toBe(false);
+    spy.mockRestore();
+    ref("");
   });
 });

@@ -25,7 +25,7 @@ Answers below come from 100 ten-player games in `mixed_v2_10p`, except where sta
 
 ## Key findings
 
-Villagers won 62 of 100 games. Gemini Flash led the OpenSkill ranking (32.94) and won 65% of its seats (95% interval: 57% to 73%). The intervals overlap across models, and the lie results are exploratory. The 100 games cost $11.02 in model calls.
+Villagers won 62 of 100 games. Gemini Flash led the OpenSkill ranking (33.01) and won 65% of its seats (95% interval: 57% to 73%). The intervals overlap across models, and the lie results are exploratory. The 100 games cost $11.02 in model calls.
 
 ## Results
 
@@ -36,17 +36,17 @@ The table below is written by `scripts/readme_results.py` from the batch report.
 
 | Model | Games / seats | Win rate (95% CI) | OpenSkill ordinal | Detection AUC | Lie rate: self-tag | Lie rate: Jev | Invalid output rate |
 |---|---|---|---|---|---|---|---|
-| gemini-flash | 100 / 139 | 65.5% (57.2% to 72.9%) | 32.94 | 0.77 | 27.9% | n/a | 0.8% |
-| llama4-maverick | 100 / 140 | 60.7% (52.4% to 68.4%) | 23.69 | 0.72 | 27.9% | n/a | 20.0% |
-| gemini-flash-lite | 100 / 138 | 59.4% (51.1% to 67.3%) | 22.71 | 0.75 | 32.2% | n/a | 0.2% |
-| gemma4-26b | 100 / 141 | 56.0% (47.8% to 64.0%) | 19.87 | 0.70 | 17.9% | n/a | 0.2% |
-| qwen3-235b | 100 / 141 | 54.6% (46.4% to 62.6%) | 16.47 | 0.69 | 22.9% | n/a | 3.4% |
-| deepseek-v3.1 | 100 / 137 | 54.0% (45.7% to 62.1%) | 13.73 | 0.73 | 21.9% | n/a | 0.4% |
-| gpt-oss-120b | 100 / 138 | 53.6% (45.3% to 61.7%) | 9.32 | 0.65 | 13.6% | n/a | 5.0% |
-| gpt-5-nano | 12 / 13 | 38.5% (17.7% to 64.5%) | -0.25 | 0.55 | 13.9% | n/a | 12.7% |
-| gpt-5-mini | 12 / 13 | 38.5% (17.7% to 64.5%) | -1.76 | 0.61 | 34.6% | n/a | 0.7% |
+| gemini-flash | 100 / 139 | 65.5% (57.2% to 72.9%) | 33.01 | 0.77 | 27.9% | n/a | 0.8% |
+| llama4-maverick | 100 / 140 | 60.7% (52.4% to 68.4%) | 22.49 | 0.72 | 27.9% | n/a | 20.0% |
+| gemini-flash-lite | 100 / 138 | 59.4% (51.1% to 67.3%) | 22.30 | 0.75 | 32.2% | n/a | 0.2% |
+| gemma4-26b | 100 / 141 | 56.0% (47.8% to 64.0%) | 18.65 | 0.70 | 17.9% | n/a | 0.2% |
+| qwen3-235b | 100 / 141 | 54.6% (46.4% to 62.6%) | 15.52 | 0.69 | 22.9% | n/a | 3.4% |
+| deepseek-v3.1 | 100 / 137 | 54.0% (45.7% to 62.1%) | 11.73 | 0.73 | 21.9% | n/a | 0.4% |
+| gpt-oss-120b | 100 / 138 | 53.6% (45.3% to 61.7%) | 8.01 | 0.65 | 13.6% | n/a | 5.0% |
+| gpt-5-nano | 12 / 13 | 38.5% (17.7% to 64.5%) | -0.14 | 0.55 | 13.9% | n/a | 12.7% |
+| gpt-5-mini | 12 / 13 | 38.5% (17.7% to 64.5%) | -2.28 | 0.61 | 34.6% | n/a | 0.7% |
 
-Wolf-side advantage (OpenSkill rating of the wolf side as a player; 0 is even, above 0 favors the wolves): overall pool mu -3.66 (sigma 2.46); sided pool mu -1.09 (sigma 2.64). Within 2 sigma of 0, so no clear advantage yet.
+Wolf-side advantage (OpenSkill rating of the wolf side as a player; 0 is even, above 0 favors the wolves): overall pool mu -3.86 (sigma 2.52); sided pool mu -1.09 (sigma 2.64). Within 2 sigma of 0, so no clear advantage yet.
 
 Sample size: 100 finished games; each model filled 13 to 141 seats. Wide intervals mean a gap between two models may be chance. Lie rates are lies per statement; n/a means that label source has no labels in this batch.
 <!-- results:end -->

@@ -37,7 +37,7 @@ Say only what is filled in:
 All from `runs/mixed_v2_10p/report/report.md` (100 ten-player games, 2 wolves each):
 
 - Win rate: villagers won 62, wolves 38. gemini-flash won 65% of its seats (95% CI 57% to 73%): 68% as wolf, 65% as villager. Next are llama4-maverick 61% (52% to 68%) and gemini-flash-lite 59% (51% to 67%). The intervals overlap, so say "led", not "beat".
-- Skill rating (OpenSkill ordinal): gemini-flash 32.94, llama4-maverick 23.69, gemini-flash-lite 22.71, gemma4-26b 19.87, qwen3-235b 16.47, deepseek-v3.1 13.73, gpt-oss-120b 9.32. The report gives one ordinal per model, not one per side.
+- Skill rating (OpenSkill ordinal): gemini-flash 33.01, llama4-maverick 22.49, gemini-flash-lite 22.30, gemma4-26b 18.65, qwen3-235b 15.52, deepseek-v3.1 11.73, gpt-oss-120b 8.01. The report gives one ordinal per model, not one per side.
 - Lies: 1,129 self-tagged lies in 4,702 statements (24%). gemini-flash-lite lied most among the 100-game models (32%), gpt-oss-120b least (14%). gemini-flash's lies moved 45% of the suspicions they targeted (n=943), the highest; gpt-oss-120b's moved 16% (n=383).
 - Does lying win? Overall, 57% of votes went the way a lie implied, against a 59% no-lie base rate, so not on average. gemini-flash is the exception: 73% against its 65% base.
 - Who fools whom: in most liar-listener cells the listener followed the lie less often than it followed true claims of the same kind. Example: when gpt-oss-120b lied, deepseek-v3.1 followed 26% of 69 votes, against 81% after true claims. All 13 cells above baseline have gpt-5-mini or gpt-5-nano as the liar or the listener, and those two models played only 12 games each, so that is a small sample (for example qwen3-235b followed gpt-5-mini's lies 19 of 19 times, against 78%).
@@ -82,7 +82,7 @@ Demo game: https://society-sim.us/?game=mixed_v2_10p-g0043&seq=49&mode=narrator.
    - Seats and roles rotate. No Claude models play.
    - On screen: the model table in the README or `configs/models.yaml`.
 6. **Results: who lies best, who catches lies**
-   - gemini-flash leads: 65% win rate (57% to 73%), OpenSkill 32.94, lies moved 45% of targeted suspicions, detection AUC 0.77. Villagers won 62 of 100.
+   - gemini-flash leads: 65% win rate (57% to 73%), OpenSkill 33.01, lies moved 45% of targeted suspicions, detection AUC 0.77. Villagers won 62 of 100.
    - On screen: report charts from `runs/<batch>/report/`, or the leaderboard page.
 7. **Results: who fools whom**
    - Most cells sit below the listener's true-claim baseline: lies were followed less than truths. Example: gpt-oss-120b lying to deepseek-v3.1, 26% (n=69) against 81%.

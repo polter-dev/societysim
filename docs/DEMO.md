@@ -78,7 +78,7 @@ Each script is about 60 seconds spoken. Each says what to click, what to say, an
 - Open models at the table: 5 of the 9 in `configs/mixed_v1.yaml`, all through HF Inference Providers.
 - Smoke batch (#34): 10 of 10 games finished, about $0.02 per game.
 - `mixed_v2_10p`: 100 ten-player games, 0 unfinished, $11.02 total. Villagers won 62, wolves 38.
-- Top of the leaderboard: gemini-flash, 65% win rate (95% CI 57% to 73%), OpenSkill ordinal 32.94, 68% as wolf over 28 wolf seats. Next: llama4-maverick 61% (52% to 68%), gemini-flash-lite 59% (51% to 67%).
+- Top of the leaderboard: gemini-flash, 65% win rate (95% CI 57% to 73%), OpenSkill ordinal 33.01, 68% as wolf over 28 wolf seats. Next: llama4-maverick 61% (52% to 68%), gemini-flash-lite 59% (51% to 67%).
 - Lie success (self-tag, exploratory): 1,129 lies. 57% of votes went the way a lie implied, against a 59% no-lie base rate. gemini-flash's lies moved 45% of the suspicions they targeted (n=943), the highest.
 
 **If it breaks:** local viewer with the same game, and a screenshot of the dataset card.
@@ -172,7 +172,7 @@ Gemini is in the lineup and the Devpost draft lists the Gemini prize. No ticket 
 - Last look, 7-player self-play baseline (#35 note, 45 games): `gemini-flash` had the highest detection score, about 0.91, ahead of `deepseek` (0.85) and `llama4` (0.81). `TODO(verify)` against the report before saying it, and call it a 7-player self-play result.
 - Neon detectors/liars views last seen (#344): `gemini-flash-lite` the top detector, `gemini-flash` the top liar by suspicion received. They are also on the Leaderboard page under Global rankings (Detectors and Liars tabs). `TODO(verify)` on the day.
 - Honest caveat: `gemini-flash` calls were slow (45 to 389 s per call in the preflight, #35) and the free-tier rate limit is low. If asked, say so.
-- `mixed_v2_10p` (10 players, 100 games): gemini-flash 65% win rate (57% to 73%), OpenSkill 32.94 (first), detection AUC 0.77 (first), lies moved 45% of targeted suspicions (n=943, first). gemini-flash-lite 59% (51% to 67%), OpenSkill 22.71 (third), AUC 0.75, 39% (n=1,204). Median latency 3.7 s and 1.5 s per call in this batch.
+- `mixed_v2_10p` (10 players, 100 games): gemini-flash 65% win rate (57% to 73%), OpenSkill 33.01 (first), detection AUC 0.77 (first), lies moved 45% of targeted suspicions (n=943, first). gemini-flash-lite 59% (51% to 67%), OpenSkill 22.30 (third), AUC 0.75, 39% (n=1,204). Median latency 3.7 s and 1.5 s per call in this batch.
 
 **If it breaks:** model profile screenshots.
 

@@ -133,6 +133,18 @@
   .replay-app .replay-bar nav[aria-label='Timeline markers'] button{padding:1px 6px;font-size:calc(var(--gs-ui) - 1px);text-transform:capitalize}
   /* Pop-ups: summaries stacked at the bar's end; open, they rise over the table. One at a time. */
   .replay-app .replay-pops{flex:none;display:flex;flex-direction:column;justify-content:center;gap:3px}
+  /* A narrow bar (a ~830-1000px window with the your-turn column, more so with the Live badge) can't fit
+     the whole timeline row: drop the "N / M" counter and the Speed word, then the speed picker, and clip
+     the rest so it never runs under the pop-up buttons (#688). */
+  .replay-app .replay-bar{container:replay-bar/inline-size}
+  @container replay-bar (max-width:760px){
+    .replay-app .replay-bar .replay-controls{overflow-x:clip;overflow-clip-margin:4px}
+    .replay-app .replay-bar section[aria-label='Game timeline']>div>span{display:none}
+    .replay-app .replay-bar section[aria-label='Game timeline']>div>label:first-of-type{font-size:0;gap:0}
+  }
+  @container replay-bar (max-width:620px){
+    .replay-app .replay-bar section[aria-label='Game timeline']>div>label:first-of-type{display:none}
+  }
   .replay-app .replay-pop{position:static;width:auto;margin:0;padding:0;background:none;border:0;font-size:var(--gs-ui)}
   .replay-app .replay-pop>summary{padding:calc((var(--gs-ctl) - 28px) / 4 + 1px) 10px;line-height:1.25;border:1px solid #ac8b4599;border-radius:999px;background:#123c2e;cursor:pointer;white-space:nowrap;list-style:none}
   .replay-app .replay-pop>summary::-webkit-details-marker{display:none}

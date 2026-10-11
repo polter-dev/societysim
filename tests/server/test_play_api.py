@@ -15,6 +15,7 @@ from fakes import FakeClient  # noqa: E402
 
 from societysim.agents.llm_agent import llm_agents  # noqa: E402
 from societysim.agents.scripted import RandomAgent  # noqa: E402
+from societysim.engine.state import NAME_POOLS  # noqa: E402
 from societysim.models.client import Usage  # noqa: E402
 from societysim.models.registry import load_registry  # noqa: E402
 from societysim.server import manager as play_manager  # noqa: E402
@@ -195,6 +196,21 @@ async def test_full_game_as_a_human_seat(make_client, tmp_path):
     assert all(e["suspicion"] is None and e["private_reasoning"] == "human player" for e in said)
     assert not any(e["meta"].get("suspicion_default") for e in events)
     assert not p0(events, "fallback_action")
+
+
+async def test_players_have_names_that_fit_their_avatars(make_client):
+    """#400: /me names every player (no "Seat N"), and each name comes from its model's pool."""
+    pools = {m.name: m.avatar_presentation for m in load_registry(REGISTRY).models}
+    async with make_client() as c:
+        started = await start(c)
+        me = await until(c, started, lambda me: me["players"])
+        models = c.manager.games[started["game_id"]].game.state.models
+        names = {p["seat"]: p["name"] for p in me["players"]}
+        assert len(set(names.values())) == len(models)
+        for seat, model in models.items():
+            assert names[seat] in NAME_POOLS[pools.get(model, "neutral")]
+        assert models["p0"] == "human" and names["p0"] in NAME_POOLS["neutral"]
+        assert me["name"] == names["p0"]
 
 
 async def test_bad_setup_is_rejected(make_client):

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Event } from "../types/events";
 import {
-  WOLF_COUNT,
   buildResults,
   isLocked,
   selectableSeats,
   lockIfRevealed,
   toggleMark,
+  wolfCount,
   type GuessState,
   type Results,
 } from "./guesses";
@@ -25,7 +25,7 @@ export interface SpotWolfView {
 export function spotWolfView(events: Event[], idx: number, state: GuessState): SpotWolfView {
   return {
     seats: selectableSeats(events, idx, state.marks).map((s) => ({ ...s, marked: state.marks.includes(s.id) })),
-    maxMarks: WOLF_COUNT,
+    maxMarks: wolfCount(events),
     locked: isLocked(state, events, idx),
     results: buildResults(events, idx, state),
   };

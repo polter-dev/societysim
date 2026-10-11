@@ -16,6 +16,7 @@ import {
   scoreMarks,
   selectableSeats,
   toggleMark,
+  wolfCount,
 } from "./guesses";
 import { loadGuesses, saveGuesses } from "./storage";
 import { spotWolfView } from "./useSpotWolf";
@@ -117,6 +118,58 @@ describe("marking and locking", () => {
     expect(isLocked(s, events, 0)).toBe(true);
     // even without a stored lock, the reveal itself blocks new marks
     expect(toggleMark(initGuesses("g"), events, endIdx, "p2").marks).toEqual([]);
+  });
+});
+
+describe("wolf count", () => {
+  /** The fixture with exactly `n` wolves in game_start. */
+  function withWolves(n: number) {
+    const wolfSeats = ["p2", "p5", "p1", "p4"].slice(0, n);
+    return events.map((e) =>
+      e.type !== "game_start"
+        ? e
+        : {
+            ...e,
+            meta: {
+              ...e.meta,
+              seats: Object.fromEntries(
+                Object.entries(e.meta.seats!).map(([id, s]) => [
+                  id,
+                  { ...s, role: wolfSeats.includes(id) ? ("wolf" as const) : ("villager" as const) },
+                ]),
+              ),
+            },
+          },
+    );
+  }
+
+  it("counts the wolves in game_start", () => {
+    expect(wolfCount(events)).toBe(2);
+    expect(wolfCount(withWolves(3))).toBe(3);
+    expect(wolfCount(withWolves(1))).toBe(1);
+  });
+
+  it("falls back to 2 when game_start has no roles", () => {
+    const bare = events.map((e) => (e.type === "game_start" ? { ...e, meta: { ...e.meta, seats: undefined } } : e));
+    expect(wolfCount(bare)).toBe(2);
+    expect(wolfCount([])).toBe(2);
+  });
+
+  it("allows three marks in a 3-wolf game", () => {
+    const ev = withWolves(3);
+    let s = initGuesses("g");
+    for (const seat of ["p0", "p1", "p2"]) s = toggleMark(s, ev, 5, seat);
+    expect(s.marks).toEqual(["p0", "p1", "p2"]);
+    expect(toggleMark(s, ev, 5, "p3")).toBe(s);
+    expect(spotWolfView(ev, 5, s).maxMarks).toBe(3);
+  });
+
+  it("allows one mark in a 1-wolf game", () => {
+    const ev = withWolves(1);
+    const s = toggleMark(initGuesses("g"), ev, 5, "p0");
+    expect(s.marks).toEqual(["p0"]);
+    expect(toggleMark(s, ev, 5, "p3")).toBe(s);
+    expect(spotWolfView(ev, 5, s).maxMarks).toBe(1);
   });
 });
 

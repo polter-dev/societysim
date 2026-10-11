@@ -1,8 +1,8 @@
 import { deriveScene } from "../scene/deriveScene";
 import type { Event, Role } from "../types/events";
 
-/** Default rules: 2 wolves at the table (docs/RULES.md). Public knowledge, so safe to show during play. */
-export const WOLF_COUNT = 2;
+/** Default rules: 2 wolves at the table (docs/RULES.md). Used when the log does not say how many there are. */
+export const DEFAULT_WOLF_COUNT = 2;
 export const POINTS_PER_WOLF = 10;
 export const PENALTY_PER_INNOCENT = 5;
 
@@ -29,6 +29,17 @@ export function initGuesses(gameId: string): GuessState {
 
 function clamp(events: Event[], idx: number): number {
   return Math.max(0, Math.min(idx, events.length - 1));
+}
+
+/**
+ * How many wolves the game has. The count is public knowledge (players are told the role counts), so it is
+ * safe to use during play; only the count is read here, never which seats are wolves. Falls back to the
+ * default when game_start carries no roles (a running Neon game's stand-in).
+ */
+export function wolfCount(events: Event[]): number {
+  const seats = events.find((e) => e.type === "game_start")?.meta.seats;
+  const n = Object.values(seats ?? {}).filter((s) => s.role === "wolf").length;
+  return n > 0 ? n : DEFAULT_WOLF_COUNT;
 }
 
 /** True once events[0..idx] includes the game_end event. Nothing role-related may be shown before this. */
@@ -77,7 +88,7 @@ export function toggleMark(
   events: Event[],
   idx: number,
   seat: string,
-  maxMarks = WOLF_COUNT,
+  maxMarks = wolfCount(events),
 ): GuessState {
   if (events.length === 0 || isLocked(state, events, idx)) return state;
   const on = state.marks.includes(seat);

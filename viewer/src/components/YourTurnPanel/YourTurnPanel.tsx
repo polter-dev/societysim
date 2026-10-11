@@ -163,7 +163,7 @@ export function YourTurnPanel({ seat, events = [] }: { seat: Seat; events?: Even
       )}
       {seat.error && <p role="alert">{seat.error}</p>}
 
-      {sent && !pending && <p role="status" className="your-turn__sent">Move sent. Waiting for the village…</p>}
+      {sent && !pending && me.alive && me.status === "running" && <p role="status" className="your-turn__sent">Move sent. Waiting for the village…</p>}
       {pending && (
         <form
           className="your-turn__form"

@@ -65,6 +65,22 @@ describe("YourTurnPanel", () => {
     expect(sent(pending)).toEqual({ ok: true, body: { action: { vote: "p2" } } });
   });
 
+  it("drops the 'Move sent' line once the seat is out", async () => {
+    const pending: PendingAction = { kind: "vote", targets: ["p1", "p2"], others: ["p1", "p2"], deadline: 0 };
+    render(pending);
+    click(button("Bo"));
+    await act(async () => box.querySelector("form")!.requestSubmit());
+    const after = (alive: boolean) => {
+      const seat = { me: { ...me(pending), alive, pending_action: null }, gone: false, pending: null, error: null, errors: [], busy: false, secondsLeft: null, submit, refresh: vi.fn(async () => {}) };
+      act(() => root.render(createElement(YourTurnPanel, { seat })));
+    };
+    after(true);
+    expect(box.textContent).toContain("Move sent");
+    after(false);
+    expect(box.textContent).toContain("You are out.");
+    expect(box.textContent).not.toContain("Move sent");
+  });
+
   it("abstain is its own button", () => {
     const pending: PendingAction = { kind: "vote", targets: ["p1", "abstain"], others: ["p1"], deadline: 0 };
     render(pending);

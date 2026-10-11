@@ -15,6 +15,9 @@
   --gs-counter:clamp(38px,6dvh,80px);
   --gs-bar:clamp(84px,10.5dvh,124px);
   --gs-turn:0px;
+  /* chrome and bar text, and their control height: 12px / 28px up to ~1900 wide, 16px / 40px at 2560 */
+  --gs-ui:clamp(12px,.62vw,16px);
+  --gs-ctl:clamp(28px,1.6vw,40px);
   /* table region height, then the width the table would use at that height */
   --gs-th:calc(100dvh - var(--gs-top) - var(--gs-counter) - var(--gs-bar) - 2 * var(--gs-gap));
   /* side panels take what the table leaves, within bounds */
@@ -39,8 +42,8 @@
   html:has(.illustrated-shell),body:has(.illustrated-shell){height:100%;overflow:hidden}
 
   /* --- top chrome: compact, themed, off the art --------------------------------------------- */
-  body:has(.illustrated-shell) .site-nav{position:fixed;z-index:6;left:var(--gs-gap);top:calc((var(--gs-top) - 32px) / 2);height:32px;margin:0;max-width:calc(100vw - var(--gs-turn) - 360px)}
-  .replay-app .replay-tools{position:fixed;z-index:6;top:calc((var(--gs-top) - 32px) / 2);right:calc(var(--gs-turn) + 2 * var(--gs-gap) + 44px);left:auto;height:32px;margin:0;padding:0 4px 0 6px;width:auto;max-width:none;display:flex;align-items:center;gap:8px;background:var(--gs-panel);border:1px solid var(--gs-line);border-radius:8px;box-sizing:border-box;font-size:12px}
+  body:has(.illustrated-shell) .site-nav{position:fixed;z-index:6;left:var(--gs-gap);top:calc((var(--gs-top) - var(--gs-ctl) - 4px) / 2);height:calc(var(--gs-ctl) + 4px);font-size:var(--gs-ui);margin:0;max-width:calc(100vw - var(--gs-turn) - 360px)}
+  .replay-app .replay-tools{position:fixed;z-index:6;top:calc((var(--gs-top) - var(--gs-ctl) - 4px) / 2);right:calc(var(--gs-turn) + 2 * var(--gs-gap) + 44px);left:auto;height:calc(var(--gs-ctl) + 4px);margin:0;padding:0 4px 0 6px;width:auto;max-width:none;display:flex;align-items:center;gap:8px;background:var(--gs-panel);border:1px solid var(--gs-line);border-radius:8px;box-sizing:border-box;font-size:var(--gs-ui)}
   .replay-app .replay-tools>p{margin:0;display:flex;align-items:center;gap:8px;white-space:nowrap}
   /* Loading, empty and error notes drop below the chrome row instead of stretching it. */
   .replay-app .replay-tools>:is([role=alert],[role=status],details,p:not(:first-of-type)){position:absolute;top:calc(100% + 6px);right:0;margin:0;padding:6px 10px;width:max-content;max-width:40vw;background:var(--gs-panel);border:1px solid var(--gs-line);border-radius:8px}
@@ -91,25 +94,25 @@
   .illustrated-shell.agents-collapsed:before{top:var(--gs-top);bottom:var(--gs-bar);width:40px}
 
   /* --- bottom bar ------------------------------------------------------------------------------ */
-  .replay-app .replay-bar{position:fixed;z-index:4;left:var(--gs-gap);right:calc(var(--gs-turn) + var(--gs-gap));bottom:var(--gs-gap);height:calc(var(--gs-bar) - var(--gs-gap));box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:6px 10px;color:var(--gs-ink);background:var(--gs-panel);border:1px solid var(--gs-line);border-radius:12px;font:12px system-ui,sans-serif}
-  .replay-app .replay-bar .replay-controls{position:static;flex:1;min-width:0;width:auto;max-height:none;margin:0;padding:0;overflow:visible;background:none;border:0;display:flex;flex-wrap:nowrap;align-items:center;gap:12px;font-size:12px}
+  .replay-app .replay-bar{position:fixed;z-index:4;left:var(--gs-gap);right:calc(var(--gs-turn) + var(--gs-gap));bottom:var(--gs-gap);height:calc(var(--gs-bar) - var(--gs-gap));box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:6px 10px;color:var(--gs-ink);background:var(--gs-panel);border:1px solid var(--gs-line);border-radius:12px;font:var(--gs-ui) system-ui,sans-serif}
+  .replay-app .replay-bar .replay-controls{position:static;flex:1;min-width:0;width:auto;max-height:none;margin:0;padding:0;overflow:visible;background:none;border:0;display:flex;flex-wrap:nowrap;align-items:center;gap:12px;font-size:var(--gs-ui)}
   .replay-app .replay-bar .replay-controls>section{flex:1;min-width:0}
   .replay-app .replay-bar .step-controls{flex:none;gap:6px}
-  .replay-app .replay-bar .step-controls :is(.step-prev,.step-next){width:32px;height:32px;font-size:12px}
-  .replay-app .replay-bar .step-controls .step-label{min-width:6.5em;font-size:13px}
-  .replay-app .replay-bar .step-controls .step-live{min-height:32px;padding:0 10px;font-size:12px}
+  .replay-app .replay-bar .step-controls :is(.step-prev,.step-next){width:calc(var(--gs-ctl) + 4px);height:calc(var(--gs-ctl) + 4px);font-size:var(--gs-ui)}
+  .replay-app .replay-bar .step-controls .step-label{min-width:6.5em;font-size:calc(var(--gs-ui) + 1px)}
+  .replay-app .replay-bar .step-controls .step-live{min-height:var(--gs-ctl);padding:0 10px;font-size:var(--gs-ui)}
   .replay-app .replay-bar section[aria-label='Game timeline']>div{gap:8px!important;flex-wrap:nowrap!important}
   .replay-app .replay-bar section[aria-label='Game timeline']>div>label:last-of-type{flex:1 1 auto!important;min-width:80px;white-space:nowrap}
-  .replay-app .replay-bar section[aria-label='Game timeline'] button{padding:3px 8px;font-size:12px}
-  .replay-app .replay-bar .themed-select--field .themed-select__trigger.themed-select__trigger{min-height:28px;padding:0 8px;font-size:13px}
+  .replay-app .replay-bar section[aria-label='Game timeline'] button{padding:3px 8px;font-size:var(--gs-ui)}
+  .replay-app .replay-bar .themed-select--field .themed-select__trigger.themed-select__trigger{min-height:var(--gs-ctl);padding:0 8px;font-size:calc(var(--gs-ui) + 1px)}
   /* Timeline markers: one strip, swiped or tabbed sideways; no scrollbar of its own. */
   .replay-app .replay-bar nav[aria-label='Timeline markers']{flex-wrap:nowrap!important;gap:6px!important;margin-top:4px!important;overflow-x:auto;scrollbar-width:none}
   .replay-app .replay-bar nav[aria-label='Timeline markers']::-webkit-scrollbar{display:none}
   .replay-app .replay-bar nav[aria-label='Timeline markers']>div{flex:none;padding:1px 4px!important;border-color:#ac8b4566!important;white-space:nowrap}
-  .replay-app .replay-bar nav[aria-label='Timeline markers'] button{padding:1px 6px;font-size:11px;text-transform:capitalize}
+  .replay-app .replay-bar nav[aria-label='Timeline markers'] button{padding:1px 6px;font-size:calc(var(--gs-ui) - 1px);text-transform:capitalize}
   /* Pop-ups: summaries stacked at the bar's end; open, they rise over the table. One at a time. */
   .replay-app .replay-pops{flex:none;display:flex;flex-direction:column;justify-content:center;gap:4px}
-  .replay-app .replay-pop{position:static;width:auto;margin:0;padding:0;background:none;border:0;font-size:12px}
+  .replay-app .replay-pop{position:static;width:auto;margin:0;padding:0;background:none;border:0;font-size:var(--gs-ui)}
   .replay-app .replay-pop>summary{padding:3px 10px;border:1px solid #ac8b4599;border-radius:999px;background:#123c2e;cursor:pointer;white-space:nowrap;list-style:none}
   .replay-app .replay-pop>summary::-webkit-details-marker{display:none}
   .replay-app .replay-pop[open]>summary{background:#82692c;border-color:#e3c576}
@@ -143,11 +146,11 @@
 }
 
 /* Chrome controls at every width: the file picker is a themed button, the ambience toggle an icon. */
-.replay-app .file-button{display:inline-flex;align-items:center;height:28px;padding:0 10px;border:1px solid #a88a46;border-radius:6px;background:#123c2e;color:#fff0c2;font:600 12px system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.replay-app .file-button{display:inline-flex;align-items:center;height:var(--gs-ctl);padding:0 10px;border:1px solid #a88a46;border-radius:6px;background:#123c2e;color:#fff0c2;font:600 var(--gs-ui) system-ui,sans-serif;cursor:pointer;white-space:nowrap}
 .replay-app .file-button:hover{filter:brightness(1.2)}
 .replay-app .file-button:has(input:focus-visible){outline:3px solid #ffe499;outline-offset:3px}
 .replay-app .replay-tools label:has(.themed-select){display:inline-flex;align-items:center;gap:6px}
-.replay-app .replay-tools .themed-select--field .themed-select__trigger.themed-select__trigger{min-height:28px;padding:0 8px;font-size:13px}
+.replay-app .replay-tools .themed-select--field .themed-select__trigger.themed-select__trigger{min-height:var(--gs-ctl);padding:0 8px;font-size:calc(var(--gs-ui) + 1px)}
 .illustrated-shell .motion-toggle{display:grid;place-items:center;padding:0;border-radius:50%;font-size:12px;background:#03271eee}
 .illustrated-shell .motion-toggle svg{width:14px;height:14px;fill:currentColor}
 .illustrated-shell .motion-toggle[aria-pressed=true]{background:#82692c}

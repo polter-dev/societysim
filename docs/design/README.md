@@ -1,6 +1,6 @@
 # Viewer design / T4.0
 
-The source is [Werewolf — Game Viewer](https://www.figma.com/design/eWOVhSAOmFM0jycNu3TTPd/Werewolf---Game-Viewer). The original Landing Page and Main website pages remain intact. Editable wireframes and annotations live on [T4.0 — Viewer flows & tokens](https://www.figma.com/design/eWOVhSAOmFM0jycNu3TTPd/Werewolf---Game-Viewer?node-id=54-161).
+**Figma file (design source): [Werewolf — Game Viewer](https://www.figma.com/design/eWOVhSAOmFM0jycNu3TTPd/Werewolf---Game-Viewer)** The original Landing Page and Main website pages remain intact. Editable wireframes and annotations live on [T4.0 — Viewer flows & tokens](https://www.figma.com/design/eWOVhSAOmFM0jycNu3TTPd/Werewolf---Game-Viewer?node-id=54-161).
 
 ## Frames
 
@@ -24,9 +24,24 @@ The prototype uses in-page scroll links for Watch, Leaderboard, player seats, In
 - `interaction-spec.md`: keyboard, screen-reader and visibility rules.
 - `../../viewer/PRODUCT.md` and `../../viewer/DESIGN.md`: Impeccable product/design context.
 
+SocietySim is desktop only. The wireframes and specs cover desktop layouts; mobile and narrow-screen layouts are out of scope.
+
 Day colors and Cinzel/Inter styles come from the existing Figma design. Night colors, gold/focus accents, spacing and radii document the illustrated viewer conventions. The new Viewer foundations collection uses explicit day/night variable names in a single mode, so it works without a paid multi-mode Figma plan. Existing variables were preserved.
 
 This ticket records design intent. It does not implement missing viewer controls, load fonts, or replace application CSS. Those changes belong to the viewer implementation tickets.
+
+## What the live viewer uses today
+
+The app does not use these tokens yet. Its CSS has no custom properties; colors, sizes and radii are written inline per component (`viewer/src/landing`, `illustrated`, `pages`, `play`). Checked against main:
+
+- Fonts: Georgia (headings and landing) and system-ui (small text). Cinzel and Inter are not loaded.
+- Matches the tokens: night panel `#03271e`, night surface `#123c2e`, gold `#d4b35c` (play), focus ring `#ffe499` (3 px outline, 3 px offset).
+- Close but not the same: primary text is about `#f2e7ba` (token `#f4ebc2`); the landing and Advanced Setup screens use `#ffe89f` for focus (2 px) and their own cream and gold shades.
+- Radii in use: 6, 8, 12, 16 and 18 px. Tokens define 8 (control) and 16 (panel).
+- Spacing is mixed px, em and container units (`cqw`), not the 4-48 scale.
+- Advanced Setup and the mode picker use illustrated image backgrounds for panels and inputs, so their surfaces are artwork, not token colors.
+
+Adopting the tokens in the app is a separate viewer ticket. Until then treat the Figma file as the target and this section as the current state.
 
 ## Validation
 

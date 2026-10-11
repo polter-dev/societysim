@@ -26,6 +26,6 @@ Copying a share link announces success. Links contain only game, beat and viewin
 
 ## Visual accessibility
 
-Control targets are at least 44×44 px. Focus uses a 3 px #ffe499 outline with a gap from the control. Body copy uses Inter; Cinzel is reserved for headings. Keep functional text on an opaque panel. Support 375 px through stacked layouts and scrollable transcripts without two-dimensional page scrolling.
+Control targets are at least 44×44 px. Focus uses a 3 px #ffe499 outline with a gap from the control. Body copy uses Inter; Cinzel is reserved for headings. Keep functional text on an opaque panel. Desktop only: mobile and narrow-screen layouts are out of scope. Transcripts scroll inside their panel.
 
 Colors are documented in tokens.json. Primary/secondary copy needs WCAG AA contrast. Secondary text on day/surface is only 4.15:1: use primary text there, or move secondary copy onto day/panel. Pale gold marks on panels meet the non-text 3:1 target. The darker accusation accent is decorative and must be paired with a readable label or higher-contrast outline. The live-site accessibility check is a separate ticket (#303).

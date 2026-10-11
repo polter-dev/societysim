@@ -43,7 +43,7 @@ components:
 
 ## Overview
 
-The user's Figma file is the design authority. See ../docs/design/README.md for exact frame links and the exported foundations. Original illustrated art and the editable behavior wireframes are complementary references. This record initializes Impeccable context; it does not claim the application has already adopted every token.
+The user's Figma file is the design authority. See ../docs/design/README.md for exact frame links and the exported foundations. Original illustrated art and the editable behavior wireframes are complementary references. This record initializes Impeccable context; the application has not adopted these tokens yet (see the live-viewer section in ../docs/design/README.md).
 
 ## Colors
 
@@ -51,11 +51,11 @@ Use day/night palettes deliberately, with primary and secondary copy on opaque s
 
 ## Typography
 
-Use the existing Figma Cinzel heading styles and Inter body/label styles. Header 44 px, page 28 px, section 18 px; body 16/14/12 px. Do not bake functional labels into PNGs. Font loading is a separate implementation concern; Georgia/system-ui are fallbacks.
+Use the existing Figma Cinzel heading styles and Inter body/label styles. Header 44 px, page 28 px, section 18 px; body 16/14/12 px. Do not bake functional labels into PNGs. The live viewer does not load Cinzel or Inter yet: it ships Georgia for headings and system-ui for small text. Adopting the Figma fonts is a separate implementation ticket.
 
 ## Layout
 
-Use the 4–48 px spacing scale. The table supports 7–10 seats, with speech and arrow endpoints tied to seat positions. At 375 px, stack ancillary panels and maintain readable transcripts. Center buttons against their visible artwork, accounting for transparent PNG margins.
+Use the 4–48 px spacing scale. The table supports 7–10 seats, with speech and arrow endpoints tied to seat positions. Desktop only; mobile and responsive layouts are out of scope. Keep transcripts readable in a scrolling panel. Center buttons against their visible artwork, accounting for transparent PNG margins.
 
 ## Elevation & Depth
 
@@ -67,7 +67,7 @@ Control radius 8 px; panel radius 16 px. Interactive targets are at least 44 px 
 
 ## Components
 
-Seat buttons open an inspector. Modal close actions restore focus. Lie markers seek to recorded events. Timeline and step controls expose current position. Narration, playback and viewing-mode changes are labelled. Detailed behavior is in ../docs/design/interaction-spec.md.
+The landing page leads to a mode picker (Normal, Watch, Advanced) and an Advanced Setup screen built on illustrated panels. Seat buttons open an inspector. Modal close actions restore focus. Lie markers seek to recorded events. Timeline and step controls expose current position. Narration, playback and viewing-mode changes are labelled. Detailed behavior is in ../docs/design/interaction-spec.md.
 
 ## Do's and Don'ts
 

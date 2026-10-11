@@ -4,7 +4,11 @@
 
 ## Platform
 
-web
+web (desktop browsers only)
+
+## Platform scope
+
+Desktop only. Mobile and responsive layouts are out of scope.
 
 ## Users
 
@@ -16,7 +20,7 @@ Replay logged Werewolf games, inspect recorded decisions, and understand decepti
 
 ## Operating Context
 
-The React/Vite viewer reads a published index and JSONL recordings. Local JSONL upload is a fallback. Visitor Play is a separate flow backed by a Play API.
+The React/Vite viewer reads a published index and JSONL recordings. Local JSONL upload is a fallback. Visitors can also play: the landing page offers Normal, Watch and Advanced modes, backed by a Play API. A global leaderboard (Detectors and Liars) is live, built from recorded games.
 
 ## Capabilities and Constraints
 
@@ -39,4 +43,4 @@ Actual contracts and fixtures in schema/, fixtures/ and docs/DATA_CONTRACT.md at
 
 ## Accessibility & Inclusion
 
-Keyboard-only operation, named controls, modal focus restoration, readable day/night contrast, reduced motion and responsive use down to 375 px are part of the confirmed viewer brief.
+Keyboard-only operation, named controls, modal focus restoration, readable day/night contrast and reduced motion are part of the confirmed viewer brief.

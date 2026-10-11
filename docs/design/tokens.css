@@ -1,4 +1,4 @@
-/* Exported from Figma viewer foundations; scoped adoption is a separate ticket. */
+/* Exported from Figma viewer foundations. The live viewer does not use these variables yet; adoption is a separate ticket. */
 :root {
   --day-canvas: #243d2b;
   --day-panel: #183020;

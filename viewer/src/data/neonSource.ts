@@ -93,6 +93,17 @@ function modelNames(m: unknown): string[] | undefined {
   return [...new Set(names)].sort();
 }
 
+const DAYS_TIMEOUT_MS = 2000;
+
+/** Day count per finished game from its public game_end row. Best effort: a denial or a slow answer gives no days. */
+async function finishedDays(ids: string[]): Promise<Map<string, number>> {
+  if (ids.length === 0) return new Map();
+  const q = `events_public?select=game_id,day&type=eq.game_end&game_id=in.(${ids.map(encodeURIComponent).join(",")})&limit=${ids.length}`;
+  const timeout = new Promise<never[]>((resolve) => setTimeout(() => resolve([]), DAYS_TIMEOUT_MS));
+  const ends = await Promise.race([get<{ game_id: string; day: number }>(q).catch(() => []), timeout]);
+  return new Map(ends.map((e) => [e.game_id, e.day]));
+}
+
 export function neonSource(): NeonSource {
   const gameRow = async (id: string) => {
     const [row] = await get<{ status: string | null; models: unknown }>(`games?select=status,models&${gid(id)}`);
@@ -105,13 +116,11 @@ export function neonSource(): NeonSource {
     // roles stay in the database). `games` has no day count, so days come from each finished
     // game's public game_end row.
     listGames: async () => {
-      const [rows, ends] = await Promise.all([
-        get<{ game_id: string; models: unknown; status: string | null; winner: string | null }>(
-          "games?select=game_id,models,status,winner&order=started_at.desc.nullslast",
-        ),
-        get<{ game_id: string; day: number }>("events_public?select=game_id,day&type=eq.game_end").catch(() => []),
-      ]);
-      const days = new Map(ends.map((e) => [e.game_id, e.day]));
+      const rows = await get<{ game_id: string; models: unknown; status: string | null; winner: string | null }>(
+        "games?select=game_id,models,status,winner&order=started_at.desc.nullslast",
+      );
+      const finished = rows.filter((g) => g.status === "finished").map((g) => g.game_id);
+      const days = await finishedDays(finished);
       return rows.map(
         (g): GameSummary => ({
           id: g.game_id,

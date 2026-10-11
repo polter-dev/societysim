@@ -10,3 +10,11 @@ body{margin:0;background:#031b17;color:#efe5bd}a{color:#eacb75}.batch-source{dis
 @media(min-width:601px){.detail-heading{background:transparent;top:17%;font-size:2.5cqw}.detail-time{left:26%;top:35.5%;width:14%;font-size:1cqw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}}
 .replay-app button:disabled{opacity:.45;cursor:default}
 @media(min-width:601px){.detail-description{font-size:max(13px,1.5cqw)}.detail-participants p,.detail-reasoning p,.detail-outcome p{font-size:max(13px,1.4cqw)}.detail-time{font-size:max(11px,1cqw)}}
+/* The desktop artwork already contains its close glyph. Overlay only the hit target. */
+@media(min-width:601px){
+  .event-detail-board .detail-close{right:2.5%;top:8%;width:6.5%;height:9.5%;min-width:44px;min-height:44px;padding:0;color:transparent!important;border-radius:50%;cursor:pointer}
+  .event-detail-board .detail-close:focus-visible{outline:2px solid #ffe499;outline-offset:3px}
+  .event-detail-board .detail-participants{top:26.5%;height:30.5%}
+  .event-detail-board .detail-participants h3{line-height:1.2;min-height:3.5cqw;display:flex;align-items:center;margin-bottom:0}
+  .event-detail-board .detail-participants p{margin-top:6%}
+}

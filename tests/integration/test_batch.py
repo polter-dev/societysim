@@ -172,6 +172,29 @@ async def test_salted_batch_resume_requires_same_salt_and_keeps_it_private(tmp_p
         assert secret not in str(exc.value)
 
 
+async def test_salt_mismatch_names_the_salt_and_leaves_the_directory(tmp_path):
+    batch_cfg = cfg(n_games=1, mode="selfplay", models=["a"])
+    for first, second in (("a-private-test-salt", None), (None, "a-private-test-salt")):
+        runs = tmp_path / str(first)
+        await run_batch(batch_cfg, SPECS, None, runs_dir=runs, salt=first)
+        before = {p.name: p.read_bytes() for p in (runs / "t").iterdir()}
+        with pytest.raises(BatchMismatch) as exc:
+            await run_batch(batch_cfg, SPECS, None, runs_dir=runs, salt=second)
+        msg = str(exc.value)
+        assert "SOCIETYSIM_SEED_SALT" in msg and "same" in msg
+        assert "use a new batch_id" not in msg
+        assert "a-private-test-salt" not in msg
+        assert {p.name: p.read_bytes() for p in (runs / "t").iterdir()} == before
+
+
+async def test_non_salt_fingerprint_mismatch_keeps_generic_message(tmp_path):
+    await run_batch(cfg(n_games=1, models=["a"]), SPECS, None, runs_dir=tmp_path)
+    with pytest.raises(BatchMismatch) as exc:
+        await run_batch(cfg(n_games=1, models=["a"], seed=99), SPECS, None, runs_dir=tmp_path)
+    assert "SOCIETYSIM_SEED_SALT" not in str(exc.value)
+    assert "delete the directory" in str(exc.value)
+
+
 async def test_resume_with_nothing_left_makes_no_calls(tmp_path):
     await run_batch(cfg(), SPECS, PricedFake(), runs_dir=tmp_path)
     client = PricedFake()

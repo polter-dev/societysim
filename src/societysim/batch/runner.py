@@ -326,6 +326,17 @@ async def run_batch(
             "use a new batch_id or delete the directory"
         )
     if old.get("fingerprint") not in (None, fp):
+        was_salted = bool(old.get("salted"))  # absent (unsalted) in batches older than the field
+        if was_salted or salt:
+            raise BatchMismatch(
+                f"runs/{cfg.batch_id} was started "
+                f"{'with' if was_salted else 'without'} SOCIETYSIM_SEED_SALT and "
+                f"{'a salt is' if salt else 'no salt is'} set now, so the batch does not match. "
+                "The salt is the likely cause: set the same SOCIETYSIM_SEED_SALT the batch was "
+                "started with (or unset it for an unsalted batch) to resume. If the salt is "
+                "right, the seed, models (or their registry entries), mode or game settings "
+                "changed. Do not delete the directory: it holds finished games and their spend"
+            )
         raise BatchMismatch(
             f"runs/{cfg.batch_id} was made with a different seed, models (or their registry "
             "entries), mode or game settings; use a new batch_id or delete the directory"
@@ -410,6 +421,7 @@ async def run_batch(
             "batch_id": cfg.batch_id,
             "status": status,
             "fingerprint": fp,
+            "salted": bool(salt),
             "agents": agents,
             "started_at": started,
             "updated_at": datetime.now(UTC).isoformat(),

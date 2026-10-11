@@ -4,6 +4,7 @@ which has logs and labels but no Jev cache (#645)."""
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import zipfile
@@ -132,3 +133,32 @@ def test_without_a_cache_unlabeled_games_get_free_labels(local, tmp_path):
     assert '"source":"self_tag"' in labels
     assert '"source":"jev"' not in labels
     assert (ci / "report" / "metrics.json").is_file()
+
+
+def test_a_zip_can_only_add_jev_cache_files(local, tmp_path):
+    ci = _fetched(local, tmp_path)
+    good = f".cache/jev/{GAME}/7.json"
+    bad = [
+        "planted.jsonl",  # batch root: would be published
+        f".cache/jev/{GAME}/../../../planted2.jsonl",
+        "/tmp/planted3.json",
+        f".cache/jev/{GAME}/sub/1.json",
+        ".cache/other/1.json",
+        f".cache/jev/{GAME}/8.txt",
+    ]
+    evil = tmp_path / "evil.zip"
+    with zipfile.ZipFile(evil, "w") as z:
+        z.writestr(good, "{}")
+        for name in bad:
+            z.writestr(name, "{}")
+        link = zipfile.ZipInfo(f".cache/jev/{GAME}/9.json")
+        link.external_attr = (stat.S_IFLNK | 0o777) << 16
+        z.writestr(link, "/etc/passwd")
+    before = {p.name for p in ci.iterdir()}
+    r = _run(ci, evil)
+    assert "restored 1 files, rejected 7" in r.stdout
+    cached = [p.relative_to(ci).as_posix() for p in (ci / ".cache").rglob("*") if p.is_file()]
+    assert cached == [good]
+    assert not list(tmp_path.rglob("planted*"))
+    added = {p.name for p in ci.iterdir()} - before
+    assert added <= {".cache", "report", "highlights.json", "agreement.json"}

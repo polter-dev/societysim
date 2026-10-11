@@ -20,8 +20,8 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 run() { uv run --frozen --project "$root" "$@"; }
 
 if [[ -n "$zip" ]]; then
-  # zipfile drops ".." and absolute paths on extract; python, since unzip may be missing.
-  run python -m zipfile -e "$zip" "$batch"
+  # Only .cache/jev/<game_id>/<seq>.json files; anything else in the zip is rejected.
+  run python "$root/scripts/restore_jev_cache.py" "$zip" "$batch"
   run societysim label "$batch" --no-jev
 else
   echo "::warning::no Jev cache for $(basename "$batch"): the Jev lie rate stays null and there is no agreement.json"

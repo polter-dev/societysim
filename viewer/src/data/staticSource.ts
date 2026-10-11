@@ -36,8 +36,8 @@ export const summarize = (e: IndexEntry): GameSummary => ({
   models: [...new Set(Object.values(e.seats).map((s) => s.model))].sort(),
 });
 
-/** A GameSource over a static index.json. URLs resolve against `base`, so relative paths work on any host. */
-export function indexSource(indexUrl: string, base = window.location.href): GameSource {
+/** A GameSource over a static index.json. `narratedOnly` skips audio fetches for games without shipped narration (default site only). URLs resolve against `base`, so relative paths work on any host. */
+export function indexSource(indexUrl: string, base = window.location.href, narratedOnly = false): GameSource {
   const absIndex = new URL(indexUrl, base);
   const loaded = fetchJson<IndexEntry[]>(absIndex.href).then((entries) => {
     const urls = Object.fromEntries(entries.map((e) => [e.game_id, new URL(e.file, absIndex.pathname.endsWith("/report/index.json") ? new URL("../", absIndex) : absIndex).href]));
@@ -54,7 +54,7 @@ export function indexSource(indexUrl: string, base = window.location.href): Game
     },
     audioIndexUrl: async (id) => {
       const url = (await loaded).urls[id];
-      return url ? siblingAudioIndexUrl(url) : null;
+      return url ? siblingAudioIndexUrl(url, narratedOnly) : null;
     },
   };
 }

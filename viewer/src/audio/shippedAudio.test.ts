@@ -32,8 +32,17 @@ describe("shipped narration", () => {
     expect([...NARRATED_GAMES].sort()).toEqual(dirs.map((d) => d.replace(/\.audio$/, "")).sort());
   });
 
-  it("returns no URL for a game without narration, so nothing is fetched", () => {
-    expect(siblingAudioIndexUrl("https://x.test/mixed_v2_10p-g0000.jsonl")).toBeNull();
+  it("default site: no URL for a game without narration, so nothing is fetched", () => {
+    expect(siblingAudioIndexUrl("https://x.test/mixed_v2_10p-g0000.jsonl", true)).toBeNull();
+    expect(siblingAudioIndexUrl("https://x.test/mixed_v2_10p-g0043.jsonl", true)).toBe(
+      "https://x.test/mixed_v2_10p-g0043.audio/index.json",
+    );
+  });
+
+  it("custom sources (?base, ?index, ?log) keep the URL for any game", () => {
+    expect(siblingAudioIndexUrl("https://x.test/local_batch-g0000.jsonl")).toBe(
+      "https://x.test/local_batch-g0000.audio/index.json",
+    );
     expect(siblingAudioIndexUrl("https://x.test/notes.txt")).toBeNull();
   });
 });

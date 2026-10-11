@@ -54,6 +54,13 @@ describe("indexSource", () => {
     expect(asked.filter((u) => u.endsWith("index.json"))).toHaveLength(1);
   });
 
+  it("audioIndexUrl: narratedOnly skips un-narrated games, custom sources keep the URL", async () => {
+    serve({ [`${site}report/index.json`]: JSON.stringify([entry]) });
+    const url = `${site}sample_game.audio/index.json`;
+    expect(await indexSource("data/report/index.json", base).audioIndexUrl!("fixture-0001")).toBe(url);
+    expect(await indexSource("data/report/index.json", base, true).audioIndexUrl!("fixture-0001")).toBeNull();
+  });
+
   it("surfaces a missing index and unknown games as errors", async () => {
     serve({});
     await expect(indexSource("data/report/index.json", base).listGames()).rejects.toThrow(/HTTP 404/);

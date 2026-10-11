@@ -35,7 +35,7 @@ let dataBase: URL;
 try { dataBase = publishedBase(location.search, location.href); }
 catch (err) { baseError = err instanceof Error ? err.message : String(err); dataBase = new URL('./', location.href); }
 const indexUrl = new URL(indexParam ?? DEFAULT_INDEX_URL, dataBase).href;
-const staticGames = home ? undefined : indexSource(indexUrl);
+const staticGames = home ? undefined : indexSource(indexUrl, undefined, !indexParam && !params.get("base"));
 // Neon (index, leaderboard, live games) when the build has both Neon URLs and the URL doesn't
 // pick a static batch with ?base= or ?index=. Neon errors fall back to the static files.
 // The global rankings board reads Neon directly, so it uses the same gate.

@@ -163,6 +163,47 @@ it("shows a manual retry after a rejected automatic start and waits for a fresh 
   expect(onStarted).toHaveBeenCalledTimes(1);
 });
 
+it("focuses Try again after a failed bot check, then re-runs the check and starts once", async () => {
+  let renders = 0;
+  (globalThis as { turnstile?: unknown }).turnstile = {
+    render: (_el: unknown, options: { callback: (t: string) => void; "error-callback": () => void }) => {
+      if (++renders === 1) options["error-callback"]();
+      else options.callback("fresh-token");
+      return `w${renders}`;
+    },
+  };
+  const onStarted = vi.fn();
+  act(() => root.render(createElement(PlayStart, { onStarted, autoStart: true, modeLocked: true })));
+  await settle();
+  expect(box.querySelector('[role="alert"]')?.textContent).toBe("Turnstile check failed.");
+  const retry = box.querySelector<HTMLButtonElement>("button")!;
+  expect(retry.textContent).toBe("Try again");
+  expect(retry.disabled).toBe(false);
+  expect(document.activeElement).toBe(retry);
+  await act(async () => retry.click());
+  await settle();
+  expect(renders).toBe(2);
+  const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST");
+  expect(posts.map(([, init]) => JSON.parse(init.body).turnstile_token)).toEqual(["fresh-token"]);
+  expect(onStarted).toHaveBeenCalledTimes(1);
+});
+
+it("refetches limits from Try again when they failed to load", async () => {
+  let limitCalls = 0;
+  fetchMock.mockImplementation(async (url: string) => {
+    if (url.endsWith("/limits") && ++limitCalls === 1) return new Response("{}", { status: 500 });
+    return new Response(JSON.stringify(url.endsWith("/limits") ? { play_enabled: true, remaining_today: 5 } : { game_id: "g1", seat: "p0", seat_token: "tok" }));
+  });
+  const onStarted = vi.fn();
+  act(() => root.render(createElement(PlayStart, { onStarted, autoStart: true, modeLocked: true })));
+  await settle();
+  expect(onStarted).not.toHaveBeenCalled();
+  await act(async () => box.querySelector<HTMLButtonElement>("button")!.click());
+  await settle();
+  expect(limitCalls).toBe(2);
+  expect(onStarted).toHaveBeenCalledTimes(1);
+});
+
 it("keeps selected Advanced mode recoverable when its catalog is unavailable", async () => {
   act(() => root.render(createElement(PlayStart, { onStarted: vi.fn(), initialMode: "advanced" })));
   await settle();

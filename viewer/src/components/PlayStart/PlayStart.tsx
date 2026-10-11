@@ -29,14 +29,16 @@ export function PlayStart({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const widget = useRef<HTMLDivElement>(null);
+  const retryButton = useRef<HTMLButtonElement>(null);
   const attempted = useRef(false);
   const starting = useRef(false);
   const started = useRef(false);
   const { token, reset } = useTurnstile(widget, setError);
 
-  useEffect(() => {
+  const loadLimits = useCallback(() => {
     getLimits().then(setLimits, (e) => setError(e instanceof PlayError ? e.message : "Couldn't load limits."));
   }, []);
+  useEffect(loadLimits, [loadLimits]);
 
   const allowed = allowedModels(limits);
   const paused = limits !== null && !limits.play_enabled;
@@ -67,6 +69,19 @@ export function PlayStart({
     attempted.current = true;
     void start();
   }, [autoStart, canStart, error, start]);
+
+  // Keyboard users land on Try again as soon as an automatic start fails.
+  useEffect(() => {
+    if (autoStart && error) retryButton.current?.focus();
+  }, [autoStart, error]);
+
+  /** Re-arm the automatic start. A failed check or limits fetch is redone, so Try again never dead-ends. */
+  const retry = () => {
+    setError(null);
+    attempted.current = false;
+    if (limits === null) loadLimits();
+    if (token === null) reset();
+  };
 
   return (
     <section className="play-start">
@@ -107,9 +122,13 @@ export function PlayStart({
       {!limits && !error && <p className="play-start__status" role="status">Waking the server… Checking availability can take 30–60 seconds.</p>}
       {limits && (!autoStart || paused || none) && <p className="play-start__status">{paused ? "Play is paused." : none ? "The daily allowance or budget is used up." : "Play is open."}</p>}
       {error && <p role="alert">{error}</p>}
-      {(!autoStart || error) && <button type="button" disabled={!canStart} onClick={start}>
-        {busy ? "Waking the server…" : autoStart ? "Try again" : "Start game"}
-      </button>}
+      {autoStart ? (
+        error && <button ref={retryButton} type="button" disabled={busy} onClick={retry}>Try again</button>
+      ) : (
+        <button type="button" disabled={!canStart} onClick={start}>
+          {busy ? "Waking the server…" : "Start game"}
+        </button>
+      )}
     </section>
   );
 }

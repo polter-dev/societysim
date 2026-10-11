@@ -50,6 +50,18 @@ describe("GlobalLeaderboard", () => {
     expect(html).toContain("<td>30%</td><td>83%</td><td>1.00</td><td>n/a (n=0)</td><td>75% (n=4)</td>");
   });
 
+  it("hides the Lie success (Jev) column when no row has a Jev lie, and keeps self-tag", () => {
+    const noJev: GlobalBoard = {
+      ...board,
+      liars: board.liars.map((r) => ({ ...r, self_tag_lie_voters: 10, self_tag_lie_success: 0.5, jev_lie_voters: 0, jev_lie_success: null })),
+    };
+    const html = render({ board: noJev, initialTab: "liars" });
+    expect(html).not.toContain("Lie success (Jev)");
+    expect(html).toContain("Lie success (self-tag)");
+    expect(html).toContain("<td>50% (n=10)</td></tr>");
+    expect(render({ initialTab: "liars" })).toContain("Lie success (Jev)");
+  });
+
   it("loading, empty and error states", () => {
     expect(render({ board: null })).toContain("Loading the leaderboard");
     expect(render({ board: { detectors: [], liars: [], failed: [] } })).toContain("No finished games yet.");

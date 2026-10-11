@@ -1,7 +1,7 @@
 import { useId, useState, type KeyboardEvent } from "react";
 import { ModelAvatar, useModelLabel } from "../ModelAvatar/ModelAvatar";
 import { modelName } from "../../data/modelNames";
-import { BOARD_TABS, DETECTOR_COLUMNS, LIAR_COLUMNS, type BoardTab, type Column, type GlobalBoard } from "../../data/globalBoard";
+import { BOARD_TABS, DETECTOR_COLUMNS, liarColumns, type BoardTab, type Column, type GlobalBoard } from "../../data/globalBoard";
 
 export interface GlobalLeaderboardProps {
   board: GlobalBoard | null;
@@ -34,7 +34,7 @@ export function GlobalLeaderboard({ board, error = null, initialTab = "detectors
   ) : tab === "detectors" ? (
     <Table rows={board.detectors} columns={DETECTOR_COLUMNS} caption="Best wolf detectors, as villagers" />
   ) : (
-    <Table rows={board.liars} columns={LIAR_COLUMNS} caption="Best liars, as wolves" />
+    <Table rows={board.liars} columns={liarColumns(board.liars)} caption="Best liars, as wolves" />
   );
   return (
     <section className="global-leaderboard" data-tab={tab}>

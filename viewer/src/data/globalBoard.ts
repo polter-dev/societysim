@@ -97,6 +97,7 @@ async function get(path: string): Promise<Raw[]> {
 export async function loadGlobalBoard(): Promise<GlobalBoard> {
   // Each view loads on its own: one failing must not blank the other tab.
   const [d, l] = await Promise.allSettled([get("global_detectors?select=*"), get("global_liars?select=*")]);
+  if (d.status === "rejected" && l.status === "rejected") throw d.reason;
   return {
     detectors: d.status === "fulfilled" ? sortDetectors(d.value.map(parseDetector)) : [],
     liars: l.status === "fulfilled" ? sortLiars(l.value.map(parseLiar)) : [],
@@ -153,6 +154,17 @@ export interface GlobalBoardState {
   error: string | null;
 }
 
+/** A tab that failed this refresh keeps its previous rows; it only shows the error with none. */
+function keepPrevious(prev: GlobalBoard | null, next: GlobalBoard): GlobalBoard {
+  if (!prev) return next;
+  const kept = next.failed.filter((t) => !prev.failed.includes(t));
+  return {
+    detectors: kept.includes("detectors") ? prev.detectors : next.detectors,
+    liars: kept.includes("liars") ? prev.liars : next.liars,
+    failed: next.failed.filter((t) => !kept.includes(t)),
+  };
+}
+
 /**
  * Loads the board now and every `intervalMs` while the page is visible. A hidden tab stops
  * polling; it reloads at once when the tab is shown again.
@@ -170,7 +182,7 @@ export function useGlobalBoard(load: () => Promise<GlobalBoard> = loadGlobalBoar
       busy = true;
       try {
         const board = await load();
-        if (!stopped) setState({ board, error: null });
+        if (!stopped) setState((s) => ({ board: keepPrevious(s.board, board), error: null }));
       } catch (e) {
         if (!stopped) setState((s) => ({ ...s, error: e instanceof Error ? e.message : String(e) }));
       }

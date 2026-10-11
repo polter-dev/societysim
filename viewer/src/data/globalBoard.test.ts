@@ -68,6 +68,15 @@ describe("loadGlobalBoard", () => {
     expect(board.liars[0]).toMatchObject({ model: "y", survival_rate: 0.833 });
   });
 
+  it("throws when both views fail, so the last board stays up", async () => {
+    vi.stubGlobal("fetch", async (url: string) =>
+      url.endsWith("/token/anonymous")
+        ? new Response(JSON.stringify({ token: "jwt", expires_at: new Date(Date.now() + 3_600_000).toISOString() }))
+        : new Response("no", { status: 503 }),
+    );
+    await expect(loadGlobalBoard()).rejects.toThrow("HTTP 503");
+  });
+
   it.each([
     ["global_liars", "liars"],
     ["global_detectors", "detectors"],

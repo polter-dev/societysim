@@ -16,3 +16,20 @@
 .advanced-retry{min-height:44px;padding:8px 18px;margin:8px 0;border:1px solid #d4b35c;border-radius:8px;background:#123c2e;color:#f4ebc2;cursor:pointer;font:600 14px system-ui}
 @media(max-width:1000px){.advanced-panel-content>form{padding-bottom:0;-webkit-mask-image:none;mask-image:none}}
 @media(min-width:1001px) and (max-height:700px){.advanced-columns legend{margin-bottom:2px}.advanced-row{margin-bottom:3px}.advanced-actions{margin-top:0}.advanced-start{width:22cqw}.advanced-feedback p{margin:1px 0}}
+/* Keep the heading below the ornament and bring the two settings groups inward. */
+@media(min-width:701px){
+  .advanced-panel-content{padding-top:22%}
+  .advanced-columns{gap:3cqw;margin-inline:1.5cqw}
+  .advanced-row{margin-bottom:4px;padding-block:4px;min-height:36px}
+  .advanced-title{margin-bottom:12px}
+  .advanced-columns legend{margin-bottom:4px}
+}
+/* Short desktops must allow the complete form to remain reachable. */
+@media(min-width:1001px) and (max-height:850px){
+  .advanced-screen{height:auto;overflow:visible}
+  .advanced-panel{max-height:none}
+  .advanced-panel-content>form{overflow:visible;mask-image:none;-webkit-mask-image:none;padding-bottom:0}
+  .advanced-title h1{font-size:28px}
+  .advanced-start{width:26cqw}
+}
+@media(max-width:700px){.advanced-panel-content{padding-top:120px}}

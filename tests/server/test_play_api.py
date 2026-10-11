@@ -226,6 +226,46 @@ async def test_auth_failures(make_client):
         await finished(c, watch)
 
 
+async def test_refresh_reattaches_with_the_seat_token(make_client):
+    """A page reload is a new connection that only has the game id and the stored token:
+    /me gives back the same seat and the pending turn, and starts nothing new."""
+    async with make_client() as c:
+        started = await start(c)
+        before = await until(c, started, waiting)
+        assert before["status"] == "running" and before["pending_action"]
+        spent, left = c.manager.ledger.spent_nanos, c.manager.ledger.remaining_today()
+        url = f"/api/games/{started['game_id']}/me"
+
+        async with httpx.AsyncClient(transport=c._transport, base_url="http://test") as reload:
+            r = await reload.get(url, headers=auth(started["seat_token"]))
+            assert r.status_code == 200, r.text
+            again = r.json()
+            assert (again["game_id"], again["seat"], again["role"]) == (
+                started["game_id"],
+                started["seat"],
+                before["role"],
+            )
+            assert again["pending_action"] == before["pending_action"]
+            assert (await reload.get(url, headers=auth("x" * 43))).status_code == 401
+
+        assert list(c.manager.games) == [started["game_id"]]  # no second game
+        assert c.manager.ledger.spent_nanos == spent  # no extra spend hold
+        assert c.manager.ledger.remaining_today() == left
+
+
+async def test_me_is_404_once_an_ended_game_is_pruned(make_client):
+    async with make_client() as c:
+        started = await start(c)
+        await play_out(c, started)
+        session = await finished(c, started)
+        url, headers = f"/api/games/{started['game_id']}/me", auth(started["seat_token"])
+        assert (await c.get(url, headers=headers)).json()["status"] == "finished"
+        session.ended_at -= play_manager.KEEP_FINISHED_S + 1
+        c.manager._prune()
+        r = await c.get(url, headers=headers)
+        assert r.status_code == 404 and r.json()["error"] == "game_not_found"
+
+
 async def test_wrong_turn_and_bad_moves(make_client):
     async with make_client() as c:
         started = await start(c)

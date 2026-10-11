@@ -160,27 +160,37 @@ function pooled(cells: (DeceptionCell | undefined)[], minN: number): number | nu
   return (p + (z * z) / (2 * n) - z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n)) / (1 + (z * z) / n);
 }
 
-function byRate(keys: string[], rate: (k: string) => number | null): string[] {
+/** Thin: fewer than half of the model's cells reach `minN` voters. Thin models sort after the rest (#717). */
+function rank(cells: (DeceptionCell | undefined)[], minN: number) {
+  const present = cells.filter((c): c is DeceptionCell => !!c);
+  const kept = present.filter((c) => !belowThreshold(c, minN)).length;
+  return { thin: kept * 2 < present.length, rate: pooled(cells, minN) };
+}
+
+function byRate(keys: string[], cellsOf: (k: string) => (DeceptionCell | undefined)[], minN: number): string[] {
+  const r = new Map(keys.map((k) => [k, rank(cellsOf(k), minN)]));
   return [...keys].sort((a, b) => {
-    const ra = rate(a);
-    const rb = rate(b);
-    if (ra === rb) return a.localeCompare(b);
-    if (ra === null) return 1;
-    if (rb === null) return -1;
-    return rb - ra || a.localeCompare(b);
+    const ra = r.get(a)!;
+    const rb = r.get(b)!;
+    if (ra.thin !== rb.thin) return ra.thin ? 1 : -1;
+    if (ra.rate === rb.rate) return a.localeCompare(b);
+    if (ra.rate === null) return 1;
+    if (rb.rate === null) return -1;
+    return rb.rate - ra.rate || a.localeCompare(b);
   });
 }
 
 /**
  * Heatmap axes. Rows: best liars first; columns: most gullible listeners first. Both rank by the
  * Wilson lower bound of the pooled follow rate over cells with at least `minN` voters, so a model
- * seen in a handful of votes can't top the table (#712). Models with no such cell go last.
+ * seen in a handful of votes can't top the table (#712). Thin models (under half their cells reach
+ * `minN`) go after the well-sampled ones (#717).
  */
 export function sortAxes(m: DeceptionMatrix, source: DeceptionSource, minN = DEFAULT_MIN_N) {
   const { liars, listeners } = listModels(m, source);
   const p = m.pairs[source];
   return {
-    liars: byRate(liars, (l) => pooled(Object.values(p[l] ?? {}), minN)),
-    listeners: byRate(listeners, (t) => pooled(liars.map((l) => p[l]?.[t]), minN)),
+    liars: byRate(liars, (l) => Object.values(p[l] ?? {}), minN),
+    listeners: byRate(listeners, (t) => liars.map((l) => p[l]?.[t]), minN),
   };
 }

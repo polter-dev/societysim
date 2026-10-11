@@ -56,4 +56,21 @@ describe("ranking and sorting", () => {
     expect(sortAxes(t, "self_tag").liars).toEqual(["a", "e", "b", "d"]);
     expect(sortAxes(t, "self_tag", 1).liars).toEqual(["a", "d", "e", "b"]); // 4/4 counts once the threshold allows it
   });
+
+  it("puts thin models after well-sampled ones even when their lower bound is higher (#717)", () => {
+    const f = structuredClone(fixture) as any;
+    const big = f.pairs.self_tag.a.b;
+    // d: two 5-voter cells at 5/5 (high bound) among five tiny cells -> thin; b stays well sampled.
+    f.pairs.self_tag.d = {
+      a: { ...big, voters: 5, followed: 5, vote_follow_rate: 1 },
+      b: { ...big, voters: 5, followed: 5, vote_follow_rate: 1 },
+      c: { ...big, voters: 2, followed: 2, vote_follow_rate: 1 },
+      d: { ...big, voters: 2, followed: 2, vote_follow_rate: 1 },
+      e: { ...big, voters: 2, followed: 2, vote_follow_rate: 1 },
+    };
+    const t = parseDeceptionMatrix(f);
+    const liars = sortAxes(t, "self_tag").liars;
+    expect(liars.indexOf("b")).toBeLessThan(liars.indexOf("d"));
+    expect(liars.at(-1)).toBe("d");
+  });
 });

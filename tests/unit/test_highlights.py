@@ -111,6 +111,20 @@ def test_fellow_wolf_voted_out_is_named():
     assert m["score"] == 1.0  # no swap bonus: no non-wolf was eliminated
 
 
+def test_jev_only_lie_is_a_moment_on_its_statement():
+    g = game()
+    bus = next(lb for lb in g.labels if lb.label is LabelType.BUSSING)
+    g.labels = [lb for lb in g.labels if lb is not bus]
+    g.labels.append(bus.model_copy(update={"source": "jev", "source_seq": 69}))
+    (m,) = [m for m in lie_moments(g) if m["actor"] == "p2"]
+    assert m["seq"][0] == 69 and "Both label sources" not in m["description"]
+
+
+def test_no_elimination_says_nobody_went_out():
+    (m,) = [m for m in wolf_survival_moments(game()) if m["actor"] == "p5"]
+    assert m["description"].endswith("; nobody went out.")
+
+
 def test_engine_labels_are_not_lies():
     g = game()
     g.labels = [lb for lb in g.labels if lb.source == "engine"]

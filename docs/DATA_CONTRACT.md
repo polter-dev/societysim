@@ -521,7 +521,7 @@ to them). All bodies are JSON and closed: an unknown key is a 422. Every error i
 | `GET /api/games/{id}/me` | seat token | | `Me` |
 | `POST /api/games/{id}/action` | seat token | `ActionBody` | `{"accepted": true}` |
 | `GET /api/limits` | none | | `{"play_enabled": bool, "remaining_today": int, "client_ip_hint": str, "allowed_models": [str]}` (model ids visitors may use, sorted) |
-| `GET /api/health` | none | | `{"ok": true, "providers_ready": {"<provider>": bool}}` (a key is present for that provider; never the key) |
+| `GET /api/health` | none | | `{"ok": true, "providers_ready": {"<provider>": bool}, "games_running": int}` (a key is present for that provider; never the key. `games_running`: games in memory a deploy would end) |
 
 ### Starting a game
 

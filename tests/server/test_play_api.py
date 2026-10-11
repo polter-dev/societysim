@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 pytest.importorskip("fastapi", reason="needs the server extra: uv run --extra server pytest")
 
@@ -23,7 +24,8 @@ from societysim.server.app import create_app, play_api_json_schema  # noqa: E402
 from societysim.server.manager import Settings  # noqa: E402
 from societysim.setup import REGISTRY  # noqa: E402
 
-SCHEMA = Path(__file__).resolve().parents[2] / "schema/play_api.schema.json"
+ROOT = Path(__file__).resolve().parents[2]
+SCHEMA = ROOT / "schema/play_api.schema.json"
 TIMEOUT = 30  # seconds a whole test game may take
 SAY = "I think we should vote carefully."
 
@@ -170,6 +172,7 @@ async def test_health_and_limits(make_client):
         assert (await c.get("/api/health")).json() == {
             "ok": True,
             "providers_ready": play_manager.providers_ready(),
+            "games_running": 0,
         }
         limits = (await c.get("/api/limits")).json()
         assert limits["play_enabled"] is True and limits["remaining_today"] > 0
@@ -392,6 +395,53 @@ async def test_abandoned_game_is_forfeit(make_client, tmp_path):
     assert "game_end" not in {e["type"] for e in events}
     # Two turns fell back; the third timeout in a row ended the game.
     assert len(p0(events, "fallback_action")) == 2
+
+
+async def test_health_counts_running_games(make_client):
+    """A deploy ends every game in memory (#553): the deploy workflow waits for 0."""
+    async with make_client() as c:
+        started = await start(c)
+        await until(c, started, waiting)
+        assert (await c.get("/api/health")).json()["games_running"] == 1
+        await play_out(c, started)
+        await finished(c, started)
+        assert (await c.get("/api/health")).json()["games_running"] == 0
+
+
+def render_env() -> dict[str, str]:
+    """The plain env values render.yaml gives the play service (secrets are not in it)."""
+    blueprint = yaml.safe_load((ROOT / "render.yaml").read_text(encoding="utf-8"))
+    (service,) = blueprint["services"]
+    return {v["key"]: str(v["value"]) for v in service["envVars"] if "value" in v}
+
+
+async def test_full_game_under_render_limits(make_client, monkeypatch):
+    """#553: games with the visitor alive past day 1 finish under render.yaml's limits,
+    with every model call metered at its worst case against the daily budget."""
+    env = render_env()
+    assert float(env["PLAY_DAILY_BUDGET_USD"]) <= 5 and int(env["PLAY_MAX_TOKENS"]) >= 2048
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("PLAY_RATE_PER_MIN", OPEN_LIMITS["PLAY_RATE_PER_MIN"])  # test polling
+    registry = load_registry(REGISTRY)
+    fake = FakeClient(players=[f"p{i}" for i in range(10)])
+
+    def fake_llm(cfg):
+        specs = registry.resolve([m for m in cfg.seat_models() if m != "human"])
+        return llm_agents(fake, {s.name: s for s in specs}), {}
+
+    later_days = []
+    async with make_client(agents=fake_llm) as c:
+        assert c.manager.settings.play.max_active_per_ip == int(env["PLAY_MAX_ACTIVE_PER_IP"])
+        for _ in range(int(env["PLAY_MAX_GAMES_PER_IP_DAY"])):
+            started = await start(c)
+            seen = await play_out(c, started)
+            session = await finished(c, started)
+            assert seen[-1]["status"] == session.status == "finished", session.status
+            later_days += [me["day"] for me in seen[:-1] if me["day"] >= 2]
+        assert c.manager.ledger.spent_usd() == 0  # every hold settled (the fake costs $0)
+        assert len(fake.calls) > 100  # the models were called, not the budget fallback
+    assert later_days, "the visitor never had a turn after day 1"
 
 
 async def test_villager_never_sees_wolves(make_client):

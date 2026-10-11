@@ -10,9 +10,13 @@ services:
     plan: starter
     numInstances: 1 # game state is in memory: never scale out or autoscale
     healthCheckPath: /api/health
-    # A deploy restarts the server and fails every visitor game in progress (#446, #504), so
-    # only changes to what server/Dockerfile copies trigger one. README.md and LICENSE are
-    # copied too but don't change how the server runs; viewer and docs merges don't deploy.
+    # A deploy restarts the server and fails every visitor game in progress (#446, #504, #553):
+    # traffic moves to the new instance, so the old one's games are gone. Render never deploys
+    # on a push; .github/workflows/deploy-play.yml calls the deploy hook once /api/health shows
+    # games_running 0. Changing an env var in the dashboard redeploys too, with the same effect.
+    autoDeployTrigger: "off"
+    # What server/Dockerfile copies; the deploy workflow's paths filter matches this list.
+    # README.md and LICENSE are copied too but don't change how the server runs.
     buildFilter:
       paths:
         - server/Dockerfile

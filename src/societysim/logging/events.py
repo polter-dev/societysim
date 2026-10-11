@@ -6,6 +6,7 @@ ticket, a SCHEMA_VERSION bump and regenerated schema files in the same PR.
 """
 
 import asyncio
+import contextlib
 import logging
 import subprocess
 from collections.abc import Sequence
@@ -231,15 +232,17 @@ class EventLogger:
 
     async def close(self, timeout: float = 5) -> None:
         """Let the sinks drain (up to `timeout`), stop the workers, then close the sinks."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
         for q in self._queues:
-            while True:  # the stop marker must get in even if the queue is full
-                try:
-                    q.put_nowait(None)
-                    break
-                except asyncio.QueueFull:
-                    q.get_nowait()
+            # Wait for room rather than drop a queued event; a sink still stuck at the
+            # deadline never gets the marker and is cancelled below.
+            with contextlib.suppress(TimeoutError):
+                async with asyncio.timeout_at(deadline):
+                    await q.put(None)
+        left = max(0.0, deadline - loop.time())
         # asyncio.wait rejects an empty set, so skip it when there are no sinks
-        pending = (await asyncio.wait(self._workers, timeout=timeout))[1] if self._workers else ()
+        pending = (await asyncio.wait(self._workers, timeout=left))[1] if self._workers else ()
         for w in pending:  # ponytail: a stuck sink loses its backlog; fine for a log
             w.cancel()
         for sink in self._sinks:

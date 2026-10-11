@@ -105,6 +105,28 @@ async def test_slow_sink_does_not_block_and_drops(caplog):
     await logger.close(timeout=0.1)
 
 
+async def test_close_waits_for_a_full_queue_instead_of_dropping():
+    gate = asyncio.Event()
+
+    class Gated(Recorder):
+        async def write(self, event):
+            await gate.wait()
+            self.events.append(event)
+
+    sink = Gated()
+    logger = EventLogger("g", [sink], queue_size=2)
+    logger.log(**EV)
+    await asyncio.sleep(0)  # the worker takes event 0 and waits on the gate
+    logger.log(**EV)
+    logger.log(**EV)  # the queue is now full
+    closing = asyncio.create_task(logger.close())
+    await asyncio.sleep(0)
+    gate.set()
+    await closing
+    assert [e.seq for e in sink.events] == [0, 1, 2]
+    assert sink.calls == ["close"]
+
+
 async def test_zero_sinks_lifecycle():
     logger = EventLogger("g0", sinks=[])
     await logger.start_game({}, seed=1, models=[])

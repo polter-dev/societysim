@@ -95,13 +95,19 @@ function modelNames(m: unknown): string[] | undefined {
 
 const DAYS_TIMEOUT_MS = 2000;
 
-/** Day count per finished game from its public game_end row. Best effort: a denial or a slow answer gives no days. */
+const DAYS_CHUNK = 100;
+
+/** Day count per finished game from its public game_end rows. Best effort: a denied, failed or slow chunk only blanks its own games. */
 async function finishedDays(ids: string[]): Promise<Map<string, number>> {
-  if (ids.length === 0) return new Map();
-  const q = `events_public?select=game_id,day&type=eq.game_end&game_id=in.(${ids.map(encodeURIComponent).join(",")})&limit=${ids.length}`;
-  const timeout = new Promise<never[]>((resolve) => setTimeout(() => resolve([]), DAYS_TIMEOUT_MS));
-  const ends = await Promise.race([get<{ game_id: string; day: number }>(q).catch(() => []), timeout]);
-  return new Map(ends.map((e) => [e.game_id, e.day]));
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += DAYS_CHUNK) chunks.push(ids.slice(i, i + DAYS_CHUNK));
+  const ask = (chunk: string[]) => {
+    const q = `events_public?select=game_id,day&type=eq.game_end&game_id=in.(${chunk.map(encodeURIComponent).join(",")})&limit=${chunk.length}`;
+    const timeout = new Promise<never[]>((resolve) => setTimeout(() => resolve([]), DAYS_TIMEOUT_MS));
+    return Promise.race([get<{ game_id: string; day: number }>(q).catch(() => []), timeout]);
+  };
+  const results = await Promise.allSettled(chunks.map(ask));
+  return new Map(results.flatMap((r) => (r.status === "fulfilled" ? r.value : [])).map((e) => [e.game_id, e.day]));
 }
 
 export function neonSource(): NeonSource {

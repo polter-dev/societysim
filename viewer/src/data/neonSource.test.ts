@@ -153,6 +153,18 @@ describe("neonSource, finished games", () => {
     expect(asked.some((u) => u.includes("game_end"))).toBe(false);
   });
 
+  it("chunks the days lookup past 100 finished games and merges the days", async () => {
+    const end = full.find((e) => e.type === "game_end")!;
+    const many = Object.fromEntries(
+      Array.from({ length: 230 }, (_, i) => [`g${i}`, { status: "finished", models: MODELS, rows: [end] }]),
+    );
+    const asked = fakeNeon(many);
+    const games = await neonSource().listGames();
+    expect(asked.filter((u) => u.includes("game_end"))).toHaveLength(3);
+    expect(games).toHaveLength(230);
+    expect(games.every((g) => g.days === end.day)).toBe(true);
+  });
+
   it("builds the board from the leaderboard view and counts finished non-scripted games", async () => {
     const asked = fakeNeon({
       a: { status: "finished", models: [], rows: [] },

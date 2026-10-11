@@ -5,7 +5,9 @@ import { seatName } from "../../scene/seatName";
 import { seatPosition } from "../Table/Table";
 
 /**
- * Labels to show at this scene: the ones whose source_seq is the current event, filtered by source.
+ * Labels to show at this scene: the ones whose source_seq is the current event, or anywhere inside
+ * `range` when the stepper passes the current beat's first and last seq (a beat spans several events,
+ * and the scene sits on its last one). Filtered by source.
  * Villager mode shows none. Lie labels name hidden roles ("Finn claimed Seer; he is a wolf"), and
  * a label's detail can't be split into public and private parts, so we hide them all.
  * ponytail: could show a label once its truth is public (role revealed at death/game end); not worth it yet.
@@ -15,11 +17,17 @@ export function visibleLabels(
   scene: Scene,
   mode: Mode,
   sources?: LabelSource[],
+  range?: SeqRange,
 ): Label[] {
   if (mode !== "narrator") return [];
-  return labels.filter(
-    (l) => l.source_seq === scene.seq && (!sources || sources.includes(l.source)),
-  );
+  const inScene = (seq: number) => (range ? seq >= range.first && seq <= range.last : seq === scene.seq);
+  return labels.filter((l) => inScene(l.source_seq) && (!sources || sources.includes(l.source)));
+}
+
+/** Inclusive seq range of the stepper's current beat. */
+export interface SeqRange {
+  first: number;
+  last: number;
 }
 
 const pretty = (s: string) => s.replace(/_/g, " ");
@@ -34,6 +42,7 @@ export function LabelPopups({
   mode,
   playing = false,
   sources,
+  range,
   children,
 }: {
   scene: Scene;
@@ -42,16 +51,21 @@ export function LabelPopups({
   /** Autoplay is running: drop the live region so popups aren't announced. */
   playing?: boolean;
   sources?: LabelSource[];
+  /** The current beat's seq range; without it only labels on the shown event pop up. */
+  range?: SeqRange;
   children?: ReactNode;
 }) {
-  const shown = visibleLabels(labels, scene, mode, sources);
+  const shown = visibleLabels(labels, scene, mode, sources, range);
   const n = scene.players.length;
+  const perSeat = new Map<string, number>(); // stack same-seat popups, not every popup
   return (
     <div style={{ position: "relative", width: "100%", maxWidth: 640 }}>
       {children}
       {/* Always mounted, even empty: screen readers miss live regions that appear with their content. */}
       <div aria-live={playing ? "off" : "polite"} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
         {shown.map((l, k) => {
+          const stack = perSeat.get(l.actor) ?? 0;
+          perSeat.set(l.actor, stack + 1);
           const i = scene.players.findIndex((p) => p.id === l.actor);
           const { x, y } = i < 0 ? { x: 50, y: 50 } : seatPosition(i, n);
           // Pop toward the table center so it stays inside the box; stack same-seat popups.
@@ -59,7 +73,7 @@ export function LabelPopups({
             position: "absolute",
             left: `${x}%`,
             top: `${y}%`,
-            transform: `translate(-50%, ${y < 50 ? "35%" : "-135%"}) translateY(${k * 8}px)`,
+            transform: `translate(-50%, ${y < 50 ? "35%" : "-135%"}) translateY(${stack * 8}px)`,
             width: "15em",
             padding: "0.5em 0.7em",
             borderRadius: 8,

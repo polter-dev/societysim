@@ -34,12 +34,14 @@ export interface GameProps {
   onSelect: (seat: string | null) => void; onSeqChange?: (seq: number, index: number) => void;
   /** Stepper wiring. With `onSeek` the timeline is controlled by the stepper (`seq` is the shown event). */
   step?: StepControlsProps; seq?: number | null; onSeek?: (seq: number) => void; onStep?: TimelineProps['onStep']; narration?: NarrationUi;
+  /** Seq range of the current stepper beat; label pop-ups show for any event inside it. */
+  beatRange?: {first: number; last: number};
 }
-export function Game({events, labels, idx, mode, selected, onSelect, onSeqChange, step, seq, onSeek, onStep, narration}: GameProps) {
+export function Game({events, labels, idx, mode, selected, onSelect, onSeqChange, step, seq, onSeek, onStep, narration, beatRange}: GameProps) {
   const scene = deriveScene(events, idx, mode);
   const [playing, setPlaying] = useState(false); // autoplay: chat stays out of the live regions
   return <>
-    <div className="replay-table"><LabelPopups scene={scene} labels={labels} mode={mode} playing={playing}><Table scene={scene} selected={selected} onSelect={onSelect}/><Arrows scene={scene}/><Speech scene={scene} playing={playing}/></LabelPopups></div>
+    <div className="replay-table"><LabelPopups scene={scene} labels={labels} mode={mode} playing={playing} range={beatRange}><Table scene={scene} selected={selected} onSelect={onSelect}/><Arrows scene={scene}/><Speech scene={scene} playing={playing}/></LabelPopups></div>
     <IllustratedInspector scene={scene} mode={mode} selected={selected} close={() => onSelect(null)}/>
     <EndReveal events={events} labels={labels} idx={idx} mode={mode}/>
     {/* The bottom bar: stepping and the timeline, then pop-ups that open upward over the table. */}
@@ -65,7 +67,7 @@ export function Replay({events, labels, mode, selected, onSelect, audioUrl = nul
   const idx = eventIdx(st.state);
   const step: StepControlsProps = {pos: st.state.pos, count: st.state.beats.length, live: st.state.live, atLatest: st.atLatest, newCount: st.newCount,
     onPrev: () => st.dispatch({type: 'prev'}), onNext: () => st.dispatch({type: 'next'}), onLive: st.goLive};
-  return <Game events={events} labels={labels} idx={idx} mode={mode} selected={selected} onSelect={onSelect} step={step} seq={events[idx]?.seq ?? null}
+  return <Game events={events} labels={labels} idx={idx} mode={mode} selected={selected} onSelect={onSelect} step={step} seq={events[idx]?.seq ?? null} beatRange={beat ? {first: beat.firstSeq, last: beat.lastSeq} : undefined}
     onSeek={seq => st.dispatch({type: 'goto', seq})} onStep={type => st.dispatch({type})} narration={{available: n.available, on: n.on, enabled: n.enabled, onToggle: n.setOn, onCategory: n.setCategory}}/>;
 }
 export default function App({source}: {source?: GameSource} = {}) {

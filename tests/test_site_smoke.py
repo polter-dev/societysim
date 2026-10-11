@@ -46,13 +46,17 @@ def test_advanced_controls_accept_comboboxes_and_native_selects():
     assert "select[aria-label]" in smoke.SEL_ADVANCED_CONTROLS
 
 
-def test_no_route_loads_the_auto_starting_play_page():
-    # bare ?page=play defaults to basic mode and starts a paid visitor game; only advanced is safe
+def test_play_route_is_the_cold_bare_load_and_every_play_url_is_safe():
+    # a cold load of bare ?page=play does not start a game since #518; the guard backs that up
+    play = next(r for r in smoke.ROUTES if r.name == "play")
+    assert play.query == "?page=play"
+    for state in ("play-start", "play-coming-soon", "play-offline"):
+        assert f"section.{state}" in play.key
+    # the other play URL is the advanced form, never ?mode=basic or ?mode=watch (those can start)
     for r in smoke.ROUTES:
-        if "page=play" in r.query:
+        if "page=play" in r.query and r.name != "play":
             assert "mode=advanced" in r.query, r.name
     assert next(r for r in smoke.ROUTES if r.name == "modes").query == "?page=modes"
-    assert "play" not in {r.name for r in smoke.ROUTES}
 
 
 def test_is_play_write_blocks_writes_to_api_and_allows_reads():
@@ -147,6 +151,7 @@ def _seats(leak, step: bool = False) -> str:
 
 
 POST_SCRIPT = "<script>fetch('/api/games',{method:'POST',body:'{}'}).catch(()=>{})</script>"
+SW_SCRIPT = "<script>navigator.serviceWorker.register('/sw.js').catch(()=>{})</script>"
 LIMITS_SCRIPT = "<script>fetch('/api/limits')</script>"
 
 
@@ -175,7 +180,9 @@ def _page(query: dict, leak) -> str:
             + (POST_SCRIPT if leak == "post" else "")
         )
     elif page == "play":
-        body = "<h1>SocietySim play</h1><section class='play-coming-soon'>coming soon</section>"
+        body = "<section class='play-coming-soon'>coming soon</section>" + (
+            SW_SCRIPT if leak == "sw" else ""
+        )
     elif page == "modes":
         body = (
             "<main class='landing-page mode-selection'><h1>Choose your fate</h1>"
@@ -217,10 +224,12 @@ def _serve(leak, hits: list | None = None):
 
         def do_GET(self):
             u = urlsplit(self.path)
-            if hits is not None and u.path.startswith("/api/"):
+            if hits is not None and (u.path.startswith("/api/") or u.path == "/sw.js"):
                 hits.append(("GET", self.path))
             if u.path.startswith("/api/"):
                 data, kind = "{}", "application/json"
+            elif u.path == "/sw.js":
+                data, kind = "self.addEventListener('install', () => {})", "text/javascript"
             elif u.path in files:
                 data, kind = files[u.path], "application/json"
             else:
@@ -272,8 +281,8 @@ def test_run_passes_on_a_healthy_site(browser_ready):
         "new game",
         "spot the wolf",
         "guard",
+        "play",
     }
-    assert "play" not in {r.page for r in results}
 
 
 def test_guard_lets_reads_through_and_reports_zero_writes(browser_ready):
@@ -292,6 +301,24 @@ def test_guard_aborts_a_page_that_posts_and_fails_the_run(browser_ready, capsys)
     assert "POST" in guard.detail and "/api/games" in guard.detail
     assert [h for h in hits if h[0] == "POST"] == []  # aborted before it reached the server
     assert "SMOKE GUARD TRIPPED" in capsys.readouterr().err
+
+
+def test_play_route_loads_and_passes_with_zero_writes(browser_ready):
+    hits: list = []
+    results = {(r.page, r.check): r for r in _run(leak=False, hits=hits)}
+    assert results["play", "key element"].ok
+    assert results["play", "console"].ok
+    assert results["guard", "no play API writes"].ok
+    assert not [h for h in hits if h[0] != "GET"]
+
+
+def test_service_workers_are_blocked(browser_ready):
+    # a page that registers a service worker must not get one: the worker's own requests would
+    # skip the context's route guard. Blocked, the browser never even fetches /sw.js.
+    hits: list = []
+    results = _run(leak="sw", hits=hits)
+    assert ("GET", "/sw.js") not in hits
+    assert [r for r in results if not r.ok] == []
 
 
 def test_mid_game_hidden_info_checks_run_and_pass(browser_ready):

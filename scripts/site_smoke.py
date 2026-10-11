@@ -5,8 +5,9 @@
 
 Read-only: only GETs and clicks on the page (no form submits, no secrets). A guard in the browser
 context aborts every POST/PUT/PATCH/DELETE to the play API (/api/...) and fails the run if one was
-attempted, so no selector change can start a paid visitor game. Never load ?page=play without
-mode=advanced: the basic mode auto-starts a game.
+attempted, so no selector change can start a paid visitor game. Service workers are blocked so
+none can send requests around that guard. A cold load of bare ?page=play does not start a game
+(#518); the guard is what keeps a regression there from costing money.
 Pages and selectors are in ROUTES below; routes and query params come from viewer/src/main.tsx.
 Exits 1 if any check fails. --strict-play is kept for the Site smoke workflow and does nothing now.
 """
@@ -49,6 +50,8 @@ SEL_LANDING = "[data-testid='landing'], main.landing-page"
 SEL_MODES = "[data-testid='mode-selection'], main.mode-selection"
 SEL_MODE_CARDS = "[data-testid='mode-cards'] a, nav.mode-cards a"
 SEL_ADVANCED_CONTROLS = "form [role='combobox'][aria-label], form select[aria-label]"
+# Play page: the start screen, or the coming-soon / offline notice when the play server is off.
+SEL_PLAY = "section.play-start, section.play-coming-soon, section.play-offline"
 SEL_ADVANCED = "[data-testid='advanced-setup'], main.advanced-screen"
 
 
@@ -70,11 +73,12 @@ class Route:
 
 
 ROUTES = [
-    # The nav's Play link is the mode picker ("modes"). Never add a bare ?page=play route: its
-    # default (basic) auto-starts a real paid game. ?page=play&mode=advanced does not.
+    # The nav's Play link is the mode picker ("modes"). A cold load of bare ?page=play shows the
+    # start screen without starting a game (#518); the guard aborts any write if that breaks.
     # the bare URL is the illustrated landing page; the game index moved to ?page=games
     Route("landing", "", "society sim", SEL_LANDING),
     Route("modes", "?page=modes", "choose your fate", SEL_MODES),
+    Route("play", "?page=play", "", SEL_PLAY),
     Route("advanced setup", "?page=play&mode=advanced", "advanced setup", SEL_ADVANCED),
     Route("index", "?page=games", "games", "main table a[href*='game=']"),
     Route("replay", "?game={game}", "", SEL_SEAT_KEY, ("game",)),
@@ -195,7 +199,8 @@ def run(base: str, *, channel: str | None = None, timeout_ms: int = 20_000) -> l
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True, channel=channel)
-        ctx = browser.new_context()
+        # a service worker's own requests would skip the route guard below
+        ctx = browser.new_context(service_workers="block")
         ctx.set_default_timeout(timeout_ms)
 
         # hard guard: nothing in this run may write to the play API, whatever a selector clicks

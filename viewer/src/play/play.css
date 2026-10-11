@@ -699,3 +699,13 @@
   outline: 3px solid #ffe499;
   outline-offset: 3px;
 }
+
+/* Narrow screens: just "Stop", so the nav keeps room for its other links */
+@media (max-width: 1199px) {
+  .site-nav .watch-stop {
+    padding: 8px 4px;
+  }
+  .watch-stop__more {
+    display: none;
+  }
+}

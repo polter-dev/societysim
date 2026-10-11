@@ -143,8 +143,8 @@ function WatchStop({ modesHref, go }: { modesHref: string; go: (url: string) => 
     go(modesHref);
   };
   return (
-    <button type="button" className="watch-stop" onClick={() => void stop()}>
-      Stop watching
+    <button type="button" className="watch-stop" aria-label="Stop watching" title="Stop watching" onClick={() => void stop()}>
+      Stop<span className="watch-stop__more"> watching</span>
     </button>
   );
 }

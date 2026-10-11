@@ -17,6 +17,7 @@ import { parseLog } from './data/parse';
 import { fetchLog, type GameSource, type LoadedGame } from './data/source';
 import { LiveBadge } from './components/LiveBadge/LiveBadge';
 import { useLiveGame } from './live/useLiveGame';
+import { publishLiveEvents } from './play/liveEvents';
 import { deriveScene, type Mode } from './scene/deriveScene';
 import { clearStepUrl, normalizeStepUrl } from './state/replayUrl';
 import { eventIdx } from './state/stepper';
@@ -105,6 +106,7 @@ export default function App({source}: {source?: GameSource} = {}) {
  const changeMode = (next: Mode) => {window.history.replaceState(window.history.state,'',urlWithMode(window.location.href,next));setMode(next);};
  const onFile = async (file?: File) => {if(!file) return;const version = ++loadVersion.current;try {setLabels([]);const parsed = parseLog(await file.text());if(loadVersion.current === version) {clearStepUrl();show(parsed);}} catch(err) {setLoadError(err instanceof Error ? err.message : String(err));}};
  const events = log?.events ?? [];
+ useEffect(() => {publishLiveEvents(log?.events ?? []);}, [log?.events]); // the Play panel shows the same discussion
  const gameLabels = labels.filter(l => l.game_id === events[0]?.game_id);
  const gameParam = new URLSearchParams(window.location.search).has('game') && !loadError;
  const empty = !log && !gameParam;

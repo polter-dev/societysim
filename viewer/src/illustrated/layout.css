@@ -153,6 +153,12 @@
   .play-replay .your-turn p{margin:0}
   .play-replay .your-turn .your-turn__role{padding-bottom:clamp(4px,.8dvh,10px);margin:0}
   .play-replay .your-turn .your-turn__private{flex:0 1 auto;min-height:3.2em;max-height:clamp(64px,16dvh,220px);font-size:.92em;padding:6px 8px}
+  /* The discussion log (the pop-up's Tally + ChatLog) takes the free height and scrolls on its own. */
+  .play-replay .your-turn .your-turn__log{flex:1 1 auto;min-height:clamp(120px,24dvh,260px);display:flex;flex-direction:column;gap:6px}
+  .play-replay .your-turn .your-turn__log h2{margin:0;font-size:1em}
+  .play-replay .your-turn .your-turn__log section[aria-label='Chat log']{flex:1 1 auto;min-height:0;max-height:none!important}
+  .play-replay .your-turn .your-turn__notes h4{margin:0 0 2px;font-size:.9em}
+  .play-replay .your-turn .your-turn__notes .your-turn__private{min-height:0;max-height:clamp(48px,10dvh,120px);overflow:auto}
   .play-replay .your-turn .your-turn__form{gap:clamp(5px,1dvh,12px)}
   .play-replay .your-turn .your-turn__form textarea{min-height:clamp(44px,8dvh,96px);padding:6px}
   .play-replay .your-turn .your-turn__form fieldset{padding:4px 6px 6px}

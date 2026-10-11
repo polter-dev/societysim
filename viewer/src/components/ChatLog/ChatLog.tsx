@@ -19,11 +19,12 @@ export function chatGroups(scene: Scene): { key: string; title: string; entries:
 }
 
 /** Side chat log: public statements, plus the wolf channel when the scene holds it (narrator view). */
-export function ChatLog({ scene }: { scene: Scene }) {
+export function ChatLog({ scene, keepPlace = false }: { scene: Scene; keepPlace?: boolean }) {
   const ref = useRef<HTMLElement>(null);
+  const atEnd = useRef(true); // keepPlace: only follow while the reader has not scrolled up
   // Entries stop at the current event, so following the scrubber means keeping the newest one in view.
   useEffect(() => {
-    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
+    if (ref.current && (!keepPlace || atEnd.current)) ref.current.scrollTop = ref.current.scrollHeight;
   }, [scene.seq]);
 
   const groups = chatGroups(scene);
@@ -32,7 +33,7 @@ export function ChatLog({ scene }: { scene: Scene }) {
 
   return (
     // tabIndex: a scrolling region must take focus so keyboard users can scroll it.
-    <section ref={ref} aria-label="Chat log" tabIndex={0} style={{ maxHeight: "70vh", overflowY: "auto", padding: "0 0.5em" }}>
+    <section ref={ref} aria-label="Chat log" tabIndex={0} onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }} style={{ maxHeight: "70vh", overflowY: "auto", padding: "0 0.5em" }}>
       {groups.length === 0 && <p>No one has spoken yet.</p>}
       {groups.map((g) => (
         <section key={g.key} aria-label={g.title}>

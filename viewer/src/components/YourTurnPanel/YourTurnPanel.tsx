@@ -2,12 +2,16 @@
 // Plain controls only: a text box for speech, player buttons for every choice, optional
 // suspicious/unsure/trust buttons. The client builds the JSON (play/action.ts).
 // Everything comes from useHumanSeat; the live table itself uses the existing Neon live mode.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { leaveGame } from "../../play/api";
 import { ABSTAIN, type Draft, LEVELS, type Level, MAX_TEXT, playerLabel } from "../../play/action";
 import { ModelAvatar, useModelLabel } from "../ModelAvatar/ModelAvatar";
 import type { Player } from "../../play/types";
 import type { useHumanSeat } from "../../play/useHumanSeat";
+import { deriveScene } from "../../scene/deriveScene";
+import type { Event } from "../../types/events";
+import { ChatLog } from "../ChatLog/ChatLog";
+import { Tally } from "../Tally/Tally";
 
 import { art } from "../../illustrated/assets";
 
@@ -36,6 +40,18 @@ const MOVE: Record<string, string> = {
   seer: "check a player",
   doctor: "protect a player",
 };
+
+// The lines of /me's observation that are the visitor's own private knowledge (agents/observation.py).
+// Everything else in it is public and is covered by the discussion log.
+const NOTE = /^(Your fellow wolves:|You are the only wolf\.|Your Seer checks:|Your protects:)/;
+
+/** Private lines only: the role's knowledge and, for a wolf, the pack channel. The server already limited them to this seat. */
+export function privateNotes(observation: string | null): string[] {
+  return (observation ?? "")
+    .split("\n")
+    .map((l) => l.replace(/^[-\s]+/, ""))
+    .filter((l) => NOTE.test(l) || l.includes("(wolf channel)"));
+}
 
 /** A player as a button: initial avatar and name. `pressed` marks the current choice. */
 function PlayerButton({ players, seat, pressed, onClick }: {
@@ -69,10 +85,12 @@ function Ended() {
   );
 }
 
-export function YourTurnPanel({ seat }: { seat: Seat }) {
+/** `events`: the public events the live table holds; the log is the pop-up's Tally and ChatLog, villager view. */
+export function YourTurnPanel({ seat, events = [] }: { seat: Seat; events?: Event[] }) {
   const { me, pending } = seat;
   const [draft, setDraft] = useState<Draft>({});
   const [sent, setSent] = useState(false);
+  const scene = useMemo(() => (events.length ? deriveScene(events, events.length - 1, "villager") : null), [events]);
   // A new prompt (kind or deadline) starts with a clean form.
   const key = pending ? `${pending.kind}:${pending.deadline}` : "";
   useEffect(() => { setDraft({}); if (key) setSent(false); }, [key]);
@@ -125,9 +143,22 @@ export function YourTurnPanel({ seat }: { seat: Seat }) {
           </>
         )}
       </div>
-      {me.observation && (
-        <div className="your-turn__dispatch">
-          <pre className="your-turn__private">{me.observation}</pre>
+      {scene ? (
+        <div className="your-turn__log">
+          <Tally scene={scene} />
+          <ChatLog scene={scene} keepPlace />
+        </div>
+      ) : (
+        me.observation && (
+          <div className="your-turn__dispatch">
+            <pre className="your-turn__private">{me.observation}</pre>
+          </div>
+        )
+      )}
+      {scene && privateNotes(me.observation).length > 0 && (
+        <div className="your-turn__notes">
+          <h4>Your notes</h4>
+          <pre className="your-turn__private">{privateNotes(me.observation).join("\n")}</pre>
         </div>
       )}
       {seat.error && <p role="alert">{seat.error}</p>}

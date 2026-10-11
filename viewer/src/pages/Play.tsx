@@ -5,6 +5,7 @@ import { playEnabled } from "../play/config";
 import { loadToken } from "../play/api";
 import { usePlayStatus } from "../play/usePlayStatus";
 import { useHumanSeat } from "../play/useHumanSeat";
+import { useLiveEvents } from "../play/liveEvents";
 import { loadSetupAssets, type SetupAssets } from "../settings/setup";
 import { art } from "../illustrated/assets";
 import back from "../landing/assets/modes/back.png";
@@ -115,7 +116,7 @@ export default function PlayPage({
 }
 
 function Dock({ gameId }: { gameId: string }) {
-  return <YourTurnPanel seat={useHumanSeat(gameId)} />;
+  return <YourTurnPanel seat={useHumanSeat(gameId)} events={useLiveEvents(gameId)} />;
 }
 
 /**

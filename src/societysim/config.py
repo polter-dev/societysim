@@ -121,7 +121,7 @@ class GameConfig(_Config):
 
 
 class BatchConfig(_Config):
-    batch_id: str
+    batch_id: str = Field(pattern=r"^[A-Za-z0-9_-][A-Za-z0-9._-]*$")  # a folder and file names
     seed: int = 0
     n_games: int = Field(ge=1)
     models: list[str] = Field(min_length=1)

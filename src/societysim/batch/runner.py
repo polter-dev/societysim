@@ -361,9 +361,17 @@ async def run_batch(
     run_t0 = _now()
     total = cfg.n_games
 
+    progress_failed = False
+
     def progress(event: str, **info: Any) -> None:
-        if on_progress:
+        nonlocal progress_failed
+        if not on_progress or progress_failed:
+            return
+        try:
             on_progress({"event": event, "spent": spent(), "budget": cfg.budget_usd, **info})
+        except Exception:  # printing progress must never stop a paid batch
+            progress_failed = True
+            log.exception("on_progress failed; progress reports are off for this batch")
 
     def spent() -> float:
         return prior_spend + (metered.spent if metered else 0.0)
@@ -444,6 +452,8 @@ async def run_batch(
             game = await run_game(
                 a.game_config(cfg.game), make_agent, sinks, a.game_id, colors, presentations
             )
+            if game_costs(out / f"{a.game_id}.jsonl") is None:
+                raise OSError("log not written")  # the game ran but left no finished JSONL
             outcome = {"event": "finished", "winner": getattr(game.winner, "value", game.winner)}
             try:
                 _tag_agents(out / f"{a.game_id}.run_meta.json", agents)

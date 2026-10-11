@@ -1078,3 +1078,31 @@ def test_cli_batch_invalid_stop_names_model_and_exits_2(tmp_path, monkeypatch):
     assert "raise max_invalid_rate (now 25.0%)" in result.output
     meta = json.loads((tmp_path / "runs/cli/run_meta.json").read_text())
     assert meta["status"] == "stopped_invalid"
+
+
+async def test_game_with_no_log_is_failed_not_played(tmp_path, monkeypatch):
+    async def start_game(self, *a, **kw):
+        raise FileNotFoundError("no such directory")
+
+    monkeypatch.setattr(runner.JsonlSink, "start_game", start_game)
+    res = await run_batch(cfg(n_games=2), SPECS, None, runs_dir=tmp_path)
+    assert res["status"] == "failed" and res["finished"] == []
+    assert "log not written" in res["failed"]["t-g0000"]
+
+
+@pytest.mark.parametrize("bad", ["exp/b2", "a\\b", "..", ".hidden", "", "a b"])
+def test_batch_id_must_be_a_plain_name(bad):
+    with pytest.raises(ValueError):
+        cfg(batch_id=bad)
+
+
+async def test_failing_on_progress_does_not_stop_the_batch(tmp_path, caplog):
+    calls = []
+
+    def boom(info):
+        calls.append(info)
+        raise UnicodeEncodeError("charmap", "x", 0, 1, "nope")
+
+    res = await run_batch(cfg(n_games=3), SPECS, None, runs_dir=tmp_path, on_progress=boom)
+    assert res["status"] == "completed" and len(res["finished"]) == 3
+    assert len(calls) == 1 and caplog.text.count("on_progress failed") == 1

@@ -27,3 +27,4 @@
 @media(max-width:600px){.decision-card{min-height:70px}.decision-card small,.decision-card p{font-size:8px}.decision-card h4{font-size:10px}}
 /* The notes export includes extra bottom padding outside its gold frame. */
 .decision-card.decision-notes>div{top:22%;bottom:35%;left:27%;right:9%}
+.roster .agent-list{scrollbar-width:auto;scrollbar-color:#d9b45a #0b2a1d;padding:0 4px 6px 0}.roster .agent-list::-webkit-scrollbar{width:8px}.roster .agent-list::-webkit-scrollbar-track{background:#0b2a1d;border-radius:4px}.roster .agent-list::-webkit-scrollbar-thumb{background:#d9b45a;border-radius:4px}.illustrated-shell .roster .agent-button{margin:4px 0}.roster .agent-button small{margin-top:2px}.roster .agent-button .medallion{width:24%!important}

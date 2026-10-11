@@ -53,20 +53,23 @@ const sibling = (name: string) => new URL(name, new URL(indexUrl, location.href)
 
 const replay = params.has("game") || params.has("log") || page === "replay";
 const ledger = page === "leaderboard";
+const joining = !params.has("game") && !params.has("log") && page === "play" && params.get("mode") !== "advanced";
 const profileModel = page === "model" ? params.get("model") : null;
 const profileHref = (model: string) => href({ page: "model", model });
 const title =
-  profileModel ?? { leaderboard: "leaderboard", research: "research", new: "new game", play: "play" }[page ?? ""] ?? "games";
+  profileModel ?? { leaderboard: "leaderboard", research: "research", new: "new game" }[page ?? ""] ?? "games";
+const catalogUrl = sibling("models_catalog.json");
+const schemaUrl = sibling("devui/schema/game_setup.schema.json");
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {baseError && <p role="alert">Could not use batch base: {baseError}</p>}
-    {!home && !modes && !advanced && <nav aria-label="Pages" className={ledger ? "site-nav site-nav--float" : "site-nav"}>
+    {!home && !modes && !advanced && !joining && <nav aria-label="Pages" className={ledger ? "site-nav site-nav--float" : "site-nav"}>
       <a href={href({})}>Home</a><a href={href({page:"games"})}>Games</a><a href={href({ page: "leaderboard" })}>Leaderboard</a><a href={href({ page: "research" })}>Research</a>
       <a href={href({ page: "new" })}>New game</a><PlayNavLink href={href({ page: "modes" })} />
       <a href={href({ page: "replay" })}>Open a log file</a>
     </nav>}
-    {home ? <LandingPage href={href}/> : modes ? <ModeSelection href={href}/> : advanced ? <AdvancedSetup href={href} catalogUrl={sibling("models_catalog.json")} schemaUrl={sibling("devui/schema/game_setup.schema.json")}/> : ledger ? (
+    {home ? <LandingPage href={href}/> : modes ? <ModeSelection href={href}/> : advanced ? <AdvancedSetup href={href} catalogUrl={catalogUrl} schemaUrl={schemaUrl}/> : ledger ? (
       <LeaderboardPage
         leaderboardUrl={sibling("leaderboard.json")}
         metricsUrl={sibling("metrics.json")}
@@ -74,24 +77,23 @@ createRoot(document.getElementById("root")!).render(
         globalBoard={Boolean(neon)}
         batchBase={dataBase.href}
       />
+    ) : joining ? (
+      <PlayPage initialMode={params.get("mode") === "watch" ? "watch" : "basic"} catalogUrl={catalogUrl} schemaUrl={schemaUrl} gamesHref={href({page:"games"})} gameHref={(id) => href({ game: id })} backHref={href({ page: "modes" })} />
     ) : replay ? (
       <div className="play-replay">
         <PlayDock gameId={params.get("game")} />
         <App source={source} />
       </div>
     ) : (
-      <main className={profileModel || page === "new" || page === "play" ? "info-page info-page--text" : "info-page"}>
+      <main className={profileModel || page === "new" ? "info-page info-page--text" : "info-page"}>
         <h1>SocietySim {title}</h1>
         <form method="get" className="batch-source"><label>Published batch base URL <input name="base" type="url" required defaultValue={dataBase.href} /></label><button type="submit">Load batch</button></form>
         {profileModel ? (
           <ModelProfilePage metricsUrl={sibling("metrics.json")} model={profileModel} />
         ) : page === "research" ? (
           <ResearchPage metricsUrl={sibling("metrics.json")} />
-        ) : page === "play" ? (
-          <PlayPage initialMode={params.get("mode") === "watch" ? "watch" : params.get("mode") === "advanced" ? "advanced" : "basic"} catalogUrl={sibling("models_catalog.json")} schemaUrl={sibling("devui/schema/game_setup.schema.json")} gamesHref={href({page:"games"})} gameHref={(id) => href({ game: id })} />
         ) : page === "new" ? (
-          <NewGamePage catalogUrl={sibling("models_catalog.json")} schemaUrl={sibling("devui/schema/game_setup.schema.json")} />
-
+          <NewGamePage catalogUrl={catalogUrl} schemaUrl={schemaUrl} />
         ) : (
           <IndexPage source={source!} href={(id) => href({ game: id })} />
         )}

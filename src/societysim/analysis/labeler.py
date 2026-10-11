@@ -298,9 +298,11 @@ def label_batch(
 
     With jev_for, also print the self-tag vs Jev agreement table and write it to
     <batch_dir>/agreement.json. Returns that table, or None without Jev. Empty logs are
-    skipped with a warning.
+    skipped with a warning. Games without a game_end (cut-off batch) get labels but never go
+    to Jev: a resume replays them under the same game_id.
     """
     totals: dict[str, Counter] = {}
+    unfinished = scripted_n = 0
     logs = sorted(p for p in batch_dir.glob("*.jsonl") if not p.name.endswith(".labels.jsonl"))
     loaded = []
     for path in logs:
@@ -308,11 +310,16 @@ def label_batch(
         if not events:
             print(f"warning: {path.name} is empty, skipped")
             continue
-        loaded.append((path, events, jev_for is not None and not _scripted(path)))
+        scripted = _scripted(path)
+        finished = any(e.type is EventType.GAME_END for e in events)
+        unfinished += jev_for is not None and not scripted and not finished
+        scripted_n += jev_for is not None and scripted
+        loaded.append((path, events, jev_for is not None and not scripted and finished))
     if jev_for:
-        skipped = sum(1 for _, _, use in loaded if not use)
-        if skipped:
-            print(f"Jev skipped for {skipped} scripted games")
+        if scripted_n:
+            print(f"Jev skipped for {scripted_n} scripted games")
+        if unfinished:
+            print(f"Jev skipped for {unfinished} unfinished games (no game_end)")
         n = sum(_n_statements(ev) for _, ev, use in loaded if use)
         if n:
             print(f"Jev: sending up to {n} statements (cached ones make no call)")

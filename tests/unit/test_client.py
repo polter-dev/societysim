@@ -364,6 +364,12 @@ def test_is_provider_failure_reads_reason_or_legacy_error_text():
     assert is_provider_failure(None, "ServiceUnavailableError: HuggingfaceException - busy")
     assert is_provider_failure(None, "RateLimitError: slow down")
     assert is_provider_failure(None, "Timeout: m took longer than 120 s")
+    assert is_provider_failure(
+        None,
+        "ContentPolicyViolationError: litellm.BadRequestError: litellm.ContentPolicyViolationError:"
+        " OpenAIException - Invalid prompt: your prompt was flagged",
+    )
+    assert not is_provider_failure(None, "BadRequestError: litellm.BadRequestError: bad param")
     assert not is_provider_failure(None, "1 validation error for VoteResponse")
     assert not is_provider_failure("invalid_output", "empty reply")
     assert not is_provider_failure(None, None)

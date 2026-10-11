@@ -10,9 +10,13 @@ services:
     plan: starter
     numInstances: 1 # game state is in memory: never scale out or autoscale
     healthCheckPath: /api/health
-    # A deploy restarts the server and fails every visitor game in progress (#446, #504), so
-    # only changes to what server/Dockerfile copies trigger one. README.md and LICENSE are
-    # copied too but don't change how the server runs; viewer and docs merges don't deploy.
+    # A deploy restarts the server and fails every visitor game in progress (#446, #504, #553):
+    # traffic moves to the new instance, so the old one's games are gone. Render never deploys
+    # on a push; .github/workflows/deploy-play.yml calls the deploy hook once /api/health shows
+    # games_running 0. Changing an env var in the dashboard redeploys too, with the same effect.
+    autoDeployTrigger: "off"
+    # What server/Dockerfile copies; the deploy workflow's paths filter matches this list.
+    # README.md and LICENSE are copied too but don't change how the server runs.
     buildFilter:
       paths:
         - server/Dockerfile
@@ -51,16 +55,16 @@ services:
       - key: PLAY_ALLOWED_MODELS
         value: "qwen3-235b,llama4-maverick,gemma4-26b,gpt-oss-120b,deepseek-v3.1,gemini-flash-lite,gpt-5-nano"
       - key: PLAY_RATE_PER_MIN
-        value: "120"
+        value: "600"
       - key: PLAY_MAX_ACTIVE_PER_IP
-        value: "1"
+        value: "3"
       - key: PLAY_MAX_GAMES_PER_IP_DAY
-        value: "5"
+        value: "50"
       - key: PLAY_MAX_CONCURRENT
         value: "4"
       - key: PLAY_MAX_GAME_MINUTES
         value: "45"
       - key: PLAY_DAILY_BUDGET_USD
-        value: "2.0"
+        value: "5.0"
       - key: PLAY_MAX_TOKENS
         value: "2048"

@@ -69,6 +69,7 @@ from societysim.analysis.metrics import (  # noqa: E402
     SOURCES as LABEL_SOURCES,
 )
 from societysim.analysis.narrate import Voices, load_voices  # noqa: E402
+from societysim.logging.events import EventType  # noqa: E402
 from societysim.roles import Role, SeatId, Winner  # noqa: E402
 
 SCHEMA = 1
@@ -523,6 +524,15 @@ def build_leaderboard(
 MIN_COMPARISONS = 5  # fewer lie-success comparisons than this is too thin to rank a model on
 
 
+def _jev_statements(games: list[GameData]) -> int:
+    """Statements in the games Jev labeled: Jev never read the others (#493)."""
+    return sum(
+        sum(e.type is EventType.STATEMENT and e.actor in g.roles for e in g.events)
+        for g in games
+        if "jev" in g.labeled_sources
+    )
+
+
 def build_summary(metrics: dict, games: list[GameData]) -> dict:
     """The headline numbers: batch-wide totals and the top model on a few measures."""
     allg = metrics["by_group"]["all"]
@@ -541,7 +551,7 @@ def build_summary(metrics: dict, games: list[GameData]) -> dict:
     for src in LABEL_SOURCES:
         lies[src] = {
             "lies": allg["lies"][src]["lies"],
-            "statements": allg["statements"],
+            "statements": allg["statements"] if src == "self_tag" else _jev_statements(games),
             "lie_rate": allg["lies"][src]["lie_rate"],
             "lie_success": allg["lies"][src]["lie_success"],
         }
@@ -698,7 +708,19 @@ def _n(n: int, word: str) -> str:
     return f"{n} {word}" + ("" if n == 1 else "s")
 
 
-def _headline(sm: dict, present: set[str]) -> list[str]:
+def _coverage_note(coverage: dict[str, int] | None, games: int, src: str) -> str | None:
+    """Says how many games Jev's numbers cover, when that is fewer than all of them.
+
+    Only for jev: self-tag reads every game by design, so a game with no self-tag lie is not
+    uncovered. No note when Jev labeled nothing (the report already says "no labels").
+    """
+    n = (coverage or {}).get(src, games)
+    if src != "jev" or n == 0 or n >= games:
+        return None
+    return f"{src} labeled {n} of {games} games; its lie numbers cover only those {n}."
+
+
+def _headline(sm: dict, present: set[str], coverage: dict[str, int] | None = None) -> list[str]:
     lines = ["## Headline", ""]
     lines.append(f"- Games: {sm['games']} finished, {sm['unfinished_games']} unfinished.")
     lines.append(
@@ -723,6 +745,8 @@ def _headline(sm: dict, present: set[str]) -> list[str]:
             f"{_n(ls['voters'], 'vote')} followed the lie, against a no-lie base rate of "
             f"{_pct(ls['base_rate'])} ({_n(ls['base_voters'], 'vote')})."
         )
+        if note := _coverage_note(coverage, sm["games"], src):
+            lines.append(f"- Coverage: {note}")
     if t := sm["top_openskill"]:
         lines.append(f"- Top OpenSkill: {t['model']} (ordinal {_num(t['ordinal'])}).")
     if t := sm["top_wolf_win"]:
@@ -1023,12 +1047,13 @@ def render_markdown(
     present: set[str] | None = None,
     summary: dict | None = None,
     speed: dict | None = None,
+    coverage: dict[str, int] | None = None,
 ) -> str:
     present = set(LABEL_SOURCES) if present is None else present
     lines = [
         "# Batch report",
         "",
-        *(_headline(summary, present) if summary else []),
+        *(_headline(summary, present, coverage) if summary else []),
         *_results(metrics, board, present),
         f"{board['games']} games. Win rate is per seat: each seat a model fills counts once, "
         "and a model can fill several seats in one game. Win rates carry a Wilson 95% interval; "
@@ -1102,6 +1127,8 @@ def render_markdown(
         "speaker marked it) and `jev` (a judge model found it).",
         "",
     ]
+    if note := _coverage_note(coverage, metrics["games"], "jev"):
+        lines += [f"{note} Lie rates are per statement in the games each source covers.", ""]
     lines += _table(
         ["Model", "Statements", "Lie rate (self_tag)", "Lie rate (jev)"],
         [
@@ -1333,7 +1360,8 @@ def write_report(batch_dir: Path) -> Path:
     out.mkdir(exist_ok=True)
     data = [g for _, g in games]
     metrics: dict[str, Any] = compute_metrics(data, unfinished)
-    present = {lb.source for g in data for lb in g.labels}
+    present = set().union(*(g.labeled_sources for g in data))
+    coverage = {src: sum(src in g.labeled_sources for g in data) for src in LABEL_SOURCES}
     board = build_leaderboard(metrics, present, model_game_counts(data))
     write_charts(board, out)
     write_deception_charts(metrics["deception_matrix"], present, out)
@@ -1347,6 +1375,6 @@ def write_report(batch_dir: Path) -> Path:
     dump("leaderboard.json", board)
     dump("index.json", build_index(games))
     (out / "report.md").write_text(
-        render_markdown(metrics, board, present, summary, speed), encoding="utf-8"
+        render_markdown(metrics, board, present, summary, speed, coverage), encoding="utf-8"
     )
     return out

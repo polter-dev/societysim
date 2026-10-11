@@ -232,10 +232,15 @@
           },
           "title": "Providers Ready",
           "type": "object"
+        },
+        "games_running": {
+          "title": "Games Running",
+          "type": "integer"
         }
       },
       "required": [
-        "providers_ready"
+        "providers_ready",
+        "games_running"
       ],
       "title": "Health",
       "type": "object"

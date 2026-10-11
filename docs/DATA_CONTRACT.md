@@ -179,7 +179,7 @@ Each row of `models`:
 | `fallback_rate` | number \| null | Turns that ended in a fallback move / turns. A turn is one model call (up to two attempts). Provider errors are in neither count |
 | `retry_success_rate` | number \| null | Retries whose second attempt was accepted / retries. A retry is a turn whose first attempt the model got wrong. Null when there were no retries |
 | `cost_usd_per_game` | number \| null | Per seat-game |
-| `lie_rate` | `{self_tag: number\|null, jev: number\|null}` | Lies per statement. Null when that source has no labels in the batch |
+| `lie_rate` | `{self_tag: number\|null, jev: number\|null}` | Lies per statement. Null when that source has no labels in the batch. `jev` counts only statements in games that have a jev label (games Jev never read are left out, #493) |
 
 ```json
 {"schema": 1, "games": 3, "label_sources": ["self_tag", "jev"],
@@ -522,7 +522,7 @@ to them). All bodies are JSON and closed: an unknown key is a 422. Every error i
 | `POST /api/games/{id}/action` | seat token | `ActionBody` | `{"accepted": true}` |
 | `POST /api/games/{id}/leave` | seat token | | `{"accepted": true}` |
 | `GET /api/limits` | none | | `{"play_enabled": bool, "remaining_today": int, "client_ip_hint": str, "allowed_models": [str]}` (model ids visitors may use, sorted) |
-| `GET /api/health` | none | | `{"ok": true, "providers_ready": {"<provider>": bool}}` (a key is present for that provider; never the key) |
+| `GET /api/health` | none | | `{"ok": true, "providers_ready": {"<provider>": bool}, "games_running": int}` (a key is present for that provider; never the key. `games_running`: games in memory a deploy would end) |
 
 ### Starting a game
 

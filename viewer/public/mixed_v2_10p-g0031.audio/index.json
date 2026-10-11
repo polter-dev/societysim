@@ -4,7 +4,17 @@
   "output_format": "mp3_44100_64",
   "voices": {
     "narrator": "N2lVS1w4EtoT3dr4eOWO",
-    "narrator_night": "SOYHLrjzK2X1ezoPC6cr"
+    "narrator_night": "SOYHLrjzK2X1ezoPC6cr",
+    "p0": "JBFqnCBsd6RMkjVDRZzb",
+    "p1": "IKne3meq5aSn9XLyUdCD",
+    "p2": "pFZP5JQG7iQjIQuC4Bku",
+    "p3": "cgSgspJ2msm6clMCkdW9",
+    "p4": "Xb7hH8MSUJpSbSDYk0k2",
+    "p5": "cjVigY5qzO86Huf0OWal",
+    "p6": "pNInz6obpgDQGcFmaJgB",
+    "p7": "JBFqnCBsd6RMkjVDRZzb",
+    "p8": "IKne3meq5aSn9XLyUdCD",
+    "p9": "pFZP5JQG7iQjIQuC4Bku"
   },
   "clips": [
     {
@@ -33,6 +43,186 @@
       "voice_id": "N2lVS1w4EtoT3dr4eOWO",
       "text": "Day 1. The village wakes.",
       "file": "3c28e64e935ae38dfc8ffd82fe7df91b48957d5e.mp3"
+    },
+    {
+      "seq": 16,
+      "category": "speech",
+      "speaker": "p4",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "Since nobody died last night, the Doctor likely played well or the wolves missed. I am a Villager and I'm looking for any suspicious behavior or inconsistent claims. Let's see what everyone thinks about the lack of a death.",
+      "file": "6dbf45e99d0034cca15562736fa2e54f22d850df.mp3"
+    },
+    {
+      "seq": 18,
+      "category": "speech",
+      "speaker": "p8",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "No death is interesting. Doctor might have saved someone, or wolves hesitated. I'm a villager too. Let's hear from others\u2014anyone have thoughts? We need to avoid random votes.",
+      "file": "bc52b7690a024c0a14b67f5edb6d8e4f10c85da5.mp3"
+    },
+    {
+      "seq": 20,
+      "category": "speech",
+      "speaker": "p7",
+      "voice": "gpt-oss-120b",
+      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+      "text": "No one died last night, which could mean the Doctor protected someone or the wolves missed. As a villager I\u2019m curious about any patterns\u2014who voted for who in the previous night? Also, why didn't the wolves act? I\u2019ll wait for others before voting.",
+      "file": "b54b98d26b3300d3bf3408640801d64dd5aa288a.mp3"
+    },
+    {
+      "seq": 22,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "gpt-oss-120b",
+      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+      "text": "Since no one died, I suspect the Doctor protected someone, maybe the Seer. We should look at who voted last night; if anyone abstained, that could be a clue. I don't see any strong threats yet, but let's keep an eye on vocal players.",
+      "file": "9d81378f986091ac44ead9cb69dde750563b81ed.mp3"
+    },
+    {
+      "seq": 24,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "No death last night is interesting. It could mean the Doctor protected someone or the wolves missed. I'm a villager and think we should discuss more before voting. Let's hear from everyone, especially those who haven't spoken yet.",
+      "file": "261b6b8e393a4d5314514fcdd4569d9c7f514482.mp3"
+    },
+    {
+      "seq": 26,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "Great start with no deaths, likely thanks to the Doctor. Just a reminder that night actions aren't public votes, so we won't see who voted at night. I'm a villager. I'd like to hear from p2, p5, p6, and p9 before making any judgments.",
+      "file": "91f007c654fdff33dff6ee1a765f13f034852c7f.mp3"
+    },
+    {
+      "seq": 28,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Interesting that no one died. Maybe the Doctor protected someone key, or wolves are playing slow. I'm a villager and think we should wait and see more patterns before jumping on anyone. Let's hear from Elif, Jude, and Finn\u2014they haven't spoken yet.",
+      "file": "94d3fee53211444745a37abac7aa8320c531eb6a.mp3"
+    },
+    {
+      "seq": 30,
+      "category": "speech",
+      "speaker": "p6",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "I am the Seer. I checked p0 last night and discovered that Ben (p0) is a wolf. We should vote to eliminate him immediately.",
+      "file": "5df1fd98a172f0283c3bf5996bc65e3398cd3147.mp3"
+    },
+    {
+      "seq": 34,
+      "category": "speech",
+      "speaker": "p2",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "Jude has claimed Seer and identified p0 as a wolf. Unless p0 has a strong counter-claim or reason to doubt Jude, we should follow the Seer's lead today and vote for p0. I am a villager.",
+      "file": "8c3519b230e15c07679e4883243f3235b541f876.mp3"
+    },
+    {
+      "seq": 37,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "Jude has claimed Seer and found p0 to be a wolf. Ben (p0), you need to respond to this accusation right away. Let's hear what you have to say before we lock in any votes, but a Seer claim on Day 1 is very significant.",
+      "file": "d8e24d76dce2cc8ede62ec90b434f47148aba247.mp3"
+    },
+    {
+      "seq": 40,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "gpt-oss-120b",
+      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+      "text": "Jude's claim is suspicious; a Seer claiming on day 1 is risky. I have no reason to trust him. I am a villager and have observed no clear evidence. I think we should be cautious about voting based on a single claim. Let's discuss more before deciding.",
+      "file": "a4b138c978ac3e4b74d7a7115eebc99d90339db7.mp3"
+    },
+    {
+      "seq": 43,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Jude (p6) claiming Seer so early and pointing at Ben (p0) is bold, but Ben hasn't acted suspiciously. I\u2019d like to hear more before trusting a single claim. Let\u2019s not rush\u2014wait for counter-evidence.",
+      "file": "8481ed3f67a3d6ba6a1e04e8588e22c4f5bfbcea.mp3"
+    },
+    {
+      "seq": 46,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "Hugo, questioning the Seer claim so quickly when we have a concrete check on p0 is risky. Ben (p0) is the most suspicious right now given Jude's Seer report. Unless there is another Seer claim or solid counter-evidence, we should stick with Jude's lead.",
+      "file": "0bcaed78d222e202798ba6355a04130e7305a37d.mp3"
+    },
+    {
+      "seq": 49,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "An uncontested Seer with a direct wolf check on p0 is our best lead today. p0 hasn't counter-claimed Seer, only deflecting the claim. Unless another player steps up as the true Seer, we have to trust p6 and vote out p0. Hugo defending p0 is noted, but let's focus on p0 today.",
+      "file": "b9d3124df56f2447ea9f1625f2222e40d9eb2a1f.mp3"
+    },
+    {
+      "seq": 51,
+      "category": "speech",
+      "speaker": "p6",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "Ben (p0), your deflections don't change the fact that I saw you as a wolf. Hugo (p5), defending a confirmed wolf is a dangerous game. There is no other Seer claim, and my information is certain. Let's not waste this day on hesitation; we have a wolf identified. Everyone, please vote for p0.",
+      "file": "43ee776078f8b1ab64a8b13483df5228c0c6d608.mp3"
+    },
+    {
+      "seq": 56,
+      "category": "speech",
+      "speaker": "p7",
+      "voice": "gpt-oss-120b",
+      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+      "text": "The early Seer claim feels risky. Ben (p0) is accused and also defends Jude, which raises doubt. Hugo (p5) is defending Ben, possibly protecting a partner. I\u2019m not convinced we have solid proof yet, but my suspicion leans toward p0 and p5 as wolves. Let's discuss further before voting.",
+      "file": "5f227a8aa24828f3ae7497deac10088e87426fd1.mp3"
+    },
+    {
+      "seq": 59,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "Jude's Seer claim is strong, and Ben hasn't counter-claimed. Defending a wolf check is risky, so Hugo's stance is suspicious. I support voting p0 today, but we should watch p5 closely.",
+      "file": "00aea6e7587cbc0d98f1cee805fc80401d2f2ee9.mp3"
+    },
+    {
+      "seq": 63,
+      "category": "speech",
+      "speaker": "p2",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "Jude's Seer claim stands uncontested, and Ben failed to offer a real counter. Hugo defending p0 makes him very suspicious as well. We should follow the Seer's guidance and vote for p0 today.",
+      "file": "a6416a958318c55e0c67b22cdb39865e77031608.mp3"
+    },
+    {
+      "seq": 67,
+      "category": "speech",
+      "speaker": "p4",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "Jude (p6) has made a very significant claim. Since there are no other Seer claims, we have to decide whether to trust p6's information on Ben (p0). I'm wary of Hugo (p5) for defending p0 so strongly, as that often suggests a wolf connection. I'll wait to see if p0 can provide any proof of innocence, but for now, the Seer's lead is our strongest direction.",
+      "file": "fd4322f0fce8ef1f9b2805427336ae8aa4cd6153.mp3"
+    },
+    {
+      "seq": 71,
+      "category": "speech",
+      "speaker": "p8",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "Jude's Seer claim is uncontested and credible. Ben's deflection without counter-claim is suspicious. Hugo defending Ben raises red flags\u2014possible wolf partner. We should vote p0 today and watch p5 closely.",
+      "file": "b8d57f6d696f925f824150a8d2b692d7a3a8ef39.mp3"
     },
     {
       "seq": 75,
@@ -78,6 +268,168 @@
       "voice_id": "N2lVS1w4EtoT3dr4eOWO",
       "text": "Day 2. The village wakes.",
       "file": "bb6d580c4b68d35b41c6899ef728ceb4f509fa23.mp3"
+    },
+    {
+      "seq": 94,
+      "category": "speech",
+      "speaker": "p8",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "Ben was a wolf, confirming Jude's Seer claim. No night death suggests Doctor protection or wolf hesitation. Hugo defended Ben strongly and is my top suspect. Others seem aligned with villagers. We should pressure Hugo today for explanation.",
+      "file": "6848c35101b6ae07339df885dab86a5a67937077.mp3"
+    },
+    {
+      "seq": 97,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "Ben was a wolf, confirming Jude as Seer. No night death suggests protection or wolf inaction. Hugo defended Ben aggressively and is my top suspect. Others seem villager-aligned. We should pressure Hugo for explanation today.",
+      "file": "1d1052b1fa471d71048b1a417fa9b7e74b568cb9.mp3"
+    },
+    {
+      "seq": 100,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "Ben being a confirmed wolf validates Jude's Seer claim. Hugo defended Ben strongly yesterday, making him extremely suspicious. I agree with Gia and Ava that we should press Hugo for answers today.",
+      "file": "2d8d3093d78df44da5f2e6df99033adabe182c4f.mp3"
+    },
+    {
+      "seq": 103,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "Jude (p6) is clearly verified after p0 flipped wolf. Hugo (p5) is naturally under the spotlight after defending p0 all of yesterday. Before we rush, let's hear Jude's Night 2 check and see what Hugo has to say for himself.",
+      "file": "08ce094c8801bb4d943f421e92247d1eb03804f6.mp3"
+    },
+    {
+      "seq": 106,
+      "category": "speech",
+      "speaker": "p7",
+      "voice": "gpt-oss-120b",
+      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+      "text": "Hugo's strong defense of Ben yesterday is suspicious; the only wolf left likely is him. I vote to lynch Hugo (p5).",
+      "file": "f2db1797e88c0c170566228885645fd84e7581c7.mp3"
+    },
+    {
+      "seq": 109,
+      "category": "speech",
+      "speaker": "p4",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "Ben being a wolf confirms Jude (p6) is the Seer. Hugo (p5) defending Ben so strongly when Ben was being targeted by almost everyone is a massive red flag. It is highly probable Hugo is the second wolf. I agree with the group; let's hear Hugo's defense, but I am ready to vote him out if he can't justify his stance.",
+      "file": "c148d627cfc3497bd1ca5359650b3079f73cb2f8.mp3"
+    },
+    {
+      "seq": 111,
+      "category": "speech",
+      "speaker": "p6",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "My check on Night 2 confirms it: Hugo (p5) is the second wolf. Between his defense of Ben and my Seer result, there is no doubt. Let's vote him out now and end this game.",
+      "file": "f878f1171dbaa0e0c5bb1a1359abed150798f591.mp3"
+    },
+    {
+      "seq": 115,
+      "category": "speech",
+      "speaker": "p2",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "Jude's Seer check on Hugo confirms what we all suspected after Hugo's defense of Ben yesterday. Jude has proven reliable with the p0 wolf check. This looks open and shut. Let's vote Hugo out and secure the villager win.",
+      "file": "7f54a8c0dedbf15c45f1e8e19505fdae7a76d0c7.mp3"
+    },
+    {
+      "seq": 118,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Jude claiming I'm a wolf is convenient\u2014he\u2019s steering the lynch to save the real threat. His Seer claim was suspiciously timed. Why protect me last night, Jude? That reeks of manipulation. I stand by my defense of Ben; it was reasonable then. Let\u2019s hear more before rushing.",
+      "file": "f2b7f4e1bdd90618f30241f771b805cba1926e21.mp3"
+    },
+    {
+      "seq": 121,
+      "category": "speech",
+      "speaker": "p8",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "Jude's Seer report confirms Hugo is the second wolf. Hugo defended Ben aggressively and now deflects. No night death supports Jude's credibility. We should vote Hugo out to win.",
+      "file": "f5192c90ef05ead7cd5f05a32e8827e04ea90bcb.mp3"
+    },
+    {
+      "seq": 124,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "Jude found Ben yesterday and has now found Hugo today. Hugo's defense makes no sense\u2014Jude is the Seer, not the Doctor, and Jude's checks have been completely accurate. Hugo defended a confirmed wolf all day yesterday and is clearly the final wolf. Let's vote out p5 and seal the villager win.",
+      "file": "2ea8af19fc680f261154eff1f19be4e31beb85f3.mp3"
+    },
+    {
+      "seq": 127,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "Jude's second successful check on Hugo confirms everything. Hugo defended Ben yesterday and is now trying desperately to deflect away from the Seer. The evidence is overwhelming. Let's vote out Hugo and win this game.",
+      "file": "519ef7c24e8b4552903d28148a51ab02c750bee0.mp3"
+    },
+    {
+      "seq": 130,
+      "category": "speech",
+      "speaker": "p4",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "Jude (p6) has proven himself with the Ben (p0) check, and his Night 2 check on Hugo (p5) is the final piece of the puzzle. Hugo's defense of a confirmed wolf yesterday was a massive red flag, and his attempt to deflect blame onto the Seer now is desperate. The evidence is overwhelming. We need to vote out Hugo (p5) immediately to end the game.",
+      "file": "70b31fa0b705e2da693cb8aa854f7d944e968135.mp3"
+    },
+    {
+      "seq": 133,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Jude's Seer claim is too convenient\u2014why would he check me and then protect me last night? That reeks of deception. He's manipulating you all. I defended Ben fairly, but now I'm being lynched on his word alone. Ask yourselves: who benefits from my death? It's him.",
+      "file": "61ae84728e29b9589de16dc54174997367b4b558.mp3"
+    },
+    {
+      "seq": 136,
+      "category": "speech",
+      "speaker": "p6",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "Hugo, your attempts to confuse us are futile. I am the Seer, not the Doctor, and my check on you was positive. You defended Ben, a confirmed wolf, and now you're lying to save yourself. There is no doubt: Hugo is the final wolf. Everyone, vote p5 now to secure the villager victory!",
+      "file": "9dfe055d62747f6e69f324fa889b07faf3a3cccd.mp3"
+    },
+    {
+      "seq": 140,
+      "category": "speech",
+      "speaker": "p7",
+      "voice": "gpt-oss-120b",
+      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+      "text": "Jude's Seer check matches Ben's death, and his second check names Hugo. Hugo defended a confirmed wolf, which is typical wolf behavior. No night death suggests no protection needed. I trust Jude and vote to lynch Hugo (p5).",
+      "file": "1341ec47e0f4df40f22d9f10d9d69755f555e34d.mp3"
+    },
+    {
+      "seq": 142,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "Jude's Seer checks have been accurate, and Hugo's defense of Ben was highly suspicious. No night death supports Jude's credibility. Hugo is likely the final wolf. We should vote him out to win.",
+      "file": "7ed972ec52adca7ecda065f8bf8f36ec7a40dae2.mp3"
+    },
+    {
+      "seq": 145,
+      "category": "speech",
+      "speaker": "p2",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "Hugo, your defense yesterday was clear, and Jude's Seer check today confirms everything. Jude correctly found p0 as a wolf, and now he's found you. Your desperate attempts to blame the Seer won't work. Let's vote Hugo out and secure the villager win.",
+      "file": "264d1a8b9c859c1681f2b2a252fe610da0f6d1d0.mp3"
     },
     {
       "seq": 148,

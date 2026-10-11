@@ -13,14 +13,17 @@ describe("shipped narration", () => {
     expect(dirs).toContain("mixed_v2_10p-g0043.audio");
   });
 
-  it.each(dirs)("%s is narrator-only with every clip present", (dir) => {
+  it.each(dirs)("%s has only narrator and public speech clips, every clip present", (dir) => {
     const gameId = dir.replace(/\.audio$/, "");
     const index = parseIndex(JSON.parse(readFileSync(join(publicDir, dir, "index.json"), "utf-8")));
     expect(index?.gameId).toBe(gameId);
     expect(index?.clips.length).toBeGreaterThan(0);
-    // speech, wolf_chat and highlight clips are paid and can carry hidden information
+    // wolf_chat and highlight clips can carry hidden information, so they never ship. Speech
+    // clips voice a player's public statement (narrate --select speech reads only public_text);
+    // the PR that adds them checks each clip's text against its public event.
     for (const c of index!.clips) {
-      expect(c.category).toBe("narrator");
+      expect(["narrator", "speech"]).toContain(c.category);
+      if (c.category === "speech") expect(c.speaker).toMatch(/^p\d+$/);
       expect(existsSync(join(publicDir, dir, c.file))).toBe(true);
       expect(statSync(join(publicDir, dir, c.file)).size).toBeGreaterThan(1000);
     }

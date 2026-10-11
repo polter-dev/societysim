@@ -4,7 +4,16 @@
   "output_format": "mp3_44100_64",
   "voices": {
     "narrator": "N2lVS1w4EtoT3dr4eOWO",
-    "narrator_night": "SOYHLrjzK2X1ezoPC6cr"
+    "narrator_night": "SOYHLrjzK2X1ezoPC6cr",
+    "p0": "TX3LPaxmHKxFdv7VOQHJ",
+    "p1": "Xb7hH8MSUJpSbSDYk0k2",
+    "p2": "cjVigY5qzO86Huf0OWal",
+    "p3": "pNInz6obpgDQGcFmaJgB",
+    "p5": "IKne3meq5aSn9XLyUdCD",
+    "p6": "pFZP5JQG7iQjIQuC4Bku",
+    "p7": "cgSgspJ2msm6clMCkdW9",
+    "p8": "FGY2WhTYpPnrIDTdsKH5",
+    "p9": "TX3LPaxmHKxFdv7VOQHJ"
   },
   "clips": [
     {
@@ -33,6 +42,168 @@
       "voice_id": "N2lVS1w4EtoT3dr4eOWO",
       "text": "Day 1. The village wakes.",
       "file": "3c28e64e935ae38dfc8ffd82fe7df91b48957d5e.mp3"
+    },
+    {
+      "seq": 15,
+      "category": "speech",
+      "speaker": "p6",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "Dev being killed on night one and revealed as the seer is a terrible loss for us. We need to pay close attention to everyone's reactions and reasoning. Let's hear from the others before jumping to conclusions.",
+      "file": "bbd92e2858f8033b717d828e3016e49a8edd9a73.mp3"
+    },
+    {
+      "seq": 17,
+      "category": "speech",
+      "speaker": "p8",
+      "voice": "gpt-5-nano",
+      "voice_id": "FGY2WhTYpPnrIDTdsKH5",
+      "text": "Dev\u2019s loss hurts, but the game moves on. I\u2019ll keep an eye on Gia\u2019s reactions and p6\u2019s defenses. Let\u2019s avoid sounding panicked and listen to the room before we act. I\u2019m not accusing anyone yet, but we should consider symptoms of rational fear versus manipulation.",
+      "file": "377a14eec90d7fca9ae1d775cbc8d12808c2366a.mp3"
+    },
+    {
+      "seq": 21,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "Dev's death is a big loss. Gia's caution makes sense\u2014we shouldn't rush. Cleo accusing Gia and Elif so quickly feels off; wolves might push early accusations to divert attention. Let's hear from others before jumping to conclusions.",
+      "file": "a97e8c7b3104a9f58806084087c0f7d64a0847be.mp3"
+    },
+    {
+      "seq": 24,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "Losing the Seer on night one is a disaster. I agree with Iris; Cleo's immediate accusations against Gia and Elif without any information feel premature and suspicious. We should be cautious about who we trust when someone is pushing for quick lynches this early. Let's see what the others have to say.",
+      "file": "9cb6c7d521b2cefbf06c571ad5698d253d44fff5.mp3"
+    },
+    {
+      "seq": 27,
+      "category": "speech",
+      "speaker": "p2",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Losing the seer is tough. Cleo accusing two people immediately without info seems suspicious\u2014could be wolf trying to mislead. Iris and Jude make sense pushing back. Let\u2019s not rush. I want to hear from Hugo, Ben, Ava, and Elif before deciding.",
+      "file": "bb174df7affa2b9819ac6088b5dfac773789ac07.mp3"
+    },
+    {
+      "seq": 30,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "Dev dying is bad. Cleo accused quickly (p6 and me) with no info\u2014that smells like a diversion. I'm uneasy about p8. I want others' reads before voting.",
+      "file": "d8b3e5ca857b4171720dc1dfca8e4c9ababada3e.mp3"
+    },
+    {
+      "seq": 33,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "It's definitely a rough start losing the Seer. Cleo (p8), your immediate accusations against p6 and p9 without any evidence are making a lot of people uneasy. It feels like you're trying to steer the conversation too quickly. I agree with the general sentiment that we should be cautious, but p8's behavior is the most suspicious thing happening right now. Let's hear from p0 and p7 before we commit.",
+      "file": "479caea76c62640ac28bc1bb8a06ef6b5c78831b.mp3"
+    },
+    {
+      "seq": 36,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "This is rough. Losing the Seer hurts, but piling on one player immediately seems dangerous \u2014 we should ask for concrete reads, not quick lynches. Let's discuss motives and patterns before voting.",
+      "file": "ec2243bf82779c7241f5377d21792f87309b77f7.mp3"
+    },
+    {
+      "seq": 38,
+      "category": "speech",
+      "speaker": "p7",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "Losing our Seer immediately is tough. While Cleo (p8)'s sudden accusations against p6 and p9 were definitely premature, I agree with Hugo (p0) that this massive bandwagon against p8 formed almost too smoothly. Wolves love jumping on an easy early target. Cleo, what was your actual reasoning behind naming p6 and p9? Let's give p8 a chance to explain before rushing a lynch.",
+      "file": "13851b0579a8f5ce943aa48e8b32b08b361d5a03.mp3"
+    },
+    {
+      "seq": 41,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "I agree we shouldn't rush. Cleo pushed two names very quickly after the Seer died \u2014 that feels suspicious. Let's have p8 explain concrete reasons for naming p6 and p9 before we consider a lynch.",
+      "file": "471ecf6661e7c7025c8717fa5b415ab1e19a4299.mp3"
+    },
+    {
+      "seq": 44,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "I agree with the general consensus. Cleo (p8), your sudden accusations against p6 and p9 without any information are highly suspicious and look like a diversion. However, Ava (p7) makes a good point about the bandwagon. Before we vote, I want to hear Cleo explain why they targeted those two specifically. If the reasoning is weak, p8 becomes our main suspect.",
+      "file": "6febc1cfba2019a24b988982d368a1174c0bfc9a.mp3"
+    },
+    {
+      "seq": 47,
+      "category": "speech",
+      "speaker": "p7",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "Everyone has essentially echoed the exact same point about p8. If p8 fails to provide any sensible defense or reasoning for targeting p6 and p9, voting p8 makes sense. However, keep in mind that at least one wolf is likely sitting comfortably inside this unanimous train. When p8 speaks, evaluate carefully whether it's confused villager play or caught wolf scrambling.",
+      "file": "08173b00e1e94913a3c129c4e1e59d4a1b6b1470.mp3"
+    },
+    {
+      "seq": 50,
+      "category": "speech",
+      "speaker": "p2",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "We\u2019re all aligned that Cleo (p8) needs to justify accusing Gia and Elif so fast. If the explanation is weak, p8 should be our lynch. Let\u2019s not let wolves hide behind bandwagon concerns\u2014Cleo\u2019s actions were aggressive and unexplained. I stand with the group: p8 must speak clearly now.",
+      "file": "8edf9356bd69bc0d305ee145c050c4e2617dc692.mp3"
+    },
+    {
+      "seq": 53,
+      "category": "speech",
+      "speaker": "p6",
+      "voice": "gemini-flash-lite",
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "text": "Cleo, you started this day by pointing fingers at me and Elif without any justification, which naturally drew everyone's suspicion. Now it's time to speak up. Give us your actual reasoning for those accusations. If you can't provide a logical defense, you leave us no choice. At the same time, as Ava noted, we must watch out for wolves potentially riding this bandwagon too comfortably.",
+      "file": "e55e59e32ee391db0af942d64315079490dcec19.mp3"
+    },
+    {
+      "seq": 56,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "Cleo (p8) started by accusing two people with no reason. That looks like a diversion. p8, explain now \u2014 failing to give a rationale makes you our top suspect. I vote to lynch p8.",
+      "file": "b4dc959e20f559d6baf062001df419dc069c017c.mp3"
+    },
+    {
+      "seq": 60,
+      "category": "speech",
+      "speaker": "p8",
+      "voice": "gpt-5-nano",
+      "voice_id": "FGY2WhTYpPnrIDTdsKH5",
+      "text": "We lost the seer: we need to stay collected. Cleo should align with the group but avoid sounding like a wolf. I\u2019ll push for Gia\u2019s explanation and suggest we wait before rushing p8\u2019s lynch. I\u2019m watching for consistent, logical defenses. If Gia\u2019s argument falters, we can push on her. Let\u2019s hear from p0 and p6 first before deciding.",
+      "file": "e6a068d6f80a2e36526ed4a0b9a4e40bfb5d6a3a.mp3"
+    },
+    {
+      "seq": 63,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "Cleo (p8), your response is completely nonsensical. You referred to yourself in the third person and still provided zero justification for your initial accusations against p6 and p9. This isn't a 'confused villager' move; it's a failure to provide any logical defense. I cannot trust someone who behaves this erratically and aggressively without cause. I'm sticking with the group: p8's behavior is far too suspicious to ignore.",
+      "file": "5f19e967dcd1bd9f3e8d8559ccb3c371da1b6b17.mp3"
+    },
+    {
+      "seq": 66,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "Cleo's accusations against Gia and Elif were baseless and their defense was incoherent. This looks like wolf behavior. However, Ava is right that wolves might be hiding in the bandwagon. I'm voting for Cleo unless they provide a solid explanation.",
+      "file": "965df1dfcc42054daba69e78441477238b3ea1b5.mp3"
     },
     {
       "seq": 69,
@@ -80,6 +251,132 @@
       "file": "bb6d580c4b68d35b41c6899ef728ceb4f509fa23.mp3"
     },
     {
+      "seq": 86,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "Good job lynching Cleo, but one wolf remains. Gia's death suggests wolves are targeting vocal villagers. We should look for who might have coasted on the Cleo vote without adding value. Ava's comment about everyone echoing the same point stood out\u2014could be wolf trying to blend in. Let's discuss suspicions openly.",
+      "file": "9da2d6d47b7ec8551a10dc81b18de1bbb9beface.mp3"
+    },
+    {
+      "seq": 89,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "Cleo was definitely a wolf, so we've made progress. However, Gia's death is a setback. Iris is already pointing fingers at Ava (p7). While we should be careful of people blending in, let's not rush into another lynch without more evidence. I want to hear what p0, p2, p3, and p9 think about Iris's sudden accusation.",
+      "file": "1bb299c9eeba2c21b5c72660c377ee73f478a954.mp3"
+    },
+    {
+      "seq": 91,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "It's a shame we lost Gia. Iris's suspicion of Ava for 'blending in' seems quite vague. In a game where most of us agreed on Cleo's obvious behavior, blending in is normal for villagers. I'm a villager and I think we should be cautious about lynching based on such thin evidence. Let's see if anyone else has a more concrete lead or observation from the first day.",
+      "file": "40996c5881404fcdab291cbe0e6dfc258a1ee8ff.mp3"
+    },
+    {
+      "seq": 93,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "We lost Gia to nightkill, so don't rush. Iris (p5) accused Ava (p7) with only 'blending in'\u2014too vague. Let's ask concrete: p5, what exact behavior of p7 differs from villagers? If none, I won't vote on vague claims.",
+      "file": "2a0a71843d9e6e77232610e184056cea98bfe825.mp3"
+    },
+    {
+      "seq": 96,
+      "category": "speech",
+      "speaker": "p7",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "Iris (p5), pointing out that everyone was saying the exact same thing about Cleo (p8) was an observation of how unified the village was, not hiding. Pushing an early, flimsy case on me right out the gate looks like an attempt to direct attention away from the remaining wolf. I'm a villager. Let's hear what Hugo (p0) and Finn (p2) think before jumping to conclusions.",
+      "file": "8b598fbe69b07edaeba5586eba047e30dfbc3db7.mp3"
+    },
+    {
+      "seq": 99,
+      "category": "speech",
+      "speaker": "p2",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Iris (p5) accused Ava (p7) with no real evidence\u2014just 'blending in.' That's weak. Iris is the only one pushing a baseless accusation now, just like Cleo did. We should focus on Iris. Her behavior mirrors the last wolf's. Let's not let the real threat hide behind false accusations.",
+      "file": "bf7a520523a47fbec71af87f6a803e306964ed14.mp3"
+    },
+    {
+      "seq": 102,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "Iris's accusation of Ava felt vague and sudden. We've lost Gia \u2014 we need concrete reasons before lynching, but multiple players find Iris suspicious. I think Iris (p5) should explain specifics or she looks like the remaining wolf. I'm leaning to lynch p5.",
+      "file": "19a68ee14e7f1c45a855e720766230975a65c02a.mp3"
+    },
+    {
+      "seq": 105,
+      "category": "speech",
+      "speaker": "p1",
+      "voice": "gemma4-26b",
+      "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+      "text": "The consensus is shifting heavily toward Iris (p5). Her accusation against Ava (p7) is extremely flimsy, mirroring the baseless behavior we saw from Cleo (p8). If Iris is a villager, she needs to provide a concrete reason for her suspicion immediately. Otherwise, the lack of evidence makes her the most logical target for the remaining wolf behavior. I'm staying cautious but watching p5 closely.",
+      "file": "7d9953a7586d72c985bb8affc5ac39bea4432030.mp3"
+    },
+    {
+      "seq": 108,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "Iris's logic for accusing Ava is incredibly weak and mirrors the baseless accusations we saw from Cleo. When a player tries to push a narrative without evidence, it's a red flag. Given that almost everyone else finds this behavior suspicious, I agree that Iris (p5) is the most likely candidate for the remaining wolf. We cannot afford another mistake after losing our Seer and Gia.",
+      "file": "38016b7484a017bdcfc33b26e2bd165ce971e96a.mp3"
+    },
+    {
+      "seq": 111,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "I agree with the majority \u2014 Iris's accusation of p7 was vague and sudden, mirroring Cleo's baseless push. We've lost Gia; we can't gamble. p5 should give concrete reasons now or they'll remain our primary suspect.",
+      "file": "0eee8db646a0ac2aae97c8de97c3f7f1834bc50d.mp3"
+    },
+    {
+      "seq": 114,
+      "category": "speech",
+      "speaker": "p2",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Iris (p5) accused Ava with nothing but 'blending in'\u2014that's the same baseless tactic Cleo used. Now Iris is isolated, pushing weak logic. We lost Gia; we can't afford another mistake. Iris mirrors the last wolf's behavior. Unless she explains now, she should be our lynch.",
+      "file": "6b1546e3fb96198f1f264a9ad2df01a4a73ec0a6.mp3"
+    },
+    {
+      "seq": 117,
+      "category": "speech",
+      "speaker": "p7",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "Iris (p5) definitely put herself in the spotlight with an unsubstantiated push, but let's be careful about how quickly everyone piled on. While p5 is currently the strongest candidate for the final wolf due to mirroring p8's desperate misdirection, we shouldn't overlook anyone opportunistically coasting on this wagon. If p5 has no real defense, my vote stays on p5.",
+      "file": "94df995829573ae508cd9ed3fd459340854ead25.mp3"
+    },
+    {
+      "seq": 120,
+      "category": "speech",
+      "speaker": "p5",
+      "voice": "deepseek-v3.1",
+      "voice_id": "IKne3meq5aSn9XLyUdCD",
+      "text": "My accusation against Ava was for observing groupthink, not baseless. Wolves often blend in. But now everyone piles on me without evidence, mirroring Cleo's tactics. The real wolf is among you pushing hardest. Think: who benefits from lynching a villager? I'm innocent. Don't let the wolf misdirect you.",
+      "file": "4e74b9d69669f31f9d5f381b46ed2f2bde4a3d71.mp3"
+    },
+    {
+      "seq": 126,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "Iris (p5) made a vague initial accuse of p7, then deflected by accusing four others when pressed. That noisy deflection looks wolfy. I won't entertain vague claims \u2014 my vote is on p5 unless she gives a concrete defense now.",
+      "file": "f407bfc7d42891b56cc3ce8761a1915dc648c85a.mp3"
+    },
+    {
       "seq": 129,
       "category": "narrator",
       "speaker": "narrator",
@@ -125,6 +422,96 @@
       "file": "4feae53f92cd6b30bb09f11047fd43d653533f28.mp3"
     },
     {
+      "seq": 144,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "We've lost Ben (p1), another villager. We are down to four players and one wolf. Since the wolf is blending in perfectly, we need to look at who is driving the narrative. p0, p2, p7, and p9 have all been aligned so far. Is there any discrepancy in how you've all voted or spoken? Let's be careful not to fall into another groupthink trap.",
+      "file": "19c43a91b335da19762f7eb9ef127c488138220b.mp3"
+    },
+    {
+      "seq": 145,
+      "category": "speech",
+      "speaker": "p7",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "First, Jude (p3), there are five of us left, not four: p0, p2, p3, p7, p9. Trying to isolate yourself from the rest of us by saying we've all been aligned feels like an artificial narrative to divert scrutiny. On Day 2, everyone piled on Iris quickly; whoever led that charge without second thought should be examined closely. Let's hear from p0, p2, and p9 on where they stand today.",
+      "file": "c5064fb411834954cb571fc783547f68e2e1235a.mp3"
+    },
+    {
+      "seq": 148,
+      "category": "speech",
+      "speaker": "p2",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Jude (p3) made a strange error saying there are four of us \u2014 we\u2019re five. That feels like manipulation. Ava (p7) was right to question him. I supported the Iris lynch, but Ava hesitated, which now seems smart. I\u2019m with Ava: Jude\u2019s narrative feels off. Let\u2019s examine why he\u2019s isolating himself now.",
+      "file": "37f9f9579f90878184b2b7961d08727aef1f58c3.mp3"
+    },
+    {
+      "seq": 151,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "We just lost another villager \u2014 emotions are high. Rushing to lynch p3 because of a slip feels risky. Let's slow down: ask each of p2, p3, p7, p9 to explain one concrete reason they suspect someone else before we vote.",
+      "file": "d1feb30d3d3123838510bb1cf8a611678ef43bc8.mp3"
+    },
+    {
+      "seq": 153,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "I agree we must be careful. p3 made a strange narrative move accusing groupthink \u2014 then slipped on numbers. That attempted distancing looks suspicious to me. I'm leaning toward p3 but want concrete reasons from p0/p2/p7 before voting.",
+      "file": "5e19818fbeb685ceebfe6b8745e68c389b7bebb6.mp3"
+    },
+    {
+      "seq": 156,
+      "category": "speech",
+      "speaker": "p2",
+      "voice": "qwen3-235b",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "text": "Jude (p3) made a clear mistake saying there are four of us\u2014there are five. That kind of error feels manipulative. Ava (p7) was right to call it out. I trusted the group on Iris, but Ava's hesitation was valid. Jude is now distancing himself, which raises suspicion. Let's not ignore this.",
+      "file": "fdfd20230e5e95ad2a162f7c729eafff4dc971b4.mp3"
+    },
+    {
+      "seq": 159,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "We should avoid rushing. p2 and p9 have repeatedly pushed p3 \u2014 Jude, give one concrete example of manipulative behavior beyond the slip. p2/p9, state why you trust that slip indicates guilt. If answers are weak, don't lynch on momentum alone.",
+      "file": "cf216e32faeb2643dbdbd4cbf984cd25aecbf44d.mp3"
+    },
+    {
+      "seq": 162,
+      "category": "speech",
+      "speaker": "p3",
+      "voice": "llama4-maverick",
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "text": "My mistake with the count was a simple lapse\u2014I forgot to include myself. It wasn't a narrative move. I am the Doctor; I've been protecting us to keep the village alive. If you lynch me, you lose the only person capable of stopping the wolf's kills. p2, p7, and p9 are jumping on me very quickly for a counting error, which feels like a coordinated effort to eliminate a power role.",
+      "file": "021b09db3609e7c040f995d62e06c665e01a0d7c.mp3"
+    },
+    {
+      "seq": 167,
+      "category": "speech",
+      "speaker": "p7",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "Jude (p3), claiming Doctor under pressure is very convenient. If you are truly Doctor, who did you protect on Night 1 and Night 2? Give us your protection targets immediately. Does anyone else claim Doctor? If nobody counterclaims, we must be cautious, but if your protection history doesn't make sense or if someone counterclaims, you're the clear wolf.",
+      "file": "497ede414cfa219ead624da3264062e5970436eb.mp3"
+    },
+    {
+      "seq": 170,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "Jude's doctor claim is convenient. Ava rightly asked for Night 1/2 protection targets \u2014 give them now. Without specifics, claim looks fake. I'm leaning to lynch based on pattern of defending self with role claims after pressure. Let's not split votes; state your defense concretely, Jude.",
+      "file": "40bf180e0ebe00185a98d471841741b966bd9646.mp3"
+    },
+    {
       "seq": 173,
       "category": "narrator",
       "speaker": "narrator",
@@ -168,6 +555,60 @@
       "voice_id": "N2lVS1w4EtoT3dr4eOWO",
       "text": "Day 4. The village wakes.",
       "file": "7ecf02ba7c58fe3f2ac5a5f628229490e429503a.mp3"
+    },
+    {
+      "seq": 185,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "We lost another villager last night. I'm a villager too \u2014 we've been narrowing down based on behavior. p9 has pushed hard at multiple days and dodged specific answers before. I think p9 is more suspicious; let's focus on them today and pick one to lynch.",
+      "file": "0ef6827fd1dce6583fe54efeb35aec3b07387657.mp3"
+    },
+    {
+      "seq": 188,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "Hugo (p0) has pushed hard and keeps accusing me without evidence. We've lost villagers while he redirects discussion. I trust Ava (p7) more. I vote to lynch p0.",
+      "file": "46469b8baab506dae272fc0f5b19d400254bb245.mp3"
+    },
+    {
+      "seq": 191,
+      "category": "speech",
+      "speaker": "p7",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "This is final three, so choosing between p0 and p9 decides the game. Remember on Day 1 that Cleo (p8) immediately pushed Gia (p6) and p9, which makes me wonder if p9 was a genuine village target for Cleo. Hugo (p0), why focus so hard on p9 over other aspects of the game? Both of you, please state your full case on each other before we decide the vote.",
+      "file": "716b50b3c800f1603cdda3d1bd4eda13f81f137f.mp3"
+    },
+    {
+      "seq": 194,
+      "category": "speech",
+      "speaker": "p7",
+      "voice": "gemini-flash",
+      "voice_id": "cgSgspJ2msm6clMCkdW9",
+      "text": "Looking back across the days, Cleo (p8) targeted Gia (p6) and p9 right away on Day 1. With Gia turning out to be a villager, it strongly indicates p9 was an authentic village target, not a partner. Hugo (p0) has coasted and blended with consensus every round, and opened today by immediately trying to push p9. I am firmly leaning towards voting p0 to secure the village win.",
+      "file": "f786f2047c9825ca7f51c903b7dd4a9c9c8835d4.mp3"
+    },
+    {
+      "seq": 197,
+      "category": "speech",
+      "speaker": "p0",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "We can\u2019t gamble \u2014 losing Finn shows wolves are still strong. p9 has been pushed by Cleo early and dodged specifics repeatedly. p9\u2019s attacks on me today feel like a redirect. I think lynching p9 gives us the best shot to stop wolves. Let's vote p9.",
+      "file": "dbd8e7addfbcb0828fd55afd11b4d2b7e4141644.mp3"
+    },
+    {
+      "seq": 200,
+      "category": "speech",
+      "speaker": "p9",
+      "voice": "gpt-5-mini",
+      "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
+      "text": "We must pick the most consistent wolf behavior. Hugo (p0) has led multiple pushes and now targets me without new evidence. Ava (p7) has pointed out Cleo's Day1 hit on me but hasn't pushed like Hugo. I vote p0 to try to stop whoever has been steering accusations.",
+      "file": "aa72964f835cc4651a70da58953b09f62980cf2f.mp3"
     },
     {
       "seq": 203,

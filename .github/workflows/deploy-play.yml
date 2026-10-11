@@ -7,7 +7,8 @@ name: Deploy play server
 # GET /api/health reports games_running 0. A newer push cancels a run still waiting.
 # Needs the repo variable VITE_PLAY_API_URL (the play server's URL, as the viewer uses it) and
 # the repo secret RENDER_DEPLOY_HOOK_URL (Render dashboard > societysim-play > Settings >
-# Deploy Hook). A game started in the minute or two the build takes still ends. After
+# Deploy Hook). Without the secret it logs a notice and deploys nothing (deploy by hand when
+# games_running is 0). A game started in the minute or two the build takes still ends. After
 # WAIT_MINUTES with games still running, it deploys anyway and logs a warning.
 #   gh workflow run deploy-play.yml               # wait for an idle server, then deploy
 #   gh workflow run deploy-play.yml -f force=true # deploy now, ending running games
@@ -51,8 +52,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$HOOK" ]; then
-            echo "::error::Set the RENDER_DEPLOY_HOOK_URL repo secret; nothing was deployed."
-            exit 1
+            echo "::notice::RENDER_DEPLOY_HOOK_URL not set; skipping. Deploy manually when /api/health games_running == 0"
+            exit 0
           fi
           if [ -z "$PLAY_URL" ]; then
             echo "::error::Set the VITE_PLAY_API_URL repo variable; nothing was deployed."

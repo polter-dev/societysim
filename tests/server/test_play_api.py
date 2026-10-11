@@ -67,7 +67,7 @@ def seeds(monkeypatch):
     """The server draws each game's seed; pin them to 7, 8, 9... so games replay. With seed 7
     p0 is a wolf (a turn on night 1, alive through day 1); seed 8 makes p0 a villager."""
     seeds = itertools.count(7)
-    monkeypatch.setattr("societysim.server.manager.secrets.randbelow", lambda n: next(seeds))
+    monkeypatch.setattr("societysim.server.manager.secrets.randbits", lambda n: next(seeds))
 
 
 @pytest.fixture
@@ -526,3 +526,23 @@ async def test_move_accepted_as_the_clock_runs_out_is_not_dropped():
     result = await task
     assert result.error is None and result.parsed == Reply()
     assert agent.timeouts == 0
+
+
+async def test_wide_visitor_seed_stays_private_and_replays(make_client, tmp_path, monkeypatch):
+    seed = 2**52 + 12345  # wider than the old 31 bits
+    monkeypatch.setattr("societysim.server.manager.secrets.randbits", lambda n: seed)
+    assert seed.bit_length() > 31
+    async with make_client() as c:
+        runs = []
+        for _ in range(2):
+            started = await start(c)
+            texts = [json.dumps(started)]
+            for me in await play_out(c, started):
+                texts.append(json.dumps(me))
+            await finished(c, started)
+            texts.append((await c.get("/api/limits")).text)
+            events, meta = read_log(tmp_path, started["game_id"])
+            assert str(seed) not in started["game_id"] and hex(seed)[2:] not in started["game_id"]
+            assert not any(str(seed) in t for t in texts)
+            runs.append([(e["type"], e["actor"], e.get("target")) for e in events])
+    assert runs[0] == runs[1]

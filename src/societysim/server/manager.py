@@ -322,7 +322,7 @@ class GameManager:
         (None when watching). Raises ValueError for a setup this server can't run."""
         self._prune()
         data = setup.model_dump()
-        data["seed"] = secrets.randbelow(2**31)
+        data["seed"] = secrets.randbits(53)
         if watch_only:
             if setup.human_seat is not None:
                 raise ValueError("watch_only games have no human seat; set human_seat to null")

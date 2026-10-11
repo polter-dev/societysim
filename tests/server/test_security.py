@@ -76,7 +76,7 @@ def play(**kw) -> PlayConfig:
 @pytest.fixture
 async def make_client(tmp_path, monkeypatch):
     # Fixed seed: a random one can kill the visitor on Night 1 before they get a turn.
-    monkeypatch.setattr(manager_module.secrets, "randbelow", lambda n: SEED)
+    monkeypatch.setattr(manager_module.secrets, "randbits", lambda n: SEED)
     clients = []
 
     def make(seen: list | None = None, **kw):
@@ -820,7 +820,7 @@ async def test_concurrent_calls_and_games_never_pass_the_cap(make_client, costly
 async def test_forfeit_books_calls_in_flight(make_client, monkeypatch, costly):
     """p0 is a wolf (seed 7) and forfeits on night 1 while the Seer's and Doctor's slow calls
     run: they are cancelled, and their worst-case holds are booked."""
-    monkeypatch.setattr("societysim.server.manager.secrets.randbelow", lambda n: 7)
+    monkeypatch.setattr("societysim.server.manager.secrets.randbits", lambda n: 7)
     agents = lambda cfg: (lambda st, s: CostlyAgent(st, s, delay=5), {})  # noqa: E731
     c = make_client(play=play(), agents=agents, turn_timeout=0.2, max_timeouts=1)
     started = await start(c)

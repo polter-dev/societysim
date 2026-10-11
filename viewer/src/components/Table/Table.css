@@ -30,3 +30,6 @@
 .round-table .medallion::after{font-size:1.9cqw}
 .table-seat[data-revealed=true] .seat-role{font-weight:700;color:#f2e7ba;border-color:#ac8b45}
 @media(prefers-reduced-motion:reduce){.table-seat[data-speaking] .medallion-portrait{animation:none}.round-table .table-seat>button,.round-table .medallion-portrait{transition:none}}
+/* Layering: accusation/vote arrows (a sibling svg after the table) sit under the seats, so plates and names stay readable. */
+.round-table{z-index:1}
+.replay-table [data-speaker]{z-index:2}

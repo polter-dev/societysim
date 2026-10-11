@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { type Mode } from "../../scene/deriveScene";
 import type { Event, Label } from "../../types/events";
 import { buildTimelineGroups } from "./markers";
@@ -115,7 +115,7 @@ export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqCha
             step={1}
             value={seq}
             onChange={(event) => setSeq(Number(event.target.value))}
-            style={{ display: "block", width: "100%" }}
+            style={{ display: "block", width: "100%", "--pct": `${last > first ? ((seq - first) / (last - first)) * 100 : 0}%` } as CSSProperties}
           />
         </label>
         <span>{index + 1} / {events.length}</span>

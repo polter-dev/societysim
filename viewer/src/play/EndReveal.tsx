@@ -37,7 +37,7 @@ export function EndReveal({events,labels,idx,mode}: {events:Event[];labels:Label
   const reveal = new URL(share); reveal.searchParams.set("mode","narrator");
   const copy = async () => {try {await navigator.clipboard.writeText(share.href);setCopied(true);} catch {setCopied(false);} };
   const wonWolves = scene.winner === 'wolves';
-  const crest = art(wonWolves ? 'new/event_werewolf 1.png' : 'new/day_counter-v2.png');
+  const crest = art(wonWolves ? 'new/event_werewolf 1.png' : 'inspector/05_group.png');
 
   return <section className="game-reveal" aria-labelledby="game-reveal-title">
     <div className="game-reveal__header">

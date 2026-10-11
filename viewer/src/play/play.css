@@ -83,10 +83,11 @@
   margin-bottom: 6px;
 }
 .your-turn__role-icon {
-  height: 44px;
-  width: auto;
-  max-width: 180px;
-  object-fit: contain;
+  /* The art is a 4:1 banner; crop to the medallion on its left instead of shrinking the whole ribbon. */
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  object-position: 8% 50%;
   filter: drop-shadow(0 4px 8px #000c);
   flex-shrink: 0;
 }
@@ -389,10 +390,10 @@
   margin-bottom: 16px;
 }
 .game-reveal__crest {
-  height: 52px;
-  width: auto;
-  max-width: 220px;
-  object-fit: contain;
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  object-position: 8% 50%;
   filter: drop-shadow(0 6px 12px #000c);
 }
 .game-reveal h2 {
@@ -568,8 +569,8 @@
     flex-wrap: wrap;
   }
   .your-turn__role-icon {
-    height: 36px;
-    max-width: 140px;
+    width: 40px;
+    height: 40px;
   }
   .play-start {
     padding: 16px;

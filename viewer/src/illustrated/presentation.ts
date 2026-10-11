@@ -1,12 +1,12 @@
-import type { Event } from '../types/events';
+import type { Event, Role } from '../types/events';
 import type { Scene } from '../scene/deriveScene';
 
-const CLAIM_ROLES: Record<string, string> = { seer: 'the Seer', doctor: 'the Doctor', villager: 'a Villager', werewolf: 'a Werewolf' };
+const CLAIM_ROLES: Record<Role, string> = { seer: 'the Seer', doctor: 'the Doctor', villager: 'a Villager', wolf: 'a Werewolf' };
 
 /** Claimed role comes only from the public event's meta.role, never the speaker's true role. */
 function claimText(event: Event) {
   const role: unknown = event.meta.role;
-  const label = typeof role === 'string' ? CLAIM_ROLES[role] : undefined;
+  const label = typeof role === 'string' && Object.hasOwn(CLAIM_ROLES, role) ? CLAIM_ROLES[role as Role] : undefined;
   return label ? `Claims to be ${label}` : 'Claims a role';
 }
 

@@ -46,6 +46,7 @@ describe('role claim text',()=>{
   expect(text({role:'seer'})).toBe('Claims to be the Seer');
   expect(text({role:'doctor'})).toBe('Claims to be the Doctor');
   expect(text({role:'villager'})).toBe('Claims to be a Villager');
+  expect(text({role:'wolf'})).toBe('Claims to be a Werewolf');
  });
  it('shows the claim, not the true role, in both modes',()=>{
   const start=events.find(e=>e.type==='game_start')!;
@@ -61,5 +62,6 @@ describe('role claim text',()=>{
   expect(text({role:undefined})).toBe('Claims a role');
   expect(text({role:42})).toBe('Claims a role');
   expect(text({role:'banana'})).toBe('Claims a role');
+  expect(text({role:'toString'})).toBe('Claims a role');
  });
 });

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { ModelAvatar } from "../components/ModelAvatar/ModelAvatar";
 import { modelName } from "../data/modelNames";
 import type { GameSource, GameSummary } from "../data/source";
+import "./Games.css";
 
 interface ListProps {
   games: GameSummary[];
@@ -9,11 +11,25 @@ interface ListProps {
   showWinners?: boolean;
 }
 
+/** "18 games, 2 live" for the panel heading. */
+export function gamesCount(games: GameSummary[]): string {
+  const live = games.filter((g) => g.live).length;
+  return `${games.length} ${games.length === 1 ? "game" : "games"}${live ? `, ${live} live` : ""}`;
+}
+
+/** Winner cell text plus a data-winner value the stylesheet colours by. */
+function winnerOf(g: GameSummary, showWinners: boolean): [text: string, kind: string] {
+  if (g.live) return ["playing", "live"];
+  if (!showWinners) return ["hidden", "hidden"];
+  if (g.winner === undefined) return ["n/a", "unknown"];
+  return g.winner === null ? ["none", "none"] : [g.winner, g.winner];
+}
+
 export function GameList({ games, href, showWinners = false }: ListProps) {
-  if (games.length === 0) return <p>No games in this index.</p>;
+  if (games.length === 0) return <p className="games-status">No games in this index.</p>;
   return (
-    <table>
-      <caption>Games</caption>
+    <table className="games-table">
+      <caption className="visually-hidden">Games</caption>
       <thead>
         <tr>
           <th scope="col">Game</th>
@@ -23,17 +39,37 @@ export function GameList({ games, href, showWinners = false }: ListProps) {
         </tr>
       </thead>
       <tbody>
-        {games.map((g) => (
-          <tr key={g.id}>
-            <th scope="row">
-              <a href={href(g.id)}>{g.id}</a>
-              {g.live && <span className="live-badge"> ● Live</span>}
-            </th>
-            <td title={g.models?.join(", ")}>{g.models?.map(modelName).join(", ") ?? "?"}</td>
-            <td>{g.days ?? "n/a"}</td>
-            <td>{g.live ? "playing" : showWinners ? (g.winner === undefined ? "n/a" : (g.winner ?? "none")) : "hidden"}</td>
-          </tr>
-        ))}
+        {games.map((g) => {
+          const [winner, kind] = winnerOf(g, showWinners);
+          return (
+            <tr key={g.id}>
+              <th scope="row">
+                <a href={href(g.id)}>{g.id}</a>
+                {g.live && <span className="live-badge"> ● Live</span>}
+              </th>
+              <td>
+                {g.models?.length ? (
+                  <ul className="games-models">
+                    {g.models.map((m) => (
+                      <li key={m} title={m}>
+                        <ModelAvatar model={m} label={modelName(m)} size={20} />
+                        {modelName(m)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  "n/a"
+                )}
+              </td>
+              <td>{g.days ?? "n/a"}</td>
+              <td>
+                <span className="games-winner" data-winner={kind}>
+                  {winner}
+                </span>
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
@@ -49,15 +85,24 @@ export default function IndexPage({ source, href }: { source: GameSource; href: 
     source.listGames().then(setGames, (err: Error) => setError(err.message));
   }, [source]);
 
-  if (error) return <p role="alert">Could not load the game index: {error}</p>;
-  if (!games) return <p>Loading games...</p>;
   return (
-    <>
-      <label>
-        <input type="checkbox" checked={showWinners} onChange={(e) => setShowWinners(e.target.checked)} /> Show winners
-        (spoilers)
-      </label>
-      <GameList games={games} href={href} showWinners={showWinners} />
-    </>
+    <section className="games-page" aria-labelledby="games-heading">
+      <header className="games-head">
+        <h2 id="games-heading">{games ? gamesCount(games) : "Games"}</h2>
+        {games && games.length > 0 && (
+          <label>
+            <input type="checkbox" checked={showWinners} onChange={(e) => setShowWinners(e.target.checked)} /> Show
+            winners (spoilers)
+          </label>
+        )}
+      </header>
+      {error ? (
+        <p role="alert">Could not load the game index: {error}</p>
+      ) : !games ? (
+        <p className="games-status">Loading games...</p>
+      ) : (
+        <GameList games={games} href={href} showWinners={showWinners} />
+      )}
+    </section>
   );
 }

@@ -1,0 +1,265 @@
+/* Illustrated games list (#516), after the leaderboard (Leaderboard.css, #481). Tokens come from ../controls.css.
+   pages.css loads after this file and styles `.info-page table/th/td` at (0,1,1), so table rules here carry
+   at least two classes or (0,1,2) to win. Focus rings come from a11y.css (#414), the checkbox from controls.css (#415). */
+
+/* main.tsx caps every info page at 1100px on the left. Here the emerald page runs full width and the
+   content column centres, so a 2560px window gets neither a marooned column nor 2500px rows.
+   !important beats that inline max-width. */
+main.info-page:has(> .games-page) {
+  max-width: none !important;
+  background: radial-gradient(ellipse 90% 70% at 50% 0%, #0b3f2c, var(--night-panel) 70%) var(--night-panel);
+}
+
+main.info-page:has(> .games-page) > * {
+  box-sizing: border-box;
+  max-width: 1680px;
+  margin-inline: auto;
+}
+
+main.info-page:has(> .games-page) > h1 {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-top: 8px;
+  margin-bottom: 20px;
+  color: var(--accent-gold);
+  font: 700 34px/1.2 var(--font-heading);
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 8px rgb(0 0 0 / 50%);
+}
+
+main.info-page:has(> .games-page) > h1::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--accent-gold), transparent);
+}
+
+main.info-page:has(> .games-page) > .batch-source {
+  margin-bottom: 24px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* The panel: a gold-rimmed emerald card holding the heading row and the table. */
+.games-page {
+  margin-bottom: 48px;
+  overflow: hidden;
+  border: 1px solid var(--accent-gold);
+  border-radius: var(--radius-panel);
+  background: var(--night-panel);
+  box-shadow: var(--rim), 0 10px 28px rgb(0 0 0 / 45%);
+}
+
+.games-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
+  padding: 12px 20px;
+  background: linear-gradient(180deg, #0b3f2c, #04251e);
+  border-bottom: 2px solid var(--accent-gold);
+}
+
+.games-head h2 {
+  margin: 0;
+  color: var(--accent-gold);
+  font: 700 20px var(--font-heading);
+  font-variant: small-caps;
+  letter-spacing: 0.05em;
+}
+
+.games-head label {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.games-page > .games-status,
+.games-page > p[role="alert"] {
+  margin: 0;
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.games-page > p[role="alert"] {
+  margin: 20px;
+  padding: 14px 18px;
+  border: 1px solid var(--event-accusation);
+  border-radius: var(--radius-control);
+  background: #2b1612;
+  color: #ffcbb1;
+  font-style: normal;
+  text-align: left;
+}
+
+/* Table */
+.games-table.games-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: left;
+}
+
+.games-table :is(thead, tbody) :is(th, td) {
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 1px solid rgb(212 179 92 / 18%);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.games-table :is(thead, tbody) :is(th, td):first-child {
+  padding-left: 20px;
+}
+
+.games-table :is(thead, tbody) :is(th, td):last-child {
+  padding-right: 20px;
+}
+
+.games-table thead th {
+  padding-block: 8px;
+  background: #04251e;
+  border-bottom: 1px solid rgb(212 179 92 / 45%);
+  color: var(--accent-gold);
+  font: 600 13px var(--font-heading);
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+}
+
+/* Game, days and winner shrink to their content; models take the rest of the row. */
+.games-table :is(th, td):not(:nth-child(2)) {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.games-table :is(th, td):nth-child(3) {
+  padding-inline: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.games-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.games-table tbody tr:nth-child(even) {
+  background: rgb(18 60 46 / 25%);
+}
+
+.games-table tbody tr {
+  transition: background-color 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+/* Hover and keyboard focus light the whole row and mark it with a gold edge. */
+.games-table tbody tr:is(:hover, :has(a:focus-visible)) {
+  background: rgb(18 60 46 / 75%);
+  box-shadow: inset 3px 0 0 var(--accent-gold);
+}
+
+/* Game id: the link into the replay, kept on one line. */
+.games-table tbody th[scope="row"] {
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.games-table tbody th[scope="row"] a {
+  color: var(--text-primary);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--accent-gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.games-table tbody tr:hover th[scope="row"] a,
+.games-table tbody th[scope="row"] a:hover {
+  color: var(--focus-ring);
+  border-bottom: 1px solid var(--focus-ring);
+}
+
+.games-table .live-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 10px;
+  padding: 2px 10px;
+  border: 1px solid var(--event-accusation);
+  border-radius: 999px;
+  background: #2b1612;
+  color: #ffcbb1;
+  font-size: 12px;
+  font-weight: 700;
+  animation: games-live 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes games-live {
+  to {
+    box-shadow: 0 0 0 3px rgb(132 63 75 / 45%);
+  }
+}
+
+/* Model chips: a small portrait and the short name; the raw id shows on hover. */
+.games-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.games-models li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px 2px 2px;
+  border: 1px solid rgb(212 179 92 / 35%);
+  border-radius: 999px;
+  background: #04251e;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.games-models .model-avatar-img {
+  border: 1px solid rgb(212 179 92 / 70%);
+  font-size: 11px;
+}
+
+/* Winner pill. Each state has its own words, so colour is never the only signal. */
+.games-winner {
+  display: inline-block;
+  padding: 3px 12px;
+  border: 1px solid rgb(212 179 92 / 45%);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.games-winner:is([data-winner="wolves"], [data-winner="village"]) {
+  text-transform: capitalize;
+}
+
+.games-winner[data-winner="wolves"] {
+  border-color: var(--event-accusation);
+  background: #2b1612;
+  color: #ffcbb1;
+}
+
+.games-winner[data-winner="village"] {
+  border-color: var(--accent-gold);
+  background: rgb(212 179 92 / 16%);
+}
+
+.games-winner:is([data-winner="hidden"], [data-winner="none"], [data-winner="unknown"]) {
+  border-style: dashed;
+  color: var(--text-secondary);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.games-winner[data-winner="live"] {
+  border-color: var(--event-accusation);
+  color: #ffcbb1;
+}

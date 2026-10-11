@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { summarize } from "../data/staticSource";
-import { GameList } from "./Index";
+import { GameList, gamesCount } from "./Index";
 
 const games = [
   summarize({
@@ -22,7 +22,7 @@ describe("GameList", () => {
   it("links each game into the replay and shows models and days", () => {
     const html = render(false);
     expect(html).toContain('href="?game=g1"');
-    expect(html).toContain("m-a, m-b");
+    expect(html).toMatch(/<li title="m-a">.*m-a<\/li><li title="m-b">.*m-b<\/li>/);
     expect(html).toContain("<td>3</td>");
   });
 
@@ -30,8 +30,8 @@ describe("GameList", () => {
     const html = renderToStaticMarkup(
       createElement(GameList, { games: [{ id: "g7", models: ["llama4-maverick", "gemini-flash"] }], href: () => "" }),
     );
-    expect(html).toContain('title="llama4-maverick, gemini-flash"');
-    expect(html).toContain(">Llama 4 Maverick, Gemini Flash<");
+    expect(html).toMatch(/<li title="llama4-maverick">.*Llama 4 Maverick<\/li>/);
+    expect(html).toMatch(/<li title="gemini-flash">.*Gemini Flash<\/li>/);
   });
 
   it("hides the winner until asked and never shows roles", () => {
@@ -53,6 +53,22 @@ describe("GameList", () => {
       createElement(GameList, { games: [{ id: "g9", winner: null }], href: () => "", showWinners: true }),
     );
     expect(draw).toContain("none");
+  });
+
+  it("tags the winner pill so live, hidden and decided games look different", () => {
+    expect(render(false)).toContain('data-winner="hidden"');
+    expect(render(true)).toContain('data-winner="wolves"');
+    const live = renderToStaticMarkup(
+      createElement(GameList, { games: [{ id: "g2", live: true, winner: "village" }], href: () => "", showWinners: true }),
+    );
+    expect(live).toContain('data-winner="live"');
+    expect(live).not.toContain("village");
+  });
+
+  it("counts games and live games for the heading", () => {
+    expect(gamesCount([])).toBe("0 games");
+    expect(gamesCount([{ id: "a" }])).toBe("1 game");
+    expect(gamesCount([{ id: "a", live: true }, { id: "b" }])).toBe("2 games, 1 live");
   });
 
   it("says so when the index is empty", () => {

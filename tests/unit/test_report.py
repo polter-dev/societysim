@@ -577,3 +577,36 @@ def test_reliability_table_and_leaderboard_carry_the_three_rates(tmp_path):
     gloss = md.split("## leaderboard.json shape")[1]
     assert all(k in gloss for k in ("invalid_attempt_rate", "fallback_rate", "retry_success_rate"))
     Metrics.model_validate(metrics)
+
+
+def _add_mirror_jev(batch: Path) -> None:
+    """Jev labels for sample_game that agree with its self-tags."""
+    labels = batch / "sample_game.labels.jsonl"
+    rows = [json.loads(x) for x in labels.read_text(encoding="utf-8").splitlines()]
+    mirror = [{**r, "source": "jev"} for r in rows if r["source"] == "self_tag"]
+    labels.write_text("".join(json.dumps(r) + "\n" for r in rows + mirror), encoding="utf-8")
+
+
+def test_jev_coverage_is_per_game_and_reported(tmp_path):
+    # two copies of the sample game, Jev read only the first (#493)
+    batch = _batch(tmp_path)
+    for suffix in (".jsonl", ".labels.jsonl"):
+        text = (batch / f"sample_game{suffix}").read_text(encoding="utf-8")
+        (batch / f"second{suffix}").write_text(
+            text.replace("fixture-0001", "fixture-0002"), encoding="utf-8"
+        )
+    _add_mirror_jev(batch)
+    out, m = _report(tmp_path, batch)
+    lies = m["by_group"]["all"]["lies"]
+    assert lies["jev"]["lie_rate"] == pytest.approx(lies["self_tag"]["lie_rate"])
+    sm = m["summary"]["lies"]
+    assert sm["jev"]["statements"] * 2 == sm["self_tag"]["statements"]
+    md = (out / "report.md").read_text(encoding="utf-8")
+    assert "jev labeled 1 of 2 games" in md
+
+
+def test_no_coverage_note_when_jev_labeled_every_game(tmp_path):
+    batch = _batch(tmp_path)
+    _add_mirror_jev(batch)
+    md = (write_report(batch) / "report.md").read_text(encoding="utf-8")
+    assert "labeled" not in md

@@ -951,3 +951,35 @@ def test_rates_are_per_model_and_old_logs_without_usage_give_null():
     assert models["model-p1"]["all"]["fallback_rate"] == 0
     assert models["model-p2"]["all"]["fallback_rate"] is None
     assert models["model-p2"]["all"]["retry_success_rate"] is None
+
+
+def _mirror_jev(game) -> GameData:
+    """A game Jev read and agreed with the self-tags on every statement (#493)."""
+    jev = [lb.model_copy(update={"source": "jev"}) for lb in game.labels if lb.source == "self_tag"]
+    return GameData(game.events, game.labels + jev)
+
+
+def test_jev_numbers_cover_only_games_jev_labeled(game):
+    read = _mirror_jev(game)
+    unread = GameData(game.events, game.labels)  # self-tag only: Jev never saw it
+    alone = compute_metrics([read])
+    mixed = compute_metrics([read, unread])
+    for group in (mixed["by_group"]["all"], *(g["all"] for g in mixed["models"].values())):
+        lies = group["lies"]
+        # Jev agrees with the self-tags on everything it read, so the rates must match
+        assert lies["jev"]["lie_rate"] == pytest.approx(lies["self_tag"]["lie_rate"])
+    for model, groups in alone["models"].items():
+        want = groups["all"]["lies"]["jev"]
+        got = mixed["models"][model]["all"]["lies"]["jev"]
+        assert got["lie_rate"] == pytest.approx(want["lie_rate"])
+        assert got["lies"] == want["lies"] and got["lie_success"] == want["lie_success"]
+    assert mixed["deception_matrix"]["pairs"]["jev"] == alone["deception_matrix"]["pairs"]["jev"]
+
+
+def test_self_tag_numbers_do_not_change_when_jev_labels_exist_elsewhere(game):
+    plain = compute_metrics([GameData(game.events, game.labels)] * 2)
+    mixed = compute_metrics([_mirror_jev(game), GameData(game.events, game.labels)])
+    for model, groups in plain["models"].items():
+        got = mixed["models"][model]["all"]["lies"]["self_tag"]
+        assert got == groups["all"]["lies"]["self_tag"]
+    assert mixed["by_group"]["all"]["statements"] == plain["by_group"]["all"]["statements"]

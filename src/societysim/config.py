@@ -96,6 +96,12 @@ class GameConfig(_Config):
     @model_validator(mode="after")
     def _check(self) -> Self:
         self.roles = self.roles.resolved(self.n_players)
+        n, wolves = self.n_players, self.roles.wolves
+        if wolves >= n - wolves:
+            raise ValueError(
+                f"{wolves} wolves need more than {n - wolves} non-wolves; "
+                f"use at most {(n - 1) // 2} wolves for {n} players"
+            )
         if len(self.models) not in (0, 1, self.n_players):
             n = len(self.models)
             raise ValueError(f"models must list 1 or {self.n_players} names, got {n}")

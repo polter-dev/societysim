@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 from societysim.batch.assign import assign_games
 from societysim.batch.runner import plan
 from societysim.cli import app
-from societysim.config import BatchConfig, GameConfig, load_yaml
+from societysim.config import BatchConfig, GameConfig, RoleCounts, load_yaml
 from societysim.models.registry import load_registry
 from societysim.roles import Role
 
@@ -178,3 +178,13 @@ def test_every_model_says_how_its_avatar_reads():
     assert {m.name: m.avatar_presentation for m in reg.models} == AVATARS
     portraits = Path(__file__).resolve().parents[2] / "viewer/public/avatars"
     assert {p.stem for p in portraits.glob("*.webp")} - {"human"} <= set(AVATARS)
+
+
+@pytest.mark.parametrize("wolves", [4, 7])
+def test_wolves_must_be_fewer_than_non_wolves(wolves):
+    with pytest.raises(ValueError, match="wolves need more than"):
+        GameConfig(n_players=7, roles=RoleCounts(wolves=wolves, seers=0, doctors=0))
+
+
+def test_max_wolves_still_loads():
+    assert GameConfig(n_players=7, roles=RoleCounts(wolves=3)).roles.villagers == 2

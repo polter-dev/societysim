@@ -260,6 +260,8 @@ def client_ip(request: Request, trusted: tuple[Network, ...], ip_header: str = "
     """The visitor's address, with IPv6 reduced to its /64 so one network is one client."""
     ip = _visitor_ip(request, trusted, ip_header)
     addr = _ip(ip)
+    if addr is not None and addr.version == 6 and addr.ipv4_mapped:
+        return str(addr.ipv4_mapped)
     if addr is not None and addr.version == 6:
         return str(ipaddress.ip_network(f"{addr}/64", strict=False).network_address)
     return ip

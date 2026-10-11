@@ -894,3 +894,9 @@ def test_client_ip_buckets_ipv6_by_slash_64():
     assert ip(scope("2001:db8:1:3::1"), ()) != a
     assert ip(scope("203.0.113.5"), ()) == "203.0.113.5"
     assert security.ip_hint(a) == security.ip_hint("2001:db8:1:2::1")
+
+
+def test_client_ip_keeps_ipv4_mapped_addresses_distinct():
+    ip = security.client_ip
+    assert ip(scope("::ffff:1.2.3.4"), ()) == "1.2.3.4"
+    assert ip(scope("::ffff:5.6.7.8"), ()) == "5.6.7.8"

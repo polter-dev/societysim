@@ -1,4 +1,5 @@
 import { deriveScene, type Mode } from "../../scene/deriveScene";
+import { seatName } from "../../scene/seatName";
 import type { Event, Label, LabelType, Phase } from "../../types/events";
 
 export type MarkerKind = "kill" | "vote" | "lie";
@@ -49,7 +50,9 @@ export function buildTimelineGroups(
   mode: Mode,
 ): TimelineGroup[] {
   if (!events.length) return [];
-  const visible = deriveScene(events, events.length - 1, mode).log;
+  const scene = deriveScene(events, events.length - 1, mode);
+  const visible = scene.log;
+  const name = (id: string | null) => seatName(scene.players, id);
   const groups: TimelineGroup[] = [];
   const bySeq = new Map(visible.map((event) => [event.seq, event]));
   const byKey = new Map<string, TimelineGroup>();
@@ -64,9 +67,9 @@ export function buildTimelineGroups(
     }
     group.endSeq = event.seq;
     if ((event.type === "death_reveal" || event.type === "elimination") && event.target) {
-      group.markers.push({ seq: event.seq, kind: "kill", title: `${event.type === "elimination" ? "Elimination" : "Death"}: ${event.target}`, appearance: MARKER_APPEARANCE.kill });
+      group.markers.push({ seq: event.seq, kind: "kill", title: `${event.type === "elimination" ? "Elimination" : "Death"}: ${name(event.target)}`, appearance: MARKER_APPEARANCE.kill });
     } else if (event.type === "vote") {
-      group.markers.push({ seq: event.seq, kind: "vote", title: `Vote: ${event.actor ?? "unknown"} → ${event.target ?? "abstain"}`, appearance: MARKER_APPEARANCE.vote });
+      group.markers.push({ seq: event.seq, kind: "vote", title: `Vote: ${event.actor ? name(event.actor) : "unknown"} → ${event.target ? name(event.target) : "abstain"}`, appearance: MARKER_APPEARANCE.vote });
     }
   }
 
@@ -78,8 +81,8 @@ export function buildTimelineGroups(
         seq: event.seq,
         kind: "lie",
         title: label.label === "mis_elimination"
-          ? `${LABEL_TITLES.mis_elimination}: vote by ${label.actor}`
-          : `${LABEL_TITLES[label.label]}: ${label.actor}`,
+          ? `${LABEL_TITLES.mis_elimination}: vote by ${name(label.actor)}`
+          : `${LABEL_TITLES[label.label]}: ${name(label.actor)}`,
         appearance: MARKER_APPEARANCE[label.label],
         labelType: label.label,
       });

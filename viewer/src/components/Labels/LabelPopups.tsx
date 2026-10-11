@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { Label, LabelSource } from "../../data/labels";
 import type { Mode, Scene } from "../../scene/deriveScene";
+import { seatName } from "../../scene/seatName";
 import { seatPosition } from "../Table/Table";
 
 /**
@@ -31,12 +32,15 @@ export function LabelPopups({
   scene,
   labels,
   mode,
+  playing = false,
   sources,
   children,
 }: {
   scene: Scene;
   labels: Label[];
   mode: Mode;
+  /** Autoplay is running: drop the live region so popups aren't announced. */
+  playing?: boolean;
   sources?: LabelSource[];
   children?: ReactNode;
 }) {
@@ -46,7 +50,7 @@ export function LabelPopups({
     <div style={{ position: "relative", width: "100%", maxWidth: 640 }}>
       {children}
       {/* Always mounted, even empty: screen readers miss live regions that appear with their content. */}
-      <div aria-live="polite" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+      <div aria-live={playing ? "off" : "polite"} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
         {shown.map((l, k) => {
           const i = scene.players.findIndex((p) => p.id === l.actor);
           const { x, y } = i < 0 ? { x: 50, y: 50 } : seatPosition(i, n);
@@ -76,7 +80,7 @@ export function LabelPopups({
               data-label-source={l.source}
               style={style}
             >
-              <strong>{pretty(l.label)}</strong> · {l.actor}
+              <strong>{pretty(l.label)}</strong> · {seatName(scene.players, l.actor)}
               <div>
                 {pretty(l.source)} · {Math.round(l.confidence * 100)}% confidence
               </div>

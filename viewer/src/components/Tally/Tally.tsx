@@ -1,11 +1,12 @@
 import type { Scene } from "../../scene/deriveScene";
+import { seatName } from "../../scene/seatName";
 
 /** The vote is secret until its result event; the event also carries the final tally. */
 export function Tally({ scene }: { scene: Scene }) {
   const result = [...scene.log].reverse().find(
     (e) => e.day === scene.day && (e.type === "elimination" || e.type === "no_elimination"),
   );
-  const name = (id: string) => scene.players.find((p) => p.id === id)?.name ?? id;
+  const name = (id: string) => seatName(scene.players, id);
 
   // Both states share one live section, so the reveal is announced when it replaces "pending".
   if (!result) return <section aria-label="Vote tally" aria-live="polite"><h2>Vote tally</h2><p>Votes pending reveal.</p></section>;

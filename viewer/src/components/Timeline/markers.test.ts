@@ -50,7 +50,7 @@ describe("timeline markers", () => {
       [102, "mis_elimination"],
     ]);
     expect(lieMarkers.some((marker) => marker.seq === 100)).toBe(false);
-    expect(lieMarkers.find((marker) => marker.labelType === "mis_elimination")?.title).toBe("Villager voted out: vote by p1");
+    expect(lieMarkers.find((marker) => marker.labelType === "mis_elimination")?.title).toBe("Villager voted out: vote by Ben");
     expect(villager.some((marker) => marker.kind === "lie")).toBe(false);
     expect(buildTimelineGroups(events, [], "narrator").some((group) => group.markers.some((marker) => marker.kind === "lie"))).toBe(false);
   });
@@ -82,5 +82,20 @@ describe("timeline markers", () => {
     const publicMarkers = publicGroups.flatMap((group) => group.markers);
     expect(publicMarkers.find((marker) => marker.kind === "kill")?.appearance).toEqual({ glyph: "✝", color: "#b42318" });
     expect(publicMarkers.find((marker) => marker.kind === "vote")?.appearance).toEqual({ glyph: "●", color: "#175cd3" });
+  });
+
+  it("names players in every marker title, never seat ids", () => {
+    for (const mode of ["narrator", "villager"] as const) {
+      const titles = buildTimelineGroups(events, labels, mode).flatMap((g) => g.markers.map((m) => m.title));
+      expect(titles.length).toBeGreaterThan(0);
+      for (const t of titles) expect(t).not.toMatch(/\bp\d+\b/);
+    }
+  });
+
+  it("falls back to Seat N for a seat the game_start does not list", () => {
+    const vote = events.find((e) => e.type === "vote" && e.target)!;
+    const odd = events.map((e) => (e === vote ? { ...e, target: "p9" } : e));
+    const titles = buildTimelineGroups(odd, [], "villager").flatMap((g) => g.markers.map((m) => m.title));
+    expect(titles.some((t) => t.endsWith("→ Seat 10"))).toBe(true);
   });
 });

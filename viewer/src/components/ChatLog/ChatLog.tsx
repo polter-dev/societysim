@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Event, Phase } from "../../types/events";
 import type { Scene } from "../../scene/deriveScene";
+import { seatName } from "../../scene/seatName";
 import { SpeechText } from "../Speech/Speech";
 
 const PHASE_LABEL: Record<Phase, string> = { setup: "Setup", night: "Night", day: "Day", vote: "Vote, day" };
@@ -59,7 +60,7 @@ export function ChatLog({ scene }: { scene: Scene }) {
                   }}
                 >
                   {wolves && <small style={{ display: "block", fontWeight: 700 }}>Wolf channel</small>}
-                  <strong>{p?.name ?? e.actor}:</strong> <SpeechText e={e} />
+                  <strong>{p?.name ?? seatName(scene.players, e.actor)}:</strong> <SpeechText e={e} />
                 </li>
               );
             })}

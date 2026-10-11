@@ -37,13 +37,14 @@ export interface GameProps {
 }
 export function Game({events, labels, idx, mode, selected, onSelect, onSeqChange, step, seq, onSeek, narration}: GameProps) {
   const scene = deriveScene(events, idx, mode);
+  const [playing, setPlaying] = useState(false); // autoplay: chat stays out of the live regions
   return <>
-    <div className="replay-table"><LabelPopups scene={scene} labels={labels} mode={mode}><Table scene={scene} selected={selected} onSelect={onSelect}/><Arrows scene={scene}/><Speech scene={scene}/></LabelPopups></div>
+    <div className="replay-table"><LabelPopups scene={scene} labels={labels} mode={mode} playing={playing}><Table scene={scene} selected={selected} onSelect={onSelect}/><Arrows scene={scene}/><Speech scene={scene} playing={playing}/></LabelPopups></div>
     <details className="replay-chat"><summary>Discussion and vote tally</summary><Tally scene={scene}/><ChatLog scene={scene}/></details>
     <IllustratedInspector scene={scene} mode={mode} selected={selected} close={() => onSelect(null)}/>
     <EndReveal events={events} labels={labels} idx={idx} mode={mode}/>
     <details className="replay-spotwolf"><summary>Spot the wolf</summary><SpotWolfPanel key={events[0]?.game_id} events={events} idx={idx}/></details>
-    <div className="replay-controls">{step?.live && <LiveBadge newCount={step.newCount}/>}{step && <StepControls {...step}/>}{narration && <NarrationControls available={narration.available} mode={mode} on={narration.on} enabled={narration.enabled} onToggle={narration.onToggle} onCategory={narration.onCategory}/>}<Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} seq={seq} onSeek={onSeek}/></div>
+    <div className="replay-controls">{step?.live && <LiveBadge newCount={step.newCount}/>}{step && <StepControls {...step}/>}{narration && <NarrationControls available={narration.available} mode={mode} on={narration.on} enabled={narration.enabled} onToggle={narration.onToggle} onCategory={narration.onCategory}/>}<Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} seq={seq} onSeek={onSeek} onPlayingChange={setPlaying}/></div>
     {/* Fixed overlay, so its place here only sets focus order: table and controls first, then the long Agents and Game events panels. */}
     <IllustratedShell scene={scene} onSelect={onSelect}/>
   </>;

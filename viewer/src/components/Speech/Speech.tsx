@@ -36,12 +36,12 @@ export function currentStatement(scene: Scene): Event | null {
  * Speech bubble overlay. Place it in a `position: relative` box the same size as the Table:
  * it fills that box and anchors the bubble between the speaker's seat and the table center.
  */
-export function Speech({ scene }: { scene: Scene }) {
+export function Speech({ scene, playing = false }: { scene: Scene; playing?: boolean }) {
   const e = currentStatement(scene);
   const i = scene.players.findIndex((p) => p.id === e?.actor);
   // The live region stays mounted while empty; screen readers miss regions that appear with their content.
   const live = (bubble?: ReactNode) => (
-    <div aria-live="polite" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+    <div aria-live={playing ? "off" : "polite"} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
       {bubble}
     </div>
   );

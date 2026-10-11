@@ -44,7 +44,7 @@ describe("main.tsx global rankings gate", () => {
   it("is on with both Neon URLs and no custom source", async () => {
     const props = await loadMain("?page=leaderboard", true);
     expect(props?.globalBoard).toBe(true);
-    expect(props?.loadBoard).toBeTypeOf("function");
+    expect(props?.loadBoard).toBeUndefined(); // static board only (#395)
   });
 
   it.each(["?page=leaderboard&base=https://example.test/data/", "?page=leaderboard&index=https://example.test/index.json"])(

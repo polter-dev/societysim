@@ -81,3 +81,26 @@ describe("Leaderboard page global board", () => {
     expect(html).not.toContain("global-leaderboard");
   });
 });
+
+describe("LeaderboardTable ranking (#395)", () => {
+  it("sorts rows by the shown metric and uses display names", () => {
+    const b: Board = {
+      ...board,
+      models: [
+        row({ model: "gemma4-26b", openskill: rating(1) }),
+        row({ model: "llama4-maverick", openskill: rating(5) }),
+        row({ model: "gpt-5-mini" }),
+      ],
+    };
+    const html = renderToStaticMarkup(createElement(LeaderboardTable, { board: b }));
+    expect(html.indexOf("Llama 4 Maverick")).toBeLessThan(html.indexOf("Gemma 4 26B"));
+    expect(html.indexOf("Gemma 4 26B")).toBeLessThan(html.indexOf("GPT-5 mini"));
+  });
+
+  it("ranks by win rate when no model has OpenSkill, and scrolls inside its own box", () => {
+    const b: Board = { ...board, models: [row({ model: "alpha", win_rate: 0.2 }), row({ model: "zeta", win_rate: 0.9 })] };
+    const html = renderToStaticMarkup(createElement(LeaderboardTable, { board: b }));
+    expect(html.indexOf("zeta")).toBeLessThan(html.indexOf("alpha"));
+    expect(html).toContain("overflow-x:auto");
+  });
+});

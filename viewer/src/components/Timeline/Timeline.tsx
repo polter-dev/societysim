@@ -20,10 +20,12 @@ export interface TimelineProps {
    */
   seq?: number | null;
   onSeek?: (seq: number) => void;
+  /** Reports autoplay on/off so chat can leave the live regions while it runs. */
+  onPlayingChange?: (playing: boolean) => void;
 }
 
 const EMPTY_LABELS: Label[] = [];
-export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqChange, seq: controlled, onSeek }: TimelineProps) {
+export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqChange, seq: controlled, onSeek, onPlayingChange }: TimelineProps) {
   const isControlled = onSeek !== undefined;
   const [ownSeq, ownSet] = useSeqParam(events, !isControlled);
   const seq = isControlled ? (controlled ?? null) : ownSeq;
@@ -39,6 +41,8 @@ export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqCha
     if (!playing && seq === last && first !== undefined) setSeq(first);
     setPlaying((value) => !value);
   };
+
+  useEffect(() => onPlayingChange?.(playing), [playing, onPlayingChange]);
 
   useEffect(() => {
     if (seq !== null && index >= 0) onSeqChange?.(seq, index);
@@ -92,7 +96,7 @@ export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqCha
   if (seq === null || first === undefined || last === undefined) return null;
 
   return (
-    <section aria-label="Game timeline" onKeyDown={onKeyDown} tabIndex={0}>
+    <section aria-label="Game timeline" data-playing={playing} onKeyDown={onKeyDown} tabIndex={0}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <button type="button" onClick={togglePlaying} aria-label={playing ? "Pause playback" : "Play playback"}>
           {playing ? "Pause" : "Play"}
@@ -130,7 +134,7 @@ export default function Timeline({ events, labels = EMPTY_LABELS, mode, onSeqCha
                 title={marker.title}
                 aria-label={`${marker.title}, event ${marker.seq}`}
                 data-label-type={marker.labelType}
-                style={{ color: marker.appearance.color, marginLeft: 4 }}
+                style={{ color: marker.appearance.color, marginLeft: 4, minWidth: 24, minHeight: 24 }}
               >
                 {marker.appearance.glyph}
               </button>

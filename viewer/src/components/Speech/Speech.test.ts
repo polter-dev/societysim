@@ -45,3 +45,11 @@ describe("Speech bubble on the fixture", () => {
     expect(render(15, "narrator")).not.toContain(events[15].private_reasoning!);
   });
 });
+
+describe("Speech live region during autoplay", () => {
+  const scene = deriveScene(events, 15, "villager");
+  it("announces politely when stepping, and is off while playing", () => {
+    expect(renderToStaticMarkup(createElement(Speech, { scene }))).toContain('aria-live="polite"');
+    expect(renderToStaticMarkup(createElement(Speech, { scene, playing: true }))).toContain('aria-live="off"');
+  });
+});

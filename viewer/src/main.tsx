@@ -79,7 +79,6 @@ createRoot(document.getElementById("root")!).render(
           <LeaderboardPage
             leaderboardUrl={sibling("leaderboard.json")}
             metricsUrl={sibling("metrics.json")}
-            loadBoard={neon?.loadBoard}
             profileHref={profileHref}
             globalBoard={Boolean(neon)}
           />

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ModelAvatar, useModelLabel } from "../components/ModelAvatar/ModelAvatar";
 import { GlobalLeaderboard } from "../components/GlobalLeaderboard/GlobalLeaderboard";
 import { useGlobalBoard } from "../data/globalBoard";
+import { modelName } from "../data/modelNames";
 import { fetchJson } from "../data/staticSource";
 
 /** leaderboard.json from `societysim report` (shape documented in analysis/report.py). */
@@ -56,17 +57,24 @@ export function LeaderboardTable({
   bySide?: BySide;
   profileHref?: (model: string) => string;
 }) {
-  const label = useModelLabel();
+  const catalogLabel = useModelLabel();
+  // Catalog label once loaded; otherwise the short display name instead of the raw id.
+  const label = (m: string) => { const l = catalogLabel(m); return l === m ? modelName(m) : l; };
   const side = board.wolf_side_advantage?.overall;
+  const byOpenSkill = board.models.some((r) => r.openskill);
+  // Rank follows the metric the caption names, whatever order the file was written in.
+  const metric = (r: BoardRow) => (byOpenSkill ? r.openskill?.ordinal : r.win_rate) ?? -Infinity;
+  const rows = [...board.models].sort((a, b) => metric(b) - metric(a));
   return (
     <>
       <p>
         {board.games} games.{" "}
-        {board.models.some((r) => r.openskill)
+        {byOpenSkill
           ? "Ranked by OpenSkill ordinal (mu minus three sigma). Win rates carry a Wilson 95% interval; small batches are noisy."
           : "Ranked by win rate over all finished games; small samples are noisy."}
         {side && ` Wolf-side advantage: mu ${num(side.mu)} (0 means the sides are even).`}
       </p>
+      <div className="leaderboard-scroll" style={{ overflowX: "auto", maxWidth: "100%" }}>
       <table>
         <caption>Leaderboard</caption>
         <thead>
@@ -85,7 +93,7 @@ export function LeaderboardTable({
           </tr>
         </thead>
         <tbody>
-          {board.models.map((r, i) => (
+          {rows.map((r, i) => (
             <tr key={r.model}>
               <td>{i + 1}</td>
               <th scope="row"><ModelAvatar model={r.model} label={label(r.model)} size={28} /> {profileHref ? <a href={profileHref(r.model)}>{label(r.model)}</a> : label(r.model)}</th>
@@ -105,6 +113,7 @@ export function LeaderboardTable({
           ))}
         </tbody>
       </table>
+      </div>
     </>
   );
 }
@@ -135,18 +144,16 @@ function LiveGlobalBoard() {
 
 /**
  * Loads leaderboard.json, plus metrics.json for OpenSkill by side when it is there.
- * `loadBoard` (the Neon leaderboard view) is tried first; the static files are the fallback.
+ * Published files only; the Neon board is not overlaid (#395).
  */
 export default function LeaderboardPage({
   leaderboardUrl,
   metricsUrl,
-  loadBoard,
   profileHref,
   globalBoard = false,
 }: {
   leaderboardUrl: string;
   metricsUrl: string;
-  loadBoard?: () => Promise<Board>;
   profileHref?: (model: string) => string;
   /** True when the build has the Neon URLs; mounts the global detectors/liars board. */
   globalBoard?: boolean;
@@ -163,9 +170,8 @@ export default function LeaderboardPage({
         () => {}, // optional: the by-side columns show n/a
       );
     };
-    if (loadBoard) loadBoard().then(setBoard, fromFiles);
-    else fromFiles();
-  }, [leaderboardUrl, metricsUrl, loadBoard]);
+    fromFiles();
+  }, [leaderboardUrl, metricsUrl]);
 
   return (
     <>

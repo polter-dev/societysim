@@ -20,8 +20,8 @@
   --gs-ctl:clamp(28px,1.6vw,40px);
   /* table region height, then the width the table would use at that height */
   --gs-th:calc(100dvh - var(--gs-top) - var(--gs-counter) - var(--gs-bar) - 2 * var(--gs-gap));
-  /* side panels take what the table leaves, within bounds */
-  --gs-side:clamp(170px,calc((100vw - var(--gs-turn) - 760 * var(--gs-th) / 720 - 2 * var(--gs-gap)) / 2),18vw);
+  /* side panels take what the table leaves, within bounds; tall windows still give them 15vw */
+  --gs-side:clamp(max(170px,15vw),calc((100vw - var(--gs-turn) - 760 * var(--gs-th) / 720 - 2 * var(--gs-gap)) / 2),18vw);
   --gs-left:var(--gs-side);
   --gs-right:var(--gs-side);
   --gs-tw:calc(100vw - var(--gs-left) - var(--gs-right) - var(--gs-turn) - 2 * var(--gs-gap));
@@ -37,12 +37,22 @@
 /* The your-turn panel gets its own column; a collapsed Agents panel leaves a thin rail. */
 :root:has(.play-replay .your-turn){--gs-turn:clamp(240px,21vw,420px)}
 :root:has(.illustrated-shell.agents-collapsed){--gs-left:44px}
+/* Below ~1100px the your-turn column, both panels and the table's 760 art px don't fit side by side,
+   so during your turn the Game events panel steps aside for it (#484). */
+@media (min-width:821px) and (max-width:1100px){
+  :root:has(.play-replay .your-turn){--gs-right:0px}
+  .play-replay:has(.your-turn) .illustrated-shell .event-roster{display:none}
+}
 
-@media (min-width:1001px){
+/* From 821px wide (#484: narrow, tall desktop windows too); below, play.css stacks the page. */
+@media (min-width:821px){
   html:has(.illustrated-shell),body:has(.illustrated-shell){height:100%;overflow:hidden}
 
   /* --- top chrome: compact, themed, off the art --------------------------------------------- */
-  body:has(.illustrated-shell) .site-nav{position:fixed;z-index:6;left:var(--gs-gap);top:calc((var(--gs-top) - var(--gs-ctl) - 4px) / 2);height:calc(var(--gs-ctl) + 4px);font-size:var(--gs-ui);margin:0;max-width:calc(100vw - var(--gs-turn) - 360px)}
+  body:has(.illustrated-shell) .site-nav{position:fixed;z-index:6;left:var(--gs-gap);top:calc((var(--gs-top) - var(--gs-ctl) - 4px) / 2);height:calc(var(--gs-ctl) + 4px);font-size:var(--gs-ui);margin:0;max-width:calc(100vw - var(--gs-turn) - 360px);flex-wrap:nowrap;overflow:auto hidden;scrollbar-width:none}
+  /* Narrow windows: the nav stays one row and scrolls sideways instead of wrapping over the panels. */
+  body:has(.illustrated-shell) .site-nav::-webkit-scrollbar{display:none}
+  body:has(.illustrated-shell) .site-nav>*{flex:none}
   .replay-app .replay-tools{position:fixed;z-index:6;top:calc((var(--gs-top) - var(--gs-ctl) - 4px) / 2);right:calc(var(--gs-turn) + 2 * var(--gs-gap) + 44px);left:auto;height:calc(var(--gs-ctl) + 4px);margin:0;padding:0 4px 0 6px;width:auto;max-width:none;display:flex;align-items:center;gap:8px;background:var(--gs-panel);border:1px solid var(--gs-line);border-radius:8px;box-sizing:border-box;font-size:var(--gs-ui)}
   .replay-app .replay-tools>p{margin:0;display:flex;align-items:center;gap:8px;white-space:nowrap}
   /* Loading, empty and error notes drop below the chrome row instead of stretching it. */
@@ -91,8 +101,9 @@
   .illustrated-shell .event-list .decision-card{margin:0 0 clamp(3px,.6dvh,8px);min-height:0;aspect-ratio:4}
   .illustrated-shell .event-list .decision-card>span{inset:16% 8% 16% 26%;gap:1px}
   .illustrated-shell .event-list .decision-notes>span{bottom:28%}
-  .illustrated-shell .event-list .decision-card strong{font-size:clamp(10px,1.3dvh,14px);line-height:1.1}
-  .illustrated-shell .event-list .decision-card small{font-size:clamp(8px,1dvh,11px);line-height:1.1}
+  /* Text follows the height, capped by the panel width so narrow, tall windows don't overflow the card. */
+  .illustrated-shell .event-list .decision-card strong{font-size:min(clamp(10px,1.3dvh,14px),var(--gs-right) * .055);line-height:1.1}
+  .illustrated-shell .event-list .decision-card small{font-size:min(clamp(8px,1dvh,11px),var(--gs-right) * .042);line-height:1.1}
 
   /* Collapse arrow on the Agents panel's edge; collapsed, the panel slides off and leaves a rail. */
   .illustrated-shell .roster-toggle{left:calc(var(--gs-left) - 22px);top:calc(var(--gs-top) + (100dvh - var(--gs-top) - var(--gs-bar)) / 2);width:clamp(30px,2.6vw,48px);height:clamp(52px,7dvh,84px)}

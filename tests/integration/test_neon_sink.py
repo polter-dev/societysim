@@ -432,7 +432,8 @@ def test_play_neon_streams_live(tmp_path, monkeypatch):
     monkeypatch.setattr("societysim.logging.sinks.neon.connect_neon", connect)
     res = CliRunner().invoke(app, ["play", "--config", str(CONFIG), "--seed", "0", "--neon"])
     assert res.exit_code == 0, res.output
-    assert "create table if not exists games" in conn.executed[0][0]  # schema first
+    # schema first, after its lock_timeout and advisory lock (#498)
+    assert "create table if not exists games" in conn.executed[2][0]
     log = _events(tmp_path / "runs/selfplay_smoke/selfplay_smoke-deadbeefdeadbeef.jsonl")
     assert _event_rows(conn) == {"selfplay_smoke-deadbeefdeadbeef": [e["seq"] for e in log]}
     end = next(a for sql, a in conn.executed if sql.startswith("update games set status"))

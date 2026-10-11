@@ -42,11 +42,24 @@ create table if not exists labels (
 
 -- Agent type of the game: 'scripted' | 'llm' (run_meta.json "agents"). Null = legacy or unknown
 -- (rows written before this column, or by older code); the views keep null rows and drop 'scripted'.
-alter table games add column if not exists agents text;
-
-create index if not exists games_batch_idx on games (batch_id);
--- The views look events up by game and type (game_start, vote, elimination, death_reveal) (#447).
-create index if not exists events_game_type_idx on events (game_id, type);
+-- ALTER TABLE and CREATE INDEX lock the table (ACCESS EXCLUSIVE, SHARE) before they look at IF NOT
+-- EXISTS, and a re-run would deadlock with a live NeonSink flush (#498). So the catalogs are
+-- checked first, which takes no table lock, and the statement only runs when it is needed.
+do $$
+begin
+    if not exists (select 1 from pg_attribute
+                   where attrelid = to_regclass('games') and attname = 'agents'
+                     and not attisdropped) then
+        alter table games add column if not exists agents text;
+    end if;
+    if to_regclass('games_batch_idx') is null then
+        create index if not exists games_batch_idx on games (batch_id);
+    end if;
+    -- The views look events up by game and type (game_start, vote, elimination, death_reveal) (#447).
+    if to_regclass('events_game_type_idx') is null then
+        create index if not exists events_game_type_idx on events (game_id, type);
+    end if;
+end $$;
 
 -- Per model: seat-games in finished games, wins, win rate. A seat wins if its team won.
 -- Pools every batch and leaves out human seats and scripted games; use leaderboard_by_batch to compare fairly.
@@ -117,8 +130,15 @@ create table if not exists visitor_spend (
     cost_usd   numeric not null,
     created_at timestamptz not null default now()
 );
-create index if not exists visitor_spend_day_idx on visitor_spend (day);
-alter table visitor_spend enable row level security;
+do $$
+begin
+    if to_regclass('visitor_spend_day_idx') is null then
+        create index if not exists visitor_spend_day_idx on visitor_spend (day);
+    end if;
+    if not (select relrowsecurity from pg_class where oid = 'visitor_spend'::regclass) then
+        alter table visitor_spend enable row level security;
+    end if;
+end $$;
 
 -- Visitor games started per client per UTC day (#382), so PLAY_MAX_GAMES_PER_IP_DAY holds across
 -- restarts. client_hash is an HMAC-SHA256 of the client IP keyed with PLAY_IP_SALT, never the IP.
@@ -129,7 +149,12 @@ create table if not exists visitor_starts (
     games       integer not null,
     primary key (day, client_hash)
 );
-alter table visitor_starts enable row level security;
+do $$
+begin
+    if not (select relrowsecurity from pg_class where oid = 'visitor_starts'::regclass) then
+        alter table visitor_starts enable row level security;
+    end if;
+end $$;
 
 -- What the Data API's anonymous role reads instead of events (#323), with the same columns. A
 -- finished game reads in full. Any other (running, or failed, which batch resume reruns with the
@@ -323,11 +348,18 @@ left join voted v using (model)
 left join fooled f using (model)
 where p.model <> 'human';
 
--- Read-only access for the Data API's anonymous role (viewer, #40). Never grant writes.
--- No direct select on events or labels (#323): anonymous reads events_public and labels_public.
+-- Read-only access for the Data API's anonymous and authenticated roles (viewer, #40). Never
+-- grant writes. No direct select on events or labels (#323): they read events_public and
+-- labels_public. Neon's Data API grants `authenticated` select/insert/update/delete on every
+-- public table by default, and on future ones through default privileges (#496): anyone who signs
+-- up could PATCH games.status to 'finished' and read a running game in full. So both roles start
+-- from nothing here (REVOKE on ALL TABLES covers views too) and get back only the selects below.
+-- The writer role (the owner, NEON_DATABASE_URL) is untouched.
 do $$
 begin
     if exists (select 1 from pg_roles where rolname = 'anonymous') then
+        revoke all on all tables in schema public from anonymous;
+        alter default privileges in schema public revoke all on tables from anonymous;
         grant usage on schema public to anonymous;
         revoke all on events, labels from anonymous;
         grant select on games, events_public, labels_public, leaderboard to anonymous;
@@ -338,7 +370,11 @@ begin
         revoke all on finished_seats, finished_suspicion from anonymous;  -- internal (#344)
     end if;
     if exists (select 1 from pg_roles where rolname = 'authenticated') then
-        revoke all on events, labels from authenticated;  -- unused by us; no way around the views
+        revoke all on all tables in schema public from authenticated;
+        alter default privileges in schema public revoke all on tables from authenticated;
+        grant select on games, events_public, labels_public, leaderboard to authenticated;
+        grant select on leaderboard_by_batch, lies_by_model to authenticated;
+        grant select on global_detectors, global_liars to authenticated;
     end if;
 end $$;
 

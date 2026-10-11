@@ -136,8 +136,18 @@ async def connect_neon(dsn: str | None = None) -> Any:
     return await asyncpg.connect(dsn, statement_cache_size=0, timeout=10, command_timeout=10)
 
 
-async def apply_schema(conn: Any) -> None:
-    await conn.execute(SCHEMA_PATH.read_text(encoding="utf-8"))
+NEON_SCHEMA_LOCK = 453_000_001  # pg_advisory_xact_lock key: one schema apply at a time
+
+
+async def apply_schema(conn: Any, lock_timeout: str = "5s") -> None:
+    """Run neon/schema.sql in one transaction, serialized with every other apply (server start,
+    batch/play --neon, sync-neon) by an advisory lock. `lock_timeout` makes it fail fast, instead
+    of queueing readers or deadlocking with a live NeonSink flush (#498). On an existing schema the
+    file locks no table beyond ACCESS SHARE; only replacing a view waits for its readers."""
+    async with conn.transaction():
+        await conn.execute("select set_config('lock_timeout', $1, true)", lock_timeout)
+        await conn.execute("select pg_advisory_xact_lock($1)", NEON_SCHEMA_LOCK)
+        await conn.execute(SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
 MIGRATIONS_DIR = SCHEMA_PATH.parent / "migrations"

@@ -17,8 +17,9 @@ pytest.importorskip("fastapi", reason="needs the server extra: uv run --extra se
 asyncpg = pytest.importorskip("asyncpg")
 
 from societysim.logging.sinks import neon  # noqa: E402
+from societysim.logging.sinks.neon import NEON_SCHEMA_LOCK  # noqa: E402
 from societysim.server.ledger import Ledger  # noqa: E402
-from societysim.server.manager import NEON_SCHEMA_LOCK, GameManager, Settings  # noqa: E402
+from societysim.server.manager import GameManager, Settings  # noqa: E402
 
 
 class FakeConn:
@@ -31,7 +32,7 @@ class FakeConn:
 
     async def execute(self, sql, *args):
         self.executed.append((sql, args))
-        if self.error and not args:  # the schema itself, after the lock was taken
+        if self.error and sql == Path(__file__).read_text(encoding="utf-8"):  # the schema itself
             raise self.error
 
     async def close(self):
@@ -62,7 +63,8 @@ async def test_schema_apply_takes_the_advisory_lock_first(tmp_path, monkeypatch)
     m = manager(tmp_path)
     await m.prepare_neon()
     assert m.neon_connect is neon.connect_neon and m._neon_task is None
-    (lock, lock_args), (schema, _) = conns[0].executed
+    (timeout, timeout_args), (lock, lock_args), (schema, _) = conns[0].executed
+    assert "lock_timeout" in timeout and timeout_args == ("5s",)  # the apply fails fast (#498)
     assert "pg_advisory_xact_lock" in lock and lock_args == (NEON_SCHEMA_LOCK,)
     assert schema == Path(__file__).read_text(encoding="utf-8")
 

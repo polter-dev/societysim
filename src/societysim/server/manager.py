@@ -52,7 +52,6 @@ log = logging.getLogger(__name__)
 
 PLAY_ATTEMPTS = 2  # requests per model call: one retry for a timeout or provider error
 MAX_TEXT = 280  # statement text and wolf chat message, after control characters are stripped
-NEON_SCHEMA_LOCK = 453_000_001  # pg_advisory_xact_lock key around the startup schema apply
 KEEP_FINISHED_S = 3600  # how long an ended game stays readable through /me
 
 Status = Literal["running", "finished", "forfeit", "failed"]
@@ -299,10 +298,8 @@ class GameManager:
         try:
             conn = await neon.connect_neon()
             try:
-                # Two instances overlap during a deploy: one applies the schema at a time.
-                async with conn.transaction():
-                    await conn.execute("select pg_advisory_xact_lock($1)", NEON_SCHEMA_LOCK)
-                    await neon.apply_schema(conn)
+                # Two instances overlap during a deploy; apply_schema serializes them.
+                await neon.apply_schema(conn)
             finally:
                 await conn.close()
         except Exception as exc:  # the message may hold the DSN, so log only the type

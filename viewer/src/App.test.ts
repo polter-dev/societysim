@@ -22,12 +22,20 @@ function load(text: string, labelsJsonl: string) {
   const events = parseLog(text).events;
   const labels = parseLabels(labelsJsonl) as Label[];
   const seats = Object.keys(events.find((e) => e.type === "game_start")!.meta.seats!);
-  const render = (idx: number, mode: Mode, selected: string | null) =>
-    unescape(
+  // Aria text of every page rendered so far. Rendering is the slow part and the same page is checked by
+  // more than one test, so `ariaOf` reuses it instead of rendering again. Only the small aria string is kept.
+  const ariaSeen = new Map<string, string>();
+  const render = (idx: number, mode: Mode, selected: string | null) => {
+    const html = unescape(
       renderToStaticMarkup(
         createElement(Game, { events, labels, idx, mode, selected, onSelect: () => {}, onSeqChange: () => {} }),
       ),
     );
+    ariaSeen.set(`${idx}|${mode}|${selected}`, ariaText(html));
+    return html;
+  };
+  const ariaOf = (idx: number, mode: Mode, selected: string | null) =>
+    ariaSeen.get(`${idx}|${mode}|${selected}`) ?? ariaText(render(idx, mode, selected));
 
   // Same page with the stepper and narration controls mounted, narration on and every category ticked.
   const everything = { narrator: true, speech: true, wolf_chat: true, highlight: true };
@@ -77,11 +85,11 @@ function load(text: string, labelsJsonl: string) {
     return found;
   }
 
-  return { events, seats, secrets, revealedAt, leaks, render, renderWithControls };
+  return { events, seats, secrets, revealedAt, leaks, render, ariaOf, renderWithControls };
 }
 
 const sample = load(fixture, labelsText);
-const { events, seats, secrets, revealedAt, leaks, render, renderWithControls } = sample;
+const { events, seats, secrets, revealedAt, leaks, render, ariaOf, renderWithControls } = sample;
 
 describe("App villager view", () => {
   it("shows nothing private at any event, whoever is selected", () => {
@@ -124,11 +132,11 @@ describe("App villager view", () => {
     const firstReveal = events.findIndex((_, idx) => revealedAt(idx).size > 0);
     expect(firstReveal).toBeGreaterThan(0);
     for (let idx = 0; idx < firstReveal; idx++) {
-      for (const selected of [null, ...seats]) expect(ariaText(render(idx, "villager", selected))).not.toMatch(roleWord);
+      for (const selected of [null, ...seats]) expect(ariaOf(idx, "villager", selected)).not.toMatch(roleWord);
     }
     // The narrator view does put role words there, so this check can fail.
-    expect(ariaText(render(events.findIndex((e) => e.seq === 19), "narrator", "p5"))).toMatch(roleWord);
-  });
+    expect(ariaOf(events.findIndex((e) => e.seq === 19), "narrator", "p5")).toMatch(roleWord);
+  }, 30_000); // Same 30s as the other render-every-beat tests; run alone it renders every page itself.
 
   it("renders every part of the composed view", () => {
     const idx = events.findIndex((e) => e.seq === 54); // the day 1 tie

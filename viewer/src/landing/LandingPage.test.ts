@@ -20,6 +20,12 @@ describe('landing page',()=>{
   expect(links).toContainEqual(['Research',`?${base}&page=research`]);
   expect(html).toContain('page=modes');
  });
+ it('links Trial Voices to the narrated replay of the demo game',()=>{
+  vi.stubEnv('VITE_PLAY_API_URL','');
+  const html=renderToStaticMarkup(createElement(LandingPage,{href:extra=>'?'+new URLSearchParams({base:'https://batch.test/',...extra})}));
+  const links=[...html.matchAll(/<a [^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/g)].map(m=>[m[2],m[1].replace(/&amp;/g,'&')]);
+  expect(links).toContainEqual(['Trial Voices','?base=https%3A%2F%2Fbatch.test%2F&game=mixed_v2_10p-g0043&mode=narrator']);
+ });
  it('renders an accessible menu and preserves the selected batch on Play',()=>{
   vi.stubEnv('VITE_PLAY_API_URL','');
   const html=renderToStaticMarkup(createElement(LandingPage,{href:extra=>'?'+new URLSearchParams({base:'https://batch.test/',...extra})}));

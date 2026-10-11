@@ -61,6 +61,7 @@ export default function LandingPage({ href }: { href: (extra: Record<string, str
       <a className="landing-motion landing-trailer" href={href({page:'trailer'})}>Trailer</a>
       <a className="landing-motion landing-trailer" href={href({page:'leaderboard'})}>Leaderboard</a>
       <a className="landing-motion landing-trailer" href={href({page:'research'})}>Research</a>
+      <a className="landing-motion landing-trailer" href={href({game:'mixed_v2_10p-g0043',mode:'narrator'})}>Trial Voices</a>
     </nav>
     <button className="landing-motion" aria-pressed={paused} onClick={() => setPaused(!paused)}>{paused ? 'Resume ambience' : 'Pause ambience'}</button>
     {modal && <LandingDialog kind={modal} href={href} close={() => setModal(null)}/>}

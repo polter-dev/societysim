@@ -92,7 +92,7 @@ We built the engine fresh and borrowed ideas from earlier Werewolf and Mafia wor
 - Kaggle Game Arena Werewolf ([arXiv 2609.31473](https://arxiv.org/abs/2609.31473)): the model of a public leaderboard from mixed-model games.
 - [Mini-Mafia](https://arxiv.org/abs/2509.23023): name and recency biases, which is why we shuffle names by seed, drawn from feminine, masculine or neutral pools matched to each avatar.
 
-Open models run through Hugging Face, [Qwen3-235B-A22B-Instruct-2507](https://huggingface.co/Qwen/Qwen3-235B-A22B-Instruct-2507), [Llama-4-Maverick](https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8), [Gemma 4 26B-A4B](https://huggingface.co/google/gemma-4-26B-A4B-it), [gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) and [DeepSeek-V3.1](https://huggingface.co/deepseek-ai/DeepSeek-V3.1).
+Open models run through Hugging Face: [Qwen3-235B-A22B-Instruct-2507](https://huggingface.co/Qwen/Qwen3-235B-A22B-Instruct-2507), [Llama-4-Maverick](https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8), [Gemma 4 26B-A4B](https://huggingface.co/google/gemma-4-26B-A4B-it), [gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) and [DeepSeek-V3.1](https://huggingface.co/deepseek-ai/DeepSeek-V3.1).
 
 ## License
 

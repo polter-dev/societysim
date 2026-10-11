@@ -47,6 +47,10 @@ def server_error():
     return litellm.exceptions.InternalServerError("boom", llm_provider="openai", model="gpt-x")
 
 
+def unavailable():
+    return litellm.exceptions.ServiceUnavailableError("503", llm_provider="huggingface", model="x")
+
+
 class FakeLiteLLM:
     """Stands in for litellm.acompletion: plays `outcomes` (replies or exceptions) in order."""
 
@@ -299,6 +303,34 @@ async def test_retries_exhausted_returns_error(monkeypatch, sleeps):
     assert result.parsed is None
     assert result.error and result.error.startswith("RateLimitError")
     assert result.usage.attempts == 3
+    assert result.provider_error
+
+
+async def test_503_backs_off_and_exhausted_503_is_a_provider_error(monkeypatch, sleeps):
+    client = LiteLLMClient(sleep=sleeps, max_retries=3, backoff_s=1.0, max_backoff_s=3.0)
+    fake = mock(monkeypatch, *[unavailable() for _ in range(4)])
+    result = await client.complete(spec(), MESSAGES, VoteResponse)
+
+    assert result.provider_error and result.error.startswith("ServiceUnavailableError")
+    assert len(fake.calls) == 4 and result.usage.attempts == 4
+    assert len(sleeps.delays) == 3 and all(d <= 3.0 for d in sleeps.delays)  # bounded backoff
+
+
+async def test_connection_error_is_retried_then_a_provider_error(monkeypatch, sleeps):
+    err = litellm.exceptions.APIConnectionError("reset", llm_provider="openai", model="x")
+    client = LiteLLMClient(sleep=sleeps, max_retries=1)
+    fake = mock(monkeypatch, err, err)
+    result = await client.complete(spec(), MESSAGES, VoteResponse)
+    assert result.provider_error and len(fake.calls) == 2
+
+
+async def test_bad_reply_and_bad_request_are_not_provider_errors(monkeypatch, client):
+    mock(monkeypatch, reply("not json"))
+    bad = await client.complete(spec(), MESSAGES, VoteResponse)
+    assert bad.parsed is None and not bad.provider_error
+    err = litellm.exceptions.BadRequestError("bad schema", model="gpt-x", llm_provider="openai")
+    mock(monkeypatch, err)
+    assert not (await client.complete(spec(), MESSAGES, VoteResponse)).provider_error
 
 
 async def test_bad_request_is_not_retried(monkeypatch, client):
@@ -462,12 +494,13 @@ def hang_then(*outcomes):
     return fake, calls
 
 
-async def test_timeout_returns_error_without_retry(monkeypatch, sleeps):
+async def test_timeout_without_retries_left_returns_error(monkeypatch, sleeps):
     fake, calls = hang_then()
     monkeypatch.setattr(litellm, "acompletion", fake)
-    client = LiteLLMClient(timeout_s=0.02, sleep=sleeps)
+    client = LiteLLMClient(timeout_s=0.02, sleep=sleeps, timeout_retries=0)
     r = await client.complete(spec(), MESSAGES, VoteResponse)
     assert r.parsed is None
+    assert r.provider_error  # nothing came back from the provider
     assert r.error == "Timeout: m took longer than 0.02 s"
     assert r.usage.attempts == 1 and r.usage.latency_ms >= 10
     assert r.usage.input_tokens == r.usage.output_tokens == 0
@@ -475,10 +508,36 @@ async def test_timeout_returns_error_without_retry(monkeypatch, sleeps):
     assert sleeps.delays == []
 
 
-async def test_litellm_timeout_exception_is_not_retried(monkeypatch, client):
+async def test_litellm_timeout_exception_is_not_retried_when_timeout_retries_is_zero(
+    monkeypatch, sleeps
+):
     fake = mock(monkeypatch, litellm.exceptions.Timeout("t", model="x", llm_provider="openai"))
+    client = LiteLLMClient(sleep=sleeps, timeout_retries=0)
     r = await client.complete(spec(), MESSAGES, VoteResponse)
     assert "Timeout" in r.error and r.usage.attempts == 1 and len(fake.calls) == 1
+
+
+async def test_timeout_is_retried_once_by_default(monkeypatch, client, sleeps):
+    t = litellm.exceptions.Timeout("t", model="x", llm_provider="openai")
+    fake = mock(monkeypatch, t, reply(json.dumps(VOTE)))
+    r = await client.complete(spec(), MESSAGES, VoteResponse)
+    assert r.parsed is not None and not r.provider_error
+    assert r.usage.attempts == 2 and len(fake.calls) == 2 and len(sleeps.delays) == 1
+
+
+async def test_timeouts_stop_after_timeout_retries_even_with_attempts_left(monkeypatch, client):
+    t = litellm.exceptions.Timeout("t", model="x", llm_provider="openai")
+    fake = mock(monkeypatch, t, t, t)
+    r = await client.complete(spec(), MESSAGES, VoteResponse)
+    assert r.provider_error and r.error.startswith("Timeout")
+    assert r.usage.attempts == 2 and len(fake.calls) == 2
+
+
+async def test_timeout_and_503_budgets_are_separate(monkeypatch, client):
+    t = litellm.exceptions.Timeout("t", model="x", llm_provider="openai")
+    fake = mock(monkeypatch, t, unavailable(), unavailable(), reply(json.dumps(VOTE)))
+    r = await client.complete(spec(), MESSAGES, VoteResponse)
+    assert r.parsed is not None and len(fake.calls) == 4
 
 
 async def test_provider_timeout_overrides_client_default(monkeypatch):

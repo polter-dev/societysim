@@ -19,7 +19,7 @@
 
 providers:
   gemini: {concurrency: 2, rpm: 10}
-  huggingface: {concurrency: 8, rpm: 120}
+  huggingface: {concurrency: 8, rpm: 120, timeout_s: 180} # qwen3-235b timed out at the 120 s default (#346)
   openai: {concurrency: 8, rpm: 300}
   hosted_vllm: {concurrency: 8, rpm: 120} # hosted_vllm on a non-HF-router endpoint
 
@@ -38,7 +38,7 @@ models:
     litellm_model: hosted_vllm/Qwen/Qwen3-235B-A22B-Instruct-2507:deepinfra
     structured: json_object
     temperature: 0.7
-    max_tokens: 1024
+    max_tokens: 2048 # 1024 cut JSON off mid-string (#346)
     input_cost_per_mtok: 0.09
     output_cost_per_mtok: 0.55
     color: "#4f8ef7"

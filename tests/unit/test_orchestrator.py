@@ -2,7 +2,7 @@
 
 import random
 
-from fakes import FakeClient
+from fakes import FakeClient, ProviderError
 
 from societysim.agents.base import Turn
 from societysim.agents.llm_agent import LLMAgent, llm_agents
@@ -158,6 +158,44 @@ async def test_night_retry_then_fallback_picks_random_legal_target():
     assert check.meta.usage is None and check.suspicion is None
     assert check.meta.fallback is True
     assert game.events.index(fb) < game.events.index(check)
+
+
+async def test_provider_error_skips_the_validation_retry_and_is_flagged():
+    game = new_game()
+    seer = seats(game, Role.SEER)[0]
+    game.agents[seer].scripts["seer"] = [ProviderError(), reply([], {})]  # 2nd must not be asked
+
+    await game.night()
+
+    [invalid] = of(game, EventType.INVALID_OUTPUT)
+    assert invalid.actor == seer and invalid.meta.attempt == 1
+    assert invalid.meta.reason == "provider" and "ServiceUnavailableError" in invalid.meta.error
+    assert len(game.agents[seer].turns) == 1  # no "your reply was rejected" second call
+    [fb] = of(game, EventType.FALLBACK_ACTION, seer)
+    assert fb.meta.reason == "provider" and fb.meta.action == "seer"
+    assert of(game, EventType.SEER_CHECK)[0].meta.fallback is True
+
+
+async def test_validation_reject_then_provider_error_flags_only_the_last():
+    game = new_game()
+    seer = seats(game, Role.SEER)[0]
+    bad = reply(others(game, seer), {"target": seer})
+    game.agents[seer].scripts["seer"] = [bad, ProviderError()]
+
+    await game.night()
+
+    first, second = of(game, EventType.INVALID_OUTPUT, seer)
+    assert first.meta.reason is None and second.meta.reason == "provider"
+    assert of(game, EventType.FALLBACK_ACTION, seer)[0].meta.reason == "provider"
+
+
+async def test_ordinary_fallback_keeps_invalid_output_reason():
+    game = new_game()
+    seer = seats(game, Role.SEER)[0]
+    game.agents[seer].scripts["seer"] = ["not json"] * 2
+    await game.night()
+    assert all(e.meta.reason is None for e in of(game, EventType.INVALID_OUTPUT, seer))
+    assert of(game, EventType.FALLBACK_ACTION, seer)[0].meta.reason == "invalid_output"
 
 
 async def test_doctor_fallback_marks_doctor_save():

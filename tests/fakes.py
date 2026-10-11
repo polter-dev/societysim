@@ -25,6 +25,10 @@ from societysim.config import ModelSpec
 from societysim.models.client import CompletionResult, Usage
 
 
+class ProviderError:
+    """Script item: the provider failed (503) and the client's retries ran out."""
+
+
 class FakeClient:
     def __init__(
         self,
@@ -45,6 +49,14 @@ class FakeClient:
     ) -> CompletionResult:
         self.calls.append((model, messages, response_model))
         item = self.script.pop(0) if self.script else self._random(response_model)
+        if isinstance(item, ProviderError):
+            return CompletionResult(
+                parsed=None,
+                raw="",
+                error="ServiceUnavailableError: HF is down",
+                provider_error=True,
+                usage=Usage(model=model.name, attempts=6),
+            )
         if isinstance(item, BaseModel):
             item = item.model_dump(mode="json")
         raw = item if isinstance(item, str) else json.dumps(item)

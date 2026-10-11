@@ -75,6 +75,7 @@ class Reply:
     usage: Usage  # summed over both attempts
     failures: list[tuple[str, str]] = field(default_factory=list)  # (raw, error) per rejection
     truncated: bool = False
+    provider: bool = False  # the last failure was the provider's (client retries ran out)
 
     @property
     def fallback(self) -> bool | None:
@@ -292,6 +293,10 @@ class Game:
                 response, truncated = self._truncate(result.parsed)
                 return Reply(turn, response, usage, failures, truncated)
             failures.append((result.raw, error))
+            if result.provider_error:
+                # The model never answered and the client already retried with backoff. A
+                # corrected-JSON retry would blame the model, so go straight to the fallback.
+                return Reply(turn, None, usage, failures, provider=True)
             turn = replace(turn, prompt=retry_prompt(prompt, shown))
         return Reply(turn, None, usage, failures)
 
@@ -343,6 +348,8 @@ class Game:
         for a statement."""
         action = reply.turn.action
         for attempt, (raw, error) in enumerate(reply.failures, 1):
+            # a provider failure is always the last one: it ends the call
+            provider = reply.provider and attempt == len(reply.failures)
             self.emit(
                 EventType.INVALID_OUTPUT,
                 V.NARRATOR,
@@ -351,6 +358,7 @@ class Game:
                 attempt=attempt,
                 error=error,
                 raw=raw,
+                reason="provider" if provider else None,
             )
         if reply.response is not None:
             return getattr(reply.response.action, _CHOICE[action]) if action in _CHOICE else None
@@ -363,7 +371,7 @@ class Game:
             actor=seat,
             target=choice,
             action=action,
-            reason="invalid_output",
+            reason="provider" if reply.provider else "invalid_output",
             usage=reply.usage,
         )
         return ABSTAIN if action == "vote" else choice

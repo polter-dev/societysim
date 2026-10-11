@@ -171,8 +171,11 @@ class Row:
     survival_days: int = 0
     night_targeted: int = 0
     voted_out: int = 0
-    invalid: int = 0
-    attempts: int = 0
+    invalid: int = 0  # invalid_output events caused by the model's reply
+    provider_errors: int = (
+        0  # invalid_output events with reason "provider": the model never answered
+    )
+    attempts: int = 0  # model calls, not counting those that ended in a provider error
     input_tokens: int = 0
     output_tokens: int = 0
     cost_usd: float = 0.0
@@ -325,7 +328,10 @@ def game_rows(game: GameData) -> dict[str, Row]:
         if e.type is EventType.STATEMENT:
             row.statements += 1
         if e.type is EventType.INVALID_OUTPUT:
-            row.invalid += 1
+            if e.meta.reason == "provider":
+                row.provider_errors += 1
+            else:
+                row.invalid += 1
         if e.type is EventType.ACCUSATION and e.target:
             key = (e.actor, e.meta.statement_seq or e.seq)
             accused[key].add(e.target)
@@ -333,7 +339,9 @@ def game_rows(game: GameData) -> dict[str, Row]:
         if e.suspicion is not None and roles[e.actor] is not Role.WOLF:
             last_susp[(e.actor, e.day)] = e
         if u := e.meta.usage:
-            row.attempts += u.attempts
+            # the usage of a provider fallback is the failed call(s): not a model attempt
+            if not (e.type is EventType.FALLBACK_ACTION and e.meta.reason == "provider"):
+                row.attempts += u.attempts
             row.input_tokens += u.input_tokens
             row.output_tokens += u.output_tokens
             row.cost_usd += u.cost_usd
@@ -618,6 +626,8 @@ def summarize(row: Row) -> dict:
         "night_targeted": _ratio(row.night_targeted, row.games),
         "voted_out": _ratio(row.voted_out, row.games),
         "invalid_output_rate": _ratio(row.invalid, row.attempts),
+        "provider_errors": row.provider_errors,
+        "provider_error_rate": _ratio(row.provider_errors, row.attempts + row.provider_errors),
         "tokens_per_game": _ratio(row.input_tokens + row.output_tokens, row.games),
         "cost_usd_per_game": _ratio(row.cost_usd, row.games),
     }

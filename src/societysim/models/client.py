@@ -38,6 +38,9 @@ class CompletionResult(BaseModel):
     parsed: BaseModel | None  # instance of response_model, or None if parsing failed
     raw: str  # raw model text, kept for invalid_output events
     error: str | None = None  # parse or provider error; set whenever parsed is None
+    # True when the provider failed (5xx, 429, timeout, connection) and the client's own
+    # retries ran out. The model never answered, so this is not an invalid reply.
+    provider_error: bool = False
     usage: Usage
 
 
@@ -211,12 +214,18 @@ def estimate_cost(spec: ModelSpec, input_tokens: int, output_tokens: int) -> flo
     return in_cost + out_cost
 
 
-def _retryable(e: Exception) -> bool:
+def _transient(e: Exception) -> bool:
+    """Provider trouble rather than a bad request: 5xx, 429, timeouts, dropped connections."""
     import litellm
 
-    if isinstance(e, litellm.exceptions.APIConnectionError):
-        return True
-    return getattr(e, "status_code", None) in RETRY_STATUS
+    transient = (
+        litellm.exceptions.APIConnectionError,
+        litellm.exceptions.Timeout,
+        litellm.exceptions.RateLimitError,
+        litellm.exceptions.ServiceUnavailableError,
+        litellm.exceptions.InternalServerError,
+    )
+    return isinstance(e, transient) or getattr(e, "status_code", None) in RETRY_STATUS
 
 
 API_KEY_ENV = {
@@ -243,13 +252,16 @@ def _auth_message(spec: ModelSpec, e: Exception) -> str:
 
 
 class LiteLLMClient:
-    """`ModelClient` over `litellm.acompletion`. Retries 429/5xx with exponential backoff
-    (separate from the orchestrator's game-level retry) and never raises for a bad reply."""
+    """`ModelClient` over `litellm.acompletion`. Retries transient provider errors (429, 5xx,
+    connection errors, and timeouts up to `timeout_retries`) with exponential backoff, separate
+    from the orchestrator's validation retry. When they run out, the result has
+    `provider_error=True`. Never raises for a bad reply."""
 
     def __init__(
         self,
         limits: dict[str, ProviderLimit] | None = None,
-        max_retries: int = 4,
+        max_retries: int = 5,
+        timeout_retries: int = 1,
         timeout_s: float = DEFAULT_TIMEOUT_S,
         backoff_s: float = 1.0,
         max_backoff_s: float = 30.0,
@@ -258,6 +270,7 @@ class LiteLLMClient:
     ) -> None:
         self.limits = {**DEFAULT_LIMITS, **(limits or {})}
         self.max_retries = max_retries
+        self.timeout_retries = timeout_retries  # a timeout already cost a full timeout_s
         self.timeout_s = timeout_s
         self.backoff_s, self.max_backoff_s = backoff_s, max_backoff_s
         self.sleep, self.clock = sleep, clock
@@ -290,6 +303,7 @@ class LiteLLMClient:
         kwargs["timeout"] = timeout_s
         usage = Usage(model=model.name, attempts=0)
         latency = 0.0
+        timeouts = 0
         for attempt in range(self.max_retries + 1):
             await limiter.take_token()
             async with limiter.sem:
@@ -300,30 +314,32 @@ class LiteLLMClient:
                         litellm.acompletion(messages=messages, **kwargs), timeout_s
                     )
                     error = None
-                except (TimeoutError, litellm.exceptions.Timeout):
-                    # Not retried: the orchestrator's retry-once and fallback take over.
-                    latency += self.clock() - start
-                    usage.latency_ms = round(latency * 1000)
-                    return CompletionResult(
-                        parsed=None,
-                        raw="",
-                        error=f"Timeout: {model.name} took longer than {timeout_s:g} s",
-                        usage=usage,
-                    )
+                except (TimeoutError, litellm.exceptions.Timeout) as e:
+                    resp, error = None, e
+                    timeouts += 1
                 except Exception as e:
                     resp, error = None, e
                 latency += self.clock() - start
             if error is None:
                 break
+            usage.latency_ms = round(latency * 1000)
             if _is_auth_error(error):  # fail fast: retrying a bad key never helps
-                usage.latency_ms = round(latency * 1000)
                 return CompletionResult(
                     parsed=None, raw="", error=_auth_message(model, error), usage=usage
                 )
-            if not _retryable(error) or attempt == self.max_retries:
-                usage.latency_ms = round(latency * 1000)
+            transient = _transient(error)
+            timed_out = isinstance(error, TimeoutError | litellm.exceptions.Timeout)
+            out_of_retries = attempt == self.max_retries or (
+                timed_out and timeouts > self.timeout_retries
+            )
+            if not transient or out_of_retries:
+                msg = (
+                    f"Timeout: {model.name} took longer than {timeout_s:g} s"
+                    if timed_out
+                    else f"{type(error).__name__}: {error}"
+                )
                 return CompletionResult(
-                    parsed=None, raw="", error=f"{type(error).__name__}: {error}", usage=usage
+                    parsed=None, raw="", error=msg, provider_error=transient, usage=usage
                 )
             delay = min(self.max_backoff_s, self.backoff_s * 2**attempt)
             await self.sleep(delay * (0.5 + self._jitter.random() / 2))

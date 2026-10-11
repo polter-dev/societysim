@@ -273,6 +273,37 @@ def test_survival_targets_invalid_and_cost(m):
     assert gia["cost_usd_per_game"] == pytest.approx(0.005542)
 
 
+def test_provider_errors_are_reported_apart_from_invalid_output(game):
+    """Dev (p3, gpt-oss-120b) loses a call to a 503: not an invalid reply, not a model attempt."""
+    base = compute_metrics([game])["models"]["gpt-oss-120b"]["all"]
+    assert base["provider_errors"] == 0 and base["provider_error_rate"] == 0
+    last = game.events[-1]
+    usage = {"model": "gpt-oss-120b", "attempts": 6}
+    common = dict(game_id=last.game_id, t=last.t, day=last.day, phase=last.phase, actor="p3")
+    failed = EventMeta(action="vote", attempt=1, error="ServiceUnavailableError", reason="provider")
+    extra = [
+        Event(
+            seq=last.seq + 1,
+            type=EventType.INVALID_OUTPUT,
+            visibility=Visibility.NARRATOR,
+            meta=failed,
+            **common,
+        ),
+        Event(
+            seq=last.seq + 2,
+            type=EventType.FALLBACK_ACTION,
+            visibility=Visibility.NARRATOR,
+            meta=EventMeta(action="vote", reason="provider", usage=usage),
+            **common,
+        ),
+    ]
+    row = compute_metrics([GameData([*game.events, *extra], game.labels)])
+    row = row["models"]["gpt-oss-120b"]["all"]
+    assert row["invalid_output_rate"] == base["invalid_output_rate"]  # unchanged
+    assert row["provider_errors"] == 1
+    assert row["provider_error_rate"] > 0
+
+
 def _with_winner(game: GameData, winner: str) -> GameData:
     end = game.events[-1]
     meta = EventMeta(**{**end.meta.model_dump(), "winner": winner})

@@ -405,6 +405,19 @@
             }
           ]
         },
+        "provider_errors": {
+          "type": "integer"
+        },
+        "provider_error_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tokens_per_game": {
           "anyOf": [
             {
@@ -441,6 +454,8 @@
         "night_targeted",
         "voted_out",
         "invalid_output_rate",
+        "provider_errors",
+        "provider_error_rate",
         "tokens_per_game",
         "cost_usd_per_game"
       ],

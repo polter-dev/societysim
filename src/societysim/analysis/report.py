@@ -208,7 +208,9 @@ class GroupStats(_Out):
     survival_days: Num
     night_targeted: Num
     voted_out: Num
-    invalid_output_rate: Num
+    invalid_output_rate: Num  # excludes provider errors
+    provider_errors: int  # calls that failed at the provider (5xx, 429, timeout) after retries
+    provider_error_rate: Num
     tokens_per_game: Num
     cost_usd_per_game: Num
 
@@ -607,6 +609,14 @@ def build_profiles(
             },
         }
     return out
+
+
+def _provider_errors(group: dict | None) -> str:
+    """ "3 (2%)" for a model's provider errors; the invalid rate next to it excludes them."""
+    if not group or "provider_errors" not in group:
+        return "n/a"
+    n = group["provider_errors"]
+    return f"{n} ({_pct(group['provider_error_rate'])})" if n else "0"
 
 
 def _table(head: list[str], rows: list[list[str]]) -> list[str]:
@@ -1020,11 +1030,12 @@ def render_markdown(
         "",
     ]
     lines += _table(
-        ["Model", "Invalid output rate", "USD per game"],
+        ["Model", "Invalid output rate", "Provider errors", "USD per game"],
         [
             [
                 r["model"],
                 _pct(r["invalid_output_rate"]),
+                _provider_errors(metrics["models"].get(r["model"], {}).get("all")),
                 "n/a" if r["cost_usd_per_game"] is None else f"{r['cost_usd_per_game']:.4f}",
             ]
             for r in board["models"]

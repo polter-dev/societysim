@@ -320,38 +320,32 @@
   cursor: pointer;
   transition: all 0.15s ease;
 }
-.your-turn__suspicion button[data-level="suspicious"],
-.your-turn__suspicion button:nth-of-type(1) {
+.your-turn__suspicion button[data-level="suspicious"] {
   background: #381615;
   border: 1px solid #8c3632;
   color: #ffd0cb;
 }
-.your-turn__suspicion button[data-level="suspicious"][aria-pressed="true"],
-.your-turn__suspicion button:nth-of-type(1)[aria-pressed="true"] {
+.your-turn__suspicion button[data-level="suspicious"][aria-pressed="true"] {
   background: #6a1f1b;
   border-color: #e04b43;
   box-shadow: 0 0 8px #e04b4366;
 }
-.your-turn__suspicion button[data-level="unsure"],
-.your-turn__suspicion button:nth-of-type(2) {
+.your-turn__suspicion button[data-level="unsure"] {
   background: #2f2b13;
   border: 1px solid #7d7031;
   color: #faebba;
 }
-.your-turn__suspicion button[data-level="unsure"][aria-pressed="true"],
-.your-turn__suspicion button:nth-of-type(2)[aria-pressed="true"] {
+.your-turn__suspicion button[data-level="unsure"][aria-pressed="true"] {
   background: #665b1b;
   border-color: #d6bf47;
   box-shadow: 0 0 8px #d6bf4766;
 }
-.your-turn__suspicion button[data-level="trust"],
-.your-turn__suspicion button:nth-of-type(3) {
+.your-turn__suspicion button[data-level="trust"] {
   background: #0f3624;
   border: 1px solid #3b7e56;
   color: #c9eed6;
 }
-.your-turn__suspicion button[data-level="trust"][aria-pressed="true"],
-.your-turn__suspicion button:nth-of-type(3)[aria-pressed="true"] {
+.your-turn__suspicion button[data-level="trust"][aria-pressed="true"] {
   background: #195e3a;
   border-color: #55c782;
   box-shadow: 0 0 8px #55c78266;

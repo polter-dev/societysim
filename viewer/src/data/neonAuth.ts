@@ -33,7 +33,8 @@ async function fetchToken(): Promise<string> {
   if (!res.ok) throw new Error(`Neon auth failed: HTTP ${res.status}`);
   const body = (await res.json()) as { token?: string; expires_at?: unknown };
   if (!body.token) throw new Error("Neon auth returned no token");
-  const expiresAt = parseExpiresAt(body.expires_at) ?? Date.now() + FALLBACK_TTL_MS;
+  const expiresAt =
+    parseExpiresAt(body.expires_at) ?? Date.now() + FALLBACK_TTL_MS;
   cached = { token: body.token, expiresAt };
   return body.token;
 }
@@ -54,7 +55,10 @@ export function resetNeonAuth(): void {
 }
 
 /** fetch against VITE_NEON_DATA_API_URL + path with a bearer token; refreshes once on 400/401. */
-export async function neonFetch(path: string, init: RequestInit = {}): Promise<Response> {
+export async function neonFetch(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
   const url = env("VITE_NEON_DATA_API_URL") + path;
   const send = async (force: boolean) => {
     const headers = new Headers(init.headers);

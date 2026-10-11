@@ -1,10 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getAnonToken, parseExpiresAt, neonFetch, resetNeonAuth } from "./neonAuth";
+import {
+  getAnonToken,
+  parseExpiresAt,
+  neonFetch,
+  resetNeonAuth,
+} from "./neonAuth";
 
 const AUTH = "https://auth.test/neonauth";
 const API = "https://api.test/rest/v1";
 const tokenRes = (token: string, ms: number) =>
-  new Response(JSON.stringify({ token, expires_at: new Date(Date.now() + ms).toISOString() }));
+  new Response(
+    JSON.stringify({
+      token,
+      expires_at: new Date(Date.now() + ms).toISOString(),
+    }),
+  );
 
 let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
@@ -44,7 +54,11 @@ describe("getAnonToken", () => {
 
   it("shares one in-flight fetch between concurrent callers", async () => {
     fetchMock.mockImplementation(async () => tokenRes("t1", 3_600_000));
-    const out = await Promise.all([getAnonToken(), getAnonToken(), getAnonToken()]);
+    const out = await Promise.all([
+      getAnonToken(),
+      getAnonToken(),
+      getAnonToken(),
+    ]);
     expect(out).toEqual(["t1", "t1", "t1"]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -60,7 +74,9 @@ describe("neonFetch", () => {
     fetchMock.mockImplementation(async (url: string) =>
       url.startsWith(AUTH) ? tokenRes("t1", 3_600_000) : new Response("[]"),
     );
-    const res = await neonFetch("/games?select=*", { headers: { Accept: "application/json" } });
+    const res = await neonFetch("/games?select=*", {
+      headers: { Accept: "application/json" },
+    });
     expect(res.status).toBe(200);
     const [url, init] = fetchMock.mock.calls[1];
     expect(url).toBe(`${API}/games?select=*`);
@@ -83,7 +99,9 @@ describe("neonFetch", () => {
 
   it("does not retry more than once", async () => {
     fetchMock.mockImplementation(async (url: string) =>
-      url.startsWith(AUTH) ? tokenRes("t", 3_600_000) : new Response("", { status: 401 }),
+      url.startsWith(AUTH)
+        ? tokenRes("t", 3_600_000)
+        : new Response("", { status: 401 }),
     );
     const res = await neonFetch("/events");
     expect(res.status).toBe(401);
@@ -101,27 +119,39 @@ describe("parseExpiresAt", () => {
     expect(parseExpiresAt(1791685280)).toBe(1791685280000);
     expect(parseExpiresAt(1791685280000)).toBe(1791685280000);
     expect(parseExpiresAt("1791685280")).toBe(1791685280000);
-    expect(parseExpiresAt("2026-10-10T12:00:00Z")).toBe(Date.parse("2026-10-10T12:00:00Z"));
+    expect(parseExpiresAt("2026-10-10T12:00:00Z")).toBe(
+      Date.parse("2026-10-10T12:00:00Z"),
+    );
   });
   it("returns null for missing or garbage", () => {
-    for (const v of [undefined, null, "", "nope", -5, 0, {}]) expect(parseExpiresAt(v)).toBeNull();
+    for (const v of [undefined, null, "", "nope", -5, 0, {}])
+      expect(parseExpiresAt(v)).toBeNull();
   });
 });
 
 describe("getAnonToken expiry fallback", () => {
-  it.each([[undefined], ["garbage"]])("uses a short TTL when expires_at is %s", async (bad) => {
-    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ token: "t1", expires_at: bad })));
-    expect(await getAnonToken()).toBe("t1");
-    expect(await getAnonToken()).toBe("t1");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    vi.advanceTimersByTime(5 * 60_000);
-    await getAnonToken();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
+  it.each([[undefined], ["garbage"]])(
+    "uses a short TTL when expires_at is %s",
+    async (bad) => {
+      fetchMock.mockImplementation(
+        async () =>
+          new Response(JSON.stringify({ token: "t1", expires_at: bad })),
+      );
+      expect(await getAnonToken()).toBe("t1");
+      expect(await getAnonToken()).toBe("t1");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(5 * 60_000);
+      await getAnonToken();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it("accepts epoch seconds like the live endpoint", async () => {
     const sec = Math.floor((Date.now() + 3_600_000) / 1000);
-    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ token: "t1", expires_at: sec })));
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ token: "t1", expires_at: sec })),
+    );
     await getAnonToken();
     await getAnonToken();
     expect(fetchMock).toHaveBeenCalledTimes(1);

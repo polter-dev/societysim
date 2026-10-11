@@ -1,8 +1,14 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { GlobalBoard } from "../../data/globalBoard";
 import { GlobalLeaderboard } from "./GlobalLeaderboard";
+
+// The catalog never loads under renderToStaticMarkup; stand in for it with the long provider name.
+vi.mock("../ModelAvatar/ModelAvatar", async (orig) => ({
+  ...(await orig<typeof import("../ModelAvatar/ModelAvatar")>()),
+  useModelLabel: () => (m: string) => (m === "gpt-oss-120b" ? "openai/gpt-oss-120b-long-catalog-name" : m),
+}));
 
 const board: GlobalBoard = {
   detectors: [
@@ -68,7 +74,8 @@ describe("GlobalLeaderboard", () => {
   it("shows short model names with the full id on hover", () => {
     const b = { ...board, detectors: [{ ...board.detectors[0], model: "gpt-oss-120b" }] };
     const html = render({ board: b });
-    expect(html).toContain('title="gpt-oss-120b"');
-    expect(html).toContain("GPT-OSS 120B");
+    expect(html).toContain('title="openai/gpt-oss-120b-long-catalog-name"');
+    expect(html).toMatch(/> GPT-OSS 120B<\/th>/);
+    expect(html).not.toMatch(/>[^<]*long-catalog-name[^<]*</);
   });
 });

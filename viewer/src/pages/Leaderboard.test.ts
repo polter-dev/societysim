@@ -1,8 +1,14 @@
 // .ts, not .tsx: vite.config.ts only collects src/**/*.test.ts.
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import LeaderboardPage, { type Board, type BoardRow, GlobalSection, LeaderboardTable } from "./Leaderboard";
+
+// The catalog never loads under renderToStaticMarkup; stand in for it with the long provider name.
+vi.mock("../components/ModelAvatar/ModelAvatar", async (orig) => ({
+  ...(await orig<typeof import("../components/ModelAvatar/ModelAvatar")>()),
+  useModelLabel: () => (m: string) => (m === "llama4-maverick" ? "Llama-4-Maverick-17B-128E-Instruct-FP8 · huggingface" : m),
+}));
 
 const row = (over: Partial<BoardRow>): BoardRow => ({
   model: "m",
@@ -107,7 +113,8 @@ describe("LeaderboardTable ranking (#395)", () => {
   it("shows the short model name with the full id on hover", () => {
     const b = { ...board, models: [row({ model: "llama4-maverick", win_rate: 0.5 })] };
     const html = renderToStaticMarkup(createElement(LeaderboardTable, { board: b }));
-    expect(html).toContain('title="llama4-maverick"');
-    expect(html).toContain("Llama 4 Maverick");
+    expect(html).toContain('title="Llama-4-Maverick-17B-128E-Instruct-FP8 · huggingface"');
+    expect(html).toMatch(/> Llama 4 Maverick<\/th>/);
+    expect(html).not.toContain("Instruct-FP8 · huggingface<");
   });
 });

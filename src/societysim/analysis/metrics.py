@@ -182,7 +182,9 @@ class Row:
     provider_errors: int = (
         0  # invalid_output events with reason "provider": the model never answered
     )
-    attempts: int = 0  # model calls, not counting those that ended in a provider error
+    # model replies, counted from events: each rejected (non-provider) reply plus each accepted
+    # one. Not usage.attempts, which also counts the client's transient HTTP retries (#443).
+    attempts: int = 0
     # turns = one model call (up to two attempts) that ended in a reply or a fallback move; a
     # turn lost to a provider error is in none of these four
     turns: int = 0
@@ -364,6 +366,7 @@ def game_rows(game: GameData) -> dict[str, Row]:
                 row.provider_errors += 1
             else:
                 row.invalid += 1
+                row.attempts += 1
         if e.type is EventType.ACCUSATION and e.target:
             key = (e.actor, e.meta.statement_seq or e.seq)
             accused[key].add(e.target)
@@ -371,8 +374,9 @@ def game_rows(game: GameData) -> dict[str, Row]:
         if e.suspicion is not None and roles[e.actor] is not Role.WOLF:
             last_susp[(e.actor, e.day)] = e
         if u := e.meta.usage:
-            if not _count_turn(row, e, failed.pop(e.actor, [])):
-                row.attempts += u.attempts
+            provider_turn = _count_turn(row, e, failed.pop(e.actor, []))
+            if not provider_turn and e.type is not EventType.FALLBACK_ACTION:
+                row.attempts += 1  # the accepted reply; its rejected ones were counted above
             row.input_tokens += u.input_tokens
             row.output_tokens += u.output_tokens
             row.cost_usd += u.cost_usd

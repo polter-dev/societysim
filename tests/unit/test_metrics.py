@@ -879,10 +879,59 @@ def test_provider_errors_are_in_none_of_the_three_rates():
     )
     row = _reliability({"p0": p0})["model-p0"]["all"]
     assert row["provider_errors"] == 3
-    assert row["invalid_attempt_rate"] == pytest.approx(3 / 3)  # 3 rejected / 3 attempts
+    # 3 rejected / 4 model replies: the bad json before a provider death is a reply (#443)
+    assert row["invalid_attempt_rate"] == pytest.approx(3 / 4)
     assert row["fallback_rate"] == pytest.approx(1 / 2)  # the clean turn and the real fallback
     assert row["retry_success_rate"] == 0  # one retry, lost
-    assert row["provider_error_rate"] == pytest.approx(3 / 6)
+    assert row["provider_error_rate"] == pytest.approx(3 / 7)  # 3 / (4 replies + 3 failures)
+
+
+def _p3_extra(game: GameData, *specs) -> GameData:
+    """The fixture plus narrator events for p3 (gpt-oss-120b): (type, meta) per event."""
+    last = game.events[-1]
+    c = dict(game_id=last.game_id, t=last.t, day=last.day, phase=last.phase, actor="p3")
+    extra = [
+        Event(seq=last.seq + i, type=t, visibility=Visibility.NARRATOR, meta=m, **c)
+        for i, (t, m) in enumerate(specs, 1)
+    ]
+    return GameData([*game.events, *extra], game.labels)
+
+
+def _p3_rate(g: GameData) -> float:
+    return compute_metrics([g])["models"]["gpt-oss-120b"]["all"]["invalid_output_rate"]
+
+
+def test_bad_reply_then_provider_fallback_counts_the_reply_as_an_attempt(game):
+    assert _p3_rate(game) == pytest.approx(2 / 10)
+    g = _p3_extra(
+        game,
+        (
+            EventType.INVALID_OUTPUT,
+            EventMeta(action="vote", attempt=1, error="1 validation error for VoteResponse"),
+        ),
+        (
+            EventType.INVALID_OUTPUT,
+            EventMeta(
+                action="vote", attempt=2, error="ServiceUnavailableError: busy", reason="provider"
+            ),
+        ),
+        (
+            EventType.FALLBACK_ACTION,
+            EventMeta(
+                action="vote", reason="provider", usage={"model": "gpt-oss-120b", "attempts": 5}
+            ),
+        ),
+    )
+    assert _p3_rate(g) == pytest.approx(3 / 11)
+
+
+def test_transient_http_retries_do_not_dilute_the_invalid_rate(game):
+    # one accepted reply that took 3 HTTP tries (two 429s first) is one model attempt
+    g = _p3_extra(
+        game,
+        (EventType.VOTE, EventMeta(usage={"model": "gpt-oss-120b", "attempts": 3})),
+    )
+    assert _p3_rate(g) == pytest.approx(2 / 11)
 
 
 def test_legacy_provider_error_then_accepted_reply_is_a_turn_but_not_a_retry():

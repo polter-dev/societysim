@@ -194,6 +194,9 @@ main.replay-app .replay-tools.open-log{position:fixed;z-index:6;top:calc(50% + v
 main.replay-app .replay-tools.open-log h1{display:block;position:static;width:auto;height:auto;overflow:visible;clip-path:none;white-space:normal;margin:0;font:700 clamp(22px,1.8vw,38px) var(--font-heading,Georgia);font-variant:small-caps;letter-spacing:.04em;color:var(--text-primary,#f4ebc2)}
 main.replay-app .replay-tools.open-log>p{position:static;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:clamp(10px,1vw,20px);width:auto;max-width:none;margin:0;padding:0;background:none;border:0;white-space:normal;color:var(--text-secondary,#d8e4d1)}
 main.replay-app .replay-tools.open-log>p:empty{display:none}
+/* Skipped-line lists can be long: scroll inside the box instead of running off the window (#701). */
+.replay-app .replay-tools>details{max-height:50svh;overflow:auto;box-sizing:border-box}
+main.replay-app .replay-tools.open-log>details{position:static;width:100%;max-width:none;max-height:30svh;text-align:left}
 main.replay-app .replay-tools.open-log>[role=alert]{position:static;max-width:none;padding:0;border:0;background:none;color:#ffb4a8}
 main.replay-app .replay-tools.open-log .file-button{height:auto;min-height:var(--target-minimum,44px);padding:0 clamp(20px,1.6vw,32px);border:1px solid var(--accent-gold,#d4b35c);border-radius:999px;background:var(--marble,#123c2e);box-shadow:var(--rim,none);color:var(--text-primary,#f4ebc2);font:600 clamp(14px,.9vw,22px) var(--font-heading,Georgia);font-variant:small-caps;letter-spacing:.04em}
 main.replay-app .replay-tools.open-log .open-log__games{color:var(--accent-gold,#d4b35c);text-underline-offset:3px}

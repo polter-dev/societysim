@@ -1,5 +1,5 @@
 // Unstyled start screen for visitor play. Basic (you play) or Watch, or Advanced via SetupForm.
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { allowedModels } from "../../play/allowed";
 import { PlayError, getLimits, startGame } from "../../play/api";
 import { useTurnstile } from "../../play/useTurnstile";
@@ -12,12 +12,15 @@ export function PlayStart({
   assets,
   initialMode = "basic",
   modeLocked = false,
+  autoStart = false,
 }: {
   onStarted: (game: StartedGame, watchOnly: boolean) => void;
   /** Model catalog and setup schema; without them there is no Advanced option. */
   assets?: SetupAssets;
   initialMode?: "basic" | "watch" | "advanced";
   modeLocked?: boolean;
+  /** The mode-picker click is the start action; wait for verification, then join. */
+  autoStart?: boolean;
 }) {
   const [adv, setAdv] = useState<{ setup: GameSetupJson; valid: boolean } | null>(null);
   const [watch, setWatch] = useState(initialMode === "watch");
@@ -26,6 +29,9 @@ export function PlayStart({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const widget = useRef<HTMLDivElement>(null);
+  const attempted = useRef(false);
+  const starting = useRef(false);
+  const started = useRef(false);
   const { token, reset } = useTurnstile(widget, setError);
 
   useEffect(() => {
@@ -35,23 +41,32 @@ export function PlayStart({
   const allowed = allowedModels(limits);
   const paused = limits !== null && !limits.play_enabled;
   const none = limits !== null && limits.remaining_today <= 0;
-  const setup: GameSetupJson = useAdvanced && adv ? adv.setup : { mode: "basic", seed: 0 };
+  const setup = useMemo<GameSetupJson>(() => useAdvanced && adv ? adv.setup : { mode: "basic", seed: 0 }, [useAdvanced, adv]);
   const canStart = !busy && limits !== null && limits.play_enabled === true && Number.isInteger(limits.remaining_today) && limits.remaining_today > 0 && token !== null && (!useAdvanced || (adv !== null && adv.valid));
 
-  const start = async () => {
-    if (token === null) return;
+  const start = useCallback(async () => {
+    if (!canStart || token === null || starting.current || started.current) return;
+    starting.current = true;
     setBusy(true);
     setError(null);
     try {
       const game = await startGame({ setup, turnstile_token: token, watch_only: watch });
+      started.current = true;
       onStarted(game, watch);
     } catch (e) {
       setError(e instanceof PlayError ? e.message : "Couldn't start the game.");
       reset(); // the token was spent on this attempt
     } finally {
-      setBusy(false);
+      starting.current = false;
+      if (!started.current) setBusy(false);
     }
-  };
+  }, [canStart, token, setup, watch, onStarted, reset]);
+
+  useEffect(() => {
+    if (!autoStart || !canStart || error || attempted.current) return;
+    attempted.current = true;
+    void start();
+  }, [autoStart, canStart, error, start]);
 
   return (
     <section className="play-start">
@@ -82,6 +97,7 @@ export function PlayStart({
           onChange={(setup, valid) => setAdv({ setup, valid })} />
       )}
       <div ref={widget} className="play-start__turnstile" />
+      {autoStart && limits && !busy && !error && !paused && !none && !token && <p className="play-start__status" role="status">Checking you in… Complete the bot check to join the village.</p>}
       {limits && (
         <p className="play-start__limits">
           {paused ? "Play is paused right now." : `${limits.remaining_today} games left today.`}
@@ -89,11 +105,11 @@ export function PlayStart({
       )}
       {busy && <p className="play-start__status" role="status">Waking the server… A cold start can take 30–60 seconds.</p>}
       {!limits && !error && <p className="play-start__status" role="status">Waking the server… Checking availability can take 30–60 seconds.</p>}
-      {limits && <p className="play-start__status">{paused ? "Play is paused." : none ? "The daily allowance or budget is used up." : "Play is open."}</p>}
+      {limits && (!autoStart || paused || none) && <p className="play-start__status">{paused ? "Play is paused." : none ? "The daily allowance or budget is used up." : "Play is open."}</p>}
       {error && <p role="alert">{error}</p>}
-      <button type="button" disabled={!canStart} onClick={start}>
-        {busy ? "Waking the server…" : "Start game"}
-      </button>
+      {(!autoStart || error) && <button type="button" disabled={!canStart} onClick={start}>
+        {busy ? "Waking the server…" : autoStart ? "Try again" : "Start game"}
+      </button>}
     </section>
   );
 }

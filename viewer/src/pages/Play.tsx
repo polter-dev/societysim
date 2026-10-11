@@ -51,7 +51,7 @@ export default function PlayPage({
     <>
       <h2>{initialMode === "watch" ? "Watch the village" : "Join the village"}</h2>
 <p>{initialMode === "watch" ? "Start an all-AI game and spectate live." : "Play one seat against nine AI models. You see your own role and private information; the full reveal comes at the end."}</p>
-      <PlayStart modeLocked initialMode={initialMode} assets={assets} onStarted={(game) => go(gameHref(game.game_id))} />
+      <PlayStart autoStart={initialMode !== "advanced"} modeLocked initialMode={initialMode} assets={assets} onStarted={(game) => go(gameHref(game.game_id))} />
     </>
   );
 }

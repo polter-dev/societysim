@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, createElement } from "react";
+import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { SetupAssets } from "../../settings/setup";
@@ -104,6 +104,63 @@ it("starts a selected Watch mode as an all-AI game", async () => {
   await settle();
   const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST")!;
   expect(JSON.parse(post[1].body).watch_only).toBe(true);
+});
+
+it("starts Normal once in StrictMode after the bot check, without another Start button", async () => {
+  let verify: ((token: string) => void) | undefined;
+  (globalThis as { turnstile?: unknown }).turnstile = {
+    render: (_el: unknown, options: { callback: (token: string) => void }) => {
+      verify = options.callback;
+      return "w1";
+    },
+  };
+  const onStarted = vi.fn();
+  act(() => root.render(createElement(StrictMode, null, createElement(PlayStart, { onStarted, modeLocked: true, autoStart: true }))));
+  await settle();
+  expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  expect(box.querySelector("button")).toBeNull();
+  await act(async () => verify!("verified-token"));
+  await settle();
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+  expect(onStarted).toHaveBeenCalledTimes(1);
+});
+
+it.each([{ play_enabled: false, remaining_today: 5 }, { play_enabled: true, remaining_today: 0 }])(
+  "does not automatically start when limits prohibit play: %j", async (limits) => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(limits)));
+    act(() => root.render(createElement(PlayStart, { onStarted: vi.fn(), autoStart: true, modeLocked: true })));
+    await settle();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  },
+);
+
+it("shows a manual retry after a rejected automatic start and waits for a fresh token", async () => {
+  let count = 0;
+  (globalThis as { turnstile?: unknown }).turnstile = {
+    render: (_el: unknown, options: { callback: (token: string) => void }) => {
+      options.callback(`token-${++count}`);
+      return `w${count}`;
+    },
+  };
+  let posts = 0;
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/limits")) return new Response(JSON.stringify({ play_enabled: true, remaining_today: 5 }));
+    if (init?.method === "POST" && ++posts === 1) return new Response(JSON.stringify({ error: "bot_check_failed" }), { status: 403 });
+    return new Response(JSON.stringify({ game_id: "g1", seat: "p0", seat_token: "tok" }));
+  });
+  const onStarted = vi.fn();
+  act(() => root.render(createElement(PlayStart, { onStarted, autoStart: true, modeLocked: true })));
+  await settle();
+  expect(posts).toBe(1);
+  expect(onStarted).not.toHaveBeenCalled();
+  const retry = box.querySelector<HTMLButtonElement>("button")!;
+  expect(retry.textContent).toBe("Try again");
+  await act(async () => retry.click());
+  await settle();
+  expect(posts).toBe(2);
+  const bodies = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST").map(([, init]) => JSON.parse(init.body).turnstile_token);
+  expect(bodies).toEqual(["token-1", "token-2"]);
+  expect(onStarted).toHaveBeenCalledTimes(1);
 });
 
 it("keeps selected Advanced mode recoverable when its catalog is unavailable", async () => {

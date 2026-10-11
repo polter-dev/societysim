@@ -88,13 +88,10 @@ describe("VITE_PLAY_API_URL set", () => {
     expect(box.textContent).not.toContain("coming soon");
   });
 
-  it("starts a game through the mocked API, stores the token, and opens the game page", async () => {
+  it("joins Normal automatically after verification, stores the token, and opens the game page", async () => {
     const go = vi.fn();
     await render(page(go));
-    const start = [...box.querySelectorAll("button")].find((b) => /Start game/.test(b.textContent ?? ""))! as HTMLButtonElement;
-    expect(start.disabled).toBe(false);
-    await act(async () => start.click());
-    await settle();
+    expect(box.textContent).not.toContain("Start game");
     const post = fetchMock.mock.calls.find(([, i]) => i?.method === "POST")!;
     expect(post[0]).toBe("https://play.example.test/api/games");
     expect(JSON.parse(post[1].body)).toMatchObject({ turnstile_token: "ts-token", watch_only: false });
@@ -112,9 +109,6 @@ describe("VITE_PLAY_API_URL set", () => {
     );
     const go = vi.fn();
     await render(page(go));
-    const start = [...box.querySelectorAll("button")].find((b) => /Start game/.test(b.textContent ?? ""))!;
-    await act(async () => start.click());
-    await settle();
     expect(box.textContent).toContain("The server is full right now");
     expect(box.textContent).not.toContain("internal detail");
     expect(go).not.toHaveBeenCalled();

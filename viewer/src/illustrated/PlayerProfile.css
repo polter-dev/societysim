@@ -41,6 +41,8 @@
 .player-profile h3{font:700 calc(var(--pp)*1.05)/1.2 Georgia,serif;letter-spacing:.08em;text-transform:uppercase;color:var(--pp-gold);padding-bottom:.35em;border-bottom:1px solid var(--pp-line);flex:none}
 .profile-empty{color:#d8e4d1;font-style:italic;opacity:.85}
 .profile-pane{min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--pp-gold) var(--pp-panel);padding-right:.4em;list-style:none;padding-left:0}
+.profile-pane{overflow-wrap:anywhere;min-width:0}
+.profile-pane p{white-space:pre-wrap}
 .profile-pane p+p{margin-top:.6em}
 .profile-pane:focus-visible{outline:3px solid #ffe499;outline-offset:2px}
 .profile-history li{padding:.45em .7em;border-left:2px solid var(--pp-gold);background:#ffffff08;border-radius:0 6px 6px 0}

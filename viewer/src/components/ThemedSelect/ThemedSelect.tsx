@@ -1,6 +1,6 @@
 // In-page select that matches the illustrated screens (WAI-ARIA select-only combobox).
 // Focus stays on the trigger; the open list is portaled to <body> so frames never clip it.
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import './ThemedSelect.css';
 
@@ -30,8 +30,21 @@ export function ThemedSelect({ label, value, options, onChange, disabled = false
   const current = options[selected];
   const enabled = (i: number) => i >= 0 && i < options.length && !options[i].disabled;
 
+  // Fixed position next to the trigger, flipped up when there's little room below.
+  const placeList = () => {
+    const r = trigger.current!.getBoundingClientRect();
+    const below = window.innerHeight - r.bottom, above = r.top;
+    const flip = below < 220 && above > below;
+    setUp(flip);
+    setPlace({
+      right: Math.max(8, window.innerWidth - r.right), minWidth: r.width, maxWidth: Math.max(r.width, r.right - 8),
+      maxHeight: Math.min(320, (flip ? above : below) - 16),
+      ...(flip ? { bottom: window.innerHeight - r.top + 6 } : { top: r.bottom + 6 }),
+    });
+  };
   const show = (index = selected) => {
     if (disabled) return;
+    placeList(); // sized on the first render, so the selected option can scroll into view
     setActive(enabled(index) ? index : options.findIndex(o => !o.disabled));
     setOpen(true);
   };
@@ -47,23 +60,13 @@ export function ThemedSelect({ label, value, options, onChange, disabled = false
     return from;
   };
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!open) return;
-    const placeList = () => {
-      const r = trigger.current!.getBoundingClientRect();
-      const below = window.innerHeight - r.bottom, above = r.top;
-      const flip = below < 220 && above > below;
-      setUp(flip);
-      setPlace({
-        right: Math.max(8, window.innerWidth - r.right), minWidth: r.width, maxWidth: Math.max(r.width, r.right - 8),
-        maxHeight: Math.min(320, (flip ? above : below) - 16),
-        ...(flip ? { bottom: window.innerHeight - r.top + 6 } : { top: r.bottom + 6 }),
-      });
-    };
-    placeList();
+    // Follow the trigger when the page or a parent scrolls; scrolling the list itself is not a move.
+    const onScroll = (e: Event) => { if (!(e.target instanceof Node && list.current?.contains(e.target))) placeList(); };
     window.addEventListener('resize', placeList);
-    window.addEventListener('scroll', placeList, true);
-    return () => { window.removeEventListener('resize', placeList); window.removeEventListener('scroll', placeList, true); };
+    window.addEventListener('scroll', onScroll, true);
+    return () => { window.removeEventListener('resize', placeList); window.removeEventListener('scroll', onScroll, true); };
   }, [open]);
 
   useEffect(() => {
@@ -76,7 +79,7 @@ export function ThemedSelect({ label, value, options, onChange, disabled = false
     return () => document.removeEventListener('pointerdown', outside);
   }, [open]);
 
-  useEffect(() => { if (open && active >= 0) list.current?.children[active]?.scrollIntoView?.({ block: 'nearest' }); }, [open, active, place]);
+  useEffect(() => { if (open && active >= 0) list.current?.children[active]?.scrollIntoView?.({ block: 'nearest' }); }, [open, active]);
 
   const typeAhead = (key: string) => {
     const now = Date.now();

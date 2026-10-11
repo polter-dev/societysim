@@ -103,3 +103,18 @@ it('does not open when disabled', () => {
   act(() => trigger().click());
   expect(list()).toBeNull();
 });
+
+it('scrolling inside the open list does not snap it back to the active option', () => {
+  const scrolls = vi.fn();
+  Element.prototype.scrollIntoView = scrolls;
+  act(() => trigger().click());
+  const before = scrolls.mock.calls.length;
+  const listbox = list() as HTMLElement;
+  const style = listbox.getAttribute('style');
+  act(() => { listbox.scrollTop = 120; listbox.dispatchEvent(new Event('scroll')); });
+  expect(scrolls).toHaveBeenCalledTimes(before);
+  expect(listbox.getAttribute('style')).toBe(style);
+  act(() => { window.dispatchEvent(new Event('scroll')); });
+  expect(scrolls).toHaveBeenCalledTimes(before);
+  delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+});

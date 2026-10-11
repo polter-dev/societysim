@@ -33,14 +33,26 @@ export interface ModelProfile {
   fooled_by: Record<DeceptionSource, PairRow[]>;
 }
 
-/**
- * Avatar hook: model name -> image URL. Empty until the avatar art is in the repo; import each
- * image here (Vite gives a URL) and the profile page shows it instead of the placeholder.
- */
-const AVATARS: Record<string, string> = {};
+/** Models with a portrait in public/avatars/<model>.webp (plus `human`). */
+const AVATARS = new Set([
+  "amd-gpt-oss-20b",
+  "deepseek-v3.1",
+  "gemini-flash-lite",
+  "gemini-flash",
+  "gemma4-26b",
+  "gpt-5-mini",
+  "gpt-5-nano",
+  "gpt-oss-120b",
+  "human",
+  "llama4-maverick",
+  "qwen3-235b",
+]);
+const AVATAR_ALIAS: Record<string, string> = { "amd-strix-gpt-oss-20b": "amd-gpt-oss-20b" };
 
+/** Avatar URL for a model name (or "human"); null when there is no portrait, so callers keep their monogram. */
 export function avatarFor(model: string): string | null {
-  return Object.hasOwn(AVATARS, model) ? AVATARS[model] : null;
+  const file = AVATAR_ALIAS[model] ?? model;
+  return AVATARS.has(file) ? `${import.meta.env.BASE_URL}avatars/${file}.webp` : null;
 }
 
 function isObj(v: unknown): v is Record<string, unknown> {

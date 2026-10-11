@@ -42,8 +42,18 @@ const BY_STATUS: Record<number, string> = {
   503: "Play is closed right now (paused or out of budget). Watch a replay instead.",
 };
 
-export const friendlyMessage = (status: number, code = ""): string =>
-  BY_CODE[code] ??
+/** The server's invalid_request detail when it reads as a plain sentence; "" for anything else. */
+export function safeDetail(detail: unknown): string {
+  if (typeof detail !== "string") return "";
+  const d = detail.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
+  if (!d || d.length > 300 || /traceback|exception|litellm|https?:/i.test(d)) return "";
+  return d;
+}
+
+export const friendlyMessage = (status: number, code = "", detail: unknown = ""): string =>
+  (code === "invalid_request" || (!code && status === 422)) && safeDetail(detail)
+    ? `That request wasn't valid: ${safeDetail(detail)}`
+    : BY_CODE[code] ??
   BY_STATUS[status] ??
   (status >= 500 ? "The game server had a problem. Try again." : `Request failed (${status}).`);
 
@@ -87,13 +97,15 @@ async function call<T>(path: string, init: { method?: string; body?: unknown; to
   }
   if (!res.ok) {
     let code = "";
+    let detail: unknown = "";
     try {
-      const c = ((await res.json()) as { error?: unknown }).error;
-      if (typeof c === "string") code = c;
+      const j = (await res.json()) as { error?: unknown; message?: unknown };
+      if (typeof j.error === "string") code = j.error;
+      detail = j.message;
     } catch {
       /* no JSON body */
     }
-    throw new PlayError(res.status, friendlyMessage(res.status, code));
+    throw new PlayError(res.status, friendlyMessage(res.status, code, detail));
   }
   return (await res.json()) as T;
 }

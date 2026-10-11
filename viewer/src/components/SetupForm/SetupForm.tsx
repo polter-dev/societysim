@@ -1,17 +1,24 @@
 // Unstyled game setup form. Mount it anywhere with the loaded assets; see the PR's port notes.
 import { useEffect } from "react";
-import { type GameSetupJson, type SetupAssets, HUMAN, MAX_PLAYERS, MIN_PLAYERS, PLAY_COMMAND, maxWolves, seatId } from "../../settings/setup";
+import { type GameSetupJson, type SetupAssets, HUMAN, modelLabel, MAX_PLAYERS, MIN_PLAYERS, PLAY_COMMAND, maxWolves, seatId } from "../../settings/setup";
 import { useSetupForm } from "../../settings/useSetupForm";
 
 export function SetupForm({
   assets,
   onChange,
+  play,
+  allowed,
 }: {
   assets: SetupAssets;
   /** Called on mount and after every edit with the current setup and whether it is valid. */
   onChange?: (setup: GameSetupJson, valid: boolean) => void;
+  /** Visitor play: true = you play, false = you watch. Drives the human seat, hides seed and developer output. */
+  play?: boolean;
+  /** Visitor play: model ids the server allows (/api/limits). Remount (key) when this changes. */
+  allowed?: string[] | null;
 }) {
-  const f = useSetupForm(assets);
+  const f = useSetupForm(assets, { play, allowed });
+  const visitor = play !== undefined;
   // Fire on content change only, not when the parent passes a new callback.
   useEffect(() => onChange?.(f.setup, f.valid), [f.json, f.valid]);
   const { state: s } = f;
@@ -25,6 +32,19 @@ export function SetupForm({
   };
   const copy = () => navigator.clipboard?.writeText(PLAY_COMMAND);
 
+  const dev = (
+    <>
+      <pre className="setup-json">{f.json}</pre>
+      <button type="button" disabled={!f.valid} onClick={download}>
+        Download setup.json
+      </button>
+      <code className="setup-command">{PLAY_COMMAND}</code>{" "}
+      <button type="button" onClick={copy}>
+        Copy command
+      </button>
+    </>
+  );
+
   return (
     <form className="setup-form" onSubmit={(e) => e.preventDefault()}>
       <fieldset>
@@ -36,7 +56,7 @@ export function SetupForm({
         ))}
       </fieldset>
 
-      {!advanced && (
+      {!advanced && !visitor && (
         <label>
           <input type="checkbox" checked={s.basicHuman} onChange={(e) => f.update({ basicHuman: e.target.checked })} />{" "}
           I play (seat p0, 1 human and 9 models)
@@ -71,13 +91,14 @@ export function SetupForm({
           <label>
             <input type="checkbox" checked={s.doctor} onChange={(e) => f.update({ doctor: e.target.checked })} /> Doctor
           </label>
+          {(!visitor || play) && (
           <label>
             Human seat{" "}
             <select
               value={humanIndex < 0 ? "" : String(humanIndex)}
               onChange={(e) => f.setHuman(e.target.value === "" ? null : Number(e.target.value))}
             >
-              <option value="">none</option>
+              {!visitor && <option value="">none</option>}
               {Array.from({ length: s.nPlayers }, (_, i) => (
                 <option key={i} value={i}>
                   {seatId(i)}
@@ -85,6 +106,7 @@ export function SetupForm({
               ))}
             </select>
           </label>
+          )}
           <ol className="setup-seats">
             {s.seats.slice(0, s.nPlayers).map((m, i) => (
               <li key={i}>
@@ -94,9 +116,9 @@ export function SetupForm({
                     <span>human</span>
                   ) : (
                     <select value={m} onChange={(e) => f.setSeatModel(i, e.target.value)}>
-                      {assets.catalog.models.map((c) => (
+                      {f.catalog.models.map((c) => (
                         <option key={c.name} value={c.name} disabled={!c.available} title={c.unavailable_reason ?? undefined}>
-                          {c.name}
+                          {modelLabel(c)}
                           {c.available ? "" : " (unavailable)"}
                         </option>
                       ))}
@@ -109,10 +131,12 @@ export function SetupForm({
         </>
       )}
 
-      <label>
-        Seed{" "}
-        <input type="number" value={s.seed} onChange={(e) => f.update({ seed: Math.trunc(Number(e.target.value)) })} />
-      </label>
+      {!visitor && (
+        <label>
+          Seed{" "}
+          <input type="number" value={s.seed} onChange={(e) => f.update({ seed: Math.trunc(Number(e.target.value)) })} />
+        </label>
+      )}
 
       {f.errors.length > 0 && (
         <ul role="alert" className="setup-errors">
@@ -122,14 +146,14 @@ export function SetupForm({
         </ul>
       )}
 
-      <pre className="setup-json">{f.json}</pre>
-      <button type="button" disabled={!f.valid} onClick={download}>
-        Download setup.json
-      </button>
-      <code className="setup-command">{PLAY_COMMAND}</code>{" "}
-      <button type="button" onClick={copy}>
-        Copy command
-      </button>
+      {visitor ? (
+        <details>
+          <summary>Developer</summary>
+          {dev}
+        </details>
+      ) : (
+        dev
+      )}
     </form>
   );
 }

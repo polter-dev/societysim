@@ -37,7 +37,13 @@ describe("loadModelProfile", () => {
 });
 
 describe("avatarFor", () => {
-  it("is a placeholder hook until avatar art lands", () => {
-    expect(avatarFor("gemini-flash")).toBeNull();
+  it("points at the portraits in public/avatars", () => {
+    expect(avatarFor("gemini-flash")).toMatch(/avatars\/gemini-flash\.webp$/);
+    expect(avatarFor("human")).toMatch(/avatars\/human\.webp$/);
+    expect(avatarFor("amd-strix-gpt-oss-20b")).toMatch(/avatars\/amd-gpt-oss-20b\.webp$/);
+  });
+  it("is null for a model with no portrait", () => {
+    expect(avatarFor("mystery-model")).toBeNull();
+    expect(avatarFor("constructor")).toBeNull();
   });
 });

@@ -57,7 +57,7 @@ describe("api client", () => {
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBeUndefined();
   });
 
-  it.each(Object.entries(BY_CODE))("maps error code %s to our own text, not the server's message", async (code, text) => {
+  it.each(Object.entries(BY_CODE).filter(([c]) => c !== "invalid_request"))("maps error code %s to our own text, not the server's message", async (code, text) => {
     fetchMock.mockReturnValue(json({ error: code, message: "SERVER WORDING" }, 400));
     const e = await getLimits().catch((x) => x);
     expect(e).toBeInstanceOf(PlayError);

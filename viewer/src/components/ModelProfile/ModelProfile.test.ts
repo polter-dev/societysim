@@ -22,7 +22,7 @@ describe("ModelProfile", () => {
     expect(html).toContain("<dd>1.6 s</dd>");
     expect(html).toContain('data-voice-id="cgSgspJ2msm6clMCkdW9"');
     expect(html).not.toContain("(default voice)");
-    expect(html).toMatch(/data-placeholder="true"[^>]*>G</);
+    expect(html).toContain("avatars/gemini-flash.webp");
   });
 
   it("lists who it fools in order, marking thin rows", () => {

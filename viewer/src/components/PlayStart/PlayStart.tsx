@@ -1,5 +1,6 @@
 // Unstyled start screen for visitor play. Basic (you play) or Watch, or Advanced via SetupForm.
 import { useEffect, useRef, useState } from "react";
+import { allowedModels } from "../../play/allowed";
 import { PlayError, getLimits, startGame } from "../../play/api";
 import { getTurnstileToken } from "../../play/turnstile";
 import type { Limits, StartedGame } from "../../play/types";
@@ -34,6 +35,7 @@ export function PlayStart({
     return t.cancel;
   }, []);
 
+  const allowed = allowedModels(limits);
   const paused = limits !== null && !limits.play_enabled;
   const none = limits !== null && limits.remaining_today <= 0;
   const setup: GameSetupJson = useAdvanced && adv ? adv.setup : { mode: "basic", seed: 0 };
@@ -58,7 +60,7 @@ export function PlayStart({
       <fieldset>
         <legend>How do you want to join?</legend>
         {[
-          [false, "Play (you are seat p0)"],
+          [false, "Play (you start at seat p0)"],
           [true, "Watch"],
         ].map(([w, label]) => (
           <label key={String(w)}>
@@ -73,7 +75,12 @@ export function PlayStart({
         </label>
       )}
       {useAdvanced && assets && (
-        <SetupForm assets={assets} onChange={(setup, valid) => setAdv({ setup, valid })} />
+        <SetupForm
+          key={(allowed ?? []).join()}
+          assets={assets}
+          play={!watch}
+          allowed={allowed}
+          onChange={(setup, valid) => setAdv({ setup, valid })} />
       )}
       <div ref={widget} className="play-start__turnstile" />
       {limits && (

@@ -201,3 +201,34 @@ export function schemaErrors(value: unknown, schema: Schema, root: Schema = sche
   }
   return errs;
 }
+
+// --- visitor play (#356) -----------------------------------------------------------------------
+
+/** "Gemini 2.5 Flash-Lite · Google": what visitors see instead of the raw model id. */
+export const modelLabel = (m: CatalogModel) => (m.provider ? `${m.display_name} · ${m.provider}` : m.display_name);
+
+/** Label for a model id from the catalog; the id itself only if the catalog doesn't know it. */
+export function labelFor(catalog: ModelsCatalog, name: string): string {
+  const m = catalog.models.find((x) => x.name === name);
+  return m ? modelLabel(m) : name;
+}
+
+/**
+ * Only the models the server allows for visitor games (from /api/limits `allowed_models`).
+ * `allowed` null or missing means no restriction. The default lineup is narrowed too, so defaults
+ * built from this catalog are always allowed.
+ */
+export function restrictCatalog(catalog: ModelsCatalog, allowed: readonly string[] | null | undefined): ModelsCatalog {
+  if (!allowed) return catalog;
+  const ok = new Set(allowed);
+  const models = catalog.models.filter((m) => ok.has(m.name));
+  const lineup = catalog.default_lineup.filter((n) => ok.has(n));
+  return { ...catalog, models, default_lineup: lineup.length ? lineup : models.filter((m) => m.available).map((m) => m.name) };
+}
+
+/** Make the human seat follow the Play/Watch choice: Play has exactly one (keep it, else p0), Watch none. */
+export function joinAs(s: SetupState, play: boolean, catalog: ModelsCatalog): SetupState {
+  if (!play) return { ...setHumanSeat(s, null, catalog), basicHuman: false };
+  const keep = s.seats.slice(0, s.nPlayers).indexOf(HUMAN);
+  return { ...setHumanSeat(s, keep < 0 ? 0 : keep, catalog), basicHuman: true };
+}

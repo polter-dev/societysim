@@ -8,6 +8,7 @@ import shutil
 import uuid
 from pathlib import Path
 
+import asyncpg
 import pytest
 from typer.testing import CliRunner
 
@@ -15,12 +16,14 @@ from societysim.batch.runner import run_batch
 from societysim.cli import app
 from societysim.config import BatchConfig, ModelSpec
 from societysim.logging.events import Event, EventLogger
+from societysim.logging.sinks import neon
 from societysim.logging.sinks.neon import (
     NeonSink,
     apply_schema,
     connect_neon,
     delete_games,
     sync_batch,
+    sync_game,
 )
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
@@ -43,8 +46,32 @@ class FakeConn:
             raise ConnectionError("down")
         self.many.append((sql, list(rows)))
 
+    def transaction(self):
+        return _Tx(self)
+
+    def _snapshot(self):
+        return len(self.executed), len(self.many)
+
+    def _restore(self, snap):
+        del self.executed[snap[0] :], self.many[snap[1] :]
+
     async def close(self):
         self.closed = True
+
+
+class _Tx:
+    """Rolls the fake back to where it was if the block raises."""
+
+    def __init__(self, conn):
+        self.conn = conn
+
+    async def __aenter__(self):
+        self.snap = self.conn._snapshot()
+
+    async def __aexit__(self, exc_type, *_):
+        if exc_type is not None:
+            self.conn._restore(self.snap)
+        return False
 
 
 def _events(path: Path) -> list[dict]:
@@ -574,8 +601,16 @@ class MemConn(FakeConn):
     def __init__(self):
         super().__init__()
         self.games: dict[str, str] = {}
+        self.status: dict[str, str] = {}
         self.events: dict[tuple, tuple] = {}
         self.labels: dict[tuple, tuple] = {}
+
+    def _snapshot(self):
+        return {k: dict(getattr(self, k)) for k in ("games", "status", "events", "labels")}
+
+    def _restore(self, snap):
+        for k, v in snap.items():
+            setattr(self, k, v)
 
     def _put(self, table, key, row, replace):
         if replace or key not in table:
@@ -584,6 +619,9 @@ class MemConn(FakeConn):
     async def execute(self, sql, *args):
         if "insert into games" in sql:
             self.games[args[0]] = args[1]
+            self.status[args[0]] = "running"
+        elif sql.startswith("update games set status"):
+            self.status[args[0]] = args[1]
         elif sql.startswith("delete from events"):
             self.events = {k: v for k, v in self.events.items() if k[0] != args[0]}
         elif sql.startswith("delete from labels"):
@@ -690,3 +728,253 @@ def test_sync_neon_cli_not_a_directory(tmp_path, monkeypatch):
     res = CliRunner().invoke(app, ["sync-neon", str(tmp_path / "nope")])
     assert res.exit_code == 1
     assert f"not a directory: {tmp_path / 'nope'}" in res.output
+
+
+# --- #417: reconnect after the connection dies ------------------------------------------------
+
+
+class ClosableConn(FakeConn):
+    """Fails like asyncpg once `dead` is set: every call raises `error`, is_closed() is True."""
+
+    def __init__(self, error=None):
+        super().__init__()
+        self.dead = False
+        self.error = error or asyncpg.InterfaceError(
+            "cannot perform operation: connection is closed"
+        )
+        self.terminated = False
+
+    def _check(self):
+        if self.dead:
+            raise self.error
+
+    async def execute(self, sql, *args):
+        self._check()
+        await super().execute(sql, *args)
+
+    async def executemany(self, sql, rows):
+        self._check()
+        await super().executemany(sql, rows)
+
+    def is_closed(self):
+        return self.dead
+
+    def terminate(self):
+        self.terminated = True
+
+
+def _ends(conn: FakeConn) -> list[tuple]:
+    return [a for sql, a in conn.executed if sql.startswith("update games set status")]
+
+
+def _seqs(conn: FakeConn) -> list[int]:
+    return [r[1] for _, rows in conn.many for r in rows]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        asyncpg.InterfaceError("cannot perform operation: connection is closed"),
+        asyncpg.ConnectionDoesNotExistError("connection was closed in the middle of operation"),
+        ConnectionResetError("reset by peer"),
+    ],
+)
+async def test_sink_reconnects_after_the_connection_dies(error):
+    conns = [ClosableConn(error), ClosableConn()]
+    calls = []
+
+    async def connect():
+        calls.append(1)
+        return conns[len(calls) - 1]
+
+    sink = NeonSink("b1", connect=connect, batch_size=1, flush_after=60)
+    await sink.start_game({"game_id": "g1", "models": []})
+    await sink.write(_event(0))
+    conns[0].dead = True
+    for i in range(1, 6):
+        await sink.write(_event(i))
+    await sink.end_game("g1", "wolves")
+    await sink.close()
+    assert len(calls) == 2
+    assert conns[0].terminated
+    assert _seqs(conns[0]) == [0]
+    assert _seqs(conns[1]) == [1, 2, 3, 4, 5]
+    assert _ends(conns[1]) == [("g1", "finished", "wolves")]
+
+
+async def test_reconnect_backs_off_while_neon_is_down(monkeypatch):
+    monkeypatch.setattr(neon, "RECONNECT_BACKOFF", (0.2, 0.4))
+    conn = FakeConn()
+    calls = []
+    down = True
+
+    async def connect():
+        calls.append(1)
+        if down:
+            raise OSError("no route")
+        return conn
+
+    sink = NeonSink("b1", connect=connect, batch_size=1, flush_after=60)
+    await sink.start_game({"game_id": "g1", "models": []})  # fails: retry right away
+    for i in range(20):
+        await sink.write(_event(i))  # the first fails too; then the sink waits 0.2 s
+    assert len(calls) == 2
+    down = False
+    await asyncio.sleep(0.25)
+    await sink.write(_event(20))  # backoff over: reconnects and sends everything kept
+    assert len(calls) == 3
+    assert _seqs(conn) == list(range(21))
+    # start_game never reached Neon, so its games row goes in before the events
+    assert "insert into games" in conn.executed[0][0]
+    await sink.close()
+
+
+async def test_backoff_doubles_up_to_the_cap(monkeypatch):
+    monkeypatch.setattr(neon, "RECONNECT_BACKOFF", (0.5, 30.0))
+
+    async def connect():
+        raise OSError("no route")
+
+    sink = NeonSink("b1", connect=connect)
+    waits = []
+    for _ in range(10):
+        now = asyncio.get_running_loop().time()
+        with pytest.raises(OSError):
+            await sink._conn_ready(force=True)
+        waits.append(round(sink._retry_at - now, 1))
+    assert waits == [0.0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 30.0, 30.0, 30.0]
+
+
+async def test_end_game_still_wins_over_close_after_a_failed_status_write():
+    """end_game can't reach Neon; close() later can. The game is finished, not failed."""
+    conns = [ClosableConn(), ClosableConn()]
+    calls = []
+    down = False
+
+    async def connect():
+        if down:
+            raise OSError("no route")
+        calls.append(1)
+        return conns[len(calls) - 1]
+
+    sink = NeonSink("b1", connect=connect, batch_size=100, flush_after=60)
+    await sink.start_game({"game_id": "g1", "models": []})
+    for i in range(3):
+        await sink.write(_event(i))
+    conns[0].dead, down = True, True
+    await sink.end_game("g1", "wolves")
+    down = False
+    await sink.close()
+    assert _seqs(conns[1]) == [0, 1, 2]
+    assert _ends(conns[0]) + _ends(conns[1]) == [("g1", "finished", "wolves")]
+
+
+async def test_a_query_error_keeps_the_connection():
+    """Only connection and timeout errors replace the connection."""
+
+    class BadRows(FakeConn):
+        async def executemany(self, sql, rows):
+            raise ValueError("invalid input syntax for type json")
+
+    calls = []
+
+    async def connect():
+        calls.append(1)
+        return BadRows()
+
+    sink = NeonSink("b1", connect=connect, batch_size=1, flush_after=60)
+    await sink.start_game({"game_id": "g1", "models": []})
+    for i in range(3):
+        await sink.write(_event(i))
+    await sink.close()
+    assert len(calls) == 1
+
+
+# --- #420: a full buffer never loses an event queued during a flush -----------------------------
+
+
+async def test_overflow_during_a_flush_keeps_the_unsent_event():
+    class GatedConn(FakeConn):
+        def __init__(self):
+            super().__init__()
+            self.gate = asyncio.Event()
+            self.in_flight = asyncio.Event()
+
+        async def executemany(self, sql, rows):
+            self.in_flight.set()
+            await self.gate.wait()
+            await super().executemany(sql, rows)
+
+    conn = GatedConn()
+
+    async def connect():
+        return conn
+
+    sink = NeonSink("b1", connect=connect, batch_size=10**6, max_pending=3, flush_after=60)
+    await sink.start_game({"game_id": "g1", "models": []})
+    for i in range(3):
+        await sink.write(_event(i))
+    flush = asyncio.create_task(sink._flush())
+    await conn.in_flight.wait()  # rows 0-2 are being sent
+    await sink.write(_event(3))  # buffer full: seq 0 (already in flight) is trimmed
+    assert sink.dropped == 1
+    conn.gate.set()
+    await flush
+    assert [r[1] for r in sink._pending] == [3]
+    await sink.close()
+    assert _seqs(conn) == [0, 1, 2, 3]
+
+
+# --- #418: sync_game is all or nothing ----------------------------------------------------------
+
+
+async def test_failed_resync_leaves_the_finished_game_alone(tmp_path):
+    batch = _batch(tmp_path)
+    conn = MemConn()
+    await sync_batch(batch, conn)
+    assert conn.status == {"fixture-0001": "finished"}
+    before = conn._snapshot()
+
+    async def boom(sql, rows):
+        raise TimeoutError("command_timeout on a 500-row chunk")
+
+    conn.executemany = boom
+    with pytest.raises(TimeoutError):
+        await sync_batch(batch, conn)
+    assert conn._snapshot() == before  # still finished, with its events and labels
+
+
+# --- #419: a torn last line never aborts the batch ---------------------------------------------
+
+
+def _write_game(d: Path, gid: str, keep: int | None = None, tail: str = "") -> None:
+    lines = (FIXTURES / "sample_game.jsonl").read_text(encoding="utf-8").splitlines()[:keep]
+    text = "\n".join(lines).replace("fixture-0001", gid) + "\n" + tail
+    (d / f"{gid}.jsonl").write_text(text, encoding="utf-8")
+
+
+async def test_sync_batch_skips_a_torn_last_line(tmp_path, caplog):
+    d = tmp_path / "b"
+    d.mkdir()
+    _write_game(d, "g1", keep=-1, tail='{"schema_version":2,"game_id":"g1","seq":9')
+    _write_game(d, "g2")
+    labels = (FIXTURES / "sample_game.labels.jsonl").read_text(encoding="utf-8")
+    (d / "g2.labels.jsonl").write_text(labels.replace("fixture-0001", "g2") + "[1,", "utf-8")
+    conn = MemConn()
+    totals = await sync_batch(d, conn)
+    n = len(_events(FIXTURES / "sample_game.jsonl"))
+    assert totals == {"games": 2, "events": 2 * n - 1, "labels": 8}
+    assert conn.status == {"g1": "failed", "g2": "finished"}
+    assert "g1.jsonl ends with a torn line, ignored" in caplog.text
+    assert "g2.labels.jsonl ends with a torn line, ignored" in caplog.text
+
+
+async def test_sync_game_still_refuses_a_bad_line_before_the_end(tmp_path):
+    d = tmp_path / "b"
+    d.mkdir()
+    _write_game(d, "g1")
+    lines = (d / "g1.jsonl").read_text(encoding="utf-8").splitlines()
+    lines[3] = lines[3][:20]
+    (d / "g1.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        await sync_game(d / "g1.jsonl", MemConn())

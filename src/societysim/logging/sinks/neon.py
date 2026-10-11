@@ -1,8 +1,9 @@
 """Optional sink: stream a game into Neon Postgres, and backfill finished batches.
 
 JSONL is the source of truth; Neon is a mirror for the viewer. Per the EventSink contract
-(T1.3) nothing here may break a game: every sink method swallows its errors, and the
-pending-event buffer is bounded (oldest dropped first).
+(T1.3) nothing here may break a game: every sink method swallows its errors, every call has a
+timeout, and the pending-event buffer is bounded (oldest dropped first). A connection that dies
+mid-game is dropped and replaced, with a bounded backoff while Neon stays down (#417).
 """
 
 import asyncio
@@ -47,6 +48,29 @@ _END_GAME = "update games set status = $2, winner = $3, ended_at = now() where g
 _SET_SEATS = "update games set models = $2::jsonb where game_id = $1"
 
 Connect = Callable[[], Awaitable[Any]]
+
+# Seconds between reconnects after a failure: the first retry is immediate, then the wait
+# starts at the first value and doubles up to the second.
+RECONNECT_BACKOFF = (0.5, 30.0)
+
+
+class _BackingOff(ConnectionError):
+    """Neon is down and the sink is waiting before it tries to reconnect."""
+
+
+def _connection_lost(conn: Any, exc: BaseException) -> bool:
+    """True if `exc` leaves the connection unusable, so it must be replaced (#417): a network
+    or timeout error, asyncpg's "connection is closed" and its connection errors."""
+    import asyncpg
+
+    lost = (OSError, TimeoutError, asyncpg.InterfaceError, asyncpg.PostgresConnectionError)
+    if isinstance(exc, lost):
+        return True
+    try:
+        return bool(conn.is_closed())
+    except Exception:
+        return False
+
 
 # Per-call metadata a live (public-only) feed leaves out (#387): wolves, the seer and the doctor
 # get longer prompts, so token counts, cost and timings would give their roles away. Same list as
@@ -133,6 +157,12 @@ class NeonSink:
     Events are buffered and inserted `batch_size` at a time, by a background timer every
     `flush_after` seconds (so a slow LLM game shows up live), and on end_game / close.
 
+    A dead connection is dropped and the call retried once on a new one. If connecting keeps
+    failing, further tries wait per RECONNECT_BACKOFF; end_game and close always make one more
+    try, so the final status lands as soon as Neon is back. When the buffer is full the oldest
+    events are dropped (`dropped` counts them); what a flush sent is removed by identity, so
+    events queued during the flush are never lost with it (#420).
+
     `public_only` (visitor games, #281): the live feed gets only public events, without
     private reasoning, suspicion or per-call metadata (`live_redact`), since the Data API is
     readable by anyone, the visitor included. The full log goes in afterwards with `sync_game`.
@@ -165,37 +195,91 @@ class NeonSink:
         self._pending: list[tuple] = []
         self._game_id: str | None = None
         self._ended = False
+        self._outcome: tuple[str, str | None] | None = None  # first (status, winner) asked for
+        self._start_op: Callable[[Any], Awaitable[None]] | None = None  # until it lands
+        self._failures = 0  # consecutive connection failures
+        self._retry_at = 0.0  # loop time before which no reconnect is tried
+        self.dropped = 0  # events dropped from the full buffer
 
     async def _t(self, fn: Any, *args: Any) -> Any:
         return await asyncio.wait_for(fn(*args), self._timeout)
 
-    async def _conn_ready(self) -> Any:
+    async def _conn_ready(self, *, force: bool = False) -> Any:
         if self._conn is None:
-            self._conn = await asyncio.wait_for(self._connect(), self._timeout)
+            if not force and asyncio.get_running_loop().time() < self._retry_at:
+                raise _BackingOff
+            try:
+                self._conn = await asyncio.wait_for(self._connect(), self._timeout)
+            except Exception:
+                self._lost()
+                raise
         return self._conn
+
+    def _lost(self) -> None:
+        """Drop the connection (if any) and schedule the next connect."""
+        conn, self._conn = self._conn, None
+        if conn is not None:
+            with contextlib.suppress(Exception):
+                conn.terminate()  # asyncpg: close the socket without waiting on it
+        self._failures += 1
+        first, cap = RECONNECT_BACKOFF
+        wait = 0.0 if self._failures == 1 else min(cap, first * 2 ** (self._failures - 2))
+        self._retry_at = asyncio.get_running_loop().time() + wait
+
+    async def _with_conn(
+        self, what: str, op: Callable[[Any], Awaitable[None]], *, force: bool = False
+    ) -> bool:
+        """Run `op(conn)`, swallowing errors. If the connection turns out dead it is dropped
+        and `op` retried once on a new one. `force` ignores the backoff. True on success.
+
+        If start_game hasn't reached Neon yet, its statements run first, so a game that
+        started while Neon was down still gets its games row."""
+        for _ in range(2):
+            try:
+                conn = await self._conn_ready(force=force)
+                if self._start_op is not None:
+                    await self._start_op(conn)
+                    self._start_op = None
+                await op(conn)
+            except _BackingOff:
+                return False
+            except Exception as exc:
+                log.exception(what)
+                if self._conn is None or not _connection_lost(self._conn, exc):
+                    return False  # a failed connect is already counted; other errors stay
+                self._lost()
+            else:
+                self._failures = 0
+                return True
+        return False
 
     async def start_game(self, run_meta: dict[str, Any]) -> None:
         try:
-            conn = await self._conn_ready()
             self._game_id = run_meta["game_id"]
             self._ended = False
+            self._outcome = None
             started = run_meta.get("started_at")
             if isinstance(started, str):
                 started = datetime.fromisoformat(started)
-            await self._t(
-                conn.execute,
-                _INSERT_GAME,
-                self._game_id,
-                self.batch_id,
-                json.dumps(run_meta.get("models")),
-                started,
-                self.agents,
-            )
-            # A replayed game must not keep the old run's rows (JSONL was overwritten).
-            await self._t(conn.execute, _CLEAR_EVENTS, self._game_id)
-            await self._t(conn.execute, _CLEAR_LABELS, self._game_id)
+            models = json.dumps(run_meta.get("models"))
         except Exception:
             log.exception("NeonSink.start_game failed")
+            return
+
+        async def op(conn: Any) -> None:
+            gid = self._game_id
+            await self._t(
+                conn.execute, _INSERT_GAME, gid, self.batch_id, models, started, self.agents
+            )
+            # A replayed game must not keep the old run's rows (JSONL was overwritten).
+            await self._t(conn.execute, _CLEAR_EVENTS, gid)
+            await self._t(conn.execute, _CLEAR_LABELS, gid)
+
+        async def nothing_else(conn: Any) -> None:
+            pass
+
+        self._start_op = op
+        await self._with_conn("NeonSink.start_game failed", nothing_else)
 
     async def write(self, event: Event) -> None:
         if event.type == EventType.GAME_START:
@@ -206,9 +290,11 @@ class NeonSink:
                     return
                 event = live_redact(event)
             self._pending.append(event_row(event.model_dump(mode="json")))
-            if len(self._pending) > self._max_pending:
-                del self._pending[: len(self._pending) - self._max_pending]
-                log.warning("NeonSink buffer full, dropped oldest events")
+            over = len(self._pending) - self._max_pending
+            if over > 0:
+                del self._pending[:over]
+                self.dropped += over
+                log.warning("NeonSink buffer full, dropped %d oldest events so far", self.dropped)
             if self._timer is None and not self._closed:
                 self._timer = asyncio.create_task(self._tick())
             if len(self._pending) >= self._batch_size:
@@ -222,9 +308,13 @@ class NeonSink:
             seats = public_seats(event.model_dump(mode="json")["meta"])
             if not seats or self._game_id is None:
                 return
+            gid, models = self._game_id, json.dumps(seats)
+
+            async def op(conn: Any) -> None:
+                await self._t(conn.execute, _SET_SEATS, gid, models)
+
             async with self._lock:
-                conn = await self._conn_ready()
-                await self._t(conn.execute, _SET_SEATS, self._game_id, json.dumps(seats))
+                await self._with_conn("NeonSink could not set seat names", op)
         except Exception:
             log.exception("NeonSink could not set seat names")
 
@@ -237,26 +327,35 @@ class NeonSink:
         async with self._lock:
             await self._flush_now()
 
-    async def _flush_now(self) -> None:
+    async def _flush_now(self, *, force: bool = False) -> None:
         if not self._pending:
             return
         rows = list(self._pending)
-        try:
-            conn = await self._conn_ready()
+
+        async def op(conn: Any) -> None:
             await self._t(conn.executemany, _INSERT_EVENT, rows)
-            del self._pending[: len(rows)]  # keep anything queued while we awaited
-        except Exception:
-            log.exception("NeonSink flush failed, will retry with the next batch")
+
+        if await self._with_conn("NeonSink flush failed, will retry", op, force=force):
+            # By identity, not count: write() may have trimmed the front while we awaited, and
+            # anything queued meanwhile must stay (#420).
+            sent = {id(r) for r in rows}
+            self._pending[:] = [r for r in self._pending if id(r) not in sent]
 
     async def _finish(self, status: str, winner: str | None) -> None:
         try:
+            if self._outcome is None:
+                self._outcome = (status, winner)  # close() after a failed end_game keeps it
             async with self._lock:
-                await self._flush_now()
+                await self._flush_now(force=True)
                 if self._game_id is None or self._ended:
                     return
-                conn = await self._conn_ready()
-                await self._t(conn.execute, _END_GAME, self._game_id, status, winner)
-                self._ended = True
+                gid, (status, winner) = self._game_id, self._outcome
+
+                async def op(conn: Any) -> None:
+                    await self._t(conn.execute, _END_GAME, gid, status, winner)
+
+                what = "NeonSink could not set game status"
+                self._ended = await self._with_conn(what, op, force=True)
         except Exception:
             log.exception("NeonSink could not set game status")
 
@@ -279,8 +378,22 @@ class NeonSink:
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    lines = read_text_lenient(path).splitlines()
-    return [json.loads(line) for line in lines if line.strip()]
+    """Every JSON object line in the file. A bad last line (a hard kill mid-write) is skipped
+    with a warning, as `read_log` does; a bad line anywhere else raises (#419)."""
+    lines = [line for line in read_text_lenient(path).splitlines() if line.strip()]
+    rows = []
+    for i, line in enumerate(lines):
+        try:
+            row = json.loads(line)
+            if not isinstance(row, dict):
+                raise ValueError(f"line {i + 1} is not a JSON object")
+        except ValueError:
+            if i < len(lines) - 1:
+                raise
+            log.warning("%s ends with a torn line, ignored", path.name)
+            continue
+        rows.append(row)
+    return rows
 
 
 async def sync_batch(batch_dir: Path, conn: Any, chunk: int = 500) -> dict[str, int]:
@@ -317,25 +430,28 @@ async def sync_game(path: Path, conn: Any, chunk: int = 500) -> dict[str, int] |
     if meta_path.is_file():
         with contextlib.suppress(OSError, ValueError, AttributeError):
             agents = json.loads(read_text_lenient(meta_path)).get("agents")
-    await conn.execute(
-        _INSERT_GAME,
-        gid,
-        batch_dir.name,
-        json.dumps(models),
-        datetime.fromisoformat(started) if started else None,
-        agents,
-    )
-    await conn.execute(_CLEAR_EVENTS, gid)
-    await conn.execute(_CLEAR_LABELS, gid)
     rows = [event_row(e) for e in events]
-    for i in range(0, len(rows), chunk):
-        await conn.executemany(_INSERT_EVENT, rows[i : i + chunk])
     winner = end["meta"].get("winner") if end else None
-    await conn.execute(_END_GAME, gid, "finished" if end else "failed", winner)
     labels_path = batch_dir / f"{path.stem}.labels.jsonl"
     labels = _read_jsonl(labels_path) if labels_path.is_file() else []
-    if labels:
-        await conn.executemany(_INSERT_LABEL, [label_row(i, lb) for i, lb in enumerate(labels)])
+    # All or nothing (#418): a failed re-sync must not leave the game 'running' with no events,
+    # and readers never see it half-written.
+    async with conn.transaction():
+        await conn.execute(
+            _INSERT_GAME,
+            gid,
+            batch_dir.name,
+            json.dumps(models),
+            datetime.fromisoformat(started) if started else None,
+            agents,
+        )
+        await conn.execute(_CLEAR_EVENTS, gid)
+        await conn.execute(_CLEAR_LABELS, gid)
+        for i in range(0, len(rows), chunk):
+            await conn.executemany(_INSERT_EVENT, rows[i : i + chunk])
+        await conn.execute(_END_GAME, gid, "finished" if end else "failed", winner)
+        if labels:
+            await conn.executemany(_INSERT_LABEL, [label_row(i, lb) for i, lb in enumerate(labels)])
     return {"events": len(events), "labels": len(labels)}
 
 

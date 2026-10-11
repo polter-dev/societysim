@@ -3,6 +3,7 @@ a fake Neon, a mocked Turnstile. No paid calls; the one real-Neon test needs
 NEON_DATABASE_URL and skips without it."""
 
 import asyncio
+import contextlib
 import ipaddress
 import json
 import logging
@@ -455,6 +456,9 @@ class FakeConn:
     async def fetchval(self, sql, *args):
         assert "from visitor_spend where day = $1" in sql
         return Decimal(str(sum(cost for day, _, cost in self.db.spend if day == args[0])))
+
+    def transaction(self):  # sync_game runs in one (#418)
+        return contextlib.nullcontext()
 
     async def close(self):
         pass

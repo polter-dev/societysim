@@ -1,6 +1,7 @@
 """#387: a visitor game's live Neon feed carries no per-call metadata (token counts, cost,
 latency, timestamps), since longer role prompts would give wolves, seer and doctor away."""
 
+import contextlib
 import json
 from pathlib import Path
 
@@ -20,6 +21,9 @@ class FakeConn:
     async def executemany(self, sql, rows):
         if "insert into events" in sql:
             self.rows += [json.loads(r[-1]) for r in rows]
+
+    def transaction(self):  # sync_game runs in one (#418)
+        return contextlib.nullcontext()
 
     async def close(self):
         pass

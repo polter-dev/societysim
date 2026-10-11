@@ -204,7 +204,10 @@ class MeteredAgent:
         held = self.ledger.try_reserve(self.worst_case(turn.prompt))
         if held is None:
             return await self.fallback.act(turn)
-        call = asyncio.ensure_future(self._call(turn, held))
+        # Eager: the call runs to its first await now. A task cancelled before its first step
+        # never enters _call, so its `finally` would never settle the hold (a leaked hold).
+        loop = asyncio.get_running_loop()
+        call = asyncio.Task(self._call(turn, held), loop=loop, eager_start=True)
         self.calls.add(call)
         call.add_done_callback(self.calls.discard)
         return await call  # cancelling the game cancels the call too

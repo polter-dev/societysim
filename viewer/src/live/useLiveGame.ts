@@ -23,7 +23,25 @@ export interface LiveState {
 export async function liveTick(source: GameSource, id: string, s: LiveState): Promise<LiveState> {
   const last = s.log.events.at(-1)?.seq ?? -1;
   const more = (await source.pollEvents(id, last)).filter((e) => e.seq > last);
-  const log = more.length ? { ...s.log, events: [...s.log.events, ...more] } : s.log;
+  let log = more.length ? { ...s.log, events: [...s.log.events, ...more] } : s.log;
+  // The games row can arrive before game_start publishes its public names.
+  // Refresh only that incomplete roster; keep the accumulated events and replay position.
+  const start = log.events.find((e) => e.type === "game_start");
+  if (log.partial && start && Object.values(start.meta.seats ?? {}).some((p) => /^Seat \d+$/.test(p.name))) {
+    const snapshot = await source.loadGame(id).catch(() => null);
+    const roster = snapshot?.events.find((e) => e.type === "game_start");
+    if (roster?.visibility === "public") {
+      const seats = { ...start.meta.seats };
+      let changed = false;
+      for (const [seat, player] of Object.entries(roster.meta.seats ?? {})) {
+        if (seats[seat] && /^Seat \d+$/.test(seats[seat].name) && !/^Seat \d+$/.test(player.name)) {
+          seats[seat] = { ...seats[seat], name: player.name };
+          changed = true;
+        }
+      }
+      if (changed) log = { ...log, events: log.events.map((e) => e === start ? { ...e, meta: { ...e.meta, seats } } : e) };
+    }
+  }
   let ended = s.endTries > 0 || more.some((e) => e.type === "game_end");
   if (!ended && !more.length && source.gameStatus) ended = (await source.gameStatus(id)) !== "running";
   if (!ended) return { log, endTries: 0 };

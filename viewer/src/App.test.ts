@@ -1,7 +1,7 @@
 // .ts, not .tsx: vite.config.ts only collects src/**/*.test.ts.
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import fixture from "../../fixtures/sample_game.jsonl?raw";
 import labelsText from "../../fixtures/sample_game.labels.jsonl?raw";
 import modesText from "./__fixtures__/modes_game.jsonl?raw";
@@ -193,6 +193,35 @@ describe("mode-only data behind Arrows, Tally and Speech", () => {
       const html = m.render(result, mode, null);
       expect(html).toContain("Elif was forced to abstain"); // Arrows
       expect(html).toContain("Forced abstain: Elif"); // Tally
+    }
+  });
+});
+
+describe("Open a log empty state", () => {
+  it("renders a heading, the hint, the named file input and a Games link when no log is loaded", async () => {
+    const { default: App } = await import("./App");
+    vi.stubGlobal("window", { location: { search: "?page=replay&base=https://x.test/d/" } });
+    try {
+      const html = renderToStaticMarkup(createElement(App));
+      expect(html).toContain("replay-tools open-log");
+      expect(html).toContain("<h1>Open a game log</h1>");
+      expect(html).toContain("Open a recorded game log or choose a game from Games.");
+      expect(html).toContain('aria-label="Open a game log (.jsonl)"');
+      expect(html).toContain('href="?base=https%3A%2F%2Fx.test%2Fd%2F&amp;page=games"');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps the corner tools bar while a ?game= is loading", async () => {
+    const { default: App } = await import("./App");
+    vi.stubGlobal("window", { location: { search: "?game=g1" } });
+    try {
+      const html = renderToStaticMarkup(createElement(App));
+      expect(html).not.toContain("open-log");
+      expect(html).toContain("Loading the game");
+    } finally {
+      vi.unstubAllGlobals();
     }
   });
 });

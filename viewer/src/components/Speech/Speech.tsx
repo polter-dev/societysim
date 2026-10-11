@@ -48,21 +48,27 @@ export function Speech({ scene, playing = false }: { scene: Scene; playing?: boo
   if (!e || i < 0) return live();
   const p = scene.players[i];
   const seat = seatPosition(i, scene.players.length);
-  // Halfway to the center keeps the bubble on the felt, clear of the seat cards.
+  // Anchored halfway to the center, the bubble grows from there toward the center (away from the
+  // speaker), so it stays on the felt and off the speaker's own name plate.
+  const dx = seat.x - 50;
+  const dy = seat.y - 50;
+  const len = Math.hypot(dx, dy) || 1;
+  const shift = (d: number) => Math.round(-50 - (50 * d) / len);
+  // Sizes in cqw follow the table box (the Table's container), so the bubble scales with the table.
   const style: CSSProperties = {
     position: "absolute",
-    left: `${50 + (seat.x - 50) / 2}%`,
-    top: `${50 + (seat.y - 50) / 2}%`,
-    transform: "translate(-50%, -50%)",
-    maxWidth: "16em",
-    maxHeight: "40%",
+    left: `${50 + dx / 2}%`,
+    top: `${50 + dy / 2}%`,
+    transform: `translate(${shift(dx)}%, ${shift(dy)}%)`,
+    maxWidth: "30cqw",
+    maxHeight: "21cqw",
     overflowY: "auto",
     padding: "0.5em 0.75em",
     borderRadius: 12,
     border: `2px solid ${p.color}`,
     background: "#fffdf7",
     color: "#1c1c1c",
-    fontSize: "0.85em",
+    fontSize: "max(12px, 1.6cqw)",
     lineHeight: 1.35,
     boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
     pointerEvents: "auto",

@@ -213,3 +213,67 @@ async def test_real_jev_on_fixture(tmp_path):
     assert finn.seer_report > 0.5
     assert (finn.seer_target, finn.seer_result) == ("p0", "wolf")
     assert finn.accuse["p0"] > 0.5
+
+
+def _stored(tmp_path, seq: int = 17) -> dict:
+    return json.loads((tmp_path / "fixture-0001" / f"{seq}.json").read_text())
+
+
+async def test_new_cache_entries_carry_a_fingerprint(tmp_path):
+    async with mock_client([]) as client:
+        await jev.classify_game(FIXTURE, cache_dir=tmp_path, client=client)
+    assert _stored(tmp_path)["fingerprint"]
+
+
+async def test_changed_statement_is_a_cache_miss_and_is_re_asked(tmp_path):
+    requests: list[httpx.Request] = []
+    async with mock_client(requests) as client:
+        await jev.classify_game(FIXTURE, cache_dir=tmp_path, client=client)
+        old = _stored(tmp_path)["fingerprint"]
+        # a resumed game replays seq 17 with different text under the same game_id
+        lines = FIXTURE.read_text(encoding="utf-8").splitlines()
+        events = [json.loads(x) for x in lines if x]
+        for e in events:
+            if e["seq"] == 17:
+                e["public_text"] = "A completely different thing, said after the resume."
+        resumed = [jev.Event.model_validate(e) for e in events]
+        requests.clear()
+        results = await jev.classify_events(resumed, cache_dir=tmp_path, client=client)
+
+    assert len(results) == N_STATEMENTS
+    assert len(requests) == 1
+    assert json.loads(requests[0].content)["state"]["statement"].startswith("A completely")
+    assert _stored(tmp_path)["fingerprint"] != old  # entry now describes the new statement
+
+
+async def test_changed_statement_without_a_key_is_skipped_with_a_warning(
+    tmp_path, monkeypatch, capsys
+):
+    async with mock_client([]) as client:
+        await jev.classify_game(FIXTURE, cache_dir=tmp_path, client=client)
+    stale = tmp_path / "fixture-0001" / "17.json"
+    stale.write_text(json.dumps({**_stored(tmp_path), "fingerprint": "someone-elses"}))
+
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    results = await jev.classify_game(FIXTURE, cache_dir=tmp_path)
+
+    assert len(results) == N_STATEMENTS - 1
+    assert 17 not in {r.seq for r in results}
+    assert "skipped" in capsys.readouterr().err
+
+
+async def test_legacy_cache_entry_without_fingerprint_is_a_hit(tmp_path, monkeypatch, capsys):
+    requests: list[httpx.Request] = []
+    async with mock_client(requests) as client:
+        first = await jev.classify_game(FIXTURE, cache_dir=tmp_path, client=client)
+    for f in (tmp_path / "fixture-0001").glob("*.json"):
+        data = json.loads(f.read_text())
+        del data["fingerprint"]
+        f.write_text(json.dumps(data))
+    requests.clear()
+
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    second = await jev.classify_game(FIXTURE, cache_dir=tmp_path)  # a miss would raise
+
+    assert second == first and requests == []
+    assert "no fingerprint" in capsys.readouterr().err

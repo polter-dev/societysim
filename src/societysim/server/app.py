@@ -96,6 +96,9 @@ class Limits(_Strict):
 class Health(_Strict):
     ok: Literal[True] = True
     providers_ready: dict[str, bool]  # key present per provider; never the key itself
+    # Games in memory still running. A deploy restarts the server and ends them all (#553),
+    # so .github/workflows/deploy-play.yml waits for 0 before it deploys.
+    games_running: int
 
 
 class ActionBody(_Strict):
@@ -149,7 +152,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/health")
     async def health() -> Health:
-        return Health(providers_ready=manager_mod.providers_ready())
+        return Health(
+            providers_ready=manager_mod.providers_ready(),
+            games_running=sum(s.status == "running" for s in manager.games.values()),
+        )
 
     @app.get("/api/limits")
     async def limits(request: Request) -> Limits:

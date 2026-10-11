@@ -5,6 +5,7 @@ import fixture from "../../../fixtures/sample_game.jsonl?raw";
 import { LiveBadge } from "../components/LiveBadge/LiveBadge";
 import { parseLog } from "../data/parse";
 import type { GameSource, LoadedGame } from "../data/source";
+import type { EventMeta } from "../types/events";
 import { FINISH_TRIES, SLOW_TRIES, liveTick } from "./useLiveGame";
 
 const full = parseLog(fixture).events;
@@ -34,6 +35,21 @@ function fake(opts: { shown: () => number; status?: () => string; fullLog?: () =
 }
 
 describe("liveTick", () => {
+  it("replaces startup seat placeholders with public names without losing events or exposing roles", async () => {
+    const roster = { ...full[0], visibility: "public" as const, meta: { seats: Object.fromEntries(Object.entries(full[0].meta.seats!).map(([id, p]) => [id, { model: p.model, color: p.color, name: `Seat ${Number(id.slice(1)) + 1}` }])) } as unknown as EventMeta };
+    const named = { ...roster, meta: full[0].meta };
+    const { source } = fake({ shown: () => 8, fullLog: () => ({ events: [named, ...pub], errors: [], live: true, partial: true }) });
+    const log = { ...liveLog(5), events: [roster, ...pub.slice(0, 5)] };
+    const next = await liveTick(source, ID, { log, endTries: 0 });
+    expect(next.log.events.slice(1)).toEqual(pub.slice(0, 8));
+    for (const [id, p] of Object.entries(full[0].meta.seats!)) {
+      expect(next.log.events[0].meta.seats![id].name).toBe(p.name);
+      expect(next.log.events[0].meta.seats![id]).not.toHaveProperty("role");
+    }
+    const again = await liveTick(source, ID, next);
+    expect(again.log).toBe(next.log);
+  });
+
   it("appends new public events and keeps going", async () => {
     const { source, calls } = fake({ shown: () => 8 });
     const s = await liveTick(source, ID, { log: liveLog(5), endTries: 0 });

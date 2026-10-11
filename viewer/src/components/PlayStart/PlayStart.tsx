@@ -6,6 +6,9 @@ import { useTurnstile } from "../../play/useTurnstile";
 import type { Limits, StartedGame } from "../../play/types";
 import type { GameSetupJson, SetupAssets } from "../../settings/setup";
 import { SetupForm } from "../SetupForm/SetupForm";
+import { art } from "../../illustrated/assets";
+
+const seal = art("inspector/10_notes.png");
 
 export function PlayStart({
   onStarted,
@@ -83,8 +86,10 @@ export function PlayStart({
     if (token === null) reset();
   };
 
+  const isGate = autoStart || (modeLocked && initialMode !== "advanced");
+
   return (
-    <section className="play-start">
+    <section className={isGate ? "play-start play-start--gate" : "play-start"}>
       {!modeLocked && <fieldset>
         <legend>How do you want to join?</legend>
         {[
@@ -111,8 +116,11 @@ export function PlayStart({
           allowed={allowed}
           onChange={(setup, valid) => setAdv({ setup, valid })} />
       )}
-      <div ref={widget} className="play-start__turnstile" />
-      {autoStart && limits && !busy && !error && !paused && !none && !token && <p className="play-start__status" role="status">Checking you in… Complete the bot check to join the village.</p>}
+      <div className={isGate ? "play-gate-seal" : undefined}>
+        {isGate && seal && <img src={seal} alt="" />}
+        <div ref={widget} className="play-start__turnstile" />
+      </div>
+      {isGate && limits && !busy && !error && !paused && !none && !token && <p className="play-start__status" role="status">Checking you in… Complete the bot check to join the village.</p>}
       {limits && (
         <p className="play-start__limits">
           {paused ? "Play is paused right now." : `${limits.remaining_today} games left today.`}

@@ -86,13 +86,16 @@
   .illustrated-shell :is(.roster,.event-roster) .panel-content{position:absolute;inset:0;padding:0 2px}
   .illustrated-shell :is(.roster,.event-roster) .panel-content h2{margin:0 0 clamp(4px,1dvh,12px);font:700 min(clamp(14px,2.1dvh,26px),12cqw) Georgia,serif;letter-spacing:.04em;white-space:nowrap}
 
-  /* Agents: all ten fit without scrolling from 1366 x 768 up. Sizes follow the height. */
+  /* Agents: all ten fit without scrolling from 1366 x 768 up. --ag, the name size, follows the height,
+     or the panel width (cqw) where that gives more, as on ultrawide screens; the row's height and
+     width cap it. Model name and medallion are set from it. */
+  .illustrated-shell .roster{--ag:min(max(1.65dvh,7cqw),2.1dvh,9.5cqw)}
   .illustrated-shell .agent-list{flex:1;display:flex;flex-direction:column;justify-content:space-between;gap:0;overflow:hidden auto;scrollbar-width:none;padding:0}
   .illustrated-shell .agent-list>li{flex:none}
   .illustrated-shell .roster .agent-button{margin:0;gap:clamp(5px,.5vw,10px);padding:clamp(1px,.25dvh,4px) 2px}
-  .illustrated-shell .roster .agent-button .medallion{flex:none;width:clamp(26px,4.3dvh,58px)!important;height:auto!important}
-  .illustrated-shell .agent-button strong{font:700 clamp(12px,1.65dvh,19px)/1.15 Georgia,serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .illustrated-shell .agent-button small{margin:1px 0 0;font-size:clamp(10px,1.3dvh,14px);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal}
+  .illustrated-shell .roster .agent-button .medallion{flex:none;width:max(26px,min(2.6 * var(--ag),4.8dvh))!important;height:auto!important}
+  .illustrated-shell .agent-button strong{font:700 max(12px,var(--ag))/1.15 Georgia,serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .illustrated-shell .agent-button small{margin:1px 0 0;font-size:max(10px,.79 * var(--ag));line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal}
   .illustrated-shell .agent-button[data-alive=false] strong{text-decoration:line-through;text-decoration-thickness:1px}
 
   /* Game events: the history is the one panel that scrolls. */
@@ -101,9 +104,10 @@
   .illustrated-shell .event-list .decision-card{margin:0 0 clamp(3px,.6dvh,8px);min-height:0;aspect-ratio:4}
   .illustrated-shell .event-list .decision-card>span{inset:16% 8% 16% 26%;gap:1px}
   .illustrated-shell .event-list .decision-notes>span{bottom:28%}
-  /* Text follows the height, capped by the panel width so narrow, tall windows don't overflow the card. */
-  .illustrated-shell .event-list .decision-card strong{font-size:min(clamp(10px,1.3dvh,14px),var(--gs-right) * .055);line-height:1.1}
-  .illustrated-shell .event-list .decision-card small{font-size:min(clamp(8px,1dvh,11px),var(--gs-right) * .042);line-height:1.1}
+  /* Text follows the height, or the card width (cqw of the panel) where that gives more, as on
+     ultrawide screens; the card width caps it so narrow, tall windows don't overflow the card. */
+  .illustrated-shell .event-list .decision-card strong{font-size:min(max(10px,1.3dvh,6.3cqw),8.3cqw);line-height:1.1}
+  .illustrated-shell .event-list .decision-card small{font-size:min(max(8px,1dvh,4.85cqw),6.3cqw);line-height:1.1}
 
   /* Collapse arrow on the Agents panel's edge; collapsed, the panel slides off and leaves a rail. */
   .illustrated-shell .roster-toggle{left:calc(var(--gs-left) - 22px);top:calc(var(--gs-top) + (100dvh - var(--gs-top) - var(--gs-bar)) / 2);width:clamp(30px,2.6vw,48px);height:clamp(52px,7dvh,84px)}
@@ -166,6 +170,14 @@
 .replay-app .file-button{display:inline-flex;align-items:center;height:var(--gs-ctl);padding:0 10px;border:1px solid #a88a46;border-radius:6px;background:#123c2e;color:#fff0c2;font:600 var(--gs-ui) system-ui,sans-serif;cursor:pointer;white-space:nowrap}
 .replay-app .file-button:hover{filter:brightness(1.2)}
 .replay-app .file-button:has(input:focus-visible){outline:3px solid #ffe499;outline-offset:3px}
+/* Open a log (#545): with nothing loaded the tools bar becomes a centred card instead of a corner chip. */
+main.replay-app .replay-tools.open-log{position:fixed;z-index:6;top:calc(50% + var(--gs-top) / 2);left:50%;right:auto;translate:-50% -50%;width:min(calc(100vw - 32px),clamp(380px,26vw,640px));max-width:none;height:auto;margin:0;padding:clamp(24px,2.4vw,52px);box-sizing:border-box;display:flex;flex-direction:column;align-items:center;gap:clamp(10px,1vw,20px);text-align:center;color:var(--gs-ink);background:radial-gradient(ellipse at 50% 0,#0b3f2c,#04251e 85%);border:1px solid var(--accent-gold,#d4b35c);border-radius:var(--radius-panel,16px);box-shadow:inset 0 0 0 2px #04251e,inset 0 0 0 3px #c9a24f55,0 18px 48px #0009;font-size:clamp(14px,.9vw,22px)}
+main.replay-app .replay-tools.open-log h1{display:block;position:static;width:auto;height:auto;overflow:visible;clip-path:none;white-space:normal;margin:0;font:700 clamp(22px,1.8vw,38px) var(--font-heading,Georgia);font-variant:small-caps;letter-spacing:.04em;color:var(--text-primary,#f4ebc2)}
+main.replay-app .replay-tools.open-log>p{position:static;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:clamp(10px,1vw,20px);width:auto;max-width:none;margin:0;padding:0;background:none;border:0;white-space:normal;color:var(--text-secondary,#d8e4d1)}
+main.replay-app .replay-tools.open-log>p:empty{display:none}
+main.replay-app .replay-tools.open-log>[role=alert]{position:static;max-width:none;padding:0;border:0;background:none;color:#ffb4a8}
+main.replay-app .replay-tools.open-log .file-button{height:auto;min-height:var(--target-minimum,44px);padding:0 clamp(20px,1.6vw,32px);border:1px solid var(--accent-gold,#d4b35c);border-radius:999px;background:var(--marble,#123c2e);box-shadow:var(--rim,none);color:var(--text-primary,#f4ebc2);font:600 clamp(14px,.9vw,22px) var(--font-heading,Georgia);font-variant:small-caps;letter-spacing:.04em}
+main.replay-app .replay-tools.open-log .open-log__games{color:var(--accent-gold,#d4b35c);text-underline-offset:3px}
 .replay-app .replay-tools label:has(.themed-select){display:inline-flex;align-items:center;gap:6px}
 .replay-app .replay-tools .themed-select--field .themed-select__trigger.themed-select__trigger{min-height:var(--gs-ctl);padding:0 8px;font-size:calc(var(--gs-ui) + 1px)}
 .illustrated-shell .motion-toggle{display:grid;place-items:center;padding:0;border-radius:50%;font-size:12px;background:#03271eee}

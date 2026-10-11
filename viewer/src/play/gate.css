@@ -1,0 +1,254 @@
+/* The gate between mode choice and the table: night counter, a dealt hand of banners, the bot check in the notes seal. */
+
+.play-gate.landing-page {
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 100svh;
+  box-sizing: border-box;
+  padding: 8vh 20px 5vh;
+  caret-color: #ffe499;
+}
+
+.play-gate ::selection {
+  background: #d4b35c;
+  color: #1c1406;
+}
+
+.play-gate__banner {
+  position: relative;
+  width: min(820px, 94vw);
+  margin: 0 auto;
+  filter: drop-shadow(0 14px 18px #000a);
+  animation: gate-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.play-gate__banner img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.play-gate__banner h1 {
+  position: absolute;
+  inset: 44% 18% 16%;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #f3e4b2;
+  text-shadow: 0 2px 6px #000;
+  font: 700 clamp(18px, 2.2vw, 34px)/1.1 Georgia, serif;
+  letter-spacing: 0.03em;
+}
+
+.play-gate__link {
+  color: #f0d48a;
+  font: 600 18px Georgia, serif;
+  text-underline-offset: 3px;
+}
+
+.play-gate__lead {
+  max-width: 62ch;
+  margin: 2px auto 0;
+  text-align: center;
+  color: #f6edd4;
+  font: 16px/1.5 system-ui, sans-serif;
+  text-shadow: 0 2px 8px #000c;
+}
+
+.play-gate__cast {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  width: min(1180px, 98vw);
+  margin: 4px auto 0;
+  pointer-events: none;
+}
+
+.play-gate__cast img {
+  width: min(168px, 15vw);
+  height: auto;
+  margin: 0 -6px;
+  filter: drop-shadow(0 14px 16px #000c);
+  animation: gate-deal 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.play-gate__cast img:nth-child(1) { rotate: -8deg; margin-top: 22px; animation-delay: 0.04s; }
+.play-gate__cast img:nth-child(2) { rotate: -4deg; margin-top: 8px; animation-delay: 0.1s; z-index: 1; }
+.play-gate__cast img:nth-child(3) { rotate: 0deg; z-index: 2; animation-delay: 0.16s; }
+.play-gate__cast img:nth-child(4) { rotate: 4deg; margin-top: 8px; animation-delay: 0.22s; z-index: 1; }
+.play-gate__cast img:nth-child(5) { rotate: 8deg; margin-top: 22px; animation-delay: 0.28s; }
+
+.play-gate .play-start--gate {
+  width: min(880px, 96vw);
+  max-width: none;
+  margin: 6px auto 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: #f6edd4;
+}
+
+.play-gate-seal {
+  order: 2;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(560px, 92vw);
+  aspect-ratio: 888 / 197;
+  min-height: 80px;
+  margin: 10px auto 0;
+  filter: drop-shadow(0 10px 16px #000a);
+}
+
+.play-gate-seal > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.play-gate-seal .play-start__turnstile {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.play-start--gate .play-start__status,
+.play-start--gate .play-start__limits,
+.play-start--gate [role="alert"] {
+  order: 1;
+  margin: 4px 0;
+  max-width: 46ch;
+  text-align: center;
+  color: #f6edd4;
+  font: 600 18px/1.4 Georgia, serif;
+  text-shadow: 0 2px 8px #000c;
+}
+
+.play-start--gate [role="alert"] {
+  color: #ffd0b8;
+  font-family: system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.play-start--gate > button {
+  order: 3;
+  min-width: 180px;
+  min-height: 48px;
+  margin-top: 12px;
+  padding: 8px 22px;
+  cursor: pointer;
+  color: #1c1406;
+  background: linear-gradient(180deg, #e7c97a, #b8963e);
+  border: 1px solid #ffe499;
+  border-radius: 8px;
+  box-shadow: 0 8px 16px #0006;
+  font: 700 18px/1 Georgia, serif;
+}
+
+.play-start--gate > button:hover {
+  filter: brightness(1.08);
+}
+
+.play-start--gate > button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.play-gate__link {
+  display: inline-block;
+  margin-top: 14px;
+  color: #f3d485;
+  text-decoration: underline;
+  font-weight: 600;
+  text-shadow: 0 2px 6px #000c;
+  font-size: 16px;
+}
+
+.play-gate__link:hover {
+  color: #fff0c2;
+}
+
+.play-gate .mode-back {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 10;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.play-gate .mode-back img {
+  width: 100%;
+  height: auto;
+  transition: transform 0.15s ease;
+}
+
+.play-gate .mode-back:hover img {
+  transform: scale(1.08);
+}
+
+@keyframes gate-rise {
+  from { opacity: 0; transform: translateY(16px); filter: blur(8px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+@keyframes gate-deal {
+  from { opacity: 0; transform: translateY(36px) scale(0.96); filter: blur(8px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+@media (max-width: 800px) {
+  .play-gate.landing-page {
+    justify-content: flex-start;
+    padding-top: 88px;
+  }
+
+  .play-gate__cast {
+    width: 100%;
+  }
+
+  .play-gate__cast img {
+    width: 78px;
+    margin: 0 -12px;
+  }
+
+  .play-gate .landing-motion {
+    top: auto;
+    bottom: 16px;
+  }
+
+  .play-gate__lead,
+  .play-start--gate .play-start__status {
+    font-size: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-gate__banner,
+  .play-gate__cast img {
+    animation: none;
+  }
+}

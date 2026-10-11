@@ -7,13 +7,17 @@ For every `statement` event it asks:
   report a Seer check, on whom, with what result.
 
 Raw API responses are cached at `<cache_dir>/<game_id>/<seq>.json`, so re-runs make no
-calls. The default cache is `<batch_dir>/.cache/jev` (see `cache_dir_for`), never relative
-to the cwd. The labeler (T3.2) turns `JevResult`s into labels; this module only classifies.
+calls. Each new entry carries a `fingerprint` of the statement it answered; an entry whose
+fingerprint doesn't match the statement now at that seq (a resumed game replayed under the same
+game_id) counts as a miss. Entries from before fingerprints existed are still hits.
+The default cache is `<batch_dir>/.cache/jev` (see `cache_dir_for`), never relative to the cwd.
+The labeler (T3.2) turns `JevResult`s into labels; this module only classifies.
 
     uv run python -m societysim.analysis.jev fixtures/sample_game.jsonl
 """
 
 import asyncio
+import hashlib
 import json
 import os
 import sys
@@ -48,6 +52,11 @@ class JevResult(BaseModel):
     seer_report: float
     seer_target: SeatId  # only meaningful when seer_report is high
     seer_result: SeerResult  # same
+
+
+def fingerprint(stmt: Event) -> str:
+    """Hash of what Jev is asked to read: who spoke and what they said."""
+    return hashlib.sha256(f"{stmt.actor}\0{stmt.public_text or ''}".encode()).hexdigest()[:16]
 
 
 def cache_dir_for(batch_dir: Path) -> Path:
@@ -162,21 +171,44 @@ async def classify_events(
     key = os.environ.get("TYPESAFE_API_KEY", "")
     http = client or httpx.AsyncClient(headers={"Authorization": f"Bearer {key}"})
 
-    async def one(stmt: Event) -> JevResult:
+    unverified = 0
+
+    async def one(stmt: Event) -> JevResult | None:
+        nonlocal unverified
         path = cache_dir / stmt.game_id / f"{stmt.seq}.json"
         if path.exists():
-            return parse_response(stmt, json.loads(path.read_text(encoding="utf-8")))
-        if client is None and not key:
+            cached = json.loads(path.read_text(encoding="utf-8"))
+            stored = cached.get("fingerprint")
+            if stored is None:
+                unverified += 1  # written before fingerprints existed: trusted, can't be checked
+                return parse_response(stmt, cached)
+            if stored == fingerprint(stmt):
+                return parse_response(stmt, cached)
+            if client is None and not key:
+                print(
+                    f"warning: {path} answered a different statement and TYPESAFE_API_KEY "
+                    f"is not set, Jev skipped for {stmt.game_id} seq {stmt.seq}",
+                    file=sys.stderr,
+                )
+                return None
+        elif client is None and not key:
             raise RuntimeError(f"TYPESAFE_API_KEY is not set and {path} is not cached")
         async with sem:
             data = await _post(http, build_request(stmt, names))
         result = parse_response(stmt, data)  # a malformed response raises and is not cached
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data), encoding="utf-8")
+        path.write_text(json.dumps({**data, "fingerprint": fingerprint(stmt)}), encoding="utf-8")
         return result
 
     try:
-        return list(await asyncio.gather(*(one(s) for s in statements)))
+        results = await asyncio.gather(*(one(s) for s in statements))
+        if unverified:
+            print(
+                f"note: {unverified} cached Jev answers in {cache_dir} have no fingerprint, "
+                "reused unverified",
+                file=sys.stderr,
+            )
+        return [r for r in results if r is not None]
     finally:
         if client is None:
             await http.aclose()

@@ -1,0 +1,80 @@
+name: Deploy play server
+
+# Deploys the Render play service only when no visitor game is running (#553). Game state is
+# in memory, so a deploy ends every game in progress; with auto-deploy on, each merge to main
+# killed the games then running, and no visitor game reached day 2. render.yaml sets
+# autoDeployTrigger: off, and this workflow calls the service's deploy hook instead, once
+# GET /api/health reports games_running 0. A newer push cancels a run still waiting.
+# Needs the repo variable VITE_PLAY_API_URL (the play server's URL, as the viewer uses it) and
+# the repo secret RENDER_DEPLOY_HOOK_URL (Render dashboard > societysim-play > Settings >
+# Deploy Hook). Without the secret it logs a notice and deploys nothing (deploy by hand when
+# games_running is 0). A game started in the minute or two the build takes still ends. After
+# WAIT_MINUTES with games still running, it deploys anyway and logs a warning.
+#   gh workflow run deploy-play.yml               # wait for an idle server, then deploy
+#   gh workflow run deploy-play.yml -f force=true # deploy now, ending running games
+
+on:
+  push:
+    branches: [main]
+    paths: # render.yaml buildFilter: what server/Dockerfile copies
+      - server/Dockerfile
+      - pyproject.toml
+      - uv.lock
+      - src/**
+      - configs/**
+      - schema/**
+      - neon/schema.sql
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Deploy now, even if games are running (they end)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-play
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      PLAY_URL: ${{ vars.VITE_PLAY_API_URL }}
+      HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      FORCE: ${{ inputs.force || false }}
+      WAIT_MINUTES: 60 # games end by PLAY_MAX_GAME_MINUTES (45); then the deploy is forced
+    steps:
+      - name: Wait for no running games, then deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$HOOK" ]; then
+            echo "::notice::RENDER_DEPLOY_HOOK_URL not set; skipping. Deploy manually when /api/health games_running == 0"
+            exit 0
+          fi
+          if [ -z "$PLAY_URL" ]; then
+            echo "::error::Set the VITE_PLAY_API_URL repo variable; nothing was deployed."
+            exit 1
+          fi
+          deadline=$((SECONDS + WAIT_MINUTES * 60))
+          while [ "$FORCE" != true ]; do
+            # Unreachable, not JSON, or a server without games_running (before #553): idle.
+            running=$(curl -fsS --max-time 20 "${PLAY_URL%/}/api/health" \
+              | jq -r '.games_running // 0' 2>/dev/null) || running=0
+            [ -n "$running" ] || running=0
+            if [ "$running" = 0 ]; then
+              break
+            fi
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              # Longer than PLAY_MAX_GAME_MINUTES (45): the server keeps getting new games.
+              echo "::warning::Forced deploy: $running game(s) still running after $WAIT_MINUTES minutes; they end now."
+              break
+            fi
+            echo "$running game(s) running; checking again in 30 s"
+            sleep 30
+          done
+          curl -fsS --max-time 30 -X POST "$HOOK" -o /dev/null
+          echo "Deploy triggered."

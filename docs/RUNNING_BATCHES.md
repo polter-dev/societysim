@@ -10,7 +10,7 @@ Examples to copy from: `configs/selfplay_baseline_10p.yaml` (9 models, 10 games 
 - **Keys.** Copy `.env.example` to `.env` and fill in the providers your config uses. The README lists which key does what. A real run exits early with `missing provider key: ...` if a model's key is unset. Never paste, print or commit `.env`.
 - **Credits.** Check the balance on each provider you are about to use. A provider that runs out of credit mid-batch fails every call (see "Circuit breakers").
 - **Check the models.** `uv run societysim doctor` (**paid**, a few cents) sends a tiny structured call to every model in `configs/models.yaml` in every structured mode and prints latency and cost. It exits 1 if a model has no working mode or its configured `structured` mode fails. Narrow it with `--model 'gpt-5*'` (a glob).
-- **Game size.** 10-player games are the default for experiments. The config schema itself defaults to 7 players, so every batch config must set it:
+- **Game size.** 10-player games are the default, in the config schema too. Configs that stay 7-player (the early samples) set `n_players: 7` explicitly so their fingerprints don't change. Setting it in every batch config is still the clearest:
 
   ```yaml
   game:

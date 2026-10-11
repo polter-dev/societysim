@@ -16,13 +16,14 @@ engine, as `label --no-jev`; no paid Jev call), which the global leaderboard rea
 import asyncio
 import hashlib
 import hmac
+import itertools
 import json
 import logging
 import os
 import secrets
 import time
 import unicodedata
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
@@ -50,6 +51,7 @@ from societysim.setup import REGISTRY, GameSetup, setup_errors
 log = logging.getLogger(__name__)
 
 MAX_TEXT = 280  # statement text and wolf chat message, after control characters are stripped
+NEON_SCHEMA_LOCK = 453_000_001  # pg_advisory_xact_lock key around the startup schema apply
 KEEP_FINISHED_S = 3600  # how long an ended game stays readable through /me
 
 Status = Literal["running", "finished", "forfeit", "failed"]
@@ -245,6 +247,9 @@ class GameManager:
         self.settings, self.ledger = settings, ledger
         self.games: dict[str, Session] = {}
         self.neon_connect: Any = None  # set by prepare_neon() when Neon is reachable
+        self.neon_backoff: tuple[float, ...] = (1, 2, 5, 15, 60)  # seconds; the last repeats
+        self._neon_up = True  # False from the first failure until Neon is back
+        self._neon_task: asyncio.Task | None = None
         self._started: tuple[str, dict[str, int]] = ("", {})  # (UTC day, client -> games)
 
     def _started_counts(self) -> dict[str, int]:
@@ -256,20 +261,43 @@ class GameManager:
     def started_today(self, client: str) -> int:
         return self._started_counts().get(client, 0)
 
-    async def prepare_neon(self) -> None:
-        """Create the Neon tables once; any problem means games run without live streaming."""
+    async def prepare_neon(self, on_ready: Callable[[], Awaitable[bool]] | None = None) -> None:
+        """Create the Neon tables, then call `on_ready` (the ledger load). If either fails, games
+        run without live streaming and a background task keeps retrying with backoff (#453)."""
+        if not await self._try_neon(on_ready):
+            self._neon_task = asyncio.create_task(self._retry_neon(on_ready))
+
+    async def _try_neon(self, on_ready: Callable[[], Awaitable[bool]] | None) -> bool:
         from societysim.logging.sinks import neon
 
         try:
             conn = await neon.connect_neon()
             try:
-                await neon.apply_schema(conn)
+                # Two instances overlap during a deploy: one applies the schema at a time.
+                async with conn.transaction():
+                    await conn.execute("select pg_advisory_xact_lock($1)", NEON_SCHEMA_LOCK)
+                    await neon.apply_schema(conn)
             finally:
                 await conn.close()
         except Exception as exc:  # the message may hold the DSN, so log only the type
-            log.warning("Neon unavailable (%s); not streaming live", type(exc).__name__)
-            return
+            if self._neon_up:
+                log.warning("Neon unavailable (%s); not streaming live", type(exc).__name__)
+            self._neon_up = False
+            return False
         self.neon_connect = neon.connect_neon
+        if on_ready and not await on_ready():  # the ledger logs its own failure
+            self._neon_up = False
+            return False
+        if not self._neon_up:
+            log.warning("Neon available again; streaming live")
+        self._neon_up = True
+        return True
+
+    async def _retry_neon(self, on_ready: Callable[[], Awaitable[bool]] | None) -> None:
+        for attempt in itertools.count():
+            await asyncio.sleep(self.neon_backoff[min(attempt, len(self.neon_backoff) - 1)])
+            if await self._try_neon(on_ready):
+                return
 
     def start(
         self, setup: GameSetup, watch_only: bool, client: str = "unknown"
@@ -438,6 +466,8 @@ class GameManager:
 
     async def shutdown(self) -> None:
         tasks = [s.task for s in self.games.values() if s.task and not s.task.done()]
+        if self._neon_task:
+            tasks.append(self._neon_task)
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)

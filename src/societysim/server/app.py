@@ -129,8 +129,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         log.info("play server: secrets set: %s", ", ".join(names) or "none")  # names only
         await watch.kill_switch(settings.play_enabled)
         if settings.neon:
-            await manager.prepare_neon()
-            await ledger.load(manager.neon_connect)
+            await manager.prepare_neon(lambda: ledger.load(manager.neon_connect))
         yield
         await manager.shutdown()
         await ledger.close()

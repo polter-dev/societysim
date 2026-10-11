@@ -753,6 +753,39 @@ async def test_metered_caps_key_self_hosted_models_by_endpoint():
     await slow
 
 
+async def test_metered_caps_are_per_endpoint():
+    """#423: each self-hosted endpoint has its own cap, separate from the hosted provider's and
+    from other endpoints'. Restores polter-dev's 20b8878 test, extended to check the cap binds."""
+    from societysim.agents.schemas import VoteResponse
+    from societysim.batch.runner import MeteredClient
+
+    openai = ModelSpec(name="o", litellm_model="openai/gpt-x")
+    amd = ModelSpec(name="amd", litellm_model="openai/x", api_base="http://127.0.0.1:8000/v1")
+    other = ModelSpec(name="other", litellm_model="openai/y", api_base="http://127.0.0.1:9000/v1")
+    started, release = asyncio.Event(), asyncio.Event()
+
+    class Slow(PricedFake):
+        async def complete(self, model, messages, response_model) -> CompletionResult:
+            if model.name == "amd":
+                started.set()
+                await release.wait()
+            return CompletionResult(parsed=None, raw="", error="x", usage=Usage(model=model.name))
+
+    caps = {"openai": 1, "openai@127.0.0.1:8000": 1, "openai@127.0.0.1:9000": 1}
+    metered = MeteredClient(Slow(), provider_concurrency=caps)
+    slow = asyncio.create_task(metered.complete(amd, [], VoteResponse))
+    await started.wait()
+    # the hosted provider and another endpoint are not held up by the busy endpoint
+    await asyncio.wait_for(metered.complete(openai, [], VoteResponse), 1)
+    await asyncio.wait_for(metered.complete(other, [], VoteResponse), 1)
+    # but a second call to the busy endpoint waits for its own cap of 1
+    queued = asyncio.create_task(metered.complete(amd, [], VoteResponse))
+    await asyncio.sleep(0.05)
+    assert not queued.done()
+    release.set()
+    await asyncio.wait_for(asyncio.gather(slow, queued), 1)
+
+
 def test_cli_batch_provider_down_says_which_and_how_to_resume(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOSTED_VLLM_API_KEY", "test-key")

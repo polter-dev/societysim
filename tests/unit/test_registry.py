@@ -56,6 +56,8 @@ def test_every_model_provider_has_a_limit():
     # self-hosted models get a limit per endpoint ("openai@host", #423) and use the default
     shared = {k for k in map(limit_key, reg.models) if "@" not in k}
     assert shared and shared <= set(reg.providers)
+    own = [limit_key(m) for m in reg.models if m.api_base is not None]
+    assert own and all("@" in k for k in own)
 
 
 def test_hf_router_routes_share_one_limit(monkeypatch):

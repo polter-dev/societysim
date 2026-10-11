@@ -6,10 +6,10 @@ import { ModelAvatar, monogram } from "./ModelAvatar";
 const html = (props: Parameters<typeof ModelAvatar>[0]) => renderToStaticMarkup(createElement(ModelAvatar, props));
 
 describe("ModelAvatar", () => {
-  it("renders a lazy, sized portrait with the display name as alt", () => {
+  it("renders a lazy, sized, decorative portrait", () => {
     const out = html({ model: "gemma4-26b", label: "Gemma 4 26B · Google", size: 40 });
     expect(out).toContain("avatars/gemma4-26b.webp");
-    expect(out).toContain('alt="Gemma 4 26B · Google"');
+    expect(out).toContain('alt=""');
     expect(out).toContain('loading="lazy"');
     expect(out).toContain('width="40"');
   });

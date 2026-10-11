@@ -35,9 +35,12 @@ export const tintFor = (phase: Phase): "day" | "night" =>
 
 const roleLabel = (role: string) => role[0].toUpperCase() + role.slice(1);
 
-/** "Seat 3, gemini-3.5-flash-lite, eliminated, villager": the role only when this mode shows it. */
-export const seatLabel = (p: PlayerView, model: string) =>
-  [p.name, model, p.alive ? "alive" : "eliminated", p.role ?? ""].filter(Boolean).join(", ");
+/**
+ * "Seat 3, gemini-3.5-flash-lite, eliminated, villager": the role only when this mode shows it.
+ * Screen readers get this name for the seat and its Agents-panel button; the medallion inside is decorative.
+ */
+export const seatLabel = (p: PlayerView, model: string, speaking = false) =>
+  [p.name, model, p.alive ? "alive" : "eliminated", p.role ?? "", speaking ? "speaking" : ""].filter(Boolean).join(", ");
 
 interface SeatProps {
   p: PlayerView;
@@ -61,7 +64,7 @@ function Seat({ p, i, n, model, selected, speaking, onSelect }: SeatProps) {
       data-plate={y < 50 ? "above" : "below"}
       style={{ left: `${x}%`, top: `${y}%` }}
     >
-      <button type="button" aria-pressed={selected} aria-label={seatLabel(p, model)} data-testid="seat-button" onClick={() => onSelect?.(p.id)}>
+      <button type="button" aria-pressed={selected} aria-haspopup="dialog" aria-label={seatLabel(p, model, speaking)} data-testid="seat-button" onClick={() => onSelect?.(p.id)}>
         <AvatarMedallion model={p.model} label={model} alive={p.alive} size={96} />
         <span className="seat-plate">
           <span className="seat-name">

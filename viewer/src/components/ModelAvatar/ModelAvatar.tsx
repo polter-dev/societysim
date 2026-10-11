@@ -26,13 +26,16 @@ export function useModelLabel(): (model: string) => string {
 /** Monogram for a model with no portrait: the model's initial ("You" for the human seat). */
 export const monogram = (model: string, label = model) => (model === HUMAN ? "You" : label.charAt(0).toUpperCase());
 
-/** Round portrait for a model or the human seat; falls back to a monogram. Eliminated players are dimmed and grayscale. */
+/**
+ * Round portrait for a model or the human seat; falls back to a monogram. Eliminated players are dimmed and grayscale.
+ * Decorative (empty alt): every caller prints the name beside it or labels the control it sits in, so an alt would repeat it.
+ */
 export function ModelAvatar({ model, label, size = 32, alive = true }: { model: string; label?: string; size?: number; alive?: boolean }) {
   const src = avatarFor(model);
   const name = label ?? model;
   const style = { width: size, height: size };
   return src ? (
-    <img className="model-avatar-img" data-alive={alive} src={src} alt={name} width={size} height={size} loading="lazy" style={style} />
+    <img className="model-avatar-img" data-alive={alive} src={src} alt="" width={size} height={size} loading="lazy" style={style} />
   ) : (
     <span className="model-avatar-img" data-alive={alive} data-placeholder="true" aria-hidden="true" style={style}>
       {monogram(model, name)}

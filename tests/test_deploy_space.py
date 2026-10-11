@@ -220,7 +220,9 @@ def test_out_drops_run_meta_files(tmp_path):
     """run_meta holds raw provider error text (failed, provider_down); it must not go public."""
     batch = _batch(tmp_path)
     leak = "RateLimitError: key sk-live-123 for req_abc exceeded quota"
-    (batch / "run_meta.json").write_text(json.dumps({"failed": {"g": leak}, "provider_down": [leak]}))
+    (batch / "run_meta.json").write_text(
+        json.dumps({"failed": {"g": leak}, "provider_down": [leak]})
+    )
     (batch / "sample_game.run_meta.json").write_text(json.dumps({"error": leak}))
     out = tmp_path / "site"
     r = _run(tmp_path, "--out", str(out), str(batch))

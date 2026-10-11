@@ -13,7 +13,7 @@ LLM agents from different providers play Werewolf. A deterministic Python engine
 3. **Contracts are shared.** The event schema (`logging/events.py` → `schema/events.schema.json` → `viewer/src/types/events.ts`), agent response schemas (`agents/schemas.py`) and the model client Protocol are used by all three teams. Changing them needs its own ticket, a `schema_version` bump, and regenerated schema files in the same PR.
 4. **`actor` and `target` in events are seat ids** (`p0`…`p9`), never names.
 5. **The raw game log is never edited.** Labels go in `<game_id>.labels.jsonl` next to it.
-6. **No secrets in git.** Keys live in `.env` (see `.env.example`).
+6. **No secrets in git.** Keys live in `.env` (see `.env.example`). Test runs never see real keys or `.env` (`tests/conftest.py` strips them) unless `SOCIETYSIM_LIVE=1`, and agents must never set it.
 7. **Stay inside your ticket.** Only touch the files listed under "Files touched". If you need to change something outside it, say so in the PR and don't do it.
 8. **Human-facing text sounds human.** README, docs, PR and issue text: plain and direct, no filler. Claude users can run the humanizer skill on it. Never run humanizer on game prompts or model outputs.
 

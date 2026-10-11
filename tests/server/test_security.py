@@ -796,6 +796,7 @@ def test_visitor_spend_is_never_granted_to_anonymous():
     assert "alter table visitor_spend enable row level security" in sql
 
 
+@pytest.mark.live
 @pytest.mark.skipif(not os.environ.get("NEON_DATABASE_URL"), reason="NEON_DATABASE_URL not set")
 async def test_real_neon_ledger_roundtrip():
     from societysim.logging.sinks.neon import apply_schema, connect_neon

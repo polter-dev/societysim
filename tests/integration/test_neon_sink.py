@@ -418,6 +418,7 @@ def test_play_without_neon_url_still_plays(tmp_path, monkeypatch):
     assert (tmp_path / "runs/selfplay_smoke/selfplay_smoke-s0.jsonl").is_file()
 
 
+@pytest.mark.live
 @pytest.mark.skipif(not os.environ.get("NEON_DATABASE_URL"), reason="NEON_DATABASE_URL not set")
 def test_real_neon_roundtrip(tmp_path):
     gid = f"it-{uuid.uuid4().hex[:8]}"
@@ -457,6 +458,7 @@ def test_schema_has_views_and_grants():
     assert "grant insert" not in sql and "grant all" not in sql
 
 
+@pytest.mark.live
 @pytest.mark.skipif(not os.environ.get("NEON_DATABASE_URL"), reason="NEON_DATABASE_URL not set")
 def test_real_neon_views(tmp_path):
     ids = [f"it-{uuid.uuid4().hex[:8]}" for _ in range(2)]

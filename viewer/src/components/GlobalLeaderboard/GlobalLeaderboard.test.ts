@@ -68,6 +68,13 @@ describe("GlobalLeaderboard", () => {
     const failed = render({ error: "HTTP 503" });
     expect(failed).toContain('role="alert"');
     expect(failed).toContain("<td>0.45</td>"); // the last board stays up
+    expect(failed).toContain("Couldn&#x27;t refresh the leaderboard right now.");
+  });
+
+  it("a failure before anything loaded says load, not refresh", () => {
+    const first = render({ board: null, error: "HTTP 403" });
+    expect(first).toContain("Couldn&#x27;t load the leaderboard right now.");
+    expect(first).not.toContain("refresh");
   });
 
   it("a failed tab shows a plain error and the other tab still renders", () => {

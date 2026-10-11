@@ -55,7 +55,7 @@ export function GlobalLeaderboard({ board, error = null, initialTab = "detectors
           </button>
         ))}
       </div>
-      {error && <p role="alert">Couldn't refresh the leaderboard right now.</p>}
+      {error && <p role="alert">{board ? "Couldn't refresh the leaderboard right now." : "Couldn't load the leaderboard right now. Try reloading the page in a minute."}</p>}
       {/* The panel is also the table's scroll box, so it takes focus for keyboard scrolling. */}
       {body && (
         <div role="tabpanel" id={`${id}-panel`} aria-labelledby={tabId(tab)} tabIndex={0} className="global-leaderboard__scroll">

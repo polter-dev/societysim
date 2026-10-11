@@ -80,7 +80,9 @@ export function LeaderboardTable({
           : "Ranked by win rate over all finished games; small samples are noisy."}
         {side && ` Wolf-side advantage: mu ${num(side.mu)} (0 means the sides are even).`}
       </p>
-      {models.length === 0 && <p>No models in this board.</p>}
+      {models.length === 0 ? (
+        <p className="leaderboard-empty">No models yet. Finished games will show up here.</p>
+      ) : (
       <div className="leaderboard-table-card">
         <div className="leaderboard-scroll" style={{ overflowX: "auto", maxWidth: "100%" }} tabIndex={0} role="region" aria-label="Leaderboard table">
           <table className="leaderboard-table">
@@ -123,6 +125,7 @@ export function LeaderboardTable({
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

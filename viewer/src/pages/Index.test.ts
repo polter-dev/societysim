@@ -3,7 +3,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { summarize } from "../data/staticSource";
-import { GameList, gamesCount, filterGames } from "./Index";
+import { MalformedIndexError } from "../data/staticSource";
+import { GameList, gamesCount, filterGames, indexError } from "./Index";
 
 const games = [
   summarize({
@@ -19,6 +20,19 @@ const render = (showWinners: boolean) =>
   renderToStaticMarkup(createElement(GameList, { games, href: (id: string) => `?game=${id}`, showWinners }));
 
 describe("GameList", () => {
+  it("says 1 model, not 1 models", () => {
+    const one = renderToStaticMarkup(createElement(GameList, { games: [{ id: "g1", models: ["qwen3-235b"] }], href: () => "" }));
+    expect(one).toContain("1 model ·");
+    expect(one).not.toContain("1 models");
+    const two = renderToStaticMarkup(createElement(GameList, { games: [{ id: "g2", models: ["a", "b"] }], href: () => "" }));
+    expect(two).toContain("2 models ·");
+  });
+  it("words a malformed index plainly and keeps other errors", () => {
+    const bad = indexError(new MalformedIndexError("x: not a list"));
+    expect(bad.text).toBe("The game index is not in the expected format.");
+    expect(bad.detail).toBe("x: not a list");
+    expect(indexError(new Error("x: HTTP 404")).text).toBe("Could not load the game index: x: HTTP 404");
+  });
   it('filters by game id, readable model name and live status without searching spoilers', () => {
     const rows = [{id:'village-1',models:['llama4-maverick'],live:true,winner:'wolves'}, {id:'batch-2',models:['gemini-flash']}];
     expect(filterGames(rows, 'Llama 4', 'all')).toEqual([rows[0]]);

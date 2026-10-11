@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ModelAvatar } from "../components/ModelAvatar/ModelAvatar";
 import { modelName } from "../data/modelNames";
+import { MalformedIndexError } from "../data/staticSource";
 import type { GameSource, GameSummary } from "../data/source";
 import "./Games.css";
 
@@ -55,7 +56,7 @@ export function GameList({ games, href, showWinners = false }: ListProps) {
               </th>
               <td>
                 {g.models?.length ? (
-                  <details className="games-lineup"><summary>{g.models.length} models · {g.models.slice(0, 2).map(modelName).join(', ')}{g.models.length > 2 ? '…' : ''}</summary><ul className="games-models">
+                  <details className="games-lineup"><summary>{g.models.length} {g.models.length === 1 ? 'model' : 'models'} · {g.models.slice(0, 2).map(modelName).join(', ')}{g.models.length > 2 ? '…' : ''}</summary><ul className="games-models">
                     {g.models.map((m) => (
                       <li key={m} title={m}>
                         <ModelAvatar model={m} label={modelName(m)} size={20} />
@@ -81,17 +82,26 @@ export function GameList({ games, href, showWinners = false }: ListProps) {
   );
 }
 
+/** Message for a failed index load; the raw error stays in `detail` (the tooltip). */
+export function indexError(err: Error): { text: string; detail: string } {
+  const text = err instanceof MalformedIndexError ? "The game index is not in the expected format." : `Could not load the game index: ${err.message}`;
+  return { text, detail: err.message };
+}
+
 /** Lists the games a source knows about; each links into the replay. */
 export default function IndexPage({ source, href }: { source: GameSource; href: (id: string) => string }) {
   const [games, setGames] = useState<GameSummary[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ text: string; detail: string } | null>(null);
   const [showWinners, setShowWinners] = useState(false);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
   const visible = games ? filterGames(games, query, status) : [];
 
   useEffect(() => {
-    source.listGames().then(setGames, (err: Error) => setError(err.message));
+    source.listGames().then(setGames, (err: Error) => {
+      console.error(err);
+      setError(indexError(err));
+    });
   }, [source]);
 
   return (
@@ -112,7 +122,7 @@ export default function IndexPage({ source, href }: { source: GameSource; href: 
         {(query || status !== 'all') && <button onClick={() => { setQuery(''); setStatus('all'); }}>Clear filters</button>}
       </div>}
       {error ? (
-        <p role="alert">Could not load the game index: {error}</p>
+        <p role="alert" title={error.detail}>{error.text}</p>
       ) : !games ? (
         <p className="games-status">Loading games...</p>
       ) : (

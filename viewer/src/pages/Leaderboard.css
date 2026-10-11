@@ -265,6 +265,7 @@
 .ledger-banner h1 { position: absolute; inset: 46% 16% 14%; display: grid; place-items: center; margin: 0; color: #2a1606; font: 700 clamp(20px, 3vw, 36px)/1 Georgia, serif; text-shadow: 0 0 8px #fff4d8; }
 .ledger-stage { display: grid; gap: 28px; min-width: 0; }
 .ledger-main, .leaderboard-container { min-width: 0; }
+.leaderboard-empty { margin: 0; padding: 32px 20px; text-align: center; font-style: italic; color: var(--text-secondary); background: #04251eed; border: 1px solid #8d743c; border-radius: 10px; }
 .leaderboard-summary-text { padding: 16px 20px; background: #04251eed; border: 1px solid #8d743c; border-radius: 10px; }
 .global-rankings { padding: 24px; background: #04251eed; border: 1px solid #8d743c; border-radius: 12px; min-width: 0; }
 .global-rankings h2 { margin-top: 0; color: var(--accent-gold); }

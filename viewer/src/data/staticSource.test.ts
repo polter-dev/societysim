@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../../fixtures/sample_game.jsonl?raw";
 import labelsText from "../../../fixtures/sample_game.labels.jsonl?raw";
-import { indexSource, type IndexEntry } from "./staticSource";
+import { indexSource, MalformedIndexError, type IndexEntry } from "./staticSource";
 
 const entry: IndexEntry = {
   game_id: "fixture-0001",
@@ -60,6 +60,14 @@ describe("indexSource", () => {
     expect(await indexSource("data/report/index.json", base).audioIndexUrl!("fixture-0001")).toBe(url);
     expect(await indexSource("data/report/index.json", base, true).audioIndexUrl!("fixture-0001")).toBeNull();
   });
+
+  it.each(["null", "{}", JSON.stringify([{ game_id: "g", file: "g.jsonl", days: 2, winner: "wolf" }])])(
+    "rejects a malformed index (%s) with MalformedIndexError",
+    async (body) => {
+      serve({ [`${site}report/index.json`]: body });
+      await expect(indexSource("data/report/index.json", base).listGames()).rejects.toBeInstanceOf(MalformedIndexError);
+    },
+  );
 
   it("surfaces a missing index and unknown games as errors", async () => {
     serve({});

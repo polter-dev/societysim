@@ -28,6 +28,13 @@ export async function fetchJson<T>(url: string): Promise<T> {
   }
 }
 
+export class MalformedIndexError extends Error {
+  constructor(detail: string) {
+    super(detail);
+    this.name = "MalformedIndexError";
+  }
+}
+
 /** Roles stay out: the summary is shown before anyone opens the game. */
 export const summarize = (e: IndexEntry): GameSummary => ({
   id: e.game_id,
@@ -40,6 +47,9 @@ export const summarize = (e: IndexEntry): GameSummary => ({
 export function indexSource(indexUrl: string, base = window.location.href, narratedOnly = false): GameSource {
   const absIndex = new URL(indexUrl, base);
   const loaded = fetchJson<IndexEntry[]>(absIndex.href).then((entries) => {
+    if (!Array.isArray(entries) || entries.some((e) => !e || typeof e.seats !== "object" || !e.seats)) {
+      throw new MalformedIndexError(`${absIndex.href}: not a list of games with seats`);
+    }
     const urls = Object.fromEntries(entries.map((e) => [e.game_id, new URL(e.file, absIndex.pathname.endsWith("/report/index.json") ? new URL("../", absIndex) : absIndex).href]));
     return { entries, urls, source: staticSource(urls) };
   });

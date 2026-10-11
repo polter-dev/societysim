@@ -1,6 +1,6 @@
 # Pitch: can one AI model deceive another?
 
-A 3-minute talk track, a 9-slide outline, one beat per sponsor and answers to likely judge questions. It follows the research question in the README ("What we're asking"). Part of demo prep (#38).
+A 3-minute talk track, a 9-slide outline, one beat per sponsor and answers to likely judge questions. It follows the research questions in the README ("Research questions"). Part of demo prep (#38).
 
 Numbers come from the `mixed_v2_10p` report (100 ten-player games, #294). Say only the numbers written here.
 

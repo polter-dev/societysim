@@ -107,13 +107,14 @@ cp -R "$dist/." "$stage/"
 # Static host config (Cloudflare Pages). `cp -n` keeps whatever the viewer build already put in dist.
 for f in _headers _redirects 404.html; do [[ -e "$stage/$f" ]] || cp "$root/viewer/public/$f" "$stage/$f"; done
 mkdir -p "$stage/data"
-# .cache holds raw judge responses; the PNGs are for report.md, not the viewer.
+# .cache holds raw judge responses; the PNGs are for report.md, not the viewer. run_meta files
+# hold raw provider error text (failed, provider_down) and the viewer never reads them.
 # tar, not rsync: rsync is not available in the Windows bash.
-(cd "$batch" && tar --exclude '.cache' --exclude '*.png' -cf - .) | (cd "$stage/data" && tar -xf -)
+(cd "$batch" && tar --exclude '.cache' --exclude '*.png' --exclude '*run_meta.json' -cf - .) | (cd "$stage/data" && tar -xf -)
 # The same files at the site root (docs/DATA_CONTRACT.md): index.json, leaderboard.json and
 # metrics.json from report/, plus the logs, labels, highlights and audio next to them. The
 # integrated UI loads ./index.json; "../<file>" in it clamps to the root.
-(cd "$batch" && tar --exclude '.cache' --exclude '*.png' --exclude './report' -cf - .) | (cd "$stage" && tar -xf -)
+(cd "$batch" && tar --exclude '.cache' --exclude '*.png' --exclude '*run_meta.json' --exclude './report' -cf - .) | (cd "$stage" && tar -xf -)
 cp "$batch"/report/{index,leaderboard,metrics}.json "$stage/"
 for f in index.json leaderboard.json metrics.json; do
   [[ -s "$stage/$f" ]] || { echo "error: staged site has no $f at its root" >&2; exit 1; }

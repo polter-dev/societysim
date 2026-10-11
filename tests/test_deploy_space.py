@@ -216,6 +216,20 @@ def test_out_stages_data_at_site_root(tmp_path):
     assert (out / "404.html").is_file()  # keeps Pages from serving the SPA for a missing file
 
 
+def test_out_drops_run_meta_files(tmp_path):
+    """run_meta holds raw provider error text (failed, provider_down); it must not go public."""
+    batch = _batch(tmp_path)
+    leak = "RateLimitError: key sk-live-123 for req_abc exceeded quota"
+    (batch / "run_meta.json").write_text(json.dumps({"failed": {"g": leak}, "provider_down": [leak]}))
+    (batch / "sample_game.run_meta.json").write_text(json.dumps({"error": leak}))
+    out = tmp_path / "site"
+    r = _run(tmp_path, "--out", str(out), str(batch))
+    assert r.returncode == 0, r.stderr
+    assert not list(out.rglob("*run_meta.json"))
+    assert not [p for p in out.rglob("*") if p.is_file() and b"sk-live-123" in p.read_bytes()]
+    assert (out / "sample_game.jsonl").is_file() and (out / "data/sample_game.jsonl").is_file()
+
+
 def test_out_keeps_static_config_already_in_dist(tmp_path):
     out = tmp_path / "site"
     r = _run(tmp_path, "--out", str(out), str(_batch(tmp_path)), prebuilt=True)

@@ -166,7 +166,9 @@ def _page(query: dict, leak) -> str:
     elif page == "research":
         body = "<h1>SocietySim research</h1><section class='deception-matrix'><p>No lies heard</p></section>"
     elif page == "model":
-        body = "<h1>SocietySim m1</h1><h2>m1</h2><dl><dt>Games</dt><dd>1</dd></dl>"
+        body = (
+            "<h1 title='m1'>SocietySim Model One</h1><h2>m1</h2><dl><dt>Games</dt><dd>1</dd></dl>"
+        )
     elif page == "new":
         body = "<h1>SocietySim new game</h1><form class='setup-form'><label>Mode</label></form><pre class='setup-json'>{}</pre>"
     elif page == "play" and query.get("mode") == ["advanced"]:

@@ -276,8 +276,11 @@ def run(base: str, *, channel: str | None = None, timeout_ms: int = 20_000) -> l
 
             if route.heading:
                 want = route.heading.format(**values).lower()
-                got = page.locator(SEL_H1).first.inner_text()
-                add(route.name, "heading", want in got.lower(), got)
+                h1 = page.locator(SEL_H1).first
+                got = h1.inner_text()
+                # the model profile shows a short display name and keeps the raw id in the title
+                full = f"{got} {h1.get_attribute('title') or ''}"
+                add(route.name, "heading", want in full.lower(), got)
 
             extra(page, route, values, add, log_text)
             page.wait_for_timeout(500)  # let late fetches and effects throw

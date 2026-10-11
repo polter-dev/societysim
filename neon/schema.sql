@@ -307,7 +307,8 @@ begin
         grant select on games, events_public, labels_public, leaderboard to anonymous;
         grant select on leaderboard_by_batch, lies_by_model to anonymous;
         grant select on global_detectors, global_liars to anonymous;
-        revoke all on visitor_spend, finished_seats, finished_suspicion from anonymous;
+        revoke all on visitor_spend from anonymous;
+        revoke all on finished_seats, finished_suspicion from anonymous;  -- internal (#344)
     end if;
     if exists (select 1 from pg_roles where rolname = 'authenticated') then
         revoke all on events, labels from authenticated;  -- unused by us; no way around the views

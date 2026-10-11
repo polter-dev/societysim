@@ -2,6 +2,22 @@
 // Never log the token.
 
 const REFRESH_MARGIN_MS = 60_000;
+const FALLBACK_TTL_MS = 5 * 60_000;
+
+/** Accepts epoch seconds, epoch ms, numeric strings or ISO strings; null if unusable. */
+export function parseExpiresAt(v: unknown): number | null {
+  let n: number;
+  if (typeof v === "number") n = v;
+  else if (typeof v === "string" && v.trim() !== "") {
+    n = Number(v);
+    if (Number.isNaN(n)) n = Date.parse(v);
+    else if (n < 0) return null;
+    else n = n < 1e11 ? n * 1000 : n;
+    return Number.isFinite(n) ? n : null;
+  } else return null;
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n < 1e11 ? n * 1000 : n;
+}
 
 let cached: { token: string; expiresAt: number } | null = null;
 let inflight: Promise<string> | null = null;
@@ -15,10 +31,9 @@ function env(name: "VITE_NEON_AUTH_URL" | "VITE_NEON_DATA_API_URL"): string {
 async function fetchToken(): Promise<string> {
   const res = await fetch(`${env("VITE_NEON_AUTH_URL")}/token/anonymous`);
   if (!res.ok) throw new Error(`Neon auth failed: HTTP ${res.status}`);
-  const body = (await res.json()) as { token?: string; expires_at?: string };
-  if (!body.token || !body.expires_at) throw new Error("Neon auth returned no token");
-  const expiresAt = Date.parse(body.expires_at);
-  if (Number.isNaN(expiresAt)) throw new Error("Neon auth returned a bad expires_at");
+  const body = (await res.json()) as { token?: string; expires_at?: unknown };
+  if (!body.token) throw new Error("Neon auth returned no token");
+  const expiresAt = parseExpiresAt(body.expires_at) ?? Date.now() + FALLBACK_TTL_MS;
   cached = { token: body.token, expiresAt };
   return body.token;
 }

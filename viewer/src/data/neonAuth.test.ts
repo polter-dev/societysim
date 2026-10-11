@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getAnonToken, neonFetch, resetNeonAuth } from "./neonAuth";
+import { getAnonToken, parseExpiresAt, neonFetch, resetNeonAuth } from "./neonAuth";
 
 const AUTH = "https://auth.test/neonauth";
 const API = "https://api.test/rest/v1";
@@ -93,5 +93,37 @@ describe("neonFetch", () => {
   it("errors clearly when the data API url is missing", async () => {
     vi.stubEnv("VITE_NEON_DATA_API_URL", "");
     await expect(neonFetch("/games")).rejects.toThrow("VITE_NEON_DATA_API_URL");
+  });
+});
+
+describe("parseExpiresAt", () => {
+  it("handles epoch seconds, ms, numeric strings and ISO", () => {
+    expect(parseExpiresAt(1791685280)).toBe(1791685280000);
+    expect(parseExpiresAt(1791685280000)).toBe(1791685280000);
+    expect(parseExpiresAt("1791685280")).toBe(1791685280000);
+    expect(parseExpiresAt("2026-10-10T12:00:00Z")).toBe(Date.parse("2026-10-10T12:00:00Z"));
+  });
+  it("returns null for missing or garbage", () => {
+    for (const v of [undefined, null, "", "nope", -5, 0, {}]) expect(parseExpiresAt(v)).toBeNull();
+  });
+});
+
+describe("getAnonToken expiry fallback", () => {
+  it.each([[undefined], ["garbage"]])("uses a short TTL when expires_at is %s", async (bad) => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ token: "t1", expires_at: bad })));
+    expect(await getAnonToken()).toBe("t1");
+    expect(await getAnonToken()).toBe("t1");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(5 * 60_000);
+    await getAnonToken();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("accepts epoch seconds like the live endpoint", async () => {
+    const sec = Math.floor((Date.now() + 3_600_000) / 1000);
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ token: "t1", expires_at: sec })));
+    await getAnonToken();
+    await getAnonToken();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

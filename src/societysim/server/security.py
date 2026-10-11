@@ -257,6 +257,15 @@ def ip_hint(ip: str) -> str:
 
 
 def client_ip(request: Request, trusted: tuple[Network, ...], ip_header: str = "") -> str:
+    """The visitor's address, with IPv6 reduced to its /64 so one network is one client."""
+    ip = _visitor_ip(request, trusted, ip_header)
+    addr = _ip(ip)
+    if addr is not None and addr.version == 6:
+        return str(ipaddress.ip_network(f"{addr}/64", strict=False).network_address)
+    return ip
+
+
+def _visitor_ip(request: Request, trusted: tuple[Network, ...], ip_header: str = "") -> str:
     """The visitor's address. Forwarding headers count only when the socket peer is a trusted
     proxy; X-Forwarded-For is read right to left, skipping trusted hops, so a client can't
     spoof it by sending its own. CF-Connecting-IP is used when there is no X-Forwarded-For.

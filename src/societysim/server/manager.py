@@ -205,8 +205,10 @@ def hash_token(token: str) -> bytes:
 
 
 def clean_text(text: str) -> str:
-    """Line breaks and tabs become spaces; other control and format characters go."""
-    kept = "".join(c for c in text if c.isspace() or unicodedata.category(c) not in ("Cc", "Cf"))
+    """Line breaks and tabs become spaces; control, format and surrogate characters go."""
+    kept = "".join(
+        c for c in text if c.isspace() or unicodedata.category(c) not in ("Cc", "Cf", "Cs")
+    )
     return " ".join(kept.split())
 
 

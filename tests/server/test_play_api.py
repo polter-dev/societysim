@@ -297,6 +297,21 @@ async def test_statement_text_is_cleaned(make_client, tmp_path):
     assert {e["public_text"] for e in p0(events, "statement")} <= {"line one line two!"}
 
 
+async def test_lone_surrogate_text_is_rejected_not_logged(make_client):
+    async with make_client() as c:
+        started = await start(c)
+        url, headers = f"/api/games/{started['game_id']}/action", auth(started["seat_token"])
+        while (me := await until(c, started, waiting))["pending_action"]["kind"] != "statement":
+            r = await c.post(url, json=move(me["pending_action"]), headers=headers)
+            assert r.status_code == 200, r.text
+        body = json.dumps(move(me["pending_action"], "\ud800"))  # ascii-escaped, as a browser sends
+        r = await c.post(url, content=body, headers=headers | {"Content-Type": "application/json"})
+        assert r.status_code == 422 and r.json()["error"] == "invalid_request", r.text
+        await play_out(c, started)
+        session = await finished(c, started)
+    assert session.status == "finished"
+
+
 async def test_timeout_falls_back_like_invalid_output(make_client, tmp_path):
     async with make_client(turn_timeout=0.01, max_timeouts=1000) as c:
         started = await start(c)

@@ -340,7 +340,7 @@ def test_client_ip_behind_hf_proxy():
     chained = HF_HEADERS | {"X-Forwarded-For": "6.6.6.6, 198.51.100.20:51234, 10.16.0.9"}
     assert ip(scope("10.16.4.2", chained), hf) == "198.51.100.20"
     v6 = HF_HEADERS | {"X-Forwarded-For": "[2001:db8:1:2::5]:443"}
-    assert ip(scope("10.16.4.2", v6), hf) == "2001:db8:1:2::5"
+    assert ip(scope("10.16.4.2", v6), hf) == "2001:db8:1:2::"
     # The same spoofed header straight from a public peer: the peer is the client.
     assert ip(scope("203.0.113.1", spoofed), hf) == "203.0.113.1"
 
@@ -361,7 +361,7 @@ def test_scoped_ipv6_hint_and_client_ip():
     assert security.ip_hint("[fe80::1%eth0]:80") == "fe80:0000:x::"
     trusted = (ipaddress.ip_network("10.0.0.0/8"),)
     xff = {"X-Forwarded-For": "2001:db8::7%eth0"}
-    assert security.client_ip(scope("10.1.2.3", xff), trusted) == "2001:db8::7"
+    assert security.client_ip(scope("10.1.2.3", xff), trusted) == "2001:db8::"
     assert security.client_ip(scope("10.1.2.3", {"X-Forwarded-For": "%"}), trusted) == "10.1.2.3"
 
 
@@ -885,3 +885,12 @@ def test_client_ip_header_is_opt_in():
     assert security.client_ip(
         scope("203.0.113.1", hdr), space.trusted_proxies, "cf-connecting-ip"
     ) == ("203.0.113.1")
+
+
+def test_client_ip_buckets_ipv6_by_slash_64():
+    ip = security.client_ip
+    a, b = ip(scope("2001:db8:1:2::1"), ()), ip(scope("2001:db8:1:2:aaaa:bbbb:cccc:dddd"), ())
+    assert a == b == "2001:db8:1:2::"
+    assert ip(scope("2001:db8:1:3::1"), ()) != a
+    assert ip(scope("203.0.113.5"), ()) == "203.0.113.5"
+    assert security.ip_hint(a) == security.ip_hint("2001:db8:1:2::1")

@@ -42,11 +42,24 @@ create table if not exists labels (
 
 -- Agent type of the game: 'scripted' | 'llm' (run_meta.json "agents"). Null = legacy or unknown
 -- (rows written before this column, or by older code); the views keep null rows and drop 'scripted'.
-alter table games add column if not exists agents text;
-
-create index if not exists games_batch_idx on games (batch_id);
--- The views look events up by game and type (game_start, vote, elimination, death_reveal) (#447).
-create index if not exists events_game_type_idx on events (game_id, type);
+-- ALTER TABLE and CREATE INDEX lock the table (ACCESS EXCLUSIVE, SHARE) before they look at IF NOT
+-- EXISTS, and a re-run would deadlock with a live NeonSink flush (#498). So the catalogs are
+-- checked first, which takes no table lock, and the statement only runs when it is needed.
+do $$
+begin
+    if not exists (select 1 from pg_attribute
+                   where attrelid = to_regclass('games') and attname = 'agents'
+                     and not attisdropped) then
+        alter table games add column if not exists agents text;
+    end if;
+    if to_regclass('games_batch_idx') is null then
+        create index if not exists games_batch_idx on games (batch_id);
+    end if;
+    -- The views look events up by game and type (game_start, vote, elimination, death_reveal) (#447).
+    if to_regclass('events_game_type_idx') is null then
+        create index if not exists events_game_type_idx on events (game_id, type);
+    end if;
+end $$;
 
 -- Per model: seat-games in finished games, wins, win rate. A seat wins if its team won.
 -- Pools every batch and leaves out human seats and scripted games; use leaderboard_by_batch to compare fairly.
@@ -117,8 +130,15 @@ create table if not exists visitor_spend (
     cost_usd   numeric not null,
     created_at timestamptz not null default now()
 );
-create index if not exists visitor_spend_day_idx on visitor_spend (day);
-alter table visitor_spend enable row level security;
+do $$
+begin
+    if to_regclass('visitor_spend_day_idx') is null then
+        create index if not exists visitor_spend_day_idx on visitor_spend (day);
+    end if;
+    if not (select relrowsecurity from pg_class where oid = 'visitor_spend'::regclass) then
+        alter table visitor_spend enable row level security;
+    end if;
+end $$;
 
 -- Visitor games started per client per UTC day (#382), so PLAY_MAX_GAMES_PER_IP_DAY holds across
 -- restarts. client_hash is an HMAC-SHA256 of the client IP keyed with PLAY_IP_SALT, never the IP.
@@ -129,7 +149,12 @@ create table if not exists visitor_starts (
     games       integer not null,
     primary key (day, client_hash)
 );
-alter table visitor_starts enable row level security;
+do $$
+begin
+    if not (select relrowsecurity from pg_class where oid = 'visitor_starts'::regclass) then
+        alter table visitor_starts enable row level security;
+    end if;
+end $$;
 
 -- What the Data API's anonymous role reads instead of events (#323), with the same columns. A
 -- finished game reads in full. Any other (running, or failed, which batch resume reruns with the

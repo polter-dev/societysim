@@ -49,7 +49,7 @@ export function Game({events, labels, idx, mode, selected, onSelect, onSeqChange
     <div className="replay-bar">
       <div className="replay-controls">{step?.live && <LiveBadge newCount={step.newCount}/>}{step && <StepControls {...step}/>}<Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} seq={seq} onSeek={onSeek} onStep={onStep} onPlayingChange={setPlaying} narrationIdle={narration?.whenIdle}/></div>
       <div className="replay-pops">
-        <details className="replay-pop replay-chat" name="replay-pop"><summary>Discussion and votes</summary><div className="replay-pop__body"><Tally scene={scene}/><ChatLog scene={scene}/></div></details>
+        <details className="replay-pop replay-chat" name="replay-pop"><summary>Logs</summary><div className="replay-pop__body"><Tally scene={scene}/><ChatLog scene={scene}/></div></details>
         <details className="replay-pop replay-spotwolf" name="replay-pop"><summary>Spot the wolf</summary><div className="replay-pop__body"><SpotWolfPanel key={events[0]?.game_id} events={events} idx={idx}/></div></details>
         {narration && <details className="replay-pop replay-narration" name="replay-pop"><summary>Narration</summary><div className="replay-pop__body"><NarrationControls available={narration.available} mode={mode} on={narration.on} enabled={narration.enabled} onToggle={narration.onToggle} onCategory={narration.onCategory}/></div></details>}
       </div>

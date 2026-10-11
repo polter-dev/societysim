@@ -32,6 +32,11 @@ def test_landing_routes_accept_the_testid_or_the_current_dom():
     assert next(r for r in smoke.ROUTES if r.name == "index").query == "?page=games"
 
 
+def test_advanced_controls_accept_comboboxes_and_native_selects():
+    assert "role='combobox'" in smoke.SEL_ADVANCED_CONTROLS
+    assert "select[aria-label]" in smoke.SEL_ADVANCED_CONTROLS
+
+
 def test_routes_only_use_known_context_values():
     for r in smoke.ROUTES:
         used = {n for n in ("game", "step", "model") if "{" + n + "}" in r.query}
@@ -124,7 +129,10 @@ def _page(query: dict, leak: bool) -> str:
     elif page == "play" and query.get("mode") == ["advanced"]:
         body = (
             "<main class='landing-page advanced-screen'><h1>Advanced Setup</h1><form>"
-            + "".join(f"<select aria-label='s{i}'></select>" for i in range(3))
+            + "".join(
+                f"<button type='button' role='combobox' aria-label='s{i}'></button>"
+                for i in range(4)
+            )
             + "<button aria-label='Start simulation' disabled></button></form></main>"
         )
     elif page == "play":

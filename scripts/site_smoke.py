@@ -37,6 +37,7 @@ SEL_SPOT = "section.spotwolf"
 SEL_LANDING = "[data-testid='landing'], main.landing-page"
 SEL_MODES = "[data-testid='mode-selection'], main.mode-selection"
 SEL_MODE_CARDS = "[data-testid='mode-cards'] a, nav.mode-cards a"
+SEL_ADVANCED_CONTROLS = "form [role='combobox'][aria-label], form select[aria-label]"
 SEL_ADVANCED = "[data-testid='advanced-setup'], main.advanced-screen"
 PLAY_STATES = {
     "section.play-coming-soon": "coming soon",
@@ -269,10 +270,11 @@ def extra(
         )
         add(n, "mode cards", sorted(modes) == ["advanced", "basic", "watch"], ", ".join(modes))
     elif n == "advanced setup":
-        selects = page.locator("form select[aria-label]").count()
+        # themed comboboxes (ThemedSelect, #391); native selects before that deploy
+        selects = page.locator(SEL_ADVANCED_CONTROLS).count()
         start = page.locator("button[aria-label='Start simulation']").count()
         # never clicked: starting a game is not read-only
-        add(n, "setup form", selects >= 3 and start == 1, f"{selects} selects, start button")
+        add(n, "setup form", selects >= 4 and start == 1, f"{selects} dropdowns, start button")
     elif n == "index":
         add(
             n,

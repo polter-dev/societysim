@@ -92,3 +92,27 @@ it("sends an edited Advanced setup to startGame", async () => {
   expect(body.turnstile_token).toBe("ts-token");
   expect(onStarted).toHaveBeenCalled();
 });
+
+it("starts a selected Watch mode as an all-AI game", async () => {
+  act(() => root.render(createElement(PlayStart, { onStarted: vi.fn(), initialMode: "watch" })));
+  await settle();
+  const radios = box.querySelectorAll<HTMLInputElement>('input[name="play-mode"]');
+  expect(radios[1].checked).toBe(true);
+  expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  const start = [...box.querySelectorAll("button")].find(b => b.textContent === "Start game")!;
+  await act(async () => start.click());
+  await settle();
+  const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST")!;
+  expect(JSON.parse(post[1].body).watch_only).toBe(true);
+});
+
+it("keeps selected Advanced mode recoverable when its catalog is unavailable", async () => {
+  act(() => root.render(createElement(PlayStart, { onStarted: vi.fn(), initialMode: "advanced" })));
+  await settle();
+  const advanced = box.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+  expect(advanced.checked).toBe(true);
+  const start = [...box.querySelectorAll("button")].find(b => b.textContent === "Start game")!;
+  expect(start.disabled).toBe(true);
+  await act(async () => advanced.click());
+  expect(start.disabled).toBe(false);
+});

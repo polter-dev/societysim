@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { EndReveal } from './play/EndReveal';
 import { useNarration } from './audio/useNarration';
 import { Arrows } from './components/Arrows/Arrows';
 import { ChatLog } from './components/ChatLog/ChatLog';
@@ -41,8 +42,9 @@ export function Game({events, labels, idx, mode, selected, onSelect, onSeqChange
     <div className="replay-table"><LabelPopups scene={scene} labels={labels} mode={mode}><Table scene={scene} selected={selected} onSelect={onSelect}/><Arrows scene={scene}/><Speech scene={scene}/></LabelPopups></div>
     <details className="replay-chat"><summary>Discussion and vote tally</summary><Tally scene={scene}/><ChatLog scene={scene}/></details>
     <IllustratedInspector scene={scene} mode={mode} selected={selected} close={() => onSelect(null)}/>
+    <EndReveal events={events} labels={labels} idx={idx} mode={mode}/>
     <details className="replay-spotwolf"><summary>Spot the wolf</summary><SpotWolfPanel key={events[0]?.game_id} events={events} idx={idx}/></details>
-    <div className="replay-controls">{step?.live && <LiveBadge newCount={step.newCount}/>}{step && <StepControls {...step}/>}{narration?.available && <NarrationControls mode={mode} on={narration.on} enabled={narration.enabled} onToggle={narration.onToggle} onCategory={narration.onCategory}/>}<Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} seq={seq} onSeek={onSeek}/></div>
+    <div className="replay-controls">{step?.live && <LiveBadge newCount={step.newCount}/>}{step && <StepControls {...step}/>}{narration && <NarrationControls available={narration.available} mode={mode} on={narration.on} enabled={narration.enabled} onToggle={narration.onToggle} onCategory={narration.onCategory}/>}<Timeline events={events} labels={labels} mode={mode} onSeqChange={onSeqChange} seq={seq} onSeek={onSeek}/></div>
   </>;
 }
 /** Owns step state (?step=, arrow keys) and narration for one loaded game; deriveScene stays the source of the scene. */
@@ -84,6 +86,12 @@ export default function App({source}: {source?: GameSource} = {}) {
  }, [source]);
  useEffect(() => {const sync = () => setMode(modeFromSearch(window.location.search));window.addEventListener('popstate',sync);return () => window.removeEventListener('popstate',sync);},[]);
  useLiveGame(source, log, setLog);
+ useEffect(() => {
+   if(!log?.watchedLive || log.live || !source?.loadLabels || !log.events[0]?.game_id) return;
+   let active = true;
+   source.loadLabels(log.events[0]?.game_id!).then(value => {if(active) setLabels(value as Label[]);}, () => {});
+   return () => {active = false;};
+ }, [log?.watchedLive, log?.live, source]);
  const changeMode = (next: Mode) => {window.history.replaceState(window.history.state,'',urlWithMode(window.location.href,next));setMode(next);};
  const onFile = async (file?: File) => {if(!file) return;const version = ++loadVersion.current;try {setLabels([]);const parsed = parseLog(await file.text());if(loadVersion.current === version) {clearStepUrl();show(parsed);}} catch(err) {setLoadError(err instanceof Error ? err.message : String(err));}};
  const events = log?.events ?? [];

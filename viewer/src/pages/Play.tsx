@@ -13,9 +13,9 @@ export function PlayNavLink({ href }: { href: string }) {
   if (playEnabled() && status.kind === "offline")
     return <span aria-disabled="true" title={status.message}>Play (offline)</span>;
   return playEnabled() ? (
-    <a href={href}>Play</a>
+    <a className="play-nav" href={href}>Play</a>
   ) : (
-    <span aria-disabled="true" title="Playing from the website is coming soon">Play (coming soon)</span>
+    <span className="play-nav" aria-disabled="true" title="Playing from the website is coming soon">Play (coming soon)</span>
   );
 }
 
@@ -30,8 +30,8 @@ export function PlayComingSoon({ gamesHref }: { gamesHref: string }) {
 
 /** Start screen. Advanced settings need the model list; if it won't load, Basic and Watch still work. */
 export default function PlayPage({
-  catalogUrl, schemaUrl, gamesHref, gameHref, go = (url) => window.location.assign(url),
-}: { catalogUrl: string; schemaUrl: string; gamesHref: string; gameHref: (id: string) => string; go?: (url: string) => void }) {
+  catalogUrl, schemaUrl, gamesHref, gameHref, initialMode = "basic", go = (url) => window.location.assign(url),
+}: { initialMode?: "basic" | "watch" | "advanced"; catalogUrl: string; schemaUrl: string; gamesHref: string; gameHref: (id: string) => string; go?: (url: string) => void }) {
   const on = playEnabled();
   const status = usePlayStatus();
   const [assets, setAssets] = useState<SetupAssets | undefined>();
@@ -49,8 +49,9 @@ export default function PlayPage({
   // startGame saves the seat token in sessionStorage; the live table opens on the game page.
   return (
     <>
-      <p>Join a game against AI models. You see only what your seat is allowed to see; the full reveal comes at the end.</p>
-      <PlayStart assets={assets} onStarted={(game) => go(gameHref(game.game_id))} />
+      <h2>{initialMode === "watch" ? "Watch the village" : "Join the village"}</h2>
+<p>{initialMode === "watch" ? "Start an all-AI game and spectate live." : "Play one seat against nine AI models. You see your own role and private information; the full reveal comes at the end."}</p>
+      <PlayStart modeLocked initialMode={initialMode} assets={assets} onStarted={(game) => go(gameHref(game.game_id))} />
     </>
   );
 }

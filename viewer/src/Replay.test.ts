@@ -142,11 +142,11 @@ describe("Replay narration", () => {
     expect(played).toContain("wolf.mp3");
   });
 
-  it("does not render the narration controls when the game has no audio", async () => {
+  it("shows a disabled narration toggle when the game has no audio", async () => {
     vi.stubGlobal("fetch", async () => ({ ok: false }));
     mount();
     await flush();
-    expect(box.querySelector(".narration-controls")).toBeNull();
+    expect(box.querySelector<HTMLInputElement>(".narration-controls input")?.disabled).toBe(true);
   });
 });
 

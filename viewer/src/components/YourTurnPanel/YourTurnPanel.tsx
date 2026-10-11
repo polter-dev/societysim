@@ -40,9 +40,10 @@ function PlayerButton({ players, seat, pressed, onClick }: {
 export function YourTurnPanel({ seat }: { seat: Seat }) {
   const { me, pending } = seat;
   const [draft, setDraft] = useState<Draft>({});
+  const [sent, setSent] = useState(false);
   // A new prompt (kind or deadline) starts with a clean form.
   const key = pending ? `${pending.kind}:${pending.deadline}` : "";
-  useEffect(() => setDraft({}), [key]);
+  useEffect(() => { setDraft({}); if (key) setSent(false); }, [key]);
 
   if (!me) return <section className="your-turn">{seat.error ?? "Loading your seat..."}</section>;
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
@@ -59,7 +60,7 @@ export function YourTurnPanel({ seat }: { seat: Seat }) {
     <section className="your-turn">
       <div className="your-turn__role">
         <h3>
-          {me.name} ({me.seat}): {me.role}
+          Your turn · {me.name} ({me.seat}) <small style={{display:"block"}}>Your role: {me.role}</small>
         </h3>
         <p>
           Day {me.day}, {me.phase}. {me.alive ? "You are alive." : "You are out."}
@@ -74,18 +75,20 @@ export function YourTurnPanel({ seat }: { seat: Seat }) {
       {me.observation && <pre className="your-turn__private">{me.observation}</pre>}
       {seat.error && <p role="alert">{seat.error}</p>}
 
+      {sent && !pending && <p role="status" className="your-turn__sent">Move sent. Waiting for the village…</p>}
       {pending && (
         <form
           className="your-turn__form"
           onSubmit={(e) => {
             e.preventDefault();
-            void seat.submit(draft);
+            void seat.submit(draft).then(accepted => { if (accepted) setSent(true); });
           }}
         >
           <p>
             Your move: {MOVE[pending.kind]}
             {seat.secondsLeft !== null && <span aria-live="off"> ({seat.secondsLeft}s left)</span>}
           </p>
+          <small>Auto-move if time runs out. Each turn allows 90 seconds.</small>
           {needsText && (
             <label>
               {pending.kind === "wolf_chat" ? "Message to your pack" : "What do you say?"}
@@ -143,7 +146,7 @@ export function YourTurnPanel({ seat }: { seat: Seat }) {
               ))}
             </ul>
           )}
-          <button type="submit" disabled={seat.busy}>
+          <button type="submit" disabled={seat.busy || seat.secondsLeft === 0}>
             {seat.busy ? "Sending..." : "Submit"}
           </button>
         </form>

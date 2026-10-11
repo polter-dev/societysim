@@ -123,7 +123,8 @@ describe("VITE_PLAY_API_URL set", () => {
   it("shows only the seat's own view in the your-turn panel, via /me", async () => {
     sessionStorage.setItem(TOKEN_PREFIX + "g1", "tok");
     await render(createElement(PlayDock, { gameId: "g1" }));
-    expect(box.textContent).toContain("You (p0): villager");
+    expect(box.textContent).toContain("You (p0)");
+    expect(box.textContent).toContain("Your role: villager");
     expect(box.textContent).toContain("Nothing has happened yet.");
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("https://play.example.test/api/games/g1/me");

@@ -10,14 +10,18 @@ import { SetupForm } from "../SetupForm/SetupForm";
 export function PlayStart({
   onStarted,
   assets,
+  initialMode = "basic",
+  modeLocked = false,
 }: {
   onStarted: (game: StartedGame, watchOnly: boolean) => void;
   /** Model catalog and setup schema; without them there is no Advanced option. */
   assets?: SetupAssets;
+  initialMode?: "basic" | "watch" | "advanced";
+  modeLocked?: boolean;
 }) {
   const [adv, setAdv] = useState<{ setup: GameSetupJson; valid: boolean } | null>(null);
-  const [watch, setWatch] = useState(false);
-  const [useAdvanced, setUseAdvanced] = useState(false);
+  const [watch, setWatch] = useState(initialMode === "watch");
+  const [useAdvanced, setUseAdvanced] = useState(initialMode === "advanced");
   const [limits, setLimits] = useState<Limits | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +34,7 @@ export function PlayStart({
 
   useEffect(() => {
     if (!widget.current) return;
-    const t = getTurnstileToken(widget.current);
+    const t = getTurnstileToken(widget.current, undefined, setToken);
     t.token.then(setToken, (e: Error) => e.message !== "cancelled" && setError(e.message));
     return t.cancel;
   }, []);
@@ -39,7 +43,7 @@ export function PlayStart({
   const paused = limits !== null && !limits.play_enabled;
   const none = limits !== null && limits.remaining_today <= 0;
   const setup: GameSetupJson = useAdvanced && adv ? adv.setup : { mode: "basic", seed: 0 };
-  const canStart = !busy && !paused && !none && token !== null && (!useAdvanced || (adv !== null && adv.valid));
+  const canStart = !busy && limits !== null && limits.play_enabled === true && Number.isInteger(limits.remaining_today) && limits.remaining_today > 0 && token !== null && (!useAdvanced || (adv !== null && adv.valid));
 
   const start = async () => {
     if (token === null) return;
@@ -57,7 +61,7 @@ export function PlayStart({
 
   return (
     <section className="play-start">
-      <fieldset>
+      {!modeLocked && <fieldset>
         <legend>How do you want to join?</legend>
         {[
           [false, "Play (you start at seat p0)"],
@@ -67,13 +71,14 @@ export function PlayStart({
             <input type="radio" name="play-mode" checked={watch === w} onChange={() => setWatch(w as boolean)} /> {label}
           </label>
         ))}
-      </fieldset>
-      {assets && (
+      </fieldset>}
+      {(!modeLocked || initialMode === "advanced") && (assets || initialMode === "advanced") && (
         <label>
           <input type="checkbox" checked={useAdvanced} onChange={(e) => setUseAdvanced(e.target.checked)} /> Advanced
           settings
         </label>
       )}
+      {useAdvanced && !assets && <p role="status">Waiting for the model catalog. Turn off Advanced settings to use the standard lineup.</p>}
       {useAdvanced && assets && (
         <SetupForm
           key={(allowed ?? []).join()}
@@ -88,9 +93,12 @@ export function PlayStart({
           {paused ? "Play is paused right now." : `${limits.remaining_today} games left today.`}
         </p>
       )}
+      {busy && <p className="play-start__status" role="status">Waking the server… A cold start can take 30–60 seconds.</p>}
+      {!limits && !error && <p className="play-start__status" role="status">Waking the server… Checking availability can take 30–60 seconds.</p>}
+      {limits && <p className="play-start__status">{paused ? "Play is paused." : none ? "The daily allowance or budget is used up." : "Play is open."}</p>}
       {error && <p role="alert">{error}</p>}
       <button type="button" disabled={!canStart} onClick={start}>
-        {busy ? "Starting..." : "Start game"}
+        {busy ? "Waking the server…" : "Start game"}
       </button>
     </section>
   );

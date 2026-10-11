@@ -33,6 +33,7 @@ function loadScript(): Promise<TurnstileApi> {
 export function getTurnstileToken(
   el: HTMLElement,
   siteKey: string | undefined = import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined,
+  onToken?: (token: string | null) => void,
 ): { token: Promise<string>; cancel: () => void } {
   let id: string | undefined;
   let removed = false;
@@ -43,9 +44,9 @@ export function getTurnstileToken(
       if (removed) return reject(new Error("cancelled"));
       id = t.render(el, {
         sitekey: siteKey,
-        callback: resolve,
-        "error-callback": () => reject(new Error("Turnstile check failed.")),
-        "expired-callback": () => reject(new Error("Turnstile check expired.")),
+        callback: (value: string) => { if (!removed) { onToken?.(value); resolve(value); } },
+        "error-callback": () => { if (!removed) onToken?.(null); reject(new Error("Turnstile check failed.")); },
+        "expired-callback": () => { if (!removed) onToken?.(null); reject(new Error("Turnstile check expired.")); },
       });
     });
   })();

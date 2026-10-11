@@ -8,15 +8,17 @@ from types import SimpleNamespace
 import pytest
 
 from societysim.agents.scripted import RandomAgent
-from societysim.analysis.labeler import label_game
+from societysim.analysis.labeler import JevReport, JevVerdict, label_game
 from societysim.analysis.metrics import (
     GameData,
     auc,
     brier,
     compute_metrics,
     deception_matrix,
+    game_deception,
     humans_vs_models,
     lie_success,
+    lies_left_out,
     load_batch,
     load_game,
     openskill_ratings,
@@ -953,14 +955,102 @@ def test_rates_are_per_model_and_old_logs_without_usage_give_null():
     assert models["model-p2"]["all"]["retry_success_rate"] is None
 
 
-def _mirror_jev(game) -> GameData:
+# --- a Jev label points at the statement, a self-tag label at its claim event ---------------
+
+
+def _mirror_jev(events: list[Event]) -> dict[int, JevVerdict]:
+    """A Jev that reads exactly what each statement's self-tags say."""
+    jev: dict[int, JevVerdict] = {}
+    for e in events:
+        s = e.meta.statement_seq
+        if not s or e.type not in (
+            EventType.ACCUSATION,
+            EventType.ROLE_CLAIM,
+            EventType.SEER_CLAIM,
+        ):
+            continue
+        v = jev.setdefault(s, JevVerdict())
+        if e.type is EventType.ACCUSATION:
+            v.accuse.append(e.target)
+        elif e.type is EventType.ROLE_CLAIM:
+            v.claim_role = e.meta.role
+        else:
+            v.seer_report = JevReport(target=e.target, result=e.meta.result)
+    return jev
+
+
+def _both_sources(game: GameData, wolves: tuple[str, ...] = ()) -> GameData:
+    events = game.events
+    if wolves:  # more wolves than the fixture's two: relabel these seats
+        start = events[0]
+        seats = {
+            s: seat.model_copy(update={"role": Role.WOLF if s in wolves else seat.role})
+            for s, seat in start.meta.seats.items()
+        }
+        meta = start.meta.model_copy(update={"seats": seats})
+        events = [start.model_copy(update={"meta": meta}), *events[1:]]
+    return GameData(events, label_game(events, _mirror_jev(events)))
+
+
+def _counterpart(g: GameData, jev: Label) -> Label:
+    """The self-tag label for the same lie: type, actor, statement and reported/accused player."""
+    stmt = jev.source_seq
+    words = jev.detail.replace("(", " ").replace(")", " ").split()
+    seat = [w for w in words if w.startswith("p") and w[1:].isdigit()][-1]
+    return next(
+        lb
+        for lb in g.labels
+        if lb.source == "self_tag"
+        and (lb.label, lb.actor) == (jev.label, jev.actor)
+        and (g.by_seq[lb.source_seq].meta.statement_seq or lb.source_seq) == stmt
+        and g.by_seq[lb.source_seq].target == seat
+    )
+
+
+def _cells(g: GameData, source: str, kind: str) -> dict:
+    pairs, _ = game_deception(g)
+    return {k[1:]: n for k, n in pairs.items() if k[0] == source and k[3] == kind}
+
+
+@pytest.mark.parametrize("wolves", [(), ("p2", "p5", "p6")])
+def test_jev_false_report_and_bussing_score_like_the_equivalent_self_tag(game, wolves):
+    # the second case has 3 wolves, where a bussing label with no target would name every fellow
+    g = _both_sources(game, wolves)
+    types = (LabelType.FALSE_REPORT, LabelType.BUSSING)
+    jev_labels = [lb for lb in g.labels if lb.source == "jev" and lb.label in types]
+    assert {lb.label for lb in jev_labels} == set(types)
+    for jev in jev_labels:
+        assert g.by_seq[jev.source_seq].type is EventType.STATEMENT
+        assert lie_success(g, jev) == lie_success(g, _counterpart(g, jev))
+    # the false report is a seer report in the matrix (seer_wolf), the bussing an accusation
+    for kind in ("seer_wolf", "accusation"):
+        assert _cells(g, "self_tag", kind)
+        assert _cells(g, "jev", kind) == _cells(g, "self_tag", kind)
+    assert _cells(g, "jev", "role_claim") == _cells(g, "self_tag", "role_claim")
+
+
+def test_jev_false_report_with_an_unreadable_target_is_left_out_not_a_role_claim(game):
+    g = _both_sources(game)
+    jev = next(lb for lb in g.labels if lb.source == "jev" and lb.label is LabelType.FALSE_REPORT)
+    # no target in the detail, and no self-tag seer_claim in its statement to name one
+    h = GameData(
+        [e for e in g.events if e.type is not EventType.SEER_CLAIM],
+        [jev.model_copy(update={"detail": "a false report"})],
+    )
+    assert not any(lie_success(h, h.labels[0]).values())
+    assert not _cells(h, "jev", "role_claim")
+    assert lies_left_out([h]) == {"self_tag": {}, "jev": {"false_report": 1}}
+    assert lies_left_out([g]) == {"self_tag": {}, "jev": {}}
+
+
+def _mirror_jev_game(game) -> GameData:
     """A game Jev read and agreed with the self-tags on every statement (#493)."""
     jev = [lb.model_copy(update={"source": "jev"}) for lb in game.labels if lb.source == "self_tag"]
     return GameData(game.events, game.labels + jev)
 
 
 def test_jev_numbers_cover_only_games_jev_labeled(game):
-    read = _mirror_jev(game)
+    read = _mirror_jev_game(game)
     unread = GameData(game.events, game.labels)  # self-tag only: Jev never saw it
     alone = compute_metrics([read])
     mixed = compute_metrics([read, unread])
@@ -978,7 +1068,7 @@ def test_jev_numbers_cover_only_games_jev_labeled(game):
 
 def test_self_tag_numbers_do_not_change_when_jev_labels_exist_elsewhere(game):
     plain = compute_metrics([GameData(game.events, game.labels)] * 2)
-    mixed = compute_metrics([_mirror_jev(game), GameData(game.events, game.labels)])
+    mixed = compute_metrics([_mirror_jev_game(game), GameData(game.events, game.labels)])
     for model, groups in plain["models"].items():
         got = mixed["models"][model]["all"]["lies"]["self_tag"]
         assert got == groups["all"]["lies"]["self_tag"]

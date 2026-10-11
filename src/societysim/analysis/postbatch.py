@@ -7,6 +7,8 @@ top highlight (a `lie_moved_vote` if there is one), each as a subprocess of the 
 command. Stops on the first failure. Then prints the numbers DEMO.md needs and the upload
 commands to run next. Those are only printed, never run. `--jev` drops `--no-jev` from
 `label`, which makes paid Jev calls when TYPESAFE_API_KEY is set (the CLI loads .env itself).
+Without `--jev`, `label --no-jev` still keeps Jev labels for every statement in the batch's
+Jev cache (no calls).
 """
 
 import argparse
@@ -40,6 +42,13 @@ def _pct(x: float | None) -> str:
     return "n/a" if x is None else f"{x:.1%}"
 
 
+def _has_jev_labels(batch: Path) -> bool:
+    """True if any labels file holds a Jev label (e.g. `label --no-jev` filled them from cache)."""
+    return any(
+        '"source":"jev"' in p.read_text(encoding="utf-8") for p in batch.glob("*.labels.jsonl")
+    )
+
+
 def demo_block(batch: Path, top: dict | None, jev: bool = True) -> str:
     meta = _read(batch / "run_meta.json")
     rep = batch / "report"
@@ -61,7 +70,7 @@ def demo_block(batch: Path, top: dict | None, jev: bool = True) -> str:
         lines.append("    none (no rated models)")
     lies = metrics["by_group"]["all"]["lies"]
     for source, d in lies.items():
-        if source == "jev" and not jev:
+        if source == "jev" and not jev and not _has_jev_labels(batch):
             lines.append("  lie success (jev): Jev skipped (run with --jev)")
             continue
         ls = d["lie_success"]

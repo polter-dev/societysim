@@ -6,8 +6,9 @@ name: Deploy
 #   gh workflow run deploy.yml -f source=hf:societysim/societysim-games:my-batch
 # Data source, first match wins: the batch input (a committed dir), the source input, the
 # DEPLOY_SOURCE repo variable, then the sample game. A source of hf:<owner/name>[:<batch_id>]
-# downloads that HF Dataset (written by `societysim publish`), labels it with --no-jev if it
-# has no labels, and runs report and highlights. No paid calls. A private dataset needs HF_TOKEN.
+# downloads that HF Dataset (written by `societysim publish`), restores the Jev cache from the
+# jev-cache-<batch_id> release if there is one, labels with --no-jev and runs report and
+# highlights (scripts/label_fetched_batch.sh). No paid calls. A private dataset needs HF_TOKEN.
 # Targets (comma separated): cloudflare, hf-space, github-pages. Default is all three.
 # runs/ is gitignored, so CI gets real batches from the HF Dataset instead.
 # Cloudflare needs the CLOUDFLARE_API_TOKEN secret and the CLOUDFLARE_ACCOUNT_ID variable;
@@ -94,18 +95,14 @@ jobs:
             esac
             # A bad source must not block viewer deploys: warn and use the sample game.
             if BATCH=$(uv run python scripts/fetch_hf_batch.py "$SOURCE" --root "$RUNNER_TEMP/runs"); then
-              # Free labels only (--no-jev), for each game that has no labels file.
-              mkdir -p "$RUNNER_TEMP/unlabeled"
-              for log in "$BATCH"/*.jsonl; do
-                case "$log" in *.labels.jsonl) continue ;; esac
-                [ -f "${log%.jsonl}.labels.jsonl" ] || cp "$log" "$RUNNER_TEMP/unlabeled/"
-              done
-              if ls "$RUNNER_TEMP"/unlabeled/*.jsonl >/dev/null 2>&1; then
-                uv run societysim label "$RUNNER_TEMP/unlabeled" --no-jev
-                cp "$RUNNER_TEMP"/unlabeled/*.labels.jsonl "$BATCH/"
+              # The Jev cache lives in the jev-cache-<batch_id> release, not the dataset. With it,
+              # the Jev lie rate and agreement.json match the local postbatch (#645).
+              zip=""
+              if gh release download "jev-cache-$(basename "$BATCH")" -R "$GITHUB_REPOSITORY" \
+                  -p jev_cache.zip -D "$RUNNER_TEMP/jev"; then
+                zip="$RUNNER_TEMP/jev/jev_cache.zip"
               fi
-              uv run societysim report "$BATCH"
-              uv run societysim highlights "$BATCH"
+              bash scripts/label_fetched_batch.sh "$BATCH" ${zip:+"$zip"}
             else
               echo "::warning::could not fetch $SOURCE; deploying the sample game instead"
               BATCH=""

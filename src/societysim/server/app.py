@@ -13,16 +13,17 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, Header, Request
-from pydantic import BaseModel, ConfigDict, Field, RootModel
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.json_schema import models_json_schema
 
+from societysim.agents import human
 from societysim.agents.observation import observe
 from societysim.agents.prompts import Action
-from societysim.agents.schemas import AgentResponse
+from societysim.agents.schemas import StatementAction, TargetAction, VoteAction, WolfChatAction
 from societysim.roles import Phase, Role, SeatId, Winner
 from societysim.server import admission, alerts, security
 from societysim.server.ledger import Ledger
-from societysim.server.manager import GameManager, Session, Settings, Status
+from societysim.server.manager import GameManager, HumanReasoning, Session, Settings, Status
 from societysim.server.security import Error, PlayError
 from societysim.server.web_agent import NotYourTurn
 from societysim.setup import GameSetup
@@ -53,7 +54,7 @@ class StartedGame(_Strict):
 class PendingAction(_Strict):
     kind: Action  # which response shape to send (agents/schemas.py)
     targets: list[str]  # legal choices; a vote may also be "abstain"
-    others: list[str]  # the players to rate in suspicion; unrated ones default to 0.5
+    others: list[str]  # the players the visitor may rate in suspicion (optional)
     deadline: float  # unix seconds; after it the turn falls back
 
 
@@ -75,7 +76,7 @@ class Me(_Strict):
     alive: bool
     day: int
     phase: Phase
-    observation: str | None  # agents/observation.py's text; null once the seat is dead
+    observation: str | None  # agents/observation.py's text minus JSON-format lines; null if dead
     pending_action: PendingAction | None
     players: list[Player]  # public: names and who is alive
 
@@ -94,10 +95,14 @@ class Health(_Strict):
     ok: Literal[True] = True
 
 
-class ActionBody(RootModel[AgentResponse]):
-    """POST /api/games/{id}/action: the response shape for `pending_action.kind`.
-    Statement text and wolf chat messages: 1 to 280 characters after control characters are
-    stripped. `thoughts` is not logged."""
+class ActionBody(_Strict):
+    """POST /api/games/{id}/action: the `action` shape for `pending_action.kind`
+    (agents/schemas.py). Statement text and wolf chat messages: 1 to 280 characters after
+    control characters are stripped. `private_reasoning` is optional: players left out of
+    `suspicion` are logged as not rated, and `thoughts` is not logged."""
+
+    private_reasoning: HumanReasoning | None = None
+    action: StatementAction | VoteAction | WolfChatAction | TargetAction
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -181,7 +186,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             alive=alive,
             day=st.day,
             phase=st.phase,
-            observation=observe(st, s.game.events, seat) if alive else None,
+            observation=human.plain(observe(st, s.game.events, seat)) if alive else None,
             pending_action=p
             and PendingAction(
                 kind=p.turn.action,

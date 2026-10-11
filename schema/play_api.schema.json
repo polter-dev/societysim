@@ -39,22 +39,43 @@
       "type": "object"
     },
     "ActionBody": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/StatementResponse"
+      "additionalProperties": false,
+      "description": "POST /api/games/{id}/action: the `action` shape for `pending_action.kind`\n(agents/schemas.py). Statement text and wolf chat messages: 1 to 280 characters after\ncontrol characters are stripped. `private_reasoning` is optional: players left out of\n`suspicion` are logged as not rated, and `thoughts` is not logged.",
+      "properties": {
+        "private_reasoning": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HumanReasoning"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
-        {
-          "$ref": "#/$defs/VoteResponse"
-        },
-        {
-          "$ref": "#/$defs/WolfChatResponse"
-        },
-        {
-          "$ref": "#/$defs/TargetResponse"
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatementAction"
+            },
+            {
+              "$ref": "#/$defs/VoteAction"
+            },
+            {
+              "$ref": "#/$defs/WolfChatAction"
+            },
+            {
+              "$ref": "#/$defs/TargetAction"
+            }
+          ],
+          "title": "Action"
         }
+      },
+      "required": [
+        "action"
       ],
-      "description": "POST /api/games/{id}/action: the response shape for `pending_action.kind`.\nStatement text and wolf chat messages: 1 to 280 characters after control characters are\nstripped. `thoughts` is not logged.",
-      "title": "ActionBody"
+      "title": "ActionBody",
+      "type": "object"
     },
     "Error": {
       "additionalProperties": false,
@@ -204,6 +225,27 @@
         }
       },
       "title": "Health",
+      "type": "object"
+    },
+    "HumanReasoning": {
+      "additionalProperties": false,
+      "description": "A visitor's optional scratchpad. `thoughts` is not logged; `suspicion` may rate any of\nthe other living players, or none.",
+      "properties": {
+        "thoughts": {
+          "default": "",
+          "title": "Thoughts",
+          "type": "string"
+        },
+        "suspicion": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SuspicionEntry"
+          },
+          "title": "Suspicion",
+          "type": "array"
+        }
+      },
+      "title": "HumanReasoning",
       "type": "object"
     },
     "Limits": {
@@ -411,28 +453,6 @@
       "title": "Player",
       "type": "object"
     },
-    "PrivateReasoning": {
-      "additionalProperties": false,
-      "properties": {
-        "thoughts": {
-          "title": "Thoughts",
-          "type": "string"
-        },
-        "suspicion": {
-          "items": {
-            "$ref": "#/$defs/SuspicionEntry"
-          },
-          "title": "Suspicion",
-          "type": "array"
-        }
-      },
-      "required": [
-        "thoughts",
-        "suspicion"
-      ],
-      "title": "PrivateReasoning",
-      "type": "object"
-    },
     "Role": {
       "enum": [
         "wolf",
@@ -614,23 +634,6 @@
       "title": "StatementAction",
       "type": "object"
     },
-    "StatementResponse": {
-      "additionalProperties": false,
-      "properties": {
-        "private_reasoning": {
-          "$ref": "#/$defs/PrivateReasoning"
-        },
-        "action": {
-          "$ref": "#/$defs/StatementAction"
-        }
-      },
-      "required": [
-        "private_reasoning",
-        "action"
-      ],
-      "title": "StatementResponse",
-      "type": "object"
-    },
     "SuspicionEntry": {
       "additionalProperties": false,
       "properties": {
@@ -664,23 +667,6 @@
       "title": "TargetAction",
       "type": "object"
     },
-    "TargetResponse": {
-      "additionalProperties": false,
-      "properties": {
-        "private_reasoning": {
-          "$ref": "#/$defs/PrivateReasoning"
-        },
-        "action": {
-          "$ref": "#/$defs/TargetAction"
-        }
-      },
-      "required": [
-        "private_reasoning",
-        "action"
-      ],
-      "title": "TargetResponse",
-      "type": "object"
-    },
     "VoteAction": {
       "additionalProperties": false,
       "properties": {
@@ -693,23 +679,6 @@
         "vote"
       ],
       "title": "VoteAction",
-      "type": "object"
-    },
-    "VoteResponse": {
-      "additionalProperties": false,
-      "properties": {
-        "private_reasoning": {
-          "$ref": "#/$defs/PrivateReasoning"
-        },
-        "action": {
-          "$ref": "#/$defs/VoteAction"
-        }
-      },
-      "required": [
-        "private_reasoning",
-        "action"
-      ],
-      "title": "VoteResponse",
       "type": "object"
     },
     "WolfChatAction": {
@@ -729,23 +698,6 @@
         "proposed_target"
       ],
       "title": "WolfChatAction",
-      "type": "object"
-    },
-    "WolfChatResponse": {
-      "additionalProperties": false,
-      "properties": {
-        "private_reasoning": {
-          "$ref": "#/$defs/PrivateReasoning"
-        },
-        "action": {
-          "$ref": "#/$defs/WolfChatAction"
-        }
-      },
-      "required": [
-        "private_reasoning",
-        "action"
-      ],
-      "title": "WolfChatResponse",
       "type": "object"
     }
   }

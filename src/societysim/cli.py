@@ -238,7 +238,7 @@ def play(
         sinks.append(NeonSink(batch_id, connect=connect, agents=agents.value))
     if human_seat is not None:
         make_agent = human.with_human(make_agent, human_seat)
-        sinks = [human.MarkDefaults(sink, human_seat) for sink in sinks]
+        sinks = [human.HumanSink(sink, human_seat) for sink in sinks]
     try:
         game = asyncio.run(
             run_game(cfg, make_agent, sinks, game_id, colors={s.name: s.color for s in specs})

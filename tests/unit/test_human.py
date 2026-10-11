@@ -1,20 +1,29 @@
-"""HumanAgent with scripted stdin: input handling, the orchestrator's validator, and leakage."""
+"""HumanAgent with scripted stdin: plain prompts, the orchestrator's validator, and leakage."""
 
 import json
-import re
 
 import pytest
 
 from societysim import orchestrator
 from societysim.agents.base import Turn
-from societysim.agents.human import DEFAULTED, THOUGHTS, HumanAgent, MarkDefaults, with_human
+from societysim.agents.human import (
+    LEVELS,
+    THOUGHTS,
+    HumanAgent,
+    HumanSink,
+    choose,
+    plain,
+    reasoning,
+    with_human,
+)
+from societysim.agents.prompts import phase_prompt
 from societysim.agents.scripted import RandomAgent
 from societysim.config import GameConfig
 from societysim.engine.state import GameState
-from societysim.logging.events import Event, EventLogger, EventType, Visibility
+from societysim.logging.events import Event, EventLogger, EventType, Suspicion, Visibility
 from societysim.roles import Phase, Role
 
-CFG = GameConfig(seed=3, models=["scripted"])
+CFG = GameConfig(seed=3, models=["scripted"])  # p0 Ava, p1 Cleo, p2 Dev, ...
 SECRET = "SECRET"
 WOLFCHAT = "WOLFCHAT"
 CANARY_P = 0.4242
@@ -33,16 +42,17 @@ def scripted(*lines):
 
 
 def answer(question):
-    """A `read` that always gives a legal answer: the first option, nothing optional."""
-    if question.startswith(("statement", "message")):
-        return "I have a feeling about this."
-    if question.startswith(("vote", "target", "kill")):
-        return re.search(r"\(([^)]*)\): $", question).group(1).split()[0]
-    return ""  # accuse, claim, suspicion
+    """A `read` that always gives a legal answer: choice 1, nothing optional."""
+    if "blank" in question:
+        return ""
+    if "[1-" in question:
+        return "1"
+    return "I have a feeling about this."
 
 
 def turn(action="vote", targets=("p1", "p2", "abstain")):
-    return Turn(action, "OBS\nReply with the JSON object only.", ["p1", "p2"], list(targets))
+    prompt = phase_prompt(action, "OBS", {"p1": "Cleo", "p2": "Dev"}, {}, CFG.rules)
+    return Turn(action, prompt, ["p1", "p2"], list(targets))
 
 
 def agent(read, out=None):
@@ -50,67 +60,108 @@ def agent(read, out=None):
     return HumanAgent(GameState(CFG), "p0", read=read, write=out.append), out
 
 
-async def test_vote_reprompts_until_legal_and_defaults_skipped_suspicion():
-    read = scripted("p9", "p1", "")
+def rated(result):
+    """The seats a reply rated, as HumanSink will log them."""
+    return result.parsed.private_reasoning.thoughts.split(":", 1)[1].split()
+
+
+async def test_vote_is_a_numbered_choice_with_names():
+    read = scripted("9", "p7", "1", "")
     human, out = agent(read)
     result = await human.act(turn())
     assert result.parsed.action.vote == "p1"
-    assert [(e.player, e.p) for e in result.parsed.private_reasoning.suspicion] == [
-        ("p1", 0.5),
-        ("p2", 0.5),
-    ]
-    assert result.parsed.private_reasoning.thoughts == DEFAULTED
     assert result.usage.model == "human"
-    assert len(read.asked) == 3
-    assert any("invalid" in line for line in out)
-    assert not any("Reply with the JSON object" in line for line in out)
-    assert json.loads(result.raw)["action"] == {"vote": "p1"}
+    assert len(read.asked) == 4
+    assert read.asked[0] == "Your vote [1-3]: "
+    shown = "\n".join(out)
+    assert "  1. Cleo (p1)\n  2. Dev (p2)\n  3. abstain (vote for nobody)" in shown
+    assert sum("invalid" in line for line in out) == 2
+    # no JSON in what the human reads
+    assert "JSON" not in shown and '"action"' not in shown and '"suspicion"' not in shown
+    assert json.loads(result.raw) == {"action": {"vote": "p1"}, "suspicion": {}}
 
 
-async def test_suspicion_input_is_validated():
-    read = scripted("p2", "p1=2", "p7=0.1", "p1=x", "p1=0.9 p2=0.1")
-    human, out = agent(read)
+async def test_skipped_suspicion_rates_nobody():
+    result = await agent(scripted("2", ""))[0].act(turn())
+    assert result.parsed.action.vote == "p2"
+    assert rated(result) == ["-"]
+
+
+async def test_suspicion_is_three_buttons_per_player():
+    # "4" is not a level: the suspicion question starts over
+    human, out = agent(scripted("1", "y", "4", "yes", "1", "3"))
     result = await human.act(turn())
-    reasoning = result.parsed.private_reasoning
-    assert [(e.player, e.p) for e in reasoning.suspicion] == [("p1", 0.9), ("p2", 0.1)]
-    assert reasoning.thoughts == THOUGHTS
-    assert sum("invalid" in line for line in out) == 3
+    reasoning_ = result.parsed.private_reasoning
+    assert [(e.player, e.p) for e in reasoning_.suspicion] == [
+        ("p1", LEVELS["suspicious"]),
+        ("p2", LEVELS["trust"]),
+    ]
+    assert rated(result) == ["p1", "p2"]
+    assert sum("invalid" in line for line in out) == 1
 
 
-async def test_partial_suspicion_is_marked_defaulted():
-    human, _ = agent(scripted("p2", "p1=0.9"))
+async def test_partial_suspicion_names_only_the_rated_seats():
+    human, _ = agent(scripted("1", "y", "", "unsure"))
     result = await human.act(turn())
-    assert result.parsed.private_reasoning.thoughts == DEFAULTED
-    assert result.parsed.private_reasoning.suspicion[1].p == 0.5
+    assert rated(result) == ["p2"]
+    assert json.loads(result.raw)["suspicion"] == {"p2": LEVELS["unsure"]}
 
 
 async def test_statement_with_accusation_and_seer_claim():
-    answers = ["Ava is a wolf.", "p1 p1", "seer", "p1 wolf 1", ""]
+    # text, accuse 1 (twice), claim 2 = seer, report on seat 1 (p1): 1 = wolf, night 1
+    answers = ["Cleo is a wolf.", "1 1", "2", "1", "1", "1", ""]
     human, _ = agent(scripted(*answers))
     result = await human.act(turn("statement", ("p1", "p2")))
     act = result.parsed.action
-    assert (act.text, act.accuse, act.claim_role) == ("Ava is a wolf.", ["p1"], Role.SEER)
+    assert (act.text, act.accuse, act.claim_role) == ("Cleo is a wolf.", ["p1"], Role.SEER)
     assert act.seer_report.model_dump() == {"target": "p1", "result": "wolf", "night": 1}
 
-    # bad accuse, then a bad role, then a bad seer result: each restarts the statement
+    # empty text, a bad accuse, a bad role, a bad seer result, a bad night: each restarts
     human, out = agent(
         scripted(
-            *["x", "p5"],
-            *["x", "", "sorcerer"],
-            *["x", "", "seer", "p1 wolfish 1"],
+            "  ",
+            *["x", "5"],
+            *["x", "", "9"],
+            *["x", "", "seer", "1", "3"],
+            *["x", "", "2", "1", "2", "first"],
             *answers,
         )
     )
     result = await human.act(turn("statement", ("p1", "p2")))
     assert result.parsed.action.seer_report.target == "p1"
-    assert sum("invalid" in line for line in out) == 3
+    assert sum("invalid" in line for line in out) == 5
+
+
+async def test_statement_without_claim():
+    human, _ = agent(scripted("Hello.", "", "", ""))
+    act = (await human.act(turn("statement", ("p1", "p2")))).parsed.action
+    assert (act.accuse, act.claim_role, act.seer_report) == ([], None, None)
+
+
+def test_choose_takes_a_number_or_the_option():
+    assert choose(" 2 ", ["p1", "p2"]) == "p2"
+    assert choose("p1", ["p1", "p2"]) == "p1"
+    for bad in ("0", "3", "", "-1", "Cleo"):
+        with pytest.raises(ValueError):
+            choose(bad, ["p1", "p2"])
+
+
+def test_plain_drops_only_the_json_format_lines():
+    prompt = phase_prompt(
+        "statement", 'Now: Day 1.\nCleo (p1): "hi"', {"p1": "Cleo"}, {"p1": "Cleo"}, CFG.rules
+    )
+    text = plain(prompt)
+    assert 'Now: Day 1.\nCleo (p1): "hi"' in text
+    assert "Players you can accuse: Cleo (p1)." in text
+    assert "JSON" not in text and '"action"' not in text and '"suspicion"' not in text
 
 
 async def test_orchestrator_rejection_comes_back_as_a_retry():
     """The existing validator still runs: a seer report for a night that hasn't happened
     is rejected by the orchestrator, and the human is asked again with the error."""
     out = []
-    read = scripted("I am the Seer.", "", "seer", "p1 wolf 1", "", "Fine, I'm not.", "", "", "")
+    first = ["I am the Seer.", "", "2", "1", "1", "1", ""]
+    read = scripted(*first, "Fine, I'm not.", "", "", "")
     game = orchestrator.Game(
         CFG,
         with_human(RandomAgent, "p0"),
@@ -121,11 +172,27 @@ async def test_orchestrator_rejection_comes_back_as_a_retry():
     assert len(reply.failures) == 1
     assert "seer_report" in reply.failures[0][1]
     assert reply.response.action.text == "Fine, I'm not."
-    assert "Your previous reply was rejected" in out[-1]
+    retry = [block for block in out if "Your previous reply was rejected" in block]
+    assert len(retry) == 1 and "JSON" not in retry[0]
     assert sum(block.startswith("You are playing Werewolf") for block in out) == 1
 
 
-async def test_mark_defaults_sets_meta_only_for_defaulted_human_events():
+def event(actor, thoughts, suspicion=None):
+    return Event(
+        game_id="g",
+        seq=0,
+        t=0,
+        day=1,
+        phase=Phase.VOTE,
+        type=EventType.VOTE,
+        visibility=Visibility.PUBLIC,
+        actor=actor,
+        private_reasoning=thoughts,
+        suspicion=suspicion,
+    )
+
+
+async def test_human_sink_logs_only_given_suspicion():
     class Sink:
         def __init__(self):
             self.events, self.closed = [], False
@@ -136,26 +203,30 @@ async def test_mark_defaults_sets_meta_only_for_defaulted_human_events():
         async def close(self):
             self.closed = True
 
-    def event(actor, reasoning):
-        return Event(
-            game_id="g",
-            seq=0,
-            t=0,
-            day=1,
-            phase=Phase.VOTE,
-            type=EventType.VOTE,
-            visibility=Visibility.PUBLIC,
-            actor=actor,
-            private_reasoning=reasoning,
-        )
+    def reply(given):
+        r = reasoning(given, ["p1", "p2"])
+        return r["thoughts"], [Suspicion(**s) for s in r["suspicion"]]
 
     sink = Sink()
-    marked = MarkDefaults(sink, "p0")
-    for e in (event("p0", DEFAULTED), event("p0", THOUGHTS), event("p1", DEFAULTED)):
-        await marked.write(e)
-    await marked.close()
-    metas = [e.model_dump(mode="json")["meta"] for e in sink.events]
-    assert metas == [{"suspicion_default": True}, {}, {}]
+    human_sink = HumanSink(sink, "p0")
+    ai = event("p1", "AI thoughts", [Suspicion(player="p0", p=0.5)])
+    for e in (
+        event("p0", *reply({})),
+        event("p0", *reply({"p2": 0.8})),
+        event("p0", *reply({"p1": 0.2, "p2": 0.8})),
+        ai,
+    ):
+        await human_sink.write(e)
+    await human_sink.close()
+    logged = [e.model_dump(mode="json") for e in sink.events]
+    assert [e.get("suspicion") for e in logged] == [
+        None,  # nobody rated: null, never a made-up 0.5
+        [{"player": "p2", "p": 0.8}],
+        [{"player": "p1", "p": 0.2}, {"player": "p2", "p": 0.8}],
+        [{"player": "p0", "p": 0.5}],  # other seats are untouched
+    ]
+    assert [e["private_reasoning"] for e in logged] == [THOUGHTS] * 3 + ["AI thoughts"]
+    assert all(e["meta"] == {} for e in logged)
     assert sink.closed
 
 
@@ -196,13 +267,14 @@ async def test_leakage_human_seat_sees_only_its_observations(role, monkeypatch):
     game = orchestrator.Game(CFG, with_human(Canary, seat), EventLogger("leak", []))
     await game.run()
 
-    system, *turns = out
+    system, *rest = out
     assert system.startswith(f"You are playing Werewolf. You are {game.state.names[seat]}")
+    turns = [block for block in rest if block.startswith("\n=== your turn: ")]
     assert turns and len(turns) == len(seen)
     for block, obs in zip(turns, seen, strict=True):
-        assert block.startswith("\n=== your turn: ")
-        assert obs in block
+        assert plain(obs) in block
     shown = "\n".join(out)
+    assert "JSON" not in shown and '"suspicion"' not in shown
     assert SECRET not in shown
     assert str(CANARY_P) not in shown
     assert (WOLFCHAT in shown) is (role is Role.WOLF)

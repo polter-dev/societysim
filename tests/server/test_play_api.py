@@ -106,7 +106,7 @@ def waiting(me):
 
 
 def move(pending, text=SAY):
-    """A valid reply for a pending action; suspicion left empty (defaults to 0.5)."""
+    """A minimal valid move for a pending action: no scratchpad, no suspicion."""
     kind, targets = pending["kind"], pending["targets"]
     match kind:
         case "statement":
@@ -117,7 +117,7 @@ def move(pending, text=SAY):
             action = {"message": "Take the quiet one.", "proposed_target": targets[0]}
         case _:
             action = {"target": targets[0]}
-    return {"private_reasoning": {"thoughts": "", "suspicion": []}, "action": action}
+    return {"action": action}
 
 
 async def play_out(client, started, text=SAY):
@@ -175,8 +175,9 @@ async def test_full_game_as_a_human_seat(make_client, tmp_path):
     assert meta["agents"] == "llm" and meta["models"][0] == "human" and "forfeit" not in meta
     said = p0(events, "statement")
     assert said and all(e["public_text"] == SAY for e in said)
-    # Empty suspicion defaults to 0.5 and is marked, as for the terminal human seat.
-    assert all(e["meta"]["suspicion_default"] for e in said)
+    # No suspicion given: logged as null, never a made-up 0.5.
+    assert all(e["suspicion"] is None and e["private_reasoning"] == "human player" for e in said)
+    assert not any(e["meta"].get("suspicion_default") for e in events)
     assert not p0(events, "fallback_action")
 
 
@@ -229,10 +230,46 @@ async def test_wrong_turn_and_bad_moves(make_client):
         assert (await c.post(url, json=bad, headers=headers)).status_code == 422
         extra = {**move(pending), "debug": True}
         assert (await c.post(url, json=extra, headers=headers)).status_code == 422
+        not_rateable = {
+            **move(pending),
+            "private_reasoning": {"suspicion": [{"player": "p0", "p": 1}]},
+        }
+        assert (await c.post(url, json=not_rateable, headers=headers)).status_code == 422
+        out_of_range = {
+            **move(pending),
+            "private_reasoning": {"suspicion": [{"player": pending["others"][0], "p": 2}]},
+        }
+        assert (await c.post(url, json=out_of_range, headers=headers)).status_code == 422
+        for body in ([move(pending)], "vote", {}):
+            assert (await c.post(url, json=body, headers=headers)).status_code == 422
         assert (await c.post(url, content=b"{" * 9000, headers=headers)).status_code == 413
 
         assert (await c.post(url, json=move(pending), headers=headers)).status_code == 200
         assert (await c.post(url, json=move(pending), headers=headers)).status_code == 409
+
+
+async def test_only_the_suspicion_given_is_logged(make_client, tmp_path):
+    async with make_client() as c:
+        started = await start(c)
+        me = await until(c, started, lambda m: m["pending_action"])
+        assert "JSON" not in me["observation"] and '"suspicion"' not in me["observation"]
+        pending = me["pending_action"]
+        rated = pending["others"][0]
+        body = {
+            **move(pending),
+            "private_reasoning": {"thoughts": "NOTES", "suspicion": [{"player": rated, "p": 0.8}]},
+        }
+        url = f"/api/games/{started['game_id']}/action"
+        r = await c.post(url, json=body, headers=auth(started["seat_token"]))
+        assert r.status_code == 200, r.text
+        await play_out(c, started)
+        await finished(c, started)
+
+    events, _ = read_log(tmp_path, started["game_id"])
+    mine = [e for e in events if e["actor"] == "p0" and e["meta"].get("usage")]
+    assert mine[0]["suspicion"] == [{"player": rated, "p": 0.8}]  # the others are not invented
+    assert all(e["suspicion"] is None for e in mine[1:])
+    assert "NOTES" not in json.dumps(events)
 
 
 async def test_statement_text_is_cleaned(make_client, tmp_path):

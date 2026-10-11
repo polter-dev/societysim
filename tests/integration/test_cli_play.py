@@ -121,12 +121,10 @@ def test_llm_mode_requires_provider_key_before_starting(tmp_path, monkeypatch):
 
 
 def _answer(question: str) -> str:
-    """Scripted stdin for a human seat: the first option, nothing optional."""
-    if question.startswith(("statement", "message")):
-        return "I trust nobody yet."
-    if question.startswith(("vote", "target", "kill")):
-        return question.rsplit("(", 1)[1].split()[0].rstrip("):")
-    return ""  # accuse, claim, suspicion
+    """Scripted stdin for a human seat: choice 1, nothing optional (no suspicion either)."""
+    if "blank" in question:
+        return ""
+    return "1" if "[1-" in question else "I trust nobody yet."
 
 
 def test_human_seat_plays_against_llms_and_is_logged_as_human(tmp_path, monkeypatch):
@@ -155,11 +153,13 @@ def test_human_seat_plays_against_llms_and_is_logged_as_human(tmp_path, monkeypa
     meta = json.loads(log.with_suffix(".run_meta.json").read_text())
     assert meta["models"][3] == "human"
     assert meta["agents"] == "llm"
-    mine = [e for e in evs if e.get("actor") == "p3" and e.get("suspicion")]
+    mine = [e for e in evs if e.get("actor") == "p3" and e["meta"].get("usage")]
     assert mine
-    assert all(e["meta"]["suspicion_default"] is True for e in mine)
     assert all(e["meta"]["usage"]["model"] == "human" for e in mine)
-    assert not any(e["meta"].get("suspicion_default") for e in evs if e.get("actor") != "p3")
+    # Skipped suspicion is logged as null, never as a made-up 0.5.
+    assert all(e["suspicion"] is None for e in mine)
+    assert all(e["private_reasoning"] == "human player" for e in mine)
+    assert not any(e["meta"].get("suspicion_default") for e in evs)
     assert not [e for e in evs if e["type"] == EventType.INVALID_OUTPUT and e["actor"] == "p3"]
     assert evs[-1]["type"] == EventType.GAME_END
 

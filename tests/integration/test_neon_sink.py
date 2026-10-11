@@ -379,7 +379,7 @@ def test_play_neon_streams_live(tmp_path, monkeypatch):
     assert next(a for sql, a in conn.executed if "insert into games" in sql)[4] == "scripted"
 
 
-def test_play_neon_with_human_seat_streams_marked_events(tmp_path, monkeypatch):
+def test_play_neon_with_human_seat_streams_unrated_suspicion_as_null(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
     conn = FakeConn()
@@ -387,12 +387,10 @@ def test_play_neon_with_human_seat_streams_marked_events(tmp_path, monkeypatch):
     async def connect():
         return conn
 
-    def answer(question):  # scripted stdin: first option, nothing optional
-        if question.startswith(("statement", "message")):
-            return "Hello."
-        if question.startswith(("vote", "target", "kill")):
-            return question.rsplit("(", 1)[1].split()[0].rstrip("):")
-        return ""
+    def answer(question):  # scripted stdin: choice 1, nothing optional
+        if "blank" in question:
+            return ""
+        return "1" if "[1-" in question else "Hello."
 
     monkeypatch.setattr("societysim.logging.sinks.neon.connect_neon", connect)
     monkeypatch.setattr("builtins.input", answer)
@@ -402,9 +400,10 @@ def test_play_neon_with_human_seat_streams_marked_events(tmp_path, monkeypatch):
     log = _events(tmp_path / "runs/selfplay_smoke/selfplay_smoke-s0.jsonl")
     assert _event_rows(conn) == {"selfplay_smoke-s0": [e["seq"] for e in log]}
     rows = [json.loads(r[7]) for _, batch in conn.many for r in batch]
-    marked = [e["seq"] for e in rows if e["meta"].get("suspicion_default")]
-    assert marked
-    assert marked == [e["seq"] for e in log if e["meta"].get("suspicion_default")]
+    human = [e["seq"] for e in rows if e.get("actor") == "p3" and e["meta"].get("usage")]
+    assert human  # the human skipped suspicion: Neon gets null, as in the log
+    assert all(r["suspicion"] is None for r in rows if r["seq"] in human)
+    assert all(e.get("suspicion") is None for e in log if e["seq"] in human)
     assert rows[0]["meta"]["seats"]["p3"]["model"] == "human"
 
 

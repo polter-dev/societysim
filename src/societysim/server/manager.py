@@ -28,12 +28,12 @@ from functools import cache
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from societysim.agents import human
 from societysim.agents.base import Agent, AgentFactory
 from societysim.agents.prompts import RESPONSE_MODELS
-from societysim.agents.schemas import TargetResponse
+from societysim.agents.schemas import SuspicionEntry, TargetResponse
 from societysim.agents.scripted import RandomAgent
 from societysim.config import GameConfig
 from societysim.engine.state import GameState
@@ -53,6 +53,18 @@ MAX_TEXT = 280  # statement text and wolf chat message, after control characters
 KEEP_FINISHED_S = 3600  # how long an ended game stays readable through /me
 
 Status = Literal["running", "finished", "forfeit", "failed"]
+
+
+class HumanReasoning(BaseModel):
+    """A visitor's optional scratchpad. `thoughts` is not logged; `suspicion` may rate any of
+    the other living players, or none."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    thoughts: str = ""
+    suspicion: list[SuspicionEntry] = []
+
+
 # A game's agents for every seat but the visitor's, and model name -> viewer color.
 type AgentsFor = Callable[[GameConfig], tuple[AgentFactory, Mapping[str, str | None]]]
 
@@ -257,7 +269,7 @@ class GameManager:
         if seat is not None:
             agent = WebHumanAgent(s.turn_timeout, s.max_timeouts)
             make_agent = _seat(make_agent, seat, agent)
-            sinks = [human.MarkDefaults(sink, seat) for sink in sinks]
+            sinks = [human.HumanSink(sink, seat) for sink in sinks]
             token = secrets.token_urlsafe(32)  # 256 bits; only its hash is kept
         logger = EventLogger(game_id, sinks)
         game = Game(cfg, make_agent, logger, colors)
@@ -351,8 +363,12 @@ class GameManager:
         if pending is None:
             raise NotYourTurn
         turn = pending.turn
-        try:
-            parsed = RESPONSE_MODELS.get(turn.action, TargetResponse).model_validate(data)
+        if not isinstance(data, dict):
+            raise ValueError("the body must be a JSON object")
+        try:  # the scratchpad is optional for a visitor
+            given = HumanReasoning.model_validate(data.get("private_reasoning") or {})
+            model = RESPONSE_MODELS.get(turn.action, TargetResponse)
+            parsed = model.model_validate({**data, "private_reasoning": human.reasoning({}, [])})
         except ValidationError as exc:
             raise ValueError("; ".join(setup_errors(exc))) from None
         act = parsed.action
@@ -362,19 +378,13 @@ class GameManager:
                 if not 1 <= len(text) <= MAX_TEXT:
                     raise ValueError(f"{name} must be 1 to {MAX_TEXT} characters")
                 act = act.model_copy(update={name: text})
-        # Unrated players default to 0.5, as for the terminal human seat (meta.suspicion_default).
-        rated = {e.player: e.p for e in parsed.private_reasoning.suspicion}
+        # Players the visitor didn't rate are logged as not rated (human.HumanSink), never 0.5.
+        rated = {e.player: e.p for e in given.suspicion}
         extra = [p for p in rated if p not in turn.others]
         if extra:
             raise ValueError(f"suspicion must rate only {', '.join(turn.others)}")
-        defaulted = len(rated) < len(turn.others)
-        reasoning = {
-            "thoughts": human.DEFAULTED if defaulted else human.THOUGHTS,
-            "suspicion": [{"player": p, "p": rated.get(p, human.NEUTRAL)} for p in turn.others],
-        }
-        parsed = type(parsed).model_validate(
-            {"private_reasoning": reasoning, "action": act.model_dump()}
-        )
+        reasoning = human.reasoning(rated, turn.others)
+        parsed = model.model_validate({"private_reasoning": reasoning, "action": act.model_dump()})
         if error := session.game._invalid(turn, parsed):  # the orchestrator's own check
             raise ValueError(error)
         session.agent.submit(parsed)

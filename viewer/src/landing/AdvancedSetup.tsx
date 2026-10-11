@@ -28,12 +28,14 @@ export default function AdvancedSetup({ catalogUrl, schemaUrl, href, go = (url: 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [retryRound, setRetryRound] = useState(0);
   const widget = useRef<HTMLDivElement>(null);
   const starting = useRef(false);
-  const { token, reset } = useTurnstile(widget, () => setError('Could not complete the human verification. Reload to try again.'), playEnabled());
+  const { token, reset } = useTurnstile(widget, () => setError('Could not complete the human verification. Please retry the check.'), playEnabled());
   const on = playEnabled();
 
   useEffect(() => {
+    if (retryRound > 0 && assets) return;
     let active = true;
     setAssetError(null);
     loadSetupAssets(catalogUrl, schemaUrl).then(next => {
@@ -41,16 +43,18 @@ export default function AdvancedSetup({ catalogUrl, schemaUrl, href, go = (url: 
       setAssets(next);
       const defaults = defaultState(next.catalog).seats;
       setState(s => ({ ...s, seats: s.seats.map((model,i) => model === HUMAN ? HUMAN : defaults[i]) }));
-    }, () => { if (active) setAssetError('Could not load the model catalog. Check the published batch URL and reload.'); });
+    }, () => { if (active) setAssetError('Could not load the model catalog. Please try again.'); });
     return () => { active = false; };
-  }, [catalogUrl, schemaUrl]);
+  }, [catalogUrl, schemaUrl, retryRound]);
 
   useEffect(() => {
     if (!on) return;
     let active = true;
-    getLimits().then(next => { if (active) setLimits(next); }, () => { if (active) setError('Could not check game availability. Reload to try again.'); });
+    setError(null);
+    setLimits(null);
+    getLimits().then(next => { if (active) setLimits(next); }, () => { if (active) setError('Could not check game availability. Please try again.'); });
     return () => { active = false; };
-  }, [on]);
+  }, [on, retryRound]);
 
   const allowed = allowedModels(limits);
   const rawCatalog = assets?.catalog ?? emptyCatalog;
@@ -115,6 +119,7 @@ export default function AdvancedSetup({ catalogUrl, schemaUrl, href, go = (url: 
           {on && limits && <p>{limits.play_enabled ? `${limits.remaining_today} games left today` : 'Play is paused right now.'}</p>}
           {busy && <p role="status">Waking the server… This can take 30–60 seconds.</p>}
           {error && <p role="alert">{error}</p>}
+          {(error || assetError) && !busy && <button type="button" className="advanced-retry" onClick={() => { reset(); setRetryRound(r => r + 1); }}>Retry checks</button>}
         </div>
         <div className="advanced-actions"><div ref={widget} className="advanced-verification" /><button className="advanced-start" type="submit" disabled={!canStart} aria-label="Start simulation" aria-busy={busy}><img src={start} alt="" /></button></div>
       </form>

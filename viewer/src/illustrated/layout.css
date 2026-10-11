@@ -11,13 +11,13 @@
    the seats stay on the painted chairs. Seats, medallions and plates need 760 x 720 art px. */
 :root{
   --gs-gap:clamp(6px,.5vw,12px);
-  --gs-top:clamp(44px,4.6dvh,56px);
+  --gs-top:clamp(60px,5dvh,68px);
   --gs-counter:clamp(34px,6dvh,80px);
-  --gs-bar:clamp(78px,10.5dvh,124px);
+  --gs-bar:clamp(112px,12dvh,148px);
   --gs-turn:0px;
   /* chrome and bar text, and their control height: 12px / 28px up to ~1900 wide, 16px / 40px at 2560 */
-  --gs-ui:clamp(12px,.62vw,16px);
-  --gs-ctl:clamp(28px,1.6vw,40px);
+  --gs-ui:clamp(14px,.72vw,16px);
+  --gs-ctl:44px;
   /* table region height, then the width the table would use at that height */
   --gs-th:calc(100dvh - var(--gs-top) - var(--gs-counter) - var(--gs-bar) - 2 * var(--gs-gap));
   /* side panels take what the table leaves, within bounds; tall windows still give them 15vw */
@@ -183,3 +183,8 @@ main.replay-app .replay-tools.open-log .open-log__games{color:var(--accent-gold,
 .illustrated-shell .motion-toggle{display:grid;place-items:center;padding:0;border-radius:50%;font-size:12px;background:#03271eee}
 .illustrated-shell .motion-toggle svg{width:14px;height:14px;fill:currentColor}
 .illustrated-shell .motion-toggle[aria-pressed=true]{background:#82692c}
+@media(min-width:1001px){
+  .replay-app .replay-bar section[aria-label='Game timeline']>div button{min-height:44px}
+  .replay-app .replay-bar nav[aria-label='Timeline markers'] button{min-height:32px;min-width:32px;font-size:12px}
+  .replay-app .replay-pop>summary{min-height:32px;display:flex;align-items:center;box-sizing:border-box}
+}

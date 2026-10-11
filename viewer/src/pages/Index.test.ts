@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { summarize } from "../data/staticSource";
-import { GameList, gamesCount } from "./Index";
+import { GameList, gamesCount, filterGames } from "./Index";
 
 const games = [
   summarize({
@@ -19,6 +19,13 @@ const render = (showWinners: boolean) =>
   renderToStaticMarkup(createElement(GameList, { games, href: (id: string) => `?game=${id}`, showWinners }));
 
 describe("GameList", () => {
+  it('filters by game id, readable model name and live status without searching spoilers', () => {
+    const rows = [{id:'village-1',models:['llama4-maverick'],live:true,winner:'wolves'}, {id:'batch-2',models:['gemini-flash']}];
+    expect(filterGames(rows, 'Llama 4', 'all')).toEqual([rows[0]]);
+    expect(filterGames(rows, ' batch ', 'recorded')).toEqual([rows[1]]);
+    expect(filterGames(rows, '', 'live')).toEqual([rows[0]]);
+    expect(filterGames(rows, 'wolves', 'all')).toEqual([]);
+  });
   it("links each game into the replay and shows models and days", () => {
     const html = render(false);
     expect(html).toContain('href="?game=g1"');

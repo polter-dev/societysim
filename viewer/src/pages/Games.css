@@ -253,3 +253,13 @@ main.info-page:has(> .games-page) > .batch-source {
   border-color: var(--event-accusation);
   color: #ffcbb1;
 }
+
+.games-filters{display:flex;flex-wrap:wrap;align-items:end;gap:16px;padding:16px 20px;border-bottom:1px solid #d4b35c44}
+.games-filters label{display:grid;gap:6px;font-size:14px}
+.games-filters input,.games-filters select,.games-filters button{min-height:44px!important;padding:8px 12px!important}
+.games-filters input{width:min(320px,65vw)}
+.games-filters p{margin:0;padding-bottom:12px;color:var(--text-secondary);font-size:14px}
+.games-scroll{overflow-x:auto;scrollbar-color:var(--accent-gold) var(--night-panel)}
+.games-lineup summary{cursor:pointer;min-height:32px;display:list-item;align-content:center;color:var(--text-secondary)}
+.games-lineup[open] summary{margin-bottom:8px}
+@media(max-width:700px){.games-table.games-table{min-width:620px}.games-lineup summary{min-width:220px}}

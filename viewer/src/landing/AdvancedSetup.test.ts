@@ -26,6 +26,13 @@ it('clamps wolves and moves an out-of-range human seat when seats decrease',asyn
 it('uses watch_only when no human seat is selected',async()=>{await render();await change('Your seat','');await act(async()=>{(box.querySelector('[aria-label="Start simulation"]') as HTMLButtonElement).click();});await settle();const request=vi.mocked(startGame).mock.calls[0][0];expect(request.watch_only).toBe(true);expect(request.setup.human_seat).toBeUndefined();expect(request.setup.seats!.some(s=>s.model==='human')).toBe(false);});
 it('has no seed field and preserves friendly API errors',async()=>{await render();expect(box.querySelector('[aria-label="Seed"]')).toBeNull();vi.mocked(startGame).mockRejectedValueOnce(new PlayError(403,'Couldn’t verify you’re human. Please retry the check.'));await act(async()=>{(box.querySelector('[aria-label="Start simulation"]') as HTMLButtonElement).click();});await settle();expect(box.textContent).toContain('verify you’re human');});
 it('does not start until the verification and availability checks succeed',async()=>{vi.mocked(getLimits).mockResolvedValue({play_enabled:true,remaining_today:0});await render();expect((box.querySelector('[aria-label="Start simulation"]') as HTMLButtonElement).disabled).toBe(true);expect(startGame).not.toHaveBeenCalled();});
+it('retries failed availability without changing the selected rules or starting a game',async()=>{
+  vi.mocked(getLimits).mockRejectedValueOnce(new Error('offline'));
+  await render();await change('Seats','7');await change('Model selection','b');
+  await act(async()=>{(Array.from(box.querySelectorAll('button')).find(b=>b.textContent==='Retry checks')!).click();});await settle();
+  expect(getLimits).toHaveBeenCalledTimes(2);expect(shown('Seats')).toBe('7');expect(shown('Model selection')).toBe('b');
+  expect(box.textContent).not.toContain('Could not check game availability');expect(startGame).not.toHaveBeenCalled();
+});
 it('shows short model names with the full id in the title and hides mock in production',async()=>{
   const catalog={...assets.catalog,models:[model('llama4-maverick'),model('mock'),model('b')],default_lineup:['llama4-maverick','b']};
   vi.mocked(loadSetupAssets).mockResolvedValue({...assets,catalog});

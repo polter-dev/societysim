@@ -17,6 +17,12 @@ export function gamesCount(games: GameSummary[]): string {
   return `${games.length} ${games.length === 1 ? "game" : "games"}${live ? `, ${live} live` : ""}`;
 }
 
+export function filterGames(games: GameSummary[], query: string, status: string): GameSummary[] {
+  const search = query.trim().toLowerCase();
+  return games.filter(g => (status === 'all' || (status === 'live' ? g.live : !g.live)) &&
+    (!search || [g.id, ...(g.models ?? []).flatMap(m => [m, modelName(m)])].some(value => value.toLowerCase().includes(search))));
+}
+
 /** Winner cell text plus a data-winner value the stylesheet colours by. */
 function winnerOf(g: GameSummary, showWinners: boolean): [text: string, kind: string] {
   if (g.live) return ["playing", "live"];
@@ -49,14 +55,14 @@ export function GameList({ games, href, showWinners = false }: ListProps) {
               </th>
               <td>
                 {g.models?.length ? (
-                  <ul className="games-models">
+                  <details className="games-lineup"><summary>{g.models.length} models · {g.models.slice(0, 2).map(modelName).join(', ')}{g.models.length > 2 ? '…' : ''}</summary><ul className="games-models">
                     {g.models.map((m) => (
                       <li key={m} title={m}>
                         <ModelAvatar model={m} label={modelName(m)} size={20} />
                         {modelName(m)}
                       </li>
                     ))}
-                  </ul>
+                  </ul></details>
                 ) : (
                   "n/a"
                 )}
@@ -80,6 +86,9 @@ export default function IndexPage({ source, href }: { source: GameSource; href: 
   const [games, setGames] = useState<GameSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showWinners, setShowWinners] = useState(false);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('all');
+  const visible = games ? filterGames(games, query, status) : [];
 
   useEffect(() => {
     source.listGames().then(setGames, (err: Error) => setError(err.message));
@@ -96,12 +105,18 @@ export default function IndexPage({ source, href }: { source: GameSource; href: 
           </label>
         )}
       </header>
+      {games && <div className="games-filters">
+        <label>Search games or models<input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Game ID or model name" /></label>
+        <label>Status<select value={status} onChange={e => setStatus(e.target.value)}><option value="all">All games</option><option value="live">Live games</option><option value="recorded">Recorded games</option></select></label>
+        <p role="status">{visible.length} of {games.length} games</p>
+        {(query || status !== 'all') && <button onClick={() => { setQuery(''); setStatus('all'); }}>Clear filters</button>}
+      </div>}
       {error ? (
         <p role="alert">Could not load the game index: {error}</p>
       ) : !games ? (
         <p className="games-status">Loading games...</p>
       ) : (
-        <GameList games={games} href={href} showWinners={showWinners} />
+        visible.length ? <div className="games-scroll"><GameList games={visible} href={href} showWinners={showWinners} /></div> : <p className="games-status">{games.length ? 'No games match these filters.' : 'No games in this index.'}</p>
       )}
     </section>
   );

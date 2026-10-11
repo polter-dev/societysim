@@ -44,6 +44,16 @@ describe("ranking and sorting", () => {
   it("sorts rows by liar skill and columns by gullibility", () => {
     const { liars, listeners } = sortAxes(m, "self_tag");
     expect(liars).toEqual(["a", "b"]); // a: 12/14, b: 5/16
-    expect(listeners).toEqual(["b", "c", "a"]); // b: 8/10, c: 7/10, a: 2/10
+    expect(listeners).toEqual(["b", "c", "a"]); // over cells with 5+ voters: b 8/10, c 3/6, a 2/10
+  });
+
+  it("does not let thin samples top the axes (#712)", () => {
+    const f = structuredClone(fixture) as any;
+    // d: 100% on cells under the threshold only; e: 4/5 loses to a's 8/10 on the lower bound.
+    f.pairs.self_tag.d = { a: { ...f.pairs.self_tag.a.b, voters: 4, followed: 4, vote_follow_rate: 1 } };
+    f.pairs.self_tag.e = { c: { ...f.pairs.self_tag.a.b, voters: 5, followed: 4, vote_follow_rate: 0.8 } };
+    const t = parseDeceptionMatrix(f);
+    expect(sortAxes(t, "self_tag").liars).toEqual(["a", "e", "b", "d"]);
+    expect(sortAxes(t, "self_tag", 1).liars).toEqual(["a", "d", "e", "b"]); // 4/4 counts once the threshold allows it
   });
 });

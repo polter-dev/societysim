@@ -28,7 +28,7 @@ export function DeceptionMatrix({ matrix, minN = DEFAULT_MIN_N, initialSource = 
   const hasJev = hasSource(matrix, "jev");
   const [picked, setSource] = useState<DeceptionSource>(initialSource);
   const source = hasJev ? picked : "self_tag";
-  const { liars, listeners } = sortAxes(matrix, source);
+  const { liars, listeners } = sortAxes(matrix, source, minN);
   const label = useModelLabel();
   const model = (m: string, size: number) => (
     <span className="deception-model" title={label(m)}>

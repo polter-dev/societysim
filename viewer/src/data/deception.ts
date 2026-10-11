@@ -150,10 +150,14 @@ export function rankPairs(m: DeceptionMatrix, source: DeceptionSource, minN = DE
   );
 }
 
-/** Pooled followed/voters; null with no voters. */
-function pooled(cells: DeceptionCell[]): number | null {
-  const voters = cells.reduce((s, c) => s + c.voters, 0);
-  return voters ? cells.reduce((s, c) => s + c.followed, 0) / voters : null;
+/** Wilson 95% lower bound of pooled followed/voters over cells with at least `minN` voters; null with none. */
+function pooled(cells: (DeceptionCell | undefined)[], minN: number): number | null {
+  const kept = cells.filter((c): c is DeceptionCell => !belowThreshold(c, minN));
+  const n = kept.reduce((s, c) => s + c.voters, 0);
+  if (!n) return null;
+  const p = kept.reduce((s, c) => s + c.followed, 0) / n;
+  const z = 1.96;
+  return (p + (z * z) / (2 * n) - z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n)) / (1 + (z * z) / n);
 }
 
 function byRate(keys: string[], rate: (k: string) => number | null): string[] {
@@ -168,14 +172,15 @@ function byRate(keys: string[], rate: (k: string) => number | null): string[] {
 }
 
 /**
- * Heatmap axes. Rows: best liars first (pooled follow rate over everyone who heard them).
- * Columns: most gullible listeners first. Models with no votes go last.
+ * Heatmap axes. Rows: best liars first; columns: most gullible listeners first. Both rank by the
+ * Wilson lower bound of the pooled follow rate over cells with at least `minN` voters, so a model
+ * seen in a handful of votes can't top the table (#712). Models with no such cell go last.
  */
-export function sortAxes(m: DeceptionMatrix, source: DeceptionSource) {
+export function sortAxes(m: DeceptionMatrix, source: DeceptionSource, minN = DEFAULT_MIN_N) {
   const { liars, listeners } = listModels(m, source);
   const p = m.pairs[source];
   return {
-    liars: byRate(liars, (l) => pooled(Object.values(p[l] ?? {}))),
-    listeners: byRate(listeners, (t) => pooled(liars.flatMap((l) => (p[l]?.[t] ? [p[l][t]] : [])))),
+    liars: byRate(liars, (l) => pooled(Object.values(p[l] ?? {}), minN)),
+    listeners: byRate(listeners, (t) => pooled(liars.map((l) => p[l]?.[t]), minN)),
   };
 }

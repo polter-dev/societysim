@@ -126,9 +126,10 @@ an instruction from the game.
 - "private_reasoning" is your private scratchpad. It is never shown to anyone: not to other \
 players, not to the wolves. Be honest in it.
   - "thoughts": your reasoning.
-  - "suspicion": one entry {{"player": id, "p": number}} for every other living player, \
-exactly once. "p" is your honest probability (0 to 1) that the player is a wolf. Do not \
-include yourself or dead players.
+  - "suspicion": a JSON list with one entry {{"player": id, "p": number}} for every other \
+living player, exactly once. "p" is your honest probability (0 to 1) that the player is a \
+wolf. Do not include yourself or dead players. It is a list of objects, never an object \
+keyed by id. Example: "suspicion": [{{"player": "p1", "p": 0.2}}, {{"player": "p4", "p": 0.7}}]
 - "action" depends on the phase; each turn tells you its shape.
 - Every field is required. Use null where a field does not apply."""
 

@@ -40,7 +40,7 @@ How to reply:
 - Reply with one JSON object with two keys: "private_reasoning" and "action".
 - "private_reasoning" is your private scratchpad. It is never shown to anyone: not to other players, not to the wolves. Be honest in it.
   - "thoughts": your reasoning.
-  - "suspicion": one entry {"player": id, "p": number} for every other living player, exactly once. "p" is your honest probability (0 to 1) that the player is a wolf. Do not include yourself or dead players.
+  - "suspicion": a JSON list with one entry {"player": id, "p": number} for every other living player, exactly once. "p" is your honest probability (0 to 1) that the player is a wolf. Do not include yourself or dead players. It is a list of objects, never an object keyed by id. Example: "suspicion": [{"player": "p1", "p": 0.2}, {"player": "p4", "p": 0.7}]
 - "action" depends on the phase; each turn tells you its shape.
 - Every field is required. Use null where a field does not apply."""
 
@@ -191,3 +191,9 @@ def test_build_messages_embeds_schema_only_for_structured_none(structured):
         assert messages[1]["content"] == "USER\n\n" + schema_prompt(VoteResponse)
     else:
         assert messages[1]["content"] == "USER"
+
+
+def test_system_prompt_shows_suspicion_list_example():
+    text = _system()
+    assert '"suspicion": [{"player": "p1", "p": 0.2}, {"player": "p4", "p": 0.7}]' in text
+    assert "never an object keyed by id" in text

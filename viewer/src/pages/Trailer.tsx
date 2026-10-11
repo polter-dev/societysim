@@ -323,6 +323,11 @@ export default function TrailerPage({ audioIndexUrl = AUDIO_INDEX_URL }: { audio
   }, []);
 
   const idle = run === 0;
+  // The start buttons unmount when the trailer starts; keep keyboard focus on the page's controls (#703).
+  const replayButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (run > 0 && (!document.activeElement || document.activeElement === document.body)) replayButton.current?.focus({ preventScroll: true });
+  }, [run]);
   return (
     <main className={`trailer ${paused ? "still" : ""}`} data-playing={!idle && !state.done ? "" : undefined}>
       <TrailerFrame state={state} paused={paused} />
@@ -339,7 +344,7 @@ export default function TrailerPage({ audioIndexUrl = AUDIO_INDEX_URL }: { audio
         </div>
       )}
       <div className="trailer-controls">
-        {!idle && <button type="button" className="trailer-button" onClick={() => start(sound)}>Replay</button>}
+        {!idle && <button ref={replayButton} type="button" className="trailer-button" onClick={() => start(sound)}>Replay</button>}
         {!idle && <button type="button" className="trailer-button" aria-pressed={sound} onClick={() => { if (sound) player.stop(); setSound(!sound); }}>{sound ? "Sound on" : "Sound off"}</button>}
         <button type="button" className="trailer-button" aria-pressed={paused} onClick={() => setPaused(!paused)}>{paused ? "Resume ambience" : "Pause ambience"}</button>
       </div>

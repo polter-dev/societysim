@@ -53,7 +53,9 @@ def test_provider_timeout_passes_through_and_must_be_positive():
 
 def test_every_model_provider_has_a_limit():
     reg = load_registry(DEFAULT_PATH)
-    assert {limit_key(m) for m in reg.models} <= set(reg.providers)
+    # self-hosted models get a limit per endpoint ("openai@host", #423) and use the default
+    shared = {k for k in map(limit_key, reg.models) if "@" not in k}
+    assert shared and shared <= set(reg.providers)
 
 
 def test_hf_router_routes_share_one_limit(monkeypatch):

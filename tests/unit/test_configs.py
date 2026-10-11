@@ -188,3 +188,10 @@ def test_wolves_must_be_fewer_than_non_wolves(wolves):
 
 def test_max_wolves_still_loads():
     assert GameConfig(n_players=7, roles=RoleCounts(wolves=3)).roles.villagers == 2
+
+
+def test_last_words_true_is_rejected():
+    # #429: the engine has no last-words step, so the flag must not load as true.
+    with pytest.raises(ValueError, match="last_words: true is not supported"):
+        GameConfig.model_validate({"rules": {"last_words": True}})
+    assert GameConfig.model_validate({"rules": {"last_words": False}}).rules.last_words is False

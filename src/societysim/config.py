@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Literal, Self
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 type Presentation = Literal["feminine", "masculine", "neutral"]
 
@@ -62,6 +62,14 @@ class RuleFlags(_Config):
     discussion_rounds: int = Field(2, ge=1)
     allow_abstain: bool = True
     max_statement_words: int = Field(80, ge=1)  # longer text is truncated, not rejected
+
+    @field_validator("last_words")
+    @classmethod
+    def _no_last_words(cls, value: bool) -> bool:
+        # The engine has no last-words step; accepting true would only change the prompt.
+        if value:
+            raise ValueError("last_words: true is not supported; dead players say nothing more")
+        return value
 
 
 class RoleCounts(_Config):

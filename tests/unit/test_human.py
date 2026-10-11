@@ -23,7 +23,7 @@ from societysim.engine.state import GameState
 from societysim.logging.events import Event, EventLogger, EventType, Suspicion, Visibility
 from societysim.roles import Phase, Role
 
-CFG = GameConfig(seed=3, models=["scripted"])  # p0 Ava, p1 Cleo, p2 Dev, ...
+CFG = GameConfig(n_players=7, seed=3, models=["scripted"])  # p0 Ava, p1 Cleo, p2 Dev, ...
 SECRET = "SECRET"
 WOLFCHAT = "WOLFCHAT"
 CANARY_P = 0.4242

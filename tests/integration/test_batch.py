@@ -56,7 +56,13 @@ class PricedFake(FakeClient):
 
 
 def cfg(**kw) -> BatchConfig:
-    base = {"batch_id": "t", "n_games": 4, "models": ["a", "b"], "budget_usd": 100, "game": {}}
+    base = {
+        "batch_id": "t",
+        "n_games": 4,
+        "models": ["a", "b"],
+        "budget_usd": 100,
+        "game": {"n_players": 7},
+    }
     # The plain fakes answer invalid replies, so the breaker is off unless a test sets it.
     return BatchConfig.model_validate(base | {"max_invalid_rate": 1.0} | kw)
 
@@ -433,6 +439,7 @@ def write_config(tmp_path: Path, **kw) -> Path:
         "n_games": 3,
         "models": ["gemma4-26b", "qwen3-235b"],
         "budget_usd": 5,
+        "game": {"n_players": 7},
     } | kw
     path.write_text(json.dumps(body))
     return path

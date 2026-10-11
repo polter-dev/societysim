@@ -10,7 +10,14 @@ ROLES = ["wolf", "seer", "doctor", "villager"]
 
 
 def cfg(**kw) -> BatchConfig:
-    base = dict(batch_id="b1", seed=7, n_games=36, models=["a", "b", "c"], budget_usd=1.0)
+    base = dict(
+        batch_id="b1",
+        seed=7,
+        n_games=36,
+        models=["a", "b", "c"],
+        budget_usd=1.0,
+        game={"n_players": 7},
+    )
     return BatchConfig(**(base | kw))
 
 

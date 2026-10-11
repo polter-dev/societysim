@@ -150,6 +150,18 @@ def test_default_rules():
     assert rules.allow_abstain and not rules.last_words
 
 
+def test_default_game_is_ten_players():
+    cfg = GameConfig()
+    assert cfg.n_players == 10
+    assert (cfg.roles.wolves, cfg.roles.seers, cfg.roles.doctors, cfg.roles.villagers) == (
+        2,
+        1,
+        1,
+        6,
+    )
+    assert BatchConfig(batch_id="b", n_games=1, models=["a"], budget_usd=1).game.n_players == 10
+
+
 def test_load_yaml(tmp_path):
     path = tmp_path / "batch.yaml"
     path.write_text(
@@ -161,7 +173,7 @@ def test_load_yaml(tmp_path):
     path.write_text("n_players: 7\nmodels: [qwen]\nmax_dayz: 3\n")
     with pytest.raises(ValidationError):
         load_yaml(path, GameConfig)
-    assert GameConfig(models=["qwen"]).seat_models() == ["qwen"] * 7
+    assert GameConfig(n_players=7, models=["qwen"]).seat_models() == ["qwen"] * 7
 
 
 def test_roles():

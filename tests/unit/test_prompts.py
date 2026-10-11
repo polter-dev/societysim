@@ -14,7 +14,7 @@ from societysim.agents.schemas import StatementResponse, TargetResponse, VoteRes
 from societysim.config import GameConfig, ModelSpec, RoleCounts, RuleFlags
 from societysim.roles import Role
 
-CFG = GameConfig()
+CFG = GameConfig(n_players=7)
 OTHERS = {"p0": "Ben", "p1": "Cleo", "p5": "Dev"}
 TAIL = """
 
@@ -134,7 +134,7 @@ def test_system_prompt_follows_rule_flags():
     ],
 )
 def test_system_prompt_omits_roles_with_zero_count(seers, doctors, roles_line):
-    roles = GameConfig(roles=RoleCounts(seers=seers, doctors=doctors)).roles
+    roles = GameConfig(n_players=7, roles=RoleCounts(seers=seers, doctors=doctors)).roles
     text = system_prompt("p3", "Ava", Role.VILLAGER, CFG.rules, roles)
     assert roles_line in text.splitlines()
     night = next(line for line in text.splitlines() if line.startswith("- Night:"))

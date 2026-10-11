@@ -34,7 +34,7 @@ def test_three_wolves_and_optional_special_roles():
         Role.DOCTOR: 1,
         Role.VILLAGER: 4,
     }
-    without_specials = GameState(GameConfig(roles=RoleCounts(seers=0, doctors=0)))
+    without_specials = GameState(GameConfig(n_players=7, roles=RoleCounts(seers=0, doctors=0)))
     assert Counter(without_specials.roles.values()) == {Role.WOLF: 2, Role.VILLAGER: 5}
     assert without_specials.seer_results == {}
 
@@ -64,8 +64,8 @@ def test_one_model_is_repeated_at_every_seat():
 
 def test_distinct_models_keep_configured_seats_without_consuming_randomness():
     models = [f"model-{i}" for i in range(7)]
-    state = GameState(GameConfig(seed=17, models=models))
-    without_models = GameState(GameConfig(seed=17))
+    state = GameState(GameConfig(n_players=7, seed=17, models=models))
+    without_models = GameState(GameConfig(n_players=7, seed=17))
     assert state.models == dict(zip(state.seats, models, strict=True))
     assert state.roles == without_models.roles
     assert state.speaking_order() == without_models.speaking_order()

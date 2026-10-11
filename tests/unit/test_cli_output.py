@@ -223,3 +223,21 @@ def test_cached_verdict_checks_fingerprint_but_trusts_legacy_entries(tmp_path):
     assert get(tmp_path, "g1", 2, "p1", "changed") is None
     assert get(tmp_path, "g1", 2, "p2", "hi") is None
     assert get(tmp_path, "g1", 3, "p1", "hi") is None
+
+
+@pytest.mark.parametrize("batch_id", ["", "../x", "a/b"])
+def test_play_refuses_a_batch_id_that_is_not_a_folder_name(tmp_path, monkeypatch, batch_id):
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(app, ["play", "--preset", "basic", "--batch-id", batch_id])
+    assert result.exit_code == 1
+    assert "invalid --batch-id" in result.output
+    assert not any(tmp_path.rglob("*.jsonl"))
+
+
+def test_play_accepts_a_plain_batch_id(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(
+        app, ["play", "--preset", "basic", "--seed", "1", "--batch-id", "b.1"]
+    )
+    assert result.exit_code == 0, result.output
+    assert len(list((tmp_path / "runs" / "b.1").glob("b.1-*.jsonl"))) == 1

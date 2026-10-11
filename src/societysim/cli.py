@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import re
 import secrets
 import sys
 from enum import StrEnum
@@ -10,6 +11,9 @@ from typing import Annotated
 
 import typer
 from dotenv import load_dotenv
+
+# BatchConfig.batch_id's pattern: one folder name under runs/, never empty or a path.
+BATCH_ID = re.compile(r"[A-Za-z0-9_-][A-Za-z0-9._-]*")
 
 app = typer.Typer(no_args_is_help=True, help="societysim: LLM Werewolf research harness")
 
@@ -195,6 +199,9 @@ def play(
             cfg = cfg.model_copy(update={"seed": seed})
         elif "seed" not in cfg.model_fields_set:
             cfg = cfg.model_copy(update={"seed": secrets.randbits(53)})
+    if batch_id is not None and not BATCH_ID.fullmatch(batch_id):
+        _echo(f"invalid --batch-id {batch_id!r}: use letters, digits, '.', '_' or '-'")
+        raise typer.Exit(1)
     batch_id = batch_id if batch_id is not None else stem
     game_id = f"{batch_id}-{secrets.token_hex(8)}"
     if config is not None and human_seat is not None:

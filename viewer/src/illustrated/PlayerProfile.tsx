@@ -6,6 +6,8 @@ import { modelName } from '../data/modelNames';
 import { eventPresentation, playerStatistics } from './presentation';
 import './PlayerProfile.css';
 
+const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
 /** The player profile dialog a seat or Agents-panel button opens. Sized by clamp(); only the content panes scroll. */
 export function IllustratedInspector({ scene, mode, selected, close }: { scene: Scene; mode: Mode; selected: string | null; close: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -50,7 +52,7 @@ export function IllustratedInspector({ scene, mode, selected, close }: { scene: 
         </section>
         <section className="profile-section">
           <h3>{narrator ? 'Suspicion' : 'Public activity'}</h3>
-          {!narrator ? <p className="profile-empty">{stats.statements} statements and {stats.votes} votes so far.</p>
+          {!narrator ? <p className="profile-empty">{count(stats.statements, 'statement')} and {count(stats.votes, 'vote')} so far.</p>
             : info.suspicion.length
               ? <ul tabIndex={0} className="profile-pane profile-suspicion" aria-label="Suspicion scores">{info.suspicion.map(s => <li key={s.player}><span>{name(s.player)}</span><meter min={0} max={1} value={s.p}>{s.p}</meter><span>{Math.round(s.p * 100)}%</span></li>)}</ul>
               : <p className="profile-empty">No suspicion scores logged yet.</p>}

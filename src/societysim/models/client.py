@@ -235,6 +235,7 @@ _LEGACY_PROVIDER_ERRORS = (
     "InternalServerError",
     "APIConnectionError",
     "Timeout:",
+    "ContentPolicyViolationError",  # GPT-5 refusals, logged before T502 gave them reason: provider
 )
 
 

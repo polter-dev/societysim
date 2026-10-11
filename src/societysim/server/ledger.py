@@ -74,7 +74,7 @@ class Ledger:
         self._lock = asyncio.Lock()
         self._day = _today()
         self.spent_nanos = 0  # booked plus reserved, today
-        self.games: dict[str, float] = {}  # game_id -> USD booked today
+        self.games: dict[str, float] = {}  # game_id -> USD booked, kept across midnight
         self.starts: dict[str, int] = {}  # client_key(ip) -> games started today
         self.unsaved: list[tuple[str, tuple]] = []  # (sql, args) not yet written to Neon
         self._last_at = datetime.min.replace(tzinfo=UTC)
@@ -84,7 +84,8 @@ class Ledger:
 
     def _roll(self) -> None:
         if (today := _today()) != self._day:
-            self._day, self.spent_nanos, self.games, self.starts = today, 0, {}, {}
+            # `games` stays: a game running across midnight must not book its cost again.
+            self._day, self.spent_nanos, self.starts = today, 0, {}
 
     async def load(self, connect: Any) -> bool:
         """Write what earlier writes missed, then read today's spend and game counts from

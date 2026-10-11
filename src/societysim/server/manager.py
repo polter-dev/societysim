@@ -177,7 +177,9 @@ class MeteredAgent:
     """Books each model call in the ledger. The call's worst-case cost is held first; if it
     doesn't fit in what is left today, a scripted agent answers instead (no spend), so the
     game still finishes. The hold settles to the real cost, or stays if the call never
-    returns. Failed calls are scrubbed of provider text."""
+    returns. A call that failed (the client reports $0 for a timeout) books the worst case
+    for each attempt it made, so it is never under-counted. Failed calls are scrubbed of
+    provider text."""
 
     def __init__(
         self,
@@ -205,6 +207,8 @@ class MeteredAgent:
         try:
             result = scrub(await self.inner.act(turn))
             cost = result.usage.cost_usd
+            if result.error is not None:  # a timed-out or failed attempt may still be billed:
+                cost = max(cost, held / 1e9 * result.usage.attempts)  # its worst case each
             return result
         finally:  # also when cancelled: then the hold is what gets booked
             await self.ledger.settle(self.game_id, held, cost)

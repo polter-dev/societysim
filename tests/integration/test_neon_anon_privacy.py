@@ -243,6 +243,8 @@ async def test_anonymous_still_reads_games_labels_and_views(db):
             await _as_anon(db, f"delete from {table}")
     with pytest.raises(asyncpg.InsufficientPrivilegeError):
         await _as_anon(db, "select * from visitor_spend")
+    with pytest.raises(asyncpg.InsufficientPrivilegeError):
+        await _as_anon(db, "select * from visitor_starts")
 
 
 async def test_writer_keeps_full_access(db):

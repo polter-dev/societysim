@@ -544,18 +544,21 @@ them. A forfeited or failed game keeps the public-only rows.
 
 ### Moving: `POST /api/games/{id}/action`
 
-Same auth. The body is the reply shape a model sends for `pending_action.kind`
-(`agents/schemas.py`): `StatementResponse`, `VoteResponse`, `WolfChatResponse` or
-`TargetResponse` (for `lone_wolf`, `seer`, `doctor`).
+Same auth. The body holds the `action` shape a model sends for `pending_action.kind`
+(`agents/schemas.py`): `StatementAction`, `VoteAction`, `WolfChatAction` or `TargetAction`
+(for `lone_wolf`, `seer`, `doctor`). `private_reasoning` is optional.
 
 ```json
-{"private_reasoning": {"thoughts": "", "suspicion": [{"player": "p3", "p": 0.8}]},
- "action": {"text": "Bea has dodged every question.", "accuse": ["p3"],
-            "claim_role": null, "seer_report": null}}
+{"action": {"text": "Bea has dodged every question.", "accuse": ["p3"],
+            "claim_role": null, "seer_report": null},
+ "private_reasoning": {"suspicion": [{"player": "p3", "p": 0.8}]}}
 ```
 
-- `suspicion` may leave players out; they default to 0.5 and the event gets
-  `meta.suspicion_default: true`, as for the terminal human seat. `thoughts` is not logged.
+- `suspicion` is optional and may leave players out. Only the scores given are logged: the
+  event's `suspicion` lists the rated players, or is null if none were rated. Nothing is filled
+  in with a default, for the web and the terminal human seat alike. (Older logs may carry
+  `meta.suspicion_default: true` from when unrated players were set to 0.5.) `thoughts` is
+  not logged.
 - Statement `text` and wolf chat `message`: control and format characters are stripped, line
   breaks become spaces, and the result must be 1 to 280 characters.
 - The orchestrator's own check runs before the move is accepted: legal target, suspicion only

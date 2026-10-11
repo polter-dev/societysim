@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildAction } from "./action";
+import { LEVELS, buildAction, playerLabel } from "./action";
 import { BY_CODE, PlayError, TOKEN_PREFIX, getLimits, getMe, postAction, startGame } from "./api";
 import type { PendingAction } from "./types";
 
@@ -101,18 +101,18 @@ const pending = (kind: PendingAction["kind"]): PendingAction => ({
 });
 
 describe("buildAction", () => {
-  it("statement: defaults suspicion to 0.5 for every other player", () => {
-    const r = buildAction(pending("statement"), { text: " hi ", accuse: ["p1"], suspicion: { p2: 0.9 } });
+  it("statement: no ratings means no scratchpad at all", () => {
+    const r = buildAction(pending("statement"), { text: " hi ", accuse: ["p1"] });
     expect(r.ok && r.body).toEqual({
-      private_reasoning: {
-        thoughts: "",
-        suspicion: [
-          { player: "p1", p: 0.5 },
-          { player: "p2", p: 0.9 },
-          { player: "p3", p: 0.5 },
-        ],
-      },
       action: { text: "hi", accuse: ["p1"], claim_role: null, seer_report: null },
+    });
+  });
+
+  it("sends only the players the visitor rated, never a default", () => {
+    const r = buildAction(pending("vote"), { target: "p1", suspicion: { p3: "suspicious", p2: "trust", p1: undefined } });
+    expect(r.ok && r.body).toEqual({
+      private_reasoning: { suspicion: [{ player: "p2", p: LEVELS.trust }, { player: "p3", p: LEVELS.suspicious }] },
+      action: { vote: "p1" },
     });
   });
 
@@ -123,16 +123,12 @@ describe("buildAction", () => {
     expect(buildAction(pending("statement"), { text: "x".repeat(280) }).ok).toBe(true);
   });
 
-  it("rejects targets outside the allowed list", () => {
+  it("rejects targets and accusations outside the allowed list", () => {
     expect(buildAction(pending("vote"), { target: "p3" }).ok).toBe(false);
     expect(buildAction(pending("vote"), {}).ok).toBe(false);
+    expect(buildAction(pending("statement"), { text: "hi", accuse: ["p3"] }).ok).toBe(false);
     const r = buildAction(pending("vote"), { target: "p2" });
     expect(r.ok && r.body.action).toEqual({ vote: "p2" });
-  });
-
-  it("rejects suspicion outside 0 to 1", () => {
-    expect(buildAction(pending("vote"), { target: "p1", suspicion: { p3: 1.2 } }).ok).toBe(false);
-    expect(buildAction(pending("vote"), { target: "p1", suspicion: { p3: -0.1 } }).ok).toBe(false);
   });
 
   it("wolf chat and night actions use their shapes", () => {
@@ -142,5 +138,11 @@ describe("buildAction", () => {
       const r = buildAction(pending(k), { target: "p1" });
       expect(r.ok && r.body.action).toEqual({ target: "p1" });
     }
+  });
+
+  it("labels players by name", () => {
+    const players = [{ seat: "p1", name: "Ava", alive: true }];
+    expect(playerLabel(players, "p1")).toBe("Ava (p1)");
+    expect(playerLabel(players, "abstain")).toBe("Abstain");
   });
 });

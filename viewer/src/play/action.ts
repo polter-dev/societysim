@@ -1,22 +1,31 @@
-// Pure: turn a visitor's draft into the ActionBody for the pending action, or list what's wrong.
-import type { ActionBody, PendingAction, SuspicionEntry } from "./types";
+// Pure: turn the visitor's form state into the ActionBody for the pending action, or list what's wrong.
+import type { ActionBody, PendingAction, Player } from "./types";
 
 export const MAX_TEXT = 280;
-export const DEFAULT_SUSPICION = 0.5;
+export const ABSTAIN = "abstain";
+
+/** The three answers per player, as P(wolf). Same values as agents/human.py LEVELS. */
+export const LEVELS = { suspicious: 0.8, unsure: 0.5, trust: 0.2 } as const;
+export type Level = keyof typeof LEVELS;
 
 export interface Draft {
   /** Statement text or wolf chat message. */
   text?: string;
-  /** Vote or night target; wolf chat's proposed target. */
+  /** Vote or night target; wolf chat's proposed target. A seat id, or "abstain" for a vote. */
   target?: string;
   accuse?: string[];
-  /** Per other living player, 0 to 1. Missing means 0.5. */
-  suspicion?: Record<string, number>;
-  /** Private notes; the server does not log them. */
-  thoughts?: string;
+  /** Optional, per other living player. Players left out are logged as not rated, never as a default. */
+  suspicion?: Partial<Record<string, Level>>;
 }
 
 export type Built = { ok: true; body: ActionBody } | { ok: false; errors: string[] };
+
+/** "Ava (p3)" for a seat id; "Abstain" for the abstain choice. */
+export function playerLabel(players: Player[], seat: string): string {
+  if (seat === ABSTAIN) return "Abstain";
+  const name = players.find((p) => p.seat === seat)?.name;
+  return name ? `${name} (${seat})` : seat;
+}
 
 export function buildAction(pending: PendingAction, d: Draft): Built {
   const errors: string[] = [];
@@ -26,36 +35,30 @@ export function buildAction(pending: PendingAction, d: Draft): Built {
     errors.push(`Write between 1 and ${MAX_TEXT} characters (${text.length} now).`);
   }
   if (pending.kind !== "statement") {
-    if (!d.target || !pending.targets.includes(d.target)) errors.push("Pick one of the allowed targets.");
+    if (!d.target || !pending.targets.includes(d.target)) errors.push("Pick a player.");
   }
   const accuse = d.accuse ?? [];
-  if (pending.kind === "statement") {
-    const bad = accuse.filter((a) => !pending.others.includes(a));
-    if (bad.length) errors.push(`Can't accuse ${bad.join(", ")}.`);
-  }
-  const suspicion: SuspicionEntry[] = pending.others.map((player) => ({
-    player,
-    p: d.suspicion?.[player] ?? DEFAULT_SUSPICION,
-  }));
-  for (const s of suspicion) {
-    if (!Number.isFinite(s.p) || s.p < 0 || s.p > 1) errors.push(`Suspicion for ${s.player} must be between 0 and 1.`);
+  if (pending.kind === "statement" && accuse.some((a) => !pending.targets.includes(a))) {
+    errors.push("You can only accuse living players.");
   }
   if (errors.length) return { ok: false, errors };
 
-  const private_reasoning = { thoughts: d.thoughts ?? "", suspicion };
+  const suspicion = pending.others.flatMap((player) => {
+    const level = d.suspicion?.[player];
+    return level ? [{ player, p: LEVELS[level] }] : [];
+  });
+  // Nothing rated: no scratchpad at all; the server logs suspicion as null.
+  const reasoning = suspicion.length ? { private_reasoning: { suspicion } } : {};
   const target = d.target ?? "";
   switch (pending.kind) {
     case "statement":
-      return {
-        ok: true,
-        body: { private_reasoning, action: { text, accuse, claim_role: null, seer_report: null } },
-      };
+      return { ok: true, body: { ...reasoning, action: { text, accuse, claim_role: null, seer_report: null } } };
     case "vote":
-      return { ok: true, body: { private_reasoning, action: { vote: target } } };
+      return { ok: true, body: { ...reasoning, action: { vote: target } } };
     case "wolf_chat":
-      return { ok: true, body: { private_reasoning, action: { message: text, proposed_target: target } } };
+      return { ok: true, body: { ...reasoning, action: { message: text, proposed_target: target } } };
     default:
-      return { ok: true, body: { private_reasoning, action: { target } } };
+      return { ok: true, body: { ...reasoning, action: { target } } };
   }
 }
 

@@ -50,13 +50,14 @@ export interface SuspicionEntry {
   player: string;
   p: number;
 }
+/** Optional for a visitor (HumanReasoning). Players left out of suspicion are logged as not rated. */
 export interface PrivateReasoning {
-  thoughts: string;
-  suspicion: SuspicionEntry[];
+  thoughts?: string;
+  suspicion?: SuspicionEntry[];
 }
 export type ActionBody =
   | {
-      private_reasoning: PrivateReasoning;
+      private_reasoning?: PrivateReasoning;
       action: {
         text: string;
         accuse: string[];
@@ -64,6 +65,6 @@ export type ActionBody =
         seer_report: { target: string; result: "wolf" | "not_wolf"; night: number } | null;
       };
     }
-  | { private_reasoning: PrivateReasoning; action: { vote: string } }
-  | { private_reasoning: PrivateReasoning; action: { message: string; proposed_target: string } }
-  | { private_reasoning: PrivateReasoning; action: { target: string } };
+  | { private_reasoning?: PrivateReasoning; action: { vote: string } }
+  | { private_reasoning?: PrivateReasoning; action: { message: string; proposed_target: string } }
+  | { private_reasoning?: PrivateReasoning; action: { target: string } };

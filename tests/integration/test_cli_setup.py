@@ -25,12 +25,10 @@ def events(path: Path) -> list[dict]:
 
 
 def _answer(question: str) -> str:
-    """Scripted stdin for a human seat: the first legal option, nothing optional."""
-    if question.startswith(("statement", "message")):
-        return "I trust nobody yet."
-    if question.startswith(("vote", "target", "kill")):
-        return question.rsplit("(", 1)[1].split()[0].rstrip("):")
-    return ""
+    """Scripted stdin for a human seat: choice 1, nothing optional."""
+    if "blank" in question:
+        return ""
+    return "1" if "[1-" in question else "I trust nobody yet."
 
 
 def test_play_preset_basic_runs_ten_seats_two_wolves(tmp_path):

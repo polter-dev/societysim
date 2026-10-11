@@ -116,7 +116,7 @@ export const TIMELINE: Step[] = [
   s(42, "caption", { text: null }),
   s(42, "card", { card: "stats" }),
   s(42.6, "stat", { value: "356", label: "lies said out loud" }),
-  s(45.4, "stat", { value: "40% vs 71%", label: "votes that followed a lie, against no lie" }),
+  s(45.4, "stat", { value: "40% vs 71%", label: "lies followed, against no lie" }),
   s(48.2, "stat", { value: "65%", label: "Gemini Flash win rate" }),
   s(52, "card", { card: "cta" }),
   s(56, "card", { card: "end" }),

@@ -3,10 +3,11 @@ html:has(.trailer),body:has(.trailer){height:100%;margin:0;overflow:hidden;backg
 .trailer{position:fixed;inset:0;overflow:hidden;color:#f4ebc2;font-family:Georgia,'Times New Roman',serif;--ease:cubic-bezier(.16,1,.3,1)}
 .trailer-stage{position:absolute;inset:0}
 /* The art is 1672 x 941 on cover; the chair ring is an 800 px square at its center (Table.tsx). */
-.trailer-table{position:absolute;left:50%;top:50%;translate:-50% -50%;--apx:max(100vw / 1672,100svh / 941);width:calc(800 * var(--apx));aspect-ratio:1;transition:filter .9s var(--ease),opacity .9s var(--ease)}
+.trailer-table{position:absolute;left:50%;top:50%;translate:-50% -50%;--apx:max(100vw / 1672,100svh / 941);width:calc(800 * var(--apx));aspect-ratio:1;container-type:inline-size;transition:filter .9s var(--ease),opacity .9s var(--ease)}
 .trailer-stage[data-veiled] .trailer-table{filter:blur(7px) brightness(.45) saturate(.7)}
-.trailer-stage[data-veiled] .day-counter{opacity:0;transition:opacity .6s}
-.trailer .day-counter{z-index:2;transition:opacity .6s;animation:trailer-rise .8s var(--ease) both}
+/* scenery.css's counter-reveal keeps opacity at 1 with fill both, so it goes too. */
+.trailer-stage[data-veiled] .day-counter{opacity:0;animation:none;transition:opacity .6s}
+.trailer .day-counter{z-index:2;width:min(34vw,520px);transition:opacity .6s}
 
 /* Seats: the replay's plates and medallions (Table.css), lit one by one. */
 .trailer .table-seat{transition:opacity .8s var(--ease),scale .8s var(--ease)}
@@ -16,9 +17,10 @@ html:has(.trailer),body:has(.trailer){height:100%;margin:0;overflow:hidden;backg
 .trailer .table-seat[data-revealed=true] .seat-role{background:#3a0f0f;border-color:#e0a24a;color:#ffe7b0}
 .trailer-votes{position:absolute;right:-4%;top:-2%;z-index:3;min-width:2.8cqw;height:2.8cqw;padding:0 .5cqw;box-sizing:border-box;display:grid;place-items:center;border-radius:1.4cqw;background:#2456aa;border:.2cqw solid #f4ebc2;color:#fff;font:700 1.55cqw/1 Georgia,serif;box-shadow:0 .3cqw .8cqw #000a;animation:trailer-pop .45s var(--ease)}
 /* The bubble (Speech.tsx) is sized for a busy replay; the trailer lets it breathe. */
-.trailer [data-speaker]{z-index:2;max-width:42cqw!important;max-height:none!important;font-size:max(15px,2.1cqw)!important;line-height:1.4!important;padding:.75em 1.05em!important;box-shadow:0 12px 32px #000b!important;animation:trailer-rise .7s var(--ease) both}
+.trailer [data-speaker]{z-index:2;max-width:46cqw!important;max-height:none!important;font-size:max(15px,2.45cqw)!important;line-height:1.4!important;padding:.75em 1.05em!important;border-radius:1.4cqw!important;box-shadow:0 12px 32px #000b!important;animation:trailer-fade .7s var(--ease) both}
 
-/* Hugo's private line: paper, ink, the notes banner from the event list. */
+/* Hugo's private line: paper, ink, the notes banner from the event list. The public bubble recedes behind it. */
+.trailer-stage:has(.trailer-notes) [data-speaker]{opacity:.28;filter:blur(1px);transition:opacity .5s,filter .5s}
 .trailer-notes{position:absolute;left:50%;top:50%;z-index:4;width:min(44vw,calc(560 * var(--apx, 1px)));translate:-50% -108%;rotate:-1.5deg;background:linear-gradient(170deg,#f6ebc9,#eadaa8);color:#2a1606;border:1px solid #b8975a;border-radius:6px;box-shadow:0 18px 48px #000c,inset 0 0 0 1px #fff7dd80;animation:trailer-note .7s var(--ease) both}
 .trailer-notes-head{position:relative;display:block;height:clamp(44px,4.2vw,76px);margin:-1px -1px 0}
 .trailer-notes-head img{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}
@@ -31,7 +33,7 @@ html:has(.trailer),body:has(.trailer){height:100%;margin:0;overflow:hidden;backg
 .trailer-title{position:absolute;left:8%;right:8%;top:50%;translate:0 -50%;z-index:5;margin:0;text-align:center;font-size:clamp(42px,5.8vw,112px);font-weight:700;line-height:1.05;letter-spacing:.02em;text-transform:uppercase;text-shadow:0 4px 18px #000c,0 0 40px #0008}
 .trailer-title span{display:block;animation:trailer-rise 1s var(--ease) both}
 .trailer-title span+span{color:#ead878;animation-delay:1.3s}
-.trailer-caption{position:absolute;left:50%;bottom:9vh;z-index:5;translate:-50% 0;margin:0;max-width:80vw;padding:.45em 1.2em;background:#03271ef0;border:1px solid #ac8b45;border-radius:999px;color:#f4ebc2;font-size:clamp(18px,2vw,36px);font-variant:small-caps;letter-spacing:.03em;text-align:center;box-shadow:0 8px 24px #000a;animation:trailer-rise .7s var(--ease) both}
+.trailer-caption{position:absolute;left:50%;bottom:2.2vh;z-index:5;translate:-50% 0;margin:0;max-width:92vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:.4em 1.2em;background:#03271ef0;border:1px solid #ac8b45;border-radius:999px;color:#f4ebc2;font-size:clamp(16px,1.9vw,34px);font-variant:small-caps;letter-spacing:.03em;text-align:center;box-shadow:0 8px 24px #000a;animation:trailer-rise .7s var(--ease) both}
 
 /* The numbers: a parchment ledger. */
 .trailer-card{position:absolute;left:50%;top:50%;translate:-50% -50%;z-index:5;box-sizing:border-box;animation:trailer-rise .8s var(--ease) both}
@@ -56,7 +58,7 @@ html:has(.trailer),body:has(.trailer){height:100%;margin:0;overflow:hidden;backg
 .trailer-start p{margin:0;color:#ead878;font-variant:small-caps;font-size:clamp(16px,1.6vw,30px)}
 .trailer-start>div{display:flex;gap:12px;justify-content:center;margin-top:10px}
 .trailer-start small{color:#cfdbc6;font:13px system-ui}
-.trailer-controls{position:absolute;right:16px;bottom:16px;z-index:11;display:flex;gap:8px;transition:opacity .4s}
+.trailer-controls{position:absolute;right:16px;top:16px;z-index:11;display:flex;gap:8px;transition:opacity .4s}
 .trailer[data-playing] .trailer-controls{opacity:.55}
 .trailer[data-playing] .trailer-controls:hover,.trailer[data-playing] .trailer-controls:focus-within{opacity:1}
 .trailer-button{min-height:44px;padding:9px 16px;border:1px solid #b69c5980;border-radius:7px;background:#031b18d9;color:#f0e3b8;font:14px system-ui;cursor:pointer;transition:filter .2s,background .2s}
@@ -65,5 +67,6 @@ html:has(.trailer),body:has(.trailer){height:100%;margin:0;overflow:hidden;backg
 .trailer-button--primary:hover{filter:brightness(1.08);background:#d4b35c}
 
 @keyframes trailer-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes trailer-fade{from{opacity:0}to{opacity:1}}
 @keyframes trailer-pop{from{scale:.3;opacity:0}to{scale:1;opacity:1}}
 @keyframes trailer-note{from{opacity:0;translate:-50% -112%;rotate:-4deg}to{opacity:1;translate:-50% -108%;rotate:-1.5deg}}

@@ -10,14 +10,13 @@ import statusFrame from './assets/status-frame-clean.webp';
 import './landing.css';
 
 type Status = { kind: 'loading' | 'unconfigured' | 'unavailable' } | { kind: 'ready'; limits: Limits };
-export function landingStatus(status: Status) {
-  if (status.kind === 'ready') return {
-    games: `${Math.max(0, status.limits.remaining_today)} games left today`,
-    server: !status.limits.play_enabled ? 'Play paused' : status.limits.remaining_today <= 0 ? 'Budget or daily limit used' : 'Play available',
-  };
-  return status.kind === 'loading' ? { games: 'Checking daily allowance', server: 'Checking server' }
-    : status.kind === 'unconfigured' ? { games: 'Replays always available', server: 'Live play coming soon' }
-    : { games: 'Daily allowance unavailable', server: 'Server unreachable' };
+/** A notice for the front page only when live play is unavailable; nothing when all is well. */
+export function landingStatus(status: Status): string | null {
+  if (status.kind === 'ready') {
+    if (!status.limits.play_enabled) return 'Play paused';
+    return status.limits.remaining_today <= 0 ? 'Daily limit reached' : null;
+  }
+  return status.kind === 'unavailable' ? 'Live play unavailable right now' : null;
 }
 
 export default function LandingPage({ href }: { href: (extra: Record<string, string>) => string }) {
@@ -42,7 +41,7 @@ export default function LandingPage({ href }: { href: (extra: Record<string, str
     const timer = window.setInterval(refresh, 30000);
     return () => { active = false; window.clearInterval(timer); };
   }, []);
-  const labels = landingStatus(status);
+  const notice = landingStatus(status);
   return <main data-testid="landing" className={`landing-page ${paused ? 'landing-paused' : ''}`}>
     <div className="landing-background" aria-hidden="true"/>
     <div className="landing-lights" aria-hidden="true">{[[20,5],[25,31],[36,30],[89,12],[98,40],[87,72]].map(([x,y],i) => <i key={i} style={{left:`${x}%`,top:`${y}%`,animationDelay:`-${i*.3}s`}}/>)}</div>
@@ -54,8 +53,7 @@ export default function LandingPage({ href }: { href: (extra: Record<string, str
       <button className="landing-button landing-secondary landing-about" onClick={() => setModal('about')}><img src={aboutButton} alt=""/><span>About</span></button>
     </nav>
     <footer className="landing-status" aria-live="polite">
-      <div className="landing-badge"><img src={statusFrame} alt=""/><span>{labels.games}</span></div>
-      <div className="landing-badge"><img src={statusFrame} alt=""/><span>{labels.server}</span></div>
+      {notice && <div className="landing-badge"><img src={statusFrame} alt=""/><span>{notice}</span></div>}
     </footer>
     <nav className="landing-links" aria-label="More">
       <a className="landing-motion landing-trailer" href={href({page:'trailer'})}>Trailer</a>

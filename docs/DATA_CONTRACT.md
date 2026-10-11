@@ -538,9 +538,11 @@ an hour), 401 for a missing or wrong token (and for every token on a watch-only 
 | `players` | list of `{seat, name, alive}` | Public |
 
 Nothing else is returned: no other seat's role, reasoning or suspicion. While a visitor game
-runs, Neon gets only its public events, with `private_reasoning` and `suspicion` removed (so `seq`
-has gaps and there is no `game_start`). Once the game reaches `game_end` the full log replaces
-them. A forfeited or failed game keeps the public-only rows.
+runs, Neon gets only its public events, with `private_reasoning`, `suspicion`, `meta.usage` and
+`meta.ts` removed (so `seq` has gaps and there is no `game_start`; see `events_public` for why).
+Once the game reaches `game_end` the full log replaces them. A forfeited or failed game keeps the
+public-only rows. The play API returns no event `meta`: `observation` is built from what the
+seat saw, never from usage or timestamps.
 
 ### Moving: `POST /api/games/{id}/action`
 
@@ -717,10 +719,18 @@ Seth's and Marcus's OK. `sync-neon --prune` refuses until the column exists.
 `events_public`: what `anonymous` reads instead of `events`, with the same columns except
 `inserted_at`, which is an internal server timestamp (#323). A
 `finished` game reads in full. A `running` or `failed` game gives only its events with
-`visibility = 'public'`, with `private_reasoning` and `suspicion` set to null inside `event`, so
-`seq` has gaps and there is no `game_start`. Failed counts as unfinished because batch resume
-reruns a failed game with the same `game_id` and seed, so the same roles. The other columns are
-as in `events`.
+`visibility = 'public'`, with `private_reasoning` and `suspicion` set to null inside `event`, and
+`meta.usage` and `meta.ts` removed from it, so `seq` has gaps and there is no `game_start`.
+Failed counts as unfinished because batch resume reruns a failed game with the same `game_id`
+and seed, so the same roles. The other columns are as in `events`.
+
+Why `meta.usage` and `meta.ts` go (#387): wolves, the Seer and the Doctor get longer prompts than
+villagers, so a public vote's or statement's input token count gives its speaker's role away
+(in 30 scripted games the highest day-1 vote token counts were the wolves every time). Cost,
+latency and attempts follow token counts, and the gaps between `meta.ts` values time the hidden
+calls in between. A finished game keeps both. A new per-call `meta` key that varies with private
+context must be added to this list, in `neon/schema.sql` and in `LIVE_HIDDEN_META`
+(`logging/sinks/neon.py`). What stays visible: when each row arrives, to a client that polls.
 
 <!-- neon:events_public -->
 | Column | Type | Notes |

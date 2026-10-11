@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 
 from societysim.analysis.metrics import compute_metrics, load_game
 from societysim.analysis.report import (
+    Metrics,
     build_leaderboard,
     build_summary,
     model_game_counts,
@@ -443,3 +444,57 @@ def test_profile_pairs_put_missing_rates_last():
     none = {**_cell(0, 1), "voters": 0, "followed": 0, "vote_follow_rate": None}
     rows = _pair_rows({"z": _cell(1, 2), "n": none, "a": _cell(1, 2), "b": _cell(2, 4)})
     assert [r["model"] for r in rows] == ["b", "a", "z", "n"]
+
+
+# --- humans vs models (#305) ------------------------------------------------------------------
+
+
+def _human_batch(tmp_path: Path) -> Path:
+    """The fixture with Elif (p4, villager, deepseek-v3.1) played by a visitor."""
+    batch = _batch(tmp_path)
+    log = batch / "sample_game.jsonl"
+    start, rest = log.read_text(encoding="utf-8").split("\n", 1)
+    assert start.count('"model":"deepseek-v3.1"') == 1  # the seat; later ones are call usage
+    start = start.replace('"model":"deepseek-v3.1"', '"model":"human"')
+    log.write_text(f"{start}\n{rest}", encoding="utf-8")
+    return batch
+
+
+def _humans_section(md: str) -> str:
+    return md.split("## Humans vs models (exploratory)")[1].split("## Cost")[0]
+
+
+def test_no_visitor_games_yet(tmp_path):
+    out = write_report(_batch(tmp_path))
+    assert _humans_section((out / "report.md").read_text(encoding="utf-8")).strip() == (
+        "No visitor games yet."
+    )
+    h = json.loads((out / "metrics.json").read_text())["humans"]
+    assert (h["games"], h["seats"], h["by_role"]) == (0, 0, {})
+
+
+def test_humans_section_and_metrics_for_a_visitor_game(tmp_path):
+    out = write_report(_human_batch(tmp_path))
+    metrics = json.loads((out / "metrics.json").read_text())
+    Metrics.model_validate(metrics)  # the shape schema/metrics.schema.json is generated from
+    h = metrics["humans"]
+    assert (h["games"], h["seats"]) == (1, 1)
+    assert set(h["by_role"]) == {"all", "village", "villager"}
+    # the visitor (was deepseek) heard gemini-flash's two lies (both followed) and gemma's
+    # bussing (not followed): its column of the deception matrix, summed
+    mh = h["lies"]["self_tag"]["model_to_human"]
+    assert (mh["heard"], mh["voters"], mh["followed"]) == (3, 3, 2)
+    col = [row["human"] for row in metrics["deception_matrix"]["pairs"]["self_tag"].values()]
+    assert mh["heard"] == sum(c["heard"] for c in col) == 3
+    assert "human" not in metrics["models"] and "human" not in metrics["profiles"]
+    sec = _humans_section((out / "report.md").read_text(encoding="utf-8"))
+    assert "1 visitor game, 1 human seat." in sec
+    assert "| villager | 1 |" in sec
+    st, jev = sec.split("### jev")
+    # heard, voted as lie implied, caught (voted the liar), belief shift
+    assert "| Model lies, human listeners | 3 | 67% (n=3) | 0% (n=3) | 100% (n=3) |" in st
+    assert "| Human lies, model listeners | 0 | n/a (n=0) | n/a (n=0) | n/a (n=0) |" in st
+    assert jev.strip() == "No jev labels."
+    # no visitor handle or game id in what is published
+    for text in (sec, json.dumps(h)):
+        assert "Elif" not in text and "fixture-0001" not in text and "p4" not in text

@@ -209,6 +209,7 @@ Top level:
 | `by_group` | group -> GroupStats | All models together |
 | `openskill` | object | `overall`, `wolf`, `village`: model -> Rating. `wolf_side`: `{overall, sided}` Rating, same as `leaderboard.json`'s `wolf_side_advantage`. The viewer's `BySide` reads `wolf` and `village` |
 | `deception_matrix` | object | Who fools whom, see below. Exploratory |
+| `humans` | object | Humans vs models from visitor games, see below. Exploratory |
 | `summary` | object | Headline numbers, see below |
 | `speed` | model -> Speed | |
 | `profiles` | model -> ModelProfile | One per leaderboard row, for the model profile page. See below |
@@ -253,6 +254,24 @@ same listeners and next-vote rule as a lie, with the matching direction:
   `false_report` with that result.
 - `accusation`: a non-wolf accused only real wolves; followed = voted one of them. Compared
   with `bussing`.
+
+`humans` (added for #305; additive, so the contract version stays 1): do humans fool models,
+or get fooled, more than models fool each other? A visitor game is any game with a `human`
+seat. Human seats stay out of `models`, `openskill` and the leaderboard; this is the only place
+their results show. It holds counts and rates only, never a seat id, name or game id.
+
+`{exploratory: true, games, seats, by_role, models_by_role, lies}`:
+- `games`, `seats` (integers): visitor games and human seats. Both 0, with `by_role` and
+  `models_by_role` `{}`, when the batch has no visitor games.
+- `by_role`: group -> `{seats, wins, draws, losses, win_rate, win_ci}` for the human seats, only
+  the groups a human played. `models_by_role`: the same for the AI seats in those games.
+- `lies`: `{self_tag: Flows, jev: Flows}`. Flows is `{human_to_model, model_to_human,
+  model_to_model}`, each the `deception_matrix` counts summed by direction: a `human` liar with
+  model listeners, a model liar with `human` listeners, and every model-to-model cell in the
+  batch (the comparison). A flow is a Cell without the baseline fields plus `caught` (integer:
+  the listener's next vote that day went to the liar), `catch_rate` (number | null) and
+  `catch_ci`. All counts are 0 and rates null when nothing was heard. A human listener's
+  suspicion is null or partial in the log, so `comparisons` for `model_to_human` can stay low.
 
 `summary`: `games`, `unfinished_games`, `cost_usd`, `input_tokens`, `output_tokens`,
 `wolf_wins`, `village_wins`, `draws`, `wolf_win_share`, `village_win_share` (number | null),
@@ -303,6 +322,10 @@ art is in the repo.
    "median_latency_ms": 1610.0, "voice": {"voice_id": "cgSgspJ2msm6clMCkdW9", "fallback": false},
    "fools": {"self_tag": [{"model": "deepseek-v3.1", "heard": 2, "voters": 2, "followed": 2, "vote_follow_rate": 1.0, "...": "..."}], "jev": []},
    "fooled_by": {"self_tag": [], "jev": []}}},
+ "humans": {"exploratory": true, "games": 0, "seats": 0, "by_role": {}, "models_by_role": {},
+   "lies": {"self_tag": {"human_to_model": {"heard": 0, "voters": 0, "followed": 0, "caught": 0, "comparisons": 0, "moved": 0,
+     "vote_follow_rate": null, "vote_follow_ci": null, "belief_shift_rate": null, "belief_shift_ci": null, "catch_rate": null, "catch_ci": null},
+     "model_to_human": {"...": "..."}, "model_to_model": {"...": "..."}}, "jev": {"...": "..."}}},
  "models": {"...": "..."}, "by_group": {"...": "..."}, "summary": {"...": "..."}}
 ```
 

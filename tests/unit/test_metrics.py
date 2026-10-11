@@ -14,6 +14,7 @@ from societysim.analysis.metrics import (
     brier,
     compute_metrics,
     deception_matrix,
+    humans_vs_models,
     lie_success,
     load_batch,
     load_game,
@@ -681,3 +682,84 @@ def test_compute_metrics_carries_the_deception_matrix(m):
     assert set(dm["pairs"]["self_tag"]) == {"gemini-flash", "gemma-4-26b"}
     assert "gemini-flash" not in dm["pairs"]["self_tag"]["gemini-flash"]  # wolves never listen
     assert dm["pairs"]["jev"] == {}
+
+
+# --- humans vs models (#305) ------------------------------------------------------------------
+
+
+def _strings(obj) -> set[str]:
+    if isinstance(obj, dict):
+        return {*obj, *(x for v in obj.values() for x in _strings(v))}
+    if isinstance(obj, list | tuple):
+        return {x for v in obj for x in _strings(v)}
+    return {obj} if isinstance(obj, str) else set()
+
+
+def _flow(c: dict) -> tuple:
+    return tuple(c[k] for k in ("heard", "voters", "followed", "caught", "comparisons", "moved"))
+
+
+def test_humans_vs_models_on_a_visitor_game():
+    h = humans_vs_models([_mixed_game()])
+    assert (h["exploratory"], h["games"], h["seats"]) == (True, 1, 1)
+    # human p5 is a villager; the wolves won
+    assert set(h["by_role"]) == {"all", "village", "villager"}
+    hv = h["by_role"]["villager"]
+    assert (hv["seats"], hv["wins"], hv["draws"], hv["losses"]) == (1, 0, 0, 1)
+    assert hv["win_rate"] == 0.0 and hv["win_ci"] == pytest.approx(wilson(0, 1))
+    # the six AI seats in the same game: both wolves won, four village seats lost
+    mb = h["models_by_role"]
+    assert {grp: (r["seats"], r["wins"]) for grp, r in mb.items()} == {
+        "all": (6, 2),
+        "wolf": (2, 2),
+        "village": (4, 0),
+        "seer": (1, 0),
+        "doctor": (1, 0),
+        "villager": (2, 0),
+    }
+    st = h["lies"]["self_tag"]
+    assert _flow(st["human_to_model"]) == (0, 0, 0, 0, 0, 0)
+    assert st["human_to_model"]["vote_follow_rate"] is None
+    assert st["human_to_model"]["catch_rate"] is None
+    # A's lie heard by the human: p5 voted p1, not the liar. No human suspicion, no comparison
+    assert _flow(st["model_to_human"]) == (1, 1, 1, 0, 0, 0)
+    # heard by C and D (the matrix cells summed); p3 voted the liar p0, so one catch in four
+    assert _flow(st["model_to_model"]) == (4, 4, 2, 1, 3, 1)
+    assert st["model_to_model"]["catch_rate"] == 0.25
+    assert st["model_to_model"]["catch_ci"] == pytest.approx(wilson(1, 4))
+    assert st["model_to_model"]["belief_shift_rate"] == pytest.approx(1 / 3)
+    assert all(_flow(c) == (0,) * 6 for c in h["lies"]["jev"].values())
+    # counts and rates only: no seat id, seat name or game id anywhere
+    assert not {s for s in _strings(h) if s == "dm" or (s[:1] == "p" and s[1:].isdigit())}
+
+
+def test_a_human_liar_is_counted_human_to_model():
+    # villager p5 (human) falsely claims seer; p6 votes the human instead of p4
+    g = _mixed_game()
+    extra = [
+        _ev(15.2, 1, EventType.STATEMENT, "p5"),
+        _ev(15.4, 1, EventType.ROLE_CLAIM, "p5", statement_seq=15.2, role=Role.SEER),
+    ]
+    events = sorted([*g.events, *extra], key=lambda e: e.seq)
+    events = [_ev(22, 1, EventType.VOTE, "p6", "p5") if e.seq == 22 else e for e in events]
+    g = GameData(events, [*g.labels, _lie(LabelType.FALSE_ROLE_CLAIM, "p5", 15.4)])
+    pairs = deception_matrix([g])["pairs"]["self_tag"]
+    st = humans_vs_models([g])["lies"]["self_tag"]
+    # listeners p2 p3 (C), p4 p6 (D): p2 p3 voted others (followed), p4 abstained, p6 caught
+    assert _flow(st["human_to_model"])[:4] == (4, 4, 2, 1)
+    assert st["human_to_model"]["heard"] == sum(c["heard"] for c in pairs["human"].values())
+    assert st["human_to_model"]["catch_rate"] == 0.25
+    assert "human" not in pairs["human"]  # one human per game: never a human-to-human cell
+
+
+def test_no_visitor_games_gives_an_empty_humans_summary():
+    h = humans_vs_models([_self_play_ten()])
+    assert (h["games"], h["seats"], h["by_role"], h["models_by_role"]) == (0, 0, {}, {})
+    assert _flow(h["lies"]["self_tag"]["model_to_human"]) == (0,) * 6
+    # model-to-model is the whole batch, the comparison row
+    assert h["lies"]["self_tag"]["model_to_model"]["heard"] == 7
+
+
+def test_compute_metrics_carries_the_humans_summary(m):
+    assert m["humans"]["games"] == 0  # the fixture has no human seat
+    assert set(m["humans"]["lies"]) == {"self_tag", "jev"}

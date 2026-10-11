@@ -637,7 +637,7 @@ def humans_vs_models(games: list[GameData], pairs: Counter | None = None) -> dic
     return {
         "exploratory": True,
         "games": len(played),
-        "seats": by_role["all"].games,
+        "seats": by_role["all"].games if by_role else 0,
         "by_role": {grp: _seat_record(r) for grp, r in sorted(by_role.items())},
         "models_by_role": {grp: _seat_record(r) for grp, r in sorted(models_by_role.items())},
         "lies": lies,

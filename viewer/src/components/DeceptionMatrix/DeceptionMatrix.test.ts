@@ -33,4 +33,15 @@ describe("DeceptionMatrix", () => {
     expect(render({ initialSource: "jev" })).toContain('aria-pressed="true">Jev');
     expect(render()).toContain('aria-pressed="true">Self-tagged');
   });
+
+  it("headers show short model names, not catalog ids", () => {
+    const f = structuredClone(fixture) as typeof fixture;
+    f.pairs.self_tag = { "llama4-maverick": { "gpt-5-mini": f.pairs.self_tag.a.b } } as never;
+    const html = renderToStaticMarkup(
+      React.createElement(DeceptionMatrix, { matrix: parseDeceptionMatrix(f) }),
+    );
+    expect(html).toContain('<span class="deception-name">Llama 4 Maverick</span>');
+    expect(html).toContain('<span class="deception-name">GPT-5 mini</span>');
+    expect(html).not.toContain(">llama4-maverick<");
+  });
 });

@@ -8,6 +8,7 @@ import {
   type DeceptionMatrix as Matrix,
   type DeceptionSource,
 } from "../../data/deception";
+import { modelName } from "../../data/modelNames";
 import { ModelAvatar, useModelLabel } from "../ModelAvatar/ModelAvatar";
 
 export interface DeceptionMatrixProps {
@@ -26,9 +27,9 @@ export function DeceptionMatrix({ matrix, minN = DEFAULT_MIN_N, initialSource = 
   const { liars, listeners } = sortAxes(matrix, source);
   const label = useModelLabel();
   const model = (m: string, size: number) => (
-    <span className="deception-model" title={m}>
-      <ModelAvatar model={m} label={label(m)} size={size} />
-      <span className="deception-name">{label(m)}</span>
+    <span className="deception-model" title={label(m)}>
+      <ModelAvatar model={m} label={modelName(m)} size={size} />
+      <span className="deception-name">{modelName(m)}</span>
     </span>
   );
 

@@ -100,5 +100,5 @@ export default function App({source}: {source?: GameSource} = {}) {
  {loadError && <p role="alert">Could not load log: {loadError}</p>}
  {log && log.errors.length > 0 && <details open><summary role="alert">{log.errors.length} bad line(s) skipped</summary><ul>{log.errors.map(b => <li key={b.line}>line {b.line}: {b.error}</li>)}</ul></details>}
  {!log && (new URLSearchParams(window.location.search).has('game') && !loadError ? <p role="status">Loading the game…</p> : <p>Open a recorded game log or choose a game from Games.</p>)}{log && !events.length && <p role="status">This file has no valid game events.</p>}</div>
- {events.length > 0 && <Replay key={`${loadId}${log?.partial ? 'p' : ''}`} live={!!log?.live} atEnd={!!log?.watchedLive} events={events} labels={gameLabels} mode={mode} selected={selected} onSelect={setSelected} audioUrl={audioUrl}/>}</main>;
+ {log?.finishing && <p className="live-finishing" role="status">Finishing up…</p>}{events.length > 0 && <Replay key={`${loadId}${log?.partial ? 'p' : ''}`} live={!!log?.live} atEnd={!!log?.watchedLive} events={events} labels={gameLabels} mode={mode} selected={selected} onSelect={setSelected} audioUrl={audioUrl}/>}</main>;
 }

@@ -22,6 +22,8 @@ export interface LoadedGame extends ParsedLog {
   partial?: boolean;
   /** Swapped in by the live poll when the game ended: the replay opens at the end, not the start. */
   watchedLive?: boolean;
+  /** The game ended but its full log is not backfilled yet; the live poll is still waiting for it. */
+  finishing?: boolean;
 }
 
 /** Where games come from: static files or Neon (data/neonSource.ts). */

@@ -1,8 +1,11 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import type { GameSource, LoadedGame } from "../data/source";
 
-/** Ticks to wait after the end for the full log to land (a visitor game is backfilled after game_end). */
+/** Fast ticks to wait after the end for the full log to land (a visitor game is backfilled after game_end). */
 export const FINISH_TRIES = 5;
+/** Then this many slower ticks (one per SLOW_MS, about 2 minutes) before giving up on the backfill. */
+export const SLOW_TRIES = 24;
+export const SLOW_MS = 5000;
 
 export interface LiveState {
   log: LoadedGame;
@@ -13,8 +16,9 @@ export interface LiveState {
 /**
  * One poll of a live game. New public events are appended. Once the game has ended (a game_end
  * arrived, or the status left `running`), the full log is loaded and replaces the public one.
- * A game whose full log never shows up (a forfeited visitor game) stops being live after
- * FINISH_TRIES ticks and keeps its public events.
+ * While the full log is missing the log is `finishing`. A game whose full log never shows up
+ * (a forfeited visitor game) stops being live after FINISH_TRIES + SLOW_TRIES ticks and keeps its
+ * public events.
  */
 export async function liveTick(source: GameSource, id: string, s: LiveState): Promise<LiveState> {
   const last = s.log.events.at(-1)?.seq ?? -1;
@@ -24,9 +28,10 @@ export async function liveTick(source: GameSource, id: string, s: LiveState): Pr
   if (!ended && !more.length && source.gameStatus) ended = (await source.gameStatus(id)) !== "running";
   if (!ended) return { log, endTries: 0 };
   const full = await source.loadGame(id);
-  if (!full.live && !full.partial) return { log: { ...full, watchedLive: true }, endTries: 0 };
+  if (!full.live && !full.partial) return { log: { ...full, watchedLive: true, finishing: false }, endTries: 0 };
   const endTries = s.endTries + 1;
-  return { log: endTries >= FINISH_TRIES ? { ...log, live: false } : log, endTries };
+  if (endTries >= FINISH_TRIES + SLOW_TRIES) return { log: { ...log, live: false, finishing: false }, endTries };
+  return { log: log.finishing ? log : { ...log, finishing: true }, endTries };
 }
 
 /**
@@ -60,7 +65,7 @@ export function useLiveGame(
       } catch {
         // network or auth hiccup: try again next tick
       }
-      if (!stopped) timer = setTimeout(tick, intervalMs);
+      if (!stopped) timer = setTimeout(tick, s.endTries >= FINISH_TRIES ? Math.max(intervalMs, SLOW_MS) : intervalMs);
     };
     timer = setTimeout(tick, intervalMs);
     return () => {

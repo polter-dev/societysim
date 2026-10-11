@@ -5,7 +5,7 @@ import fixture from "../../../fixtures/sample_game.jsonl?raw";
 import { LiveBadge } from "../components/LiveBadge/LiveBadge";
 import { parseLog } from "../data/parse";
 import type { GameSource, LoadedGame } from "../data/source";
-import { FINISH_TRIES, liveTick } from "./useLiveGame";
+import { FINISH_TRIES, SLOW_TRIES, liveTick } from "./useLiveGame";
 
 const full = parseLog(fixture).events;
 const ID = full[0].game_id;
@@ -65,14 +65,33 @@ describe("liveTick", () => {
   it("waits for a backfill, then gives up and keeps the public events", async () => {
     const { source } = fake({ shown: () => pub.length, fullLog: () => ({ ...liveLog(3), live: false }) });
     let s = { log: liveLog(5), endTries: 0 };
-    for (let i = 1; i < FINISH_TRIES; i++) {
+    for (let i = 1; i < FINISH_TRIES + SLOW_TRIES; i++) {
       s = await liveTick(source, ID, s);
       expect(s.log.live).toBe(true);
+      expect(s.log.finishing).toBe(true);
       expect(s.endTries).toBe(i);
     }
     s = await liveTick(source, ID, s);
     expect(s.log.live).toBe(false);
     expect(s.log.events).toEqual(pub);
+    expect(s.log.finishing).toBe(false);
+  });
+
+  it("loads the full log when the backfill lands after the fast polls", async () => {
+    let ready = false;
+    const { source } = fake({
+      shown: () => pub.length,
+      fullLog: () => (ready ? { events: full, errors: [] } : { ...liveLog(3), live: false }),
+    });
+    let s = { log: liveLog(5), endTries: 0 };
+    for (let i = 0; i < FINISH_TRIES + 3; i++) s = await liveTick(source, ID, s);
+    expect(s.log.live).toBe(true);
+    ready = true;
+    s = await liveTick(source, ID, s);
+    expect(s.log.events).toEqual(full);
+    expect(s.log.live).toBeFalsy();
+    expect(s.log.finishing).toBe(false);
+    expect(s.log.watchedLive).toBe(true);
   });
 });
 

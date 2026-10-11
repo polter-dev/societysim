@@ -3,7 +3,7 @@ import { defaultState, HUMAN, humanSeat, loadSetupAssets, MAX_PLAYERS, MIN_PLAYE
 import { getLimits, PlayError, startGame } from '../play/api';
 import { allowedModels } from '../play/allowed';
 import { playEnabled } from '../play/config';
-import { getTurnstileToken } from '../play/turnstile';
+import { useTurnstile } from '../play/useTurnstile';
 import type { Limits } from '../play/types';
 import back from './assets/modes/back.png';
 import rules from './assets/advanced/rules.png';
@@ -22,12 +22,12 @@ export default function AdvancedSetup({ catalogUrl, schemaUrl, href, go = (url: 
   const [assetError, setAssetError] = useState<string | null>(null);
   const [state, setState] = useState<SetupState>(() => setHumanSeat({ ...defaultState(emptyCatalog), mode: 'advanced' }, 0, emptyCatalog));
   const [limits, setLimits] = useState<Limits | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [paused, setPaused] = useState(false);
   const widget = useRef<HTMLDivElement>(null);
   const starting = useRef(false);
+  const { token, reset } = useTurnstile(widget, () => setError('Could not complete the human verification. Reload to try again.'), playEnabled());
   const on = playEnabled();
 
   useEffect(() => {
@@ -46,9 +46,7 @@ export default function AdvancedSetup({ catalogUrl, schemaUrl, href, go = (url: 
     if (!on) return;
     let active = true;
     getLimits().then(next => { if (active) setLimits(next); }, () => { if (active) setError('Could not check game availability. Reload to try again.'); });
-    const check = getTurnstileToken(widget.current!, undefined, value => {if(active) setToken(value);});
-    check.token.then(value => { if (active) setToken(value); }, (e: Error) => { if (active && e.message !== 'cancelled') setError('Could not complete the human verification. Reload to try again.'); });
-    return () => { active = false; check.cancel(); };
+    return () => { active = false; };
   }, [on]);
 
   const allowed = allowedModels(limits);
@@ -79,7 +77,7 @@ export default function AdvancedSetup({ catalogUrl, schemaUrl, href, go = (url: 
     try {
       const game = await startGame({ setup, turnstile_token: token!, watch_only: human === null });
       go(href({game:game.game_id}));
-    } catch (e) { setError(e instanceof PlayError ? e.message : 'Could not start the simulation. Try again.'); }
+    } catch (e) { setError(e instanceof PlayError ? e.message : 'Could not start the simulation. Try again.'); reset(); }
     finally { starting.current = false; setBusy(false); }
   };
 

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { allowedModels } from "../../play/allowed";
 import { PlayError, getLimits, startGame } from "../../play/api";
-import { getTurnstileToken } from "../../play/turnstile";
+import { useTurnstile } from "../../play/useTurnstile";
 import type { Limits, StartedGame } from "../../play/types";
 import type { GameSetupJson, SetupAssets } from "../../settings/setup";
 import { SetupForm } from "../SetupForm/SetupForm";
@@ -23,20 +23,13 @@ export function PlayStart({
   const [watch, setWatch] = useState(initialMode === "watch");
   const [useAdvanced, setUseAdvanced] = useState(initialMode === "advanced");
   const [limits, setLimits] = useState<Limits | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const widget = useRef<HTMLDivElement>(null);
+  const { token, reset } = useTurnstile(widget, setError);
 
   useEffect(() => {
     getLimits().then(setLimits, (e) => setError(e instanceof PlayError ? e.message : "Couldn't load limits."));
-  }, []);
-
-  useEffect(() => {
-    if (!widget.current) return;
-    const t = getTurnstileToken(widget.current, undefined, setToken);
-    t.token.then(setToken, (e: Error) => e.message !== "cancelled" && setError(e.message));
-    return t.cancel;
   }, []);
 
   const allowed = allowedModels(limits);
@@ -54,6 +47,7 @@ export function PlayStart({
       onStarted(game, watch);
     } catch (e) {
       setError(e instanceof PlayError ? e.message : "Couldn't start the game.");
+      reset(); // the token was spent on this attempt
     } finally {
       setBusy(false);
     }

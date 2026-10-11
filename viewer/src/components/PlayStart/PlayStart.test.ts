@@ -116,3 +116,39 @@ it("keeps selected Advanced mode recoverable when its catalog is unavailable", a
   await act(async () => advanced.click());
   expect(start.disabled).toBe(false);
 });
+
+it.each([
+  [503, "at_capacity"],
+  [429, "rate_limited"],
+  [409, "active_game_exists"],
+])("gets a fresh Turnstile token after a rejected start (%s %s)", async (status, code) => {
+  let n = 0;
+  (globalThis as { turnstile?: unknown }).turnstile = {
+    render: (_el: unknown, o: { callback: (t: string) => void }) => {
+      o.callback(`ts-${++n}`);
+      return `w${n}`;
+    },
+  };
+  let rejected = false;
+  fetchMock.mockImplementation(async (url: string) => {
+    if (url.endsWith("/limits")) return new Response(JSON.stringify({ play_enabled: true, remaining_today: 5 }));
+    if (!rejected) {
+      rejected = true;
+      return new Response(JSON.stringify({ error: code }), { status });
+    }
+    return new Response(JSON.stringify({ game_id: "g1", seat: "p0", seat_token: "tok" }));
+  });
+  const onStarted = vi.fn();
+  act(() => root.render(createElement(PlayStart, { onStarted, initialMode: "watch" })));
+  await settle();
+  const start = [...box.querySelectorAll("button")].find((b) => b.textContent === "Start game")!;
+  await act(async () => start.click());
+  await settle();
+  expect(onStarted).not.toHaveBeenCalled();
+  expect(n).toBe(2);
+  await act(async () => start.click());
+  await settle();
+  const posts = fetchMock.mock.calls.filter(([, i]) => i?.method === "POST").map(([, i]) => JSON.parse(i.body).turnstile_token);
+  expect(posts).toEqual(["ts-1", "ts-2"]);
+  expect(onStarted).toHaveBeenCalled();
+});

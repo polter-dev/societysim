@@ -132,7 +132,8 @@ def lie_moments(g: GameData) -> list[dict]:
             desc,
         )
         # the same claim repeated in a day's discussion rounds is one moment, not one per round
-        key = (lb.actor, lb.label, src.day)
+        # (a different target, result or claimed role is a different lie)
+        key = (lb.actor, lb.label, src.day, src.target, src.meta.result, src.meta.role)
         repeats[key] = repeats.get(key, 0) + 1
         old = best.get(key)
         if old is None or (-m["score"], m["seq"][0]) < (-old["score"], old["seq"][0]):

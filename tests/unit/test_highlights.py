@@ -130,6 +130,15 @@ def test_same_lie_repeated_in_a_day_is_one_moment():
     assert "Said 2 times that day." in ms[0]["description"]
 
 
+def test_different_lies_of_one_type_on_one_day_are_two_moments():
+    g = game()
+    _repeat_bussing(g, new_day=None)
+    edit(g, 94, target="p6")  # round 2 now accuses a different player (a different lie)
+    ms = [m for m in lie_moments(g) if m["actor"] == "p2"]
+    assert len(ms) == 2
+    assert all("Said" not in m["description"] for m in ms)
+
+
 def test_same_lie_on_two_days_is_two_moments():
     g = game()
     _repeat_bussing(g, new_day=3)

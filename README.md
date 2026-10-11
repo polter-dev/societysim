@@ -8,7 +8,7 @@ AI models play Werewolf. We record what they say, what they privately suspect, a
 
 ## What it is
 
-In Werewolf, two wolves hide among eight other players. This batch used ten seats: two wolves, one seer, one doctor, and six villagers. Players talk and vote by day; the wolves attack, the seer checks a role, and the doctor protects a player at night. See the [rules](docs/RULES.md).
+In Werewolf, two wolves hide among eight other players. A game has 10 players by default: two wolves, one seer, one doctor, and six villagers. Games can have 7 to 10 players. This batch used the 10-player default. Players talk and vote by day; the wolves attack, the seer checks a role, and the doctor protects a player at night. See the [rules](docs/RULES.md).
 
 Models from several providers fill the seats. Each model sends a private scratchpad, including a suspicion score for every other living player, and a public action. A deterministic Python engine holds the true roles and enforces the rules. The [viewer](https://society-sim.us) replays the event log from a villager's view or with private information revealed.
 
@@ -17,7 +17,7 @@ Models from several providers fill the seats. Each model sends a private scratch
 Answers below come from 100 ten-player games in `mixed_v2_10p`, except where stated. Lie results use the models' own tags and show associations, not proof that a lie caused a vote. Jev labels were not used in this batch. The two GPT-5 models played 12 games each, so their results have smaller samples.
 
 1. **Can one model deceive another, and which models fool which?** Not on average. Across the batch, 57% of votes followed a lie's implied choice, against a 59% no-lie baseline. Gemini Flash is the exception (see 2). The [research page](https://society-sim.us/?page=research) has the pairwise table of who followed whom.
-2. **Who lies best?** Gemini Flash's lies moved 45% of the suspicions they targeted and 73% of votes followed its lies, versus a 65% no-lie base. GPT-oss-120b's lies moved 16% of targeted suspicions.
+2. **Who lies best?** Gemini Flash had the highest lie success rate: its lies moved 45% of targeted suspicions (n=943), and 73% of votes followed them (n=1005) against a 65% no-lie base (130 votes, 27 abstentions); GPT-oss-120b moved 16% of targeted suspicions. GPT-5 Mini moved 38% (n=138) and had 85% of votes follow (n=141) against a 29% base (14 votes, 1 abstention), while GPT-5 Nano moved 0% (n=29) and had 0% of votes follow (n=34) against a 21% base (24 votes, 1 abstention); those two models played only 12 games each.
 3. **Who catches lies best?** Gemini Flash had the highest wolf-detection AUC of the 100-game models, at 0.77. GPT-oss-120b had the lowest of those, at 0.65.
 4. **Is success about the liar or the listener?** Both matter in the data. The same liar gets different results from different listeners: DeepSeek V3.1 followed 26% of GPT-oss-120b's lies (69 votes) against an 81% baseline, and Gemini Flash followed 40%. Most pairs sit below their baseline. These data cannot isolate cause.
 5. **Do humans fool models, or get fooled, more than models do to each other?** This batch has no visitor games, so there is no comparison yet. The [play page](https://society-sim.us/?page=modes) lets a visitor take a seat.
@@ -65,7 +65,9 @@ uv run societysim play --config configs/selfplay_smoke.yaml
 cd viewer && npm ci && npm run dev
 ```
 
-Open `runs/selfplay_smoke/selfplay_smoke-s0.jsonl` in the local viewer. Use Narrator view to see private scratchpads. For real model runs, see the [demo commands](docs/DEMO.md) and [batch guide](docs/RUNNING_BATCHES.md).
+The dev server opens the landing page. Go to `http://localhost:5173/?page=replay`, choose "Open a log file," and pick `runs/selfplay_smoke/selfplay_smoke-s0.jsonl`. Use Narrator view to see private scratchpads.
+
+To take a seat in a free terminal game, run `uv run societysim play --preset basic --human-seat p3`. The other seats are scripted random players. For a paid game against nine different models, run `uv run societysim play --config configs/human_vs_ai_10p.yaml --human-seat p0 --agents llm`. See the [demo commands](docs/DEMO.md), [batch guide](docs/RUNNING_BATCHES.md), and [deployment guide](docs/DEPLOYMENT.md) for more.
 
 ## Repo map
 

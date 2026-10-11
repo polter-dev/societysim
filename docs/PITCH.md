@@ -92,7 +92,7 @@ Demo game: https://society-sim.us/?game=mixed_v2_10p-g0043&seq=49&mode=narrator.
    - On screen: https://society-sim.us.
 9. **What's next**
    - Jev labels on top of the self-tags, more games for the GPT-5 models (12 each so far), and human seats against models through visitor play.
-   - On screen: the "What we're asking" list in the README.
+   - On screen: the "Research questions" list in the README.
 
 ## Structure numbers we can cite
 

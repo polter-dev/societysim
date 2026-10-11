@@ -1,0 +1,47 @@
+# Deployment
+
+The site, visitor-play server, and live game feed have separate deploy settings. Start with the [README](../README.md) for a local game.
+
+## Site and live games
+
+- The viewer loads `index.json` from the site root by default; add `?index=<url>` to point it at another batch.
+- `scripts/deploy-space.sh runs/<batch> <owner/space>` builds the viewer with a batch and uploads it to a Hugging Face Space. To preview the same site locally with no upload and no token, run `scripts/deploy-space.sh --out site runs/<batch>` and then `python -m http.server -d site 8000` (`--force` writes into a non-empty folder).
+- The live site is on Cloudflare Pages at https://society-sim.us (project `societysim`). The `Deploy` workflow runs by hand (`gh workflow run deploy.yml -f targets=cloudflare,hf-space,github-pages`; `targets` picks any of the three, default all) and automatically on every push to `main` that touches `viewer/`. It deploys the sample game unless a data source is set: the `source` input or the `DEPLOY_SOURCE` repo variable, as `hf:<owner/name>[:<batch_id>]` (for example `hf:societysim/societysim-games`). CI then downloads that dataset's logs and labels with `scripts/fetch_hf_batch.py`, runs `label --no-jev` (only if the dataset has no labels), `report` and `highlights`, and deploys the result. No paid calls; a private dataset needs the `HF_TOKEN` secret. The Cloudflare step needs the repo secret `CLOUDFLARE_API_TOKEN` and the repo variable `CLOUDFLARE_ACCOUNT_ID`, and is skipped when either is missing. The Hugging Face step needs the `HF_TOKEN` secret. The GitHub Pages mirror at https://polter-dev.github.io/societysim stays. Pull requests that touch `viewer/` also get a Cloudflare Pages preview (the `Preview` workflow, `.github/workflows/preview.yml`): it deploys the sample-game site to the `societysim` project on a branch named after the PR branch and comments the `*.pages.dev` URL on the PR. It uses the same secret and variable as the deploy, skips on fork PRs and when they are missing, and is not a required check.
+- Before a demo, check the live site: `uv run --extra smoke python -m playwright install chromium` once, then `uv run --extra smoke python scripts/site_smoke.py [BASE_URL]` (default https://society-sim.us; `--json` for machine output, `--strict-play` to fail unless the play start screen is up). It loads every page headless, checks each key element, console errors, the data files and that unrevealed seats show no role names, prints a pass/fail table and exits non-zero on a failure. It only reads. The `Site smoke` workflow runs the same check by hand.
+- Live games from Neon on the deployed site: set two repo variables (not secrets; both are public), then rerun `Deploy`.
+  `gh variable set VITE_NEON_DATA_API_URL --body 'https://ep-....apirest.<region>.aws.neon.tech/<db>/rest/v1'` (Neon Console, your project, branch, Data API page).
+  `gh variable set VITE_NEON_AUTH_URL --body '<Auth URL>'` (Console, Auth page). The Data API wants a JWT on every request. The page gets an anonymous one with `GET <Auth URL>/token/anonymous` (returns `{token, expires_at}`, valid about 1 h, role `anonymous`, which `neon/schema.sql` limits to `select` on the games, events, labels and leaderboard tables and views) and sends it as `Authorization: Bearer <token>`. The viewer reads both variables; `/devui/` gets them from `config.json`.
+  `VITE_NEON_ANON_KEY` (a pinned JWT) still works but is not recommended: it expires.
+  Never put `NEON_DATABASE_URL` (it can write) in a variable or in the build. If a variable is unset, the build still succeeds, the viewer uses static data, and the log has a `::notice::`.
+- To put a real batch on Cloudflare (`runs/` is gitignored, so CI can't see it): `bash scripts/deploy-space.sh --out /tmp/site --force runs/<batch>`, then `npx wrangler login` (one time, browser sign-in) and `npx wrangler pages deploy /tmp/site --project-name societysim --branch main`.
+
+## Visitor play
+
+The game server for visitor play (`src/societysim/server`) runs as a Docker Space, `polter-dev/societysim-play` (https://polter-dev-societysim-play.hf.space). The site calls it from the browser; the viewer build needs two public repo variables, `VITE_PLAY_API_URL` (that URL) and `VITE_TURNSTILE_SITE_KEY`.
+
+Deploy it with `scripts/deploy-play-space.sh [--dry-run]`. It reads these from your environment and sets them on the Space by name, never printing a value: `HF_TOKEN` (deploys the Space), `PLAY_OPENAI_API_KEY`, `PLAY_HF_TOKEN` and `PLAY_GEMINI_API_KEY` (dedicated, limited keys; set on the Space as `OPENAI_API_KEY`, `HF_TOKEN`, `GEMINI_API_KEY`), `NEON_DATABASE_URL` and `TURNSTILE_SECRET_KEY` (the server won't start without these two). `--dry-run` prints the plan. The `Deploy` workflow does the same with `gh workflow run deploy.yml -f deploy_play=true` and repo secrets, and skips with a notice if they are missing.
+
+Space variables the script sets: `PLAY_TRUSTED_PROXIES` (HF's private proxy ranges, so the server sees the visitor's IP from `X-Forwarded-For`; without it every visitor shares one rate limit, so the server refuses to start) and `PLAY_ALLOWED_MODELS` (priced models only, so the daily budget holds). Limits, all optional Space variables: `PLAY_DAILY_BUDGET_USD` (default 2.00), `PLAY_MAX_CONCURRENT` (4), `PLAY_MAX_GAMES_PER_IP_DAY` (5), `PLAY_MAX_ACTIVE_PER_IP` (1), `PLAY_RATE_PER_MIN` (120), `PLAY_MAX_GAME_MINUTES` (45), `PLAY_MAX_TOKENS` (2048).
+
+After a deploy, check `curl https://polter-dev-societysim-play.hf.space/api/limits`: `remaining_today` above 0 means the Neon spend ledger loaded (it needs `neon/schema.sql`, which the image ships), and `client_ip_hint` should be your own public IP, masked (`104.53.x.x`), not HF's proxy (`10.x.x`). The uvicorn access log always shows the proxy; the hint is what the limits use. HF's proxy allows any CORS origin, so the server also refuses a POST whose `Origin` isn't the site's (403 `forbidden`) and a Turnstile token solved on another hostname.
+
+## Deploy on Render (fallback host)
+
+`render.yaml` describes the same server as one Render web service, built from `server/Dockerfile`, a single instance (game state is in memory, so never scale out). The Dockerfile listens on `$PORT` when set (Render sets it) and on 7860 otherwise, so the Space is unchanged.
+
+1. In the Render dashboard: New, Blueprint, pick this repo, apply.
+2. Paste the secrets Render asks for: `PLAY_OPENAI_API_KEY`, `PLAY_HF_TOKEN`, `PLAY_GEMINI_API_KEY`, `TURNSTILE_SECRET_KEY`, `NEON_DATABASE_URL`, `PLAY_ALERT_WEBHOOK_URL`. The limits (`PLAY_*`) have defaults in the file.
+3. Once it's live, set the repo variable `VITE_PLAY_API_URL` to the Render URL (`https://societysim-play.onrender.com`, or whatever Render assigned) and redeploy the site. The uptime workflow reads the same variable.
+4. Checks, with `$URL` as the Render URL:
+   - `curl $URL/api/limits`: `remaining_today` above 0, and `client_ip_hint` is your own public IP, masked, not `10.x.x.x` or a Cloudflare address (`172.64-71.x.x`, `104.16-31.x.x`).
+   - Spoof test: `curl -H 'X-Forwarded-For: 6.6.6.6' $URL/api/limits` still shows your IP, never `6.6.x.x`.
+   - Origin: `curl -X POST -H 'Origin: https://evil.example' $URL/api/games` returns 403 `forbidden`. CORS and the Origin allowlist (society-sim.us, www, pages.dev) are the same as on the Space.
+
+**Client IP on Render.** Render doesn't document the exact header chain or its proxy ranges. Its [DDoS article](https://render.com/articles/how-render-handles-ddos-attacks) says all traffic to web services passes through Cloudflare and Render's load balancers and that the app sees the proxy's IP by default. A [community test service on Render](https://github.com/johnbeynon/header-test) found that a client-sent `X-Forwarded-For` is kept with the real address appended after it, and that `CF-Connecting-IP` is always set to the real client (a forged copy is rejected or overwritten). Trusting Cloudflare's ranges and walking `X-Forwarded-For` would be spoofable: a visitor can send through their own Cloudflare Worker or WARP, arrive from a trusted Cloudflare address, and have a forged chain believed. So on Render the server trusts only the private hop (`PLAY_TRUSTED_PROXIES=10.0.0.0/8`) and reads the client from `CF-Connecting-IP` (`PLAY_CLIENT_IP_HEADER=CF-Connecting-IP`); `render.yaml` sets both. The header is read only when the direct peer is trusted and only when `PLAY_CLIENT_IP_HEADER` is set, so on a Space, where a visitor could send it, it is ignored. Unlike a Space, the server doesn't refuse to start on Render without these, so check `client_ip_hint` after the first deploy.
+
+
+## Alerts and kill switch
+
+Kill switch: set the Space variable `PLAY_ENABLED=0` (Space settings, Variables, then restart). New games get a `play_disabled` error; the rest of the site keeps working.
+
+Alerts: set `PLAY_ALERT_WEBHOOK_URL` (a Discord webhook URL) as a Space secret, and as a repo secret so the deploy script copies it. The server posts when daily spend passes 50% and 90% of the cap, when it starts with the kill switch on (or the switch flips while it runs), and when it fails to start. The `Play uptime` workflow checks `/api/limits` every 15 minutes and posts to the same webhook if the Space is down; it reads the `VITE_PLAY_API_URL` repo variable. With no webhook set, nothing is posted.

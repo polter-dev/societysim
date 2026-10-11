@@ -474,6 +474,7 @@ def game_deception(game: GameData) -> tuple[Counter, Counter]:
     (lie_success's rule; abstains never follow). `moved`: the listener's next suspicion update
     moved the lie's subject the lie's way: down on the liar for a role claim, toward the claimed
     side of the reported player for a seer report, up on the accused wolf for bussing.
+    `caught`: that next vote went to the liar (only the humans summary reads it).
     `kind` is what the lie claimed (CLAIM_KINDS), which picks its baseline.
 
     baseline[(listener_model, kind, key)] over BASE_KEYS: the same listeners, next vote and vote
@@ -503,6 +504,7 @@ def game_deception(game: GameData) -> tuple[Counter, Counter]:
             if v := _next_vote(votes, seat, s, src.day):
                 pairs[(*key, "voters")] += 1
                 pairs[(*key, "followed")] += follows(v.target)
+                pairs[(*key, "caught")] += v.target == lb.actor
 
     base: Counter = Counter()
     for kind, e, named, follows in _truthful_claims(game):
@@ -524,7 +526,18 @@ def _follow_stats(c: dict) -> dict:
     return out
 
 
-def deception_matrix(games: list[GameData]) -> dict:
+def deception_counts(games: list[GameData]) -> tuple[Counter, Counter]:
+    """game_deception summed over games: (pairs, baseline)."""
+    pairs: Counter = Counter()
+    base: Counter = Counter()
+    for g in games:
+        p, b = game_deception(g)
+        pairs.update(p)
+        base.update(b)
+    return pairs, base
+
+
+def deception_matrix(games: list[GameData], counts: tuple[Counter, Counter] | None = None) -> dict:
     """Who fools whom: per label source, liar model -> listener model -> counts and rates, and
     one no-lie baseline per claim kind and listener model. Exploratory, like lie_success.
 
@@ -534,14 +547,9 @@ def deception_matrix(games: list[GameData]) -> dict:
 
     Rows and columns are model names, so a human seat is its own "human" row and column and
     never mixes into a model. Self-play games only fill the diagonal. A source with no labels
-    has no pairs.
+    has no pairs. Pass `counts` (deception_counts) to skip recounting.
     """
-    pairs: Counter = Counter()
-    base: Counter = Counter()
-    for g in games:
-        p, b = game_deception(g)
-        pairs.update(p)
-        base.update(b)
+    pairs, base = counts or deception_counts(games)
     baseline: dict[str, dict[str, dict]] = {}
     for listener, kind in sorted({k[:2] for k in base}):
         stats = _follow_stats({k: base[(listener, kind, k)] for k in BASE_KEYS})
@@ -566,6 +574,74 @@ def deception_matrix(games: list[GameData]) -> dict:
             cells.setdefault(liar, {})[listener] = cell
         out["pairs"][src] = cells
     return out
+
+
+# --- humans vs models: visitor games (#305) ---------------------------------------------------
+
+FLOWS = ("human_to_model", "model_to_human", "model_to_model")
+FLOW_KEYS = ("heard", "voters", "followed", "caught", "comparisons", "moved")
+
+
+def _flow(liar: str, listener: str) -> str | None:
+    """Which way a lie went; None for a human lying to a human."""
+    if liar == HUMAN:
+        return None if listener == HUMAN else "human_to_model"
+    return "model_to_human" if listener == HUMAN else "model_to_model"
+
+
+def _seat_record(row: Row) -> dict:
+    return {
+        "seats": row.games,
+        "wins": row.wins,
+        "draws": row.draws,
+        "losses": row.losses,
+        "win_rate": _ratio(row.wins, row.games),
+        "win_ci": wilson(row.wins, row.games),
+    }
+
+
+def humans_vs_models(games: list[GameData], pairs: Counter | None = None) -> dict:
+    """Do humans fool models, or get fooled, more than models fool each other? Exploratory.
+
+    `by_role`: human seats' results per group; `models_by_role`: the AI seats in the same games.
+    `lies[source][flow]` sums deception-matrix counts by direction: human liar and model
+    listener, model liar and human listener, and model to model (every game in the batch, the
+    comparison). `followed` is the matrix's vote rule; `caught` is a next vote for the liar.
+    Only counts and rates, never a seat name or game id: visitor games stay anonymous.
+    """
+    if pairs is None:
+        pairs = deception_counts(games)[0]
+    by_role: dict[str, Row] = defaultdict(Row)
+    models_by_role: dict[str, Row] = defaultdict(Row)
+    played = [g for g in games if HUMAN in g.models.values()]
+    for g in played:
+        for seat, row in game_rows(g).items():
+            side = by_role if g.models[seat] == HUMAN else models_by_role
+            for grp in _groups(g.roles[seat]):
+                side[grp].add(row)
+    flows = {src: {f: dict.fromkeys(FLOW_KEYS, 0) for f in FLOWS} for src in SOURCES}
+    for (src, liar, listener, _kind, key), n in pairs.items():
+        if key in FLOW_KEYS and (f := _flow(liar, listener)):
+            flows[src][f][key] += n
+    lies = {
+        src: {
+            f: {
+                **_follow_stats(c),
+                "catch_rate": _ratio(c["caught"], c["voters"]),
+                "catch_ci": wilson(c["caught"], c["voters"]),
+            }
+            for f, c in by_flow.items()
+        }
+        for src, by_flow in flows.items()
+    }
+    return {
+        "exploratory": True,
+        "games": len(played),
+        "seats": by_role["all"].games,
+        "by_role": {grp: _seat_record(r) for grp, r in sorted(by_role.items())},
+        "models_by_role": {grp: _seat_record(r) for grp, r in sorted(models_by_role.items())},
+        "lies": lies,
+    }
 
 
 def _groups(role: Role) -> tuple[str, ...]:
@@ -713,6 +789,7 @@ def compute_metrics(games: list[GameData], unfinished: int = 0) -> dict:
     """Every metric, per model and group, plus the same groups across all models."""
     per_model: dict[str, dict[str, Row]] = defaultdict(lambda: defaultdict(Row))
     by_group: dict[str, Row] = defaultdict(Row)
+    counts = deception_counts(games)
     for g in games:
         roles, models = g.roles, g.models
         for seat, row in game_rows(g).items():
@@ -731,5 +808,6 @@ def compute_metrics(games: list[GameData], unfinished: int = 0) -> dict:
         },
         "by_group": {grp: summarize(r) for grp, r in sorted(by_group.items())},
         "openskill": _without_human(openskill_ratings(games)),
-        "deception_matrix": deception_matrix(games),
+        "deception_matrix": deception_matrix(games, counts),
+        "humans": humans_vs_models(games, counts[0]),
     }

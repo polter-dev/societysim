@@ -45,7 +45,9 @@ class RateLimit:
 
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         if scope["type"] == "http":
-            wait = self.limiter.take(client_ip(Request(scope), self.play.trusted_proxies))
+            wait = self.limiter.take(
+                client_ip(Request(scope), self.play.trusted_proxies, self.play.client_ip_header)
+            )
             if wait:
                 headers = {"Retry-After": str(max(1, math.ceil(wait)))}
                 response = error_response(

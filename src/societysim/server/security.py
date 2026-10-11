@@ -137,6 +137,9 @@ class PlayConfig:
     allowed_models: frozenset[str] = DEFAULT_ALLOWED  # PLAY_ALLOWED_MODELS, comma separated
     max_tokens: int = 2048  # PLAY_MAX_TOKENS: per model call
     trusted_proxies: tuple[Network, ...] = ()  # PLAY_TRUSTED_PROXIES, comma separated CIDRs
+    client_ip_header: str = (
+        ""  # PLAY_CLIENT_IP_HEADER: header the trusted proxy sets to the client IP
+    )
     space_host: str = ""  # SPACE_HOST (set by HF Spaces): its https origin is allowed
     on_space: bool = False  # SPACE_ID is set: running on HF Spaces, behind its proxy
 
@@ -170,6 +173,7 @@ class PlayConfig:
             ),
             max_tokens=_env_int(env, "PLAY_MAX_TOKENS", cls.max_tokens),
             trusted_proxies=proxies,
+            client_ip_header=env.get("PLAY_CLIENT_IP_HEADER", "").strip().lower(),
             space_host=env.get("SPACE_HOST", "").strip(),
             on_space=bool(env.get("SPACE_ID")),
         )
@@ -252,7 +256,7 @@ def ip_hint(ip: str) -> str:
     return ":".join(addr.exploded.split(":")[:2]) + ":x::"
 
 
-def client_ip(request: Request, trusted: tuple[Network, ...]) -> str:
+def client_ip(request: Request, trusted: tuple[Network, ...], ip_header: str = "") -> str:
     """The visitor's address. Forwarding headers count only when the socket peer is a trusted
     proxy; X-Forwarded-For is read right to left, skipping trusted hops, so a client can't
     spoof it by sending its own. CF-Connecting-IP is used when there is no X-Forwarded-For.
@@ -266,6 +270,10 @@ def client_ip(request: Request, trusted: tuple[Network, ...]) -> str:
 
     if not is_trusted(_ip(peer)):
         return peer or "unknown"
+    if ip_header:  # opt-in (PLAY_CLIENT_IP_HEADER), only ever read from a trusted peer
+        named = _ip(request.headers.get(ip_header, ""))
+        if named:
+            return str(named)
     hops = [h for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
     for hop in reversed(hops):
         addr = _ip(hop)

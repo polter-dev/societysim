@@ -105,7 +105,7 @@ async def check_start(request: Request, setup: GameSetup) -> Admission:
     play = settings.play
     if not settings.play_enabled:
         raise PlayError(503, "play_disabled", "Play is switched off right now; watch a replay")
-    ip = security.client_ip(request, play.trusted_proxies)
+    ip = security.client_ip(request, play.trusted_proxies, play.client_ip_header)
 
     if play.turnstile_secret:
         token = getattr(request.state, "turnstile_token", "")

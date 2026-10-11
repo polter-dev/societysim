@@ -23,12 +23,13 @@ services:
         sync: false
       - key: PLAY_ALERT_WEBHOOK_URL
         sync: false
-      # Render's private hop (10.x) plus Cloudflare's edge ranges, which sit in front of every
-      # Render web service. X-Forwarded-For arrives as "<client-sent>, <real client>,
-      # <Cloudflare edge>, <Render 10.x>", so the server walks it right to left past these and
-      # lands on the real client. See README, "Deploy on Render".
+      # Trust only Render's private hop, and take the client from CF-Connecting-IP, which
+      # Render always sets. Trusting Cloudflare's ranges would let a visitor's own Cloudflare
+      # Worker or WARP exit forge X-Forwarded-For. See README, "Deploy on Render".
       - key: PLAY_TRUSTED_PROXIES
-        value: "10.0.0.0/8,173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32"
+        value: "10.0.0.0/8"
+      - key: PLAY_CLIENT_IP_HEADER
+        value: "CF-Connecting-IP"
       - key: PLAY_ALLOWED_MODELS
         value: "qwen3-235b,llama4-maverick,gemma4-26b,gpt-oss-120b,deepseek-v3.1,gemini-flash-lite,gpt-5-nano"
       - key: PLAY_RATE_PER_MIN

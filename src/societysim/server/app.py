@@ -149,7 +149,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return Limits(
             play_enabled=settings.play_enabled,
             remaining_today=manager.ledger.remaining_today(),
-            client_ip_hint=security.ip_hint(security.client_ip(request, play.trusted_proxies)),
+            client_ip_hint=security.ip_hint(
+                security.client_ip(request, play.trusted_proxies, play.client_ip_header)
+            ),
         )
 
     @app.post("/api/games")

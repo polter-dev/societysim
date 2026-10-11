@@ -327,8 +327,8 @@ class LiteLLMClient:
                 return CompletionResult(
                     parsed=None, raw="", error=_auth_message(model, error), usage=usage
                 )
-            transient = _transient(error)
             timed_out = isinstance(error, TimeoutError | litellm.exceptions.Timeout)
+            transient = timed_out or _transient(error)
             out_of_retries = attempt == self.max_retries or (
                 timed_out and timeouts > self.timeout_retries
             )

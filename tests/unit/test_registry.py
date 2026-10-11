@@ -132,7 +132,7 @@ def test_amd_uses_low_reasoning_and_others_unchanged(monkeypatch):
     kw = {m.name: request_kwargs(m, Ping) for m in reg.models}
     sent = {name: (k.get("reasoning_effort"), k["max_tokens"]) for name, k in kw.items()}
     assert sent == {
-        "qwen3-235b": (None, 1024),
+        "qwen3-235b": (None, 2048),
         "llama4-maverick": (None, 1024),
         "gemma4-26b": (None, 1024),
         "gpt-oss-120b": ("low", 2048),

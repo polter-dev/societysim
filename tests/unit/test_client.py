@@ -544,7 +544,7 @@ async def test_provider_timeout_overrides_client_default(monkeypatch):
     fake, calls = hang_then()
     monkeypatch.setattr(litellm, "acompletion", fake)
     client = LiteLLMClient(
-        limits={"openai": ProviderLimit(8, 10_000, timeout_s=0.02)}, timeout_s=60
+        limits={"openai": ProviderLimit(8, 10_000, timeout_s=0.02)}, timeout_s=60, timeout_retries=0
     )
     r = await client.complete(spec(), MESSAGES, VoteResponse)
     assert r.error == "Timeout: m took longer than 0.02 s"
@@ -554,7 +554,9 @@ async def test_provider_timeout_overrides_client_default(monkeypatch):
 async def test_timed_out_call_frees_the_provider_slot(monkeypatch):
     fake, _ = hang_then(reply(json.dumps(VOTE)))
     monkeypatch.setattr(litellm, "acompletion", fake)
-    client = LiteLLMClient(limits={"openai": ProviderLimit(1, 10_000)}, timeout_s=0.05)
+    client = LiteLLMClient(
+        limits={"openai": ProviderLimit(1, 10_000)}, timeout_s=0.05, timeout_retries=0
+    )
     first, second = await asyncio.gather(
         client.complete(spec(), MESSAGES, VoteResponse),
         client.complete(spec(), MESSAGES, VoteResponse),

@@ -97,7 +97,12 @@ class _Game:
 # "I'm a villager", "I am just a plain villager", "as a villager, I ...": a first-person
 # villager claim in one sentence. Models often tag claim_role "villager" on statements that
 # say nothing about their role, so a villager self-tag counts only when the text says it.
-_SAYS_VILLAGER = re.compile(r"\b(?:I'm|I’m|I am|as an?)\b[^.!?;]{0,40}\bvillager", re.I)
+_SAYS_VILLAGER = re.compile(
+    r"\b(?:I'm|I’m|I am|as an?)\b[^.!?;]{0,40}\bvillager"
+    # a first-person wolf denial ("I'm not a wolf") counts as claiming villager too
+    r"|\bI(?:'m|’m| am) not (?:a |the )?(?:wolf|werewolf)",
+    re.I,
+)
 
 
 def _self_tags(game: _Game) -> list[_Tag]:
@@ -125,7 +130,9 @@ def _jev_tags(game: _Game, jev: Jev) -> list[_Tag]:
         tags += [_Tag(EventType.ACCUSATION, target=t, **base) for t in v.accuse]
         if v.claim_role:
             tags.append(_Tag(EventType.ROLE_CLAIM, role=v.claim_role, **base))
-        if v.seer_report:
+        # Jev's seer_report also fires when the speaker relays someone else's check ("Gia cleared
+        # Cleo"). Only a speaker who claims the Seer role, or really is the Seer, is reporting.
+        if v.seer_report and (v.claim_role == Role.SEER or game.roles[s.actor] is Role.SEER):
             r = v.seer_report
             tags.append(_Tag(EventType.SEER_CLAIM, target=r.target, result=r.result, **base))
     return tags

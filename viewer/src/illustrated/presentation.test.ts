@@ -4,10 +4,30 @@ import {describe,expect,it} from 'vitest';
 import fixture from '../../../fixtures/sample_game.jsonl?raw';
 import {parseLog} from '../data/parse';
 import {deriveScene} from '../scene/deriveScene';
-import {eventPresentation,playerStatistics} from './presentation';
+import {eventPresentation,playerStatistics,eventIcon} from './presentation';
 import {IllustratedShell,IllustratedInspector} from './IllustratedView';
 const events=parseLog(fixture).events;
 describe('illustrated replay data',()=>{
+ it('uses public event types and phase for detail illustrations',()=>{
+  expect(eventIcon({...events[0],type:'seer_check'})).toBe('investigation');
+  expect(eventIcon({...events[0],type:'doctor_save'})).toBe('protection');
+  expect(eventIcon({...events[0],type:'vote'})).toBe('voting');
+  expect(eventIcon({...events[0],type:'night_kill'})).toBe('werewolf');
+  expect(eventIcon({...events[0],type:'death_reveal',phase:'night'})).toBe('werewolf');
+  expect(eventIcon({...events[0],type:'death_reveal',phase:'day'})).toBe('voting');
+  expect(eventIcon({...events[0],type:'death_reveal',phase:'vote'})).toBe('voting');
+  expect(eventIcon({...events[0],type:'phase_start',phase:'night'})).toBe('night');
+  expect(eventIcon({...events[0],type:'statement',phase:'day'})).toBe('day');
+ });
+ it('villager view only illustrates public events, with no wolf picture outside the night',()=>{
+  const log=deriveScene(events,events.length-1,'villager').log;
+  expect(log.length).toBeGreaterThan(0);
+  for(const e of log){
+   expect(e.visibility).toBe('public');
+   expect(['protection']).not.toContain(eventIcon(e));
+   if(e.phase!=='night') expect(eventIcon(e)).not.toBe('werewolf');
+  }
+ });
  it('renders the logged roster, including a tenth seat without prototype agents',()=>{
   const start=events.find(e=>e.type==='game_start')!;
   const seats={...start.meta.seats!,p7:{name:'Actual Seven',model:'logged-model',color:'#123456',role:'villager' as const},p8:{name:'Actual Eight',model:'logged-model',color:'#123456',role:'villager' as const},p9:{name:'Actual Nine',model:'logged-model',color:'#123456',role:'villager' as const}};
@@ -36,6 +56,7 @@ describe('illustrated replay data',()=>{
   expect(render('villager')).not.toContain(reason);
  });
 });
+
 describe('role claim text',()=>{
  const claim=events.find(e=>e.type==='role_claim')!;
  const text=(meta:object,mode:'villager'|'narrator'='narrator')=>{

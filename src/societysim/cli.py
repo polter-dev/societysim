@@ -335,7 +335,7 @@ def batch(
         raise typer.Exit(1) from None
 
     if dry_run:
-        from societysim.batch.runner import prior_seat_cost
+        from societysim.batch.runner import MIN_PAIR_GAMES, pair_games, prior_seat_cost
 
         for name, spec in specs.items():
             if prior_seat_cost(spec) == 0:
@@ -349,6 +349,25 @@ def batch(
             f"{len(rows)} games, estimated ${total:.2f} (price-based guess) "
             f"against a ${cfg.budget_usd:.2f} budget"
         )
+        # Roles depend on the salt, so this counts the plan that would actually run.
+        pairs = pair_games(rows)
+        models = sorted(set(cfg.models))
+        _echo(f"games per (wolf model, listener model){' (salted)' if salt else ''}:")
+        for w in models:
+            _echo(f"  wolf {w}: " + " ".join(f"{o}={pairs[w, o]}" for o in models))
+        thin = [(w, o) for w in models for o in models if pairs[w, o] < MIN_PAIR_GAMES]
+        if thin:
+            shown = ", ".join(f"{w}>{o}={pairs[w, o]}" for w, o in thin[:12])
+            more = f" (+{len(thin) - 12} more)" if len(thin) > 12 else ""
+            _echo(
+                f"warning: {len(thin)} of {len(models) ** 2} (wolf, listener) pairs have fewer "
+                f"than {MIN_PAIR_GAMES} games: {shown}{more}"
+            )
+            if salt:
+                _echo(
+                    "the salt changes the deal; if this config promises pair coverage, "
+                    "set a different SOCIETYSIM_SEED_SALT and dry-run again before starting"
+                )
         return
 
     client = None

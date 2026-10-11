@@ -4,7 +4,7 @@ import type { Event } from '../types/events';
 import { art } from './assets';
 import { AvatarMedallion } from '../components/AvatarMedallion/AvatarMedallion';
 import { useModelLabel } from '../components/ModelAvatar/ModelAvatar';
-import { eventPresentation } from './presentation';
+import { eventPresentation, eventIcon } from './presentation';
 import ForestTable from './ForestTable';
 import { seatLabel } from '../components/Table/Table';
 import './scenery.css';
@@ -43,6 +43,7 @@ function Modal({ children, close, label, className = '' }: { children: React.Rea
 function EventDetails({ event, scene, close }: { event: Event; scene: Scene; close: () => void }) {
   const item = eventPresentation(event, scene);
   const people = [...new Set([event.actor, event.target].filter((id): id is string => !!id))].map(id => scene.players.find(p => p.id === id)).filter(p => !!p);
-  return <Modal close={close} label={`Event: ${item.title}`} className="event-dialog"><div className="event-detail-board"><img className="detail-art" src={art('event-details-v2.png')} alt=""/><button className="detail-close" autoFocus onClick={close} aria-label="Close event details">×</button><h2 className="detail-heading">Event Details</h2><h3 className="detail-title">{item.title}</h3><p className="detail-time">{event.phase} {event.day} · Event {event.seq}</p><p className="detail-description" tabIndex={0}>{item.text}</p><section className="detail-participants" tabIndex={0}><h3>Participants</h3>{people.length ? people.map(p => <p key={p.id}><strong>{p.name}</strong><br/>{p.model} · {p.role ?? 'role unknown'}</p>) : <p>Village event</p>}</section><section className="detail-reasoning" tabIndex={0}><h3>Logged reasoning</h3><p>{event.private_reasoning ?? 'No reasoning available in this view.'}</p></section><section className="detail-outcome" tabIndex={0}><h3>Logged outcome</h3><p>{item.result ?? 'No separate outcome logged for this action.'}</p></section></div></Modal>;
+  return <Modal close={close} label={`Event: ${item.title}`} className="event-dialog"><div className="event-detail-board"><img className="detail-art" src={art('event-details-v2.png')} alt=""/><button className="detail-close" autoFocus onClick={close} aria-label="Close event details">×</button><h2 className="detail-heading">Event Details</h2><img className="detail-event-icon" src={art(`event-icons/icon_${eventIcon(event)}.png`)} alt=""/><h3 className="detail-title">{item.title}</h3><p className="detail-time">{event.phase} {event.day} · Event {event.seq}</p><p className="detail-description" tabIndex={0}>{item.text}</p><section className="detail-participants" tabIndex={0}><h3>Participants</h3>{people.length ? people.map(p => <p key={p.id}><strong>{p.name}</strong><br/>{p.model} · {p.role ?? 'role unknown'}</p>) : <p>Village event</p>}</section><section className="detail-reasoning" tabIndex={0}><h3>Logged reasoning</h3><p>{event.private_reasoning ?? 'No reasoning available in this view.'}</p></section><section className="detail-outcome" tabIndex={0}><h3>Logged outcome</h3><p>{item.result ?? 'No separate outcome logged for this action.'}</p></section></div></Modal>;
 }
 export { IllustratedInspector } from './PlayerProfile';
+

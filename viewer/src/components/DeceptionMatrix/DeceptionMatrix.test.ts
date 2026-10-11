@@ -28,10 +28,24 @@ describe("DeceptionMatrix", () => {
     expect(render({ minN: 1 })).not.toContain('data-below-threshold="true"');
   });
 
-  it("starts on the chosen source; an empty source says so", () => {
-    expect(render({ initialSource: "jev" })).toContain("No lies heard");
-    expect(render({ initialSource: "jev" })).toContain('aria-pressed="true">Jev');
-    expect(render()).toContain('aria-pressed="true">Self-tagged');
+  it("with Jev labels the source toggle is there and starts on the chosen source", () => {
+    const f = structuredClone(fixture) as typeof fixture;
+    (f.pairs as Record<string, unknown>).jev = structuredClone(f.pairs.self_tag);
+    const m = parseDeceptionMatrix(f);
+    const withJev = (props = {}) => render({ matrix: m, ...props });
+    expect(withJev()).toContain("deception-sources");
+    expect(withJev()).not.toContain("Jev labels haven");
+    expect(withJev({ initialSource: "jev" })).toContain('aria-pressed="true">Jev');
+    expect(withJev()).toContain('aria-pressed="true">Self-tagged');
+  });
+
+  it("with no Jev labels it hides the toggle and says why, even if Jev was asked for", () => {
+    for (const html of [render(), render({ initialSource: "jev" })]) {
+      expect(html).not.toContain("deception-sources");
+      expect(html).not.toContain("No lies heard");
+      expect(html).toContain("Lie labels in this batch are self-tags. Jev labels haven&#x27;t been run on it yet.");
+      expect(html).toContain("80% <small>(n=10)</small>");
+    }
   });
 
   it("headers show short model names, not catalog ids", () => {

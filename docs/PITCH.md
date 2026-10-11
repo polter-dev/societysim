@@ -6,7 +6,7 @@ Numbers come from the `mixed_v2_10p` report (100 ten-player games, #294). Say on
 
 ## What we can claim today
 
-- Built and merged: the engine, the batch runner, `label`, `report` (including the "who fools whom" matrix, #251), the replay viewer, the human seat, narration clips, and the live site at https://society-sim.us.
+- Built and merged: the engine, the batch runner, `label`, `report` (including the "who fools whom" matrix, #251), the replay viewer, the human seat, narration that plays inside the viewer, and the live site at https://society-sim.us.
 - Done: the 10-player engine (#250) and the 10-player mixed batch `mixed_v2_10p`: 100 games, 0 unfinished, $11.02. Results are in its report and on #216.
 - Lie labels are self-tags only (the free source). Jev was not run on this batch, so every lie number is self-tag.
 
@@ -48,11 +48,11 @@ All from `runs/mixed_v2_10p/report/report.md` (100 ten-player games, 2 wolves ea
 
 Open https://society-sim.us, the demo game, with `?mode=narrator`. The viewer starts in villager view and hides everything private.
 
-1. Press Space. Pause on the first accusation arrow.
+1. Click Play in the bottom bar (Space only works once the timeline has focus). Pause on the first accusation arrow.
 2. Click a wolf's seat. The inspector shows its private scratchpad next to what it said out loud.
 3. Jump to the labeled lie pop-up, then to the vote it moved.
-4. Narration: play the game's ElevenLabs clips from its `.audio` folder alongside the replay. Callum voices the day, Harry voices the night. The viewer does not play clips itself yet, so run them from a second window or drop this step.
-5. Human seat: `uv run societysim play --human-seat p3` puts you in a seat with the same information an AI would get. The other seats need model keys, so use a laptop that has them, or skip it.
+4. Narration: open the Narration panel (bottom right), turn "Narration on" and press Play from the start of the game. The viewer plays the narrator's clips itself, reading night and day changes, deaths and the result. The clips are narrator-only and never voice private reasoning. If no sound comes out, drop this step.
+5. Human seat: Play on the site puts a visitor in a seat with the same information an AI would get. Don't start a game on stage; show the mode picker and say it is rate limited. The command-line version is `uv run societysim play --human-seat p3` and needs model keys.
 
 Demo game: https://society-sim.us/?game=mixed_v2_10p-g0043&seq=49&mode=narrator. Seq 48 to 49 is the wolf turning on his partner, 69 to 78 the votes, 79 the elimination (same as in [DEMO.md](DEMO.md)).
 
@@ -88,7 +88,7 @@ Demo game: https://society-sim.us/?game=mixed_v2_10p-g0043&seq=49&mode=narrator.
    - Most cells sit below the listener's true-claim baseline: lies were followed less than truths. Example: gpt-oss-120b lying to deepseek-v3.1, 26% (n=69) against 81%.
    - On screen: the deception matrix from the report.
 8. **Live: watch a lie work**
-   - Narrator view, inspector, label pop-up, the vote it moved, narration clips.
+   - Narrator view, inspector, label pop-up, the vote it moved, narration playing in the viewer.
    - On screen: https://society-sim.us.
 9. **What's next**
    - Jev labels on top of the self-tags, more games for the GPT-5 models (12 each so far), and human seats against models through visitor play.

@@ -4,6 +4,7 @@ import {
   DEFAULT_MIN_N,
   belowThreshold,
   cell,
+  hasSource,
   sortAxes,
   type DeceptionMatrix as Matrix,
   type DeceptionSource,
@@ -23,7 +24,10 @@ const SOURCE_LABELS: Record<DeceptionSource, string> = { self_tag: "Self-tagged"
 
 /** Liar (rows) x listener (columns) heatmap table, shaded by vote-follow rate (styled in controls.css). */
 export function DeceptionMatrix({ matrix, minN = DEFAULT_MIN_N, initialSource = "self_tag" }: DeceptionMatrixProps) {
-  const [source, setSource] = useState<DeceptionSource>(initialSource);
+  // A batch labelled with self-tags only has nothing to show under Jev: hide the toggle and say why.
+  const hasJev = hasSource(matrix, "jev");
+  const [picked, setSource] = useState<DeceptionSource>(initialSource);
+  const source = hasJev ? picked : "self_tag";
   const { liars, listeners } = sortAxes(matrix, source);
   const label = useModelLabel();
   const model = (m: string, size: number) => (
@@ -35,13 +39,17 @@ export function DeceptionMatrix({ matrix, minN = DEFAULT_MIN_N, initialSource = 
 
   return (
     <section className="deception-matrix" data-exploratory={matrix.exploratory}>
-      <div role="group" aria-label="Label source" className="deception-sources">
-        {DECEPTION_SOURCES.map((s) => (
-          <button key={s} type="button" className="deception-sources__option" aria-pressed={s === source} onClick={() => setSource(s)}>
-            {SOURCE_LABELS[s]}
-          </button>
-        ))}
-      </div>
+      {hasJev ? (
+        <div role="group" aria-label="Label source" className="deception-sources">
+          {DECEPTION_SOURCES.map((s) => (
+            <button key={s} type="button" className="deception-sources__option" aria-pressed={s === source} onClick={() => setSource(s)}>
+              {SOURCE_LABELS[s]}
+            </button>
+          ))}
+        </div>
+      ) : (
+        hasSource(matrix, "self_tag") && <p className="deception-note">Lie labels in this batch are self-tags. Jev labels haven&apos;t been run on it yet.</p>
+      )}
       {liars.length === 0 ? (
         <p>No lies heard for this label source.</p>
       ) : (

@@ -101,6 +101,11 @@ export function parseDeceptionMatrix(raw: unknown): DeceptionMatrix {
   return raw as unknown as DeceptionMatrix;
 }
 
+/** True when the batch has at least one lie heard under this label source. */
+export function hasSource(m: DeceptionMatrix, source: DeceptionSource): boolean {
+  return Object.values(m.pairs[source]).some((row) => Object.keys(row).length > 0);
+}
+
 export function cell(
   m: DeceptionMatrix,
   source: DeceptionSource,

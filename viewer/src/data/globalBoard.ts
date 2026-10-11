@@ -128,6 +128,8 @@ export const DETECTOR_COLUMNS: Column<DetectorRow>[] = [
   { label: "Wolf votes", title: "Share of its day votes that hit a wolf", value: (r) => withN(r.wolf_vote_rate, r.votes) },
 ];
 
+const JEV_COLUMN = "Lie success (Jev)";
+
 export const LIAR_COLUMNS: Column<LiarRow>[] = [
   { label: "Model", title: "", value: (r) => r.model },
   { label: "Games", title: "Seat-games as a wolf", value: (r) => String(r.wolf_games) },
@@ -140,11 +142,17 @@ export const LIAR_COLUMNS: Column<LiarRow>[] = [
     value: (r) => withN(r.self_tag_lie_success, r.self_tag_lie_voters),
   },
   {
-    label: "Lie success (Jev)",
+    label: JEV_COLUMN,
     title: "The same, for lies Jev labelled",
     value: (r) => withN(r.jev_lie_success, r.jev_lie_voters),
   },
 ];
+
+/** The liars columns; the Jev one only when some row has a Jev lie (a self-tag-only batch has none). */
+export function liarColumns(rows: LiarRow[]): Column<LiarRow>[] {
+  const hasJev = rows.some((r) => r.jev_lie_voters > 0 || r.jev_lie_success !== null);
+  return hasJev ? LIAR_COLUMNS : LIAR_COLUMNS.filter((c) => c.label !== JEV_COLUMN);
+}
 
 // --- polling ---------------------------------------------------------------------------------
 

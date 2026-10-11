@@ -37,6 +37,8 @@ Set `budget_usd` near the dry-run total. The cap is a hard stop, and the guard r
 
 `SOCIETYSIM_SEED_SALT` is off by default. Set it to a random value, for example one made with `secrets.token_hex(16)`, before starting a batch. Set the same value again for every run and dry run of that batch. A different or missing salt stops a resumed run with an error that names `SOCIETYSIM_SEED_SALT`; set the same salt (or unset it for an unsalted batch) and resume, and do not delete the directory. The deal in a salted batch cannot be rebuilt from the committed config alone. The salt is not written to the batch output.
 
+The salt also changes which seats get which roles, so it changes the wolf and listener pairs. `configs/mixed_v2_10p_gpt.yaml` was tuned for n >= 5 games per GPT pair on the unsalted plan only, and most salts break that. A `--dry-run` with the salt set prints games per (wolf model, listener model) for the plan it would actually run, and warns about pairs under 5. For a salted run of that config, dry-run first, and if it warns, pick another salt and dry-run again before any game starts.
+
 ```bash
 uv run societysim batch --config configs/selfplay_baseline_10p.yaml --agents llm   # paid
 ```

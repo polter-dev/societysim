@@ -7,11 +7,10 @@ import yaml
 from typer.testing import CliRunner
 
 from societysim.batch.assign import assign_games
-from societysim.batch.runner import plan
+from societysim.batch.runner import pair_games, plan
 from societysim.cli import app
 from societysim.config import BatchConfig, GameConfig, RoleCounts, load_yaml
 from societysim.models.registry import load_registry
-from societysim.roles import Role
 
 CONFIGS = Path(__file__).resolve().parents[2] / "configs"
 NAMES = [
@@ -93,15 +92,13 @@ def test_mixed_v2_10p_ten_seats_nine_models():
     assert all(len(g.models) == 10 for g in assign_games(cfg))
 
 
-def wolf_listener_pairs(cfg: BatchConfig) -> Counter[tuple[str, str]]:
+def wolf_listener_pairs(cfg: BatchConfig, salt: str | None = None) -> Counter[tuple[str, str]]:
     """Games per (wolf model, listener model): one count per game for each such pair."""
-    specs = {s.name: s for s in load_registry(CONFIGS / "models.yaml").resolve(cfg.models)}
-    pairs: Counter[tuple[str, str]] = Counter()
-    for row in plan(cfg, specs):
-        wolves = {m for _, m, role in row["seats"] if role == Role.WOLF}
-        others = {m for _, m, role in row["seats"] if role != Role.WOLF}
-        pairs.update((w, o) for w in wolves for o in others)
-    return pairs
+    return pair_games(plan(cfg, registry_specs(cfg), salt=salt))
+
+
+def registry_specs(cfg: BatchConfig):
+    return {s.name: s for s in load_registry(CONFIGS / "models.yaml").resolve(cfg.models)}
 
 
 def test_mixed_v2_10p_gpt_pair_coverage():
@@ -195,3 +192,38 @@ def test_last_words_true_is_rejected():
     with pytest.raises(ValueError, match="last_words: true is not supported"):
         GameConfig.model_validate({"rules": {"last_words": True}})
     assert GameConfig.model_validate({"rules": {"last_words": False}}).rules.last_words is False
+
+
+def test_dry_run_warns_when_salt_thins_gpt_pairs(tmp_path, monkeypatch):
+    """#490: the unsalted plan has every GPT pair at 5+ games; a salt re-deals roles and can
+    thin them. The dry run must count the plan it would run, salt included, and warn."""
+    monkeypatch.chdir(tmp_path)
+    cfg = load("mixed_v2_10p_gpt")
+    gpt = [m for m in cfg.models if m.startswith("gpt-5")]
+    gpt_pairs = [(a, b) for a in cfg.models for b in cfg.models if a in gpt or b in gpt]
+    salt = next(
+        s
+        for s in (f"salt-{i}" for i in range(200))
+        if min(wolf_listener_pairs(cfg, s)[p] for p in gpt_pairs) < 5
+    )
+    args = [
+        "batch",
+        "--dry-run",
+        "--config",
+        str(CONFIGS / "mixed_v2_10p_gpt.yaml"),
+        "--registry",
+        str(CONFIGS / "models.yaml"),
+    ]
+    env = {"PYTHON_DOTENV_DISABLED": "1"}
+    clean = CliRunner().invoke(app, args, env={**env, "SOCIETYSIM_SEED_SALT": ""})
+    assert clean.exit_code == 0, clean.output
+    assert "games per (wolf model, listener model):" in clean.output
+    salted = CliRunner().invoke(app, args, env={**env, "SOCIETYSIM_SEED_SALT": salt})
+    assert salted.exit_code == 0, salted.output
+    assert "games per (wolf model, listener model) (salted):" in salted.output
+    assert "fewer than 5 games" in salted.output
+    assert "SOCIETYSIM_SEED_SALT" in salted.output
+    assert salt not in salted.output
+    counts = wolf_listener_pairs(cfg, salt)
+    thin = next(p for p in gpt_pairs if counts[p] < 5)
+    assert f"{thin[0]}>{thin[1]}={counts[thin]}" in salted.output

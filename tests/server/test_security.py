@@ -921,6 +921,35 @@ async def test_leave_books_calls_in_flight(make_client, monkeypatch, costly):
     assert booked == pytest.approx(costly["held"]) and booked > 0
 
 
+class Broken(RandomAgent):
+    async def act(self, turn):
+        raise RuntimeError("provider said: https://x?key=LEAKCHECK")
+
+
+async def test_every_game_end_is_logged_with_its_reason(make_client, caplog):
+    """#593: Neon shows a forfeit as 'failed', so the server log says why each game ended:
+    one warning per unfinished game with its id, status and reason; the type of an exception,
+    never its text."""
+    c = make_client(play=play())
+    left = await start(c)
+    await until(c, left, lambda m: m["pending_action"])
+    with caplog.at_level(logging.WARNING, logger="societysim.server.manager"):
+        await c.post(f"/api/games/{left['game_id']}/leave", headers=auth(left["seat_token"]))
+        await finished(c, left["game_id"])
+        timed_out = make_client(play=play(), turn_timeout=0.01, max_timeouts=1)
+        gone = await start(timed_out)
+        await finished(timed_out, gone["game_id"])
+        broken = make_client(play=play(), agents=lambda cfg: (Broken, {}))
+        crashed = await start(broken, watch_only=True)
+        await finished(broken, crashed["game_id"])
+    lines = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(lines) == 3, lines
+    assert lines[0].startswith(f"game {left['game_id']} ended: forfeit (leave) at day 1 after")
+    assert lines[1].startswith(f"game {gone['game_id']} ended: forfeit (turn timeouts) at day 1")
+    assert lines[2].startswith(f"game {crashed['game_id']} ended: failed (RuntimeError) at night 1")
+    assert "LEAKCHECK" not in caplog.text
+
+
 async def test_dead_visitor_no_longer_holds_the_ip_slot(make_client):
     """A visitor who is out watches an all-AI game; that doesn't block their next one. A
     watch-only game still does (test_one_active_game_per_ip_and_daily_cap)."""

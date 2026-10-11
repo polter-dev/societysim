@@ -9,6 +9,9 @@
 # Seed 25 was picked by scanning seeds 0-39: it is the first seed where all 28 (wolf model,
 # listener model) pairs with a GPT model on either side, GPT-vs-GPT included, reach at least 5
 # games (tests/unit/test_configs.py checks this).
+# That check is for the UNSALTED plan. SOCIETYSIM_SEED_SALT re-deals every game's roles, and most
+# salts leave a GPT pair under 5 games (#490). For a salted run, run --dry-run with the same salt
+# first (it prints games per pair and warns about thin ones) and pick another salt if it warns.
 # Dry-run estimate (about $4) is the basis of the cap. The prior runs about 4x high (see mixed_v1),
 # so the real cost should land near $1.
 batch_id: mixed_v2_10p_gpt

@@ -9,6 +9,7 @@ import {
   restrictCatalog,
   schemaErrors,
   setHumanSeat,
+  setNPlayers,
   setMode,
   toSetupJson,
   validate,
@@ -56,7 +57,12 @@ export function useSetupForm(assets: SetupAssets, { play, allowed }: VisitorOpti
       setup,
       json: JSON.stringify(setup, null, 2),
       valid: errors.length === 0,
-      update: (patch) => setState((s) => ({ ...s, ...patch })),
+      update: (patch) =>
+        setState((s) => {
+          const { nPlayers, ...rest } = patch;
+          const next = { ...s, ...rest };
+          return nPlayers === undefined ? next : setNPlayers(next, nPlayers, catalog);
+        }),
       setMode: (mode) => setState((s) => setMode(s, mode)),
       setSeatModel: (seat, model) =>
         setState((s) => ({ ...s, seats: s.seats.map((m, i) => (i === seat ? model : m)) })),

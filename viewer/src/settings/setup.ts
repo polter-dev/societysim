@@ -232,3 +232,14 @@ export function joinAs(s: SetupState, play: boolean, catalog: ModelsCatalog): Se
   const keep = s.seats.slice(0, s.nPlayers).indexOf(HUMAN);
   return { ...setHumanSeat(s, keep < 0 ? 0 : keep, catalog), basicHuman: true };
 }
+
+/**
+ * Change the player count and keep the setup valid: a human seat past the new count moves to p0
+ * (the old slot gets its default model back), and wolves are clamped to 1..maxWolves(n).
+ */
+export function setNPlayers(s: SetupState, n: number, catalog: ModelsCatalog): SetupState {
+  if (!Number.isInteger(n)) return { ...s, nPlayers: n };
+  const next = { ...s, nPlayers: n, nWolves: Math.max(1, Math.min(s.nWolves, maxWolves(n))) };
+  const h = s.seats.indexOf(HUMAN);
+  return s.mode === "advanced" && h >= n ? setHumanSeat(next, 0, catalog) : next;
+}

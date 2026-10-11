@@ -13,6 +13,7 @@ import {
   schemaErrors,
   setHumanSeat,
   setMode,
+  setNPlayers,
   toSetupJson,
   validate,
 } from "./setup";
@@ -134,5 +135,25 @@ describe("SetupForm", () => {
     expect(out).toContain("Download setup.json");
     expect(out).toContain("societysim play --setup setup.json");
     expect(out).not.toContain("<select");
+  });
+});
+
+describe("setNPlayers", () => {
+  it("moves a human past the new count to p0 and frees the old slot", () => {
+    const s = setNPlayers(setHumanSeat(adv(), 8, catalog), 7, catalog);
+    expect(humanSeat(s)).toBe("p0");
+    expect(s.seats.filter((m) => m === "human")).toHaveLength(1);
+    expect(validate(s, catalog)).toEqual([]);
+    expect(schemaErrors(toSetupJson(s), schema)).toEqual([]);
+    expect(toSetupJson(s).seats).toHaveLength(7);
+  });
+  it("keeps a human who is still in range", () => {
+    expect(humanSeat(setNPlayers(setHumanSeat(adv(), 5, catalog), 7, catalog))).toBe("p5");
+  });
+  it("clamps wolves to the allowed range", () => {
+    const s = setNPlayers(adv({ nWolves: 4 }), 8, catalog);
+    expect(s.nWolves).toBe(3);
+    expect(validate(s, catalog)).toEqual([]);
+    expect(setNPlayers(adv({ nWolves: 4 }), 7, catalog).nWolves).toBe(3);
   });
 });

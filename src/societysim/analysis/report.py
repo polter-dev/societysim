@@ -709,9 +709,13 @@ def _n(n: int, word: str) -> str:
 
 
 def _coverage_note(coverage: dict[str, int] | None, games: int, src: str) -> str | None:
-    """Says how many games a source's numbers cover, when that is fewer than all of them."""
+    """Says how many games Jev's numbers cover, when that is fewer than all of them.
+
+    Only for jev: self-tag reads every game by design, so a game with no self-tag lie is not
+    uncovered. No note when Jev labeled nothing (the report already says "no labels").
+    """
     n = (coverage or {}).get(src, games)
-    if n >= games:
+    if src != "jev" or n == 0 or n >= games:
         return None
     return f"{src} labeled {n} of {games} games; its lie numbers cover only those {n}."
 

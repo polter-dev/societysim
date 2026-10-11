@@ -605,6 +605,15 @@ def test_jev_coverage_is_per_game_and_reported(tmp_path):
     assert "jev labeled 1 of 2 games" in md
 
 
+def test_no_coverage_note_for_self_tag_only_batch(tmp_path):
+    # two games, the second with no labels at all (no self-tag lie): not a coverage gap
+    batch = _batch(tmp_path)
+    text = (batch / "sample_game.jsonl").read_text(encoding="utf-8")
+    (batch / "second.jsonl").write_text(text.replace("fixture-0001", "fixture-0002"), "utf-8")
+    md = (write_report(batch) / "report.md").read_text(encoding="utf-8")
+    assert "labeled" not in md
+
+
 def test_no_coverage_note_when_jev_labeled_every_game(tmp_path):
     batch = _batch(tmp_path)
     _add_mirror_jev(batch)

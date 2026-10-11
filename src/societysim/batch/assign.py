@@ -25,8 +25,11 @@ class Assignment(BaseModel):
         return template.model_copy(update={"seed": self.seed, "models": self.models})
 
 
-def derive_seed(batch_seed: int, index: int, attempt: int = 0) -> int:
-    digest = hashlib.sha256(f"{batch_seed}:{index}:{attempt}".encode()).digest()
+def derive_seed(batch_seed: int, index: int, attempt: int = 0, salt: str | None = None) -> int:
+    source = f"{batch_seed}:{index}:{attempt}"
+    if salt:
+        source += f":{salt}"
+    digest = hashlib.sha256(source.encode()).digest()
     return int.from_bytes(digest[:4], "big")
 
 
@@ -51,14 +54,14 @@ def _role_cost(
     return gaps, squares
 
 
-def assign_games(cfg: BatchConfig) -> list[Assignment]:
-    """One Assignment per game, deterministic in the batch config.
+def assign_games(cfg: BatchConfig, salt: str | None = None) -> list[Assignment]:
+    """One Assignment per game, deterministic in the batch config and optional salt.
 
     Seats are a Latin square: game i seats models[(k + i) % m] at seat k, so every m games each
     model sits in every seat once. Roles are dealt by the engine from the seed, so to balance
-    them we try a few seeds derived from (batch seed, game index, attempt) and keep the one
-    that evens out each model's role counts. The seed stays a pure function of the config
-    and the earlier games, so a longer batch repeats a shorter one's prefix.
+    them we try a few seeds derived from (batch seed, game index, attempt, salt) and keep
+    the one that evens out each model's role counts. A longer batch repeats a shorter one's
+    prefix when the salt is the same.
     """
     n = cfg.game.n_players
     played: Counter[str] = Counter()  # games each model appears in, for model_game_limits
@@ -74,10 +77,10 @@ def assign_games(cfg: BatchConfig) -> list[Assignment]:
             [avail[i % m]] * n if cfg.mode == "selfplay" else [avail[(k + i) % m] for k in range(n)]
         )
 
-        seed, best = derive_seed(cfg.seed, i), None
+        seed, best = derive_seed(cfg.seed, i, salt=salt), None
         if cfg.mode == "mixed":
             for attempt in range(ATTEMPTS):
-                cand = derive_seed(cfg.seed, i, attempt) if attempt else seed
+                cand = derive_seed(cfg.seed, i, attempt, salt=salt) if attempt else seed
                 game_cfg = cfg.game.model_copy(update={"seed": cand, "models": []})
                 roles = [r.value for r in GameState(game_cfg).roles.values()]
                 cost = _role_cost(role_count, avail, seat_models, roles)

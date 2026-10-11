@@ -38,7 +38,8 @@ def adv(**kw) -> dict:
     return {"mode": "advanced", **kw}
 
 
-def test_basic_setup_is_ten_seats_two_wolves_seer_doctor():
+def test_basic_setup_is_ten_seats_two_wolves_seer_doctor(monkeypatch):
+    monkeypatch.setattr("societysim.setup.secrets.randbelow", lambda n: 23)
     setup = GameSetup.basic()
     cfg = setup.game_config()
     assert setup == GameSetup()  # every default is Basic
@@ -53,6 +54,18 @@ def test_basic_setup_is_ten_seats_two_wolves_seer_doctor():
     assert HUMAN not in cfg.models
     assert set(cfg.models) == set(DEFAULT_LINEUP)  # 10 seats cover all 7 lineup models
     assert set(DEFAULT_LINEUP) <= {m.name for m in REGISTRY.models}
+
+
+def test_default_seed_is_fresh_and_explicit_seed_is_deterministic(monkeypatch):
+    seeds = iter([11, 22, 33, 44])
+    monkeypatch.setattr("societysim.setup.secrets.randbelow", lambda n: next(seeds))
+    assert [GameSetup().seed, GameSetup().seed, GameSetup.basic().seed, GameSetup.basic().seed] == [
+        11,
+        22,
+        33,
+        44,
+    ]
+    assert GameSetup.basic(seed=7).game_config() == GameSetup.basic(seed=7).game_config()
 
 
 def test_basic_setup_with_a_human_has_nine_models_and_two_wolves():

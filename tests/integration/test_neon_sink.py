@@ -421,6 +421,7 @@ CONFIG = Path(__file__).resolve().parents[2] / "configs/selfplay_smoke.yaml"
 
 def test_play_neon_streams_live(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("societysim.cli.secrets.token_hex", lambda n: "deadbeefdeadbeef")
     monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
     conn = FakeConn()
 
@@ -431,15 +432,16 @@ def test_play_neon_streams_live(tmp_path, monkeypatch):
     res = CliRunner().invoke(app, ["play", "--config", str(CONFIG), "--neon"])
     assert res.exit_code == 0, res.output
     assert "create table if not exists games" in conn.executed[0][0]  # schema first
-    log = _events(tmp_path / "runs/selfplay_smoke/selfplay_smoke-s0.jsonl")
-    assert _event_rows(conn) == {"selfplay_smoke-s0": [e["seq"] for e in log]}
+    log = _events(tmp_path / "runs/selfplay_smoke/selfplay_smoke-deadbeefdeadbeef.jsonl")
+    assert _event_rows(conn) == {"selfplay_smoke-deadbeefdeadbeef": [e["seq"] for e in log]}
     end = next(a for sql, a in conn.executed if sql.startswith("update games set status"))
-    assert end == ("selfplay_smoke-s0", "finished", log[-1]["meta"]["winner"])
+    assert end == ("selfplay_smoke-deadbeefdeadbeef", "finished", log[-1]["meta"]["winner"])
     assert next(a for sql, a in conn.executed if "insert into games" in sql)[4] == "scripted"
 
 
 def test_play_neon_with_human_seat_streams_unrated_suspicion_as_null(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("societysim.cli.secrets.token_hex", lambda n: "deadbeefdeadbeef")
     monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
     conn = FakeConn()
 
@@ -456,8 +458,8 @@ def test_play_neon_with_human_seat_streams_unrated_suspicion_as_null(tmp_path, m
     args = ["play", "--config", str(CONFIG), "--neon", "--human-seat", "p3"]
     res = CliRunner().invoke(app, args)
     assert res.exit_code == 0, res.output
-    log = _events(tmp_path / "runs/selfplay_smoke/selfplay_smoke-s0.jsonl")
-    assert _event_rows(conn) == {"selfplay_smoke-s0": [e["seq"] for e in log]}
+    log = _events(tmp_path / "runs/selfplay_smoke/selfplay_smoke-deadbeefdeadbeef.jsonl")
+    assert _event_rows(conn) == {"selfplay_smoke-deadbeefdeadbeef": [e["seq"] for e in log]}
     rows = [json.loads(r[7]) for _, batch in conn.many for r in batch]
     human = [e["seq"] for e in rows if e.get("actor") == "p3" and e["meta"].get("usage")]
     assert human  # the human skipped suspicion: Neon gets null, as in the log
@@ -468,12 +470,13 @@ def test_play_neon_with_human_seat_streams_unrated_suspicion_as_null(tmp_path, m
 
 def test_play_without_neon_url_still_plays(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("societysim.cli.secrets.token_hex", lambda n: "deadbeefdeadbeef")
     monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
     monkeypatch.delenv("NEON_DATABASE_URL", raising=False)
     res = CliRunner().invoke(app, ["play", "--config", str(CONFIG), "--neon"])
     assert res.exit_code == 0, res.output
     assert "warning: Neon unavailable (RuntimeError)" in res.output
-    assert (tmp_path / "runs/selfplay_smoke/selfplay_smoke-s0.jsonl").is_file()
+    assert (tmp_path / "runs/selfplay_smoke/selfplay_smoke-deadbeefdeadbeef.jsonl").is_file()
 
 
 @pytest.mark.live
@@ -581,6 +584,7 @@ def test_real_neon_views(tmp_path):
 
 def test_abandoned_human_game_ends_failed_in_neon(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("societysim.cli.secrets.token_hex", lambda n: "deadbeefdeadbeef")
     monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
     conn = FakeConn()
 
@@ -592,7 +596,7 @@ def test_abandoned_human_game_ends_failed_in_neon(tmp_path, monkeypatch):
     res = CliRunner().invoke(app, args, input="")  # stdin EOF: the player walks away
     assert res.exit_code == 130, res.output
     ends = [a for sql, a in conn.executed if sql.startswith("update games set status")]
-    assert ends == [("selfplay_smoke-s0", "failed", None)]
+    assert ends == [("selfplay_smoke-deadbeefdeadbeef", "failed", None)]
 
 
 class MemConn(FakeConn):

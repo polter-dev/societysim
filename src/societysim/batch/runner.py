@@ -158,12 +158,14 @@ def prior_seat_cost(spec: ModelSpec) -> float:
     return PRIOR_CALLS_PER_SEAT * estimate_cost(spec, PRIOR_INPUT_TOKENS, PRIOR_OUTPUT_TOKENS)
 
 
-def plan(cfg: BatchConfig, specs: Mapping[str, ModelSpec]) -> list[dict[str, Any]]:
+def plan(
+    cfg: BatchConfig, specs: Mapping[str, ModelSpec], *, salt: str | None = None
+) -> list[dict[str, Any]]:
     """One row per game: id, seed, per-seat model and role, and a prior cost estimate."""
     from societysim.engine.state import GameState
 
     rows = []
-    for a in assign_games(cfg):
+    for a in assign_games(cfg, salt=salt):
         roles = GameState(a.game_config(cfg.game)).roles
         rows.append(
             {
@@ -205,7 +207,9 @@ class BatchMismatch(Exception):
     """runs/<batch_id> holds games from a different batch config; the message is safe to print."""
 
 
-def fingerprint(cfg: BatchConfig, specs: Mapping[str, ModelSpec], agents: str) -> str:
+def fingerprint(
+    cfg: BatchConfig, specs: Mapping[str, ModelSpec], agents: str, *, salt: str | None = None
+) -> str:
     """Hash of what decides what a game is: config, agent type and the models' registry entries.
 
     n_games, budget, the invalid-output limits and concurrency may change between runs.
@@ -222,6 +226,8 @@ def fingerprint(cfg: BatchConfig, specs: Mapping[str, ModelSpec], agents: str) -
     )
     keep["agents"] = agents
     keep["registry"] = {m: specs[m].model_dump(mode="json") for m in sorted(set(cfg.models))}
+    if salt:
+        keep["seed_salt"] = hashlib.sha256(salt.encode()).hexdigest()[:16]
     return hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:16]
 
 
@@ -246,6 +252,7 @@ async def run_batch(
     specs: Mapping[str, ModelSpec],
     client: ModelClient | None,
     *,
+    salt: str | None = None,
     provider_concurrency: Mapping[str, int] | None = None,
     runs_dir: str | Path = "runs",
     neon_connect: Connect | None = None,
@@ -297,7 +304,7 @@ async def run_batch(
     meta_path = out / "run_meta.json"
     old = _read_meta(meta_path)
     agents = "llm" if client else "scripted"
-    fp = fingerprint(cfg, specs, agents)
+    fp = fingerprint(cfg, specs, agents, salt=salt)
     if old.get("agents") not in (None, agents):
         raise BatchMismatch(
             f"runs/{cfg.batch_id} was played with {old['agents']} agents, not {agents}; "
@@ -334,7 +341,7 @@ async def run_batch(
             if model in costs:
                 seat_cost[model] = max(seat_cost.get(model, 0.0), costs[model] / seats)
 
-    for a in assign_games(cfg):
+    for a in assign_games(cfg, salt=salt):
         costs = game_costs(out / f"{a.game_id}.jsonl")
         if costs is None:
             todo.append(a)

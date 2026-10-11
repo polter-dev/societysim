@@ -17,6 +17,8 @@ REGISTRY = Path(__file__).resolve().parents[2] / "configs/models.yaml"
 @pytest.fixture(autouse=True)
 def _no_dotenv(monkeypatch, tmp_path):
     monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    monkeypatch.setattr("societysim.cli.secrets.token_hex", lambda n: "deadbeefdeadbeef")
+    monkeypatch.setattr("societysim.cli.secrets.randbelow", lambda n: 17)
     monkeypatch.chdir(tmp_path)
 
 
@@ -34,7 +36,7 @@ def _answer(question: str) -> str:
 def test_play_preset_basic_runs_ten_seats_two_wolves(tmp_path):
     result = RUNNER.invoke(app, ["play", "--preset", "basic", "--seed", "4"])
     assert result.exit_code == 0, result.output
-    evs = events(tmp_path / "runs/basic/basic-s4.jsonl")
+    evs = events(tmp_path / "runs/basic/basic-deadbeefdeadbeef.jsonl")
     seats = evs[0]["meta"]["seats"]
     assert list(seats) == [f"p{i}" for i in range(10)]
     assert {s["model"] for s in seats.values()} == set(DEFAULT_LINEUP)
@@ -46,7 +48,8 @@ def test_play_preset_basic_with_a_human_seat(tmp_path, monkeypatch):
     monkeypatch.setattr("builtins.input", _answer)
     result = RUNNER.invoke(app, ["play", "--preset", "basic", "--human-seat", "p0"])
     assert result.exit_code == 0, result.output
-    evs = events(tmp_path / "runs/basic/basic-s0.jsonl")
+    evs = events(tmp_path / "runs/basic/basic-deadbeefdeadbeef.jsonl")
+    assert evs[0]["meta"]["seed"] == 17
     seats = evs[0]["meta"]["seats"]
     assert seats["p0"]["model"] == HUMAN
     assert sum(s["model"] != HUMAN for s in seats.values()) == 9
@@ -67,25 +70,25 @@ def test_play_setup_file_runs_an_advanced_game(tmp_path):
     (tmp_path / "eight.json").write_text(json.dumps(setup))
     result = RUNNER.invoke(app, ["play", "--setup", "eight.json"])
     assert result.exit_code == 0, result.output
-    evs = events(tmp_path / "runs/eight/eight-s11.jsonl")
+    evs = events(tmp_path / "runs/eight/eight-deadbeefdeadbeef.jsonl")
     seats = evs[0]["meta"]["seats"]
     assert [s["model"] for s in seats.values()] == ["gemma4-26b", "qwen3-235b"] * 4
     roles = sorted(evs[-1]["meta"]["roles"].values())
     assert roles.count("wolf") == 3 and "doctor" not in roles and roles.count("seer") == 1
-    assert evs[0]["meta"]["seed"] == 11
+    assert evs[0]["meta"]["seed"] == 17
 
     again = RUNNER.invoke(app, ["play", "--setup", "eight.json", "--batch-id", "b"])
     assert again.exit_code == 0, again.output
-    assert (tmp_path / "runs/b/b-s11.jsonl").read_text().replace("b-s11", "eight-s11") == (
-        tmp_path / "runs/eight/eight-s11.jsonl"
-    ).read_text()
+    assert (tmp_path / "runs/b/b-deadbeefdeadbeef.jsonl").read_text().replace(
+        "b-deadbeefdeadbeef", "eight-deadbeefdeadbeef"
+    ) == (tmp_path / "runs/eight/eight-deadbeefdeadbeef.jsonl").read_text()
 
 
 def test_play_setup_reads_yaml(tmp_path):
     (tmp_path / "s.yaml").write_text("mode: advanced\nn_players: 7\nmodel_pool: [gemma4-26b]\n")
     result = RUNNER.invoke(app, ["play", "--setup", "s.yaml", "--seed", "2"])
     assert result.exit_code == 0, result.output
-    seats = events(tmp_path / "runs/s/s-s2.jsonl")[0]["meta"]["seats"]
+    seats = events(tmp_path / "runs/s/s-deadbeefdeadbeef.jsonl")[0]["meta"]["seats"]
     assert [s["model"] for s in seats.values()] == ["gemma4-26b"] * 7
 
 

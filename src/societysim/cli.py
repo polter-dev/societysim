@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import secrets
 import sys
 from enum import StrEnum
 from pathlib import Path
@@ -181,6 +182,7 @@ def play(
     if sum(x is not None for x in (config, preset, setup)) != 1:
         _echo("give exactly one of --config, --preset or --setup")
         raise typer.Exit(1)
+    seed = seed if seed is not None else secrets.randbelow(2**31)
     if config is None:
         game_setup = _load_setup(setup, human_seat, seed)
         cfg, human_seat = game_setup.game_config(), game_setup.human_seat
@@ -190,10 +192,9 @@ def play(
         raise typer.Exit(1)
     else:
         cfg, stem = load_yaml(config, GameConfig), config.stem
-        if seed is not None:
-            cfg = cfg.model_copy(update={"seed": seed})
+        cfg = cfg.model_copy(update={"seed": seed})
     batch_id = batch_id if batch_id is not None else stem
-    game_id = f"{batch_id}-s{cfg.seed}"
+    game_id = f"{batch_id}-{secrets.token_hex(8)}"
     if config is not None and human_seat is not None:
         models = cfg.seat_models()
         seats = [f"p{i}" for i in range(cfg.n_players)]
@@ -322,6 +323,7 @@ def batch(
             raise typer.Exit(1)
     cfg = load_yaml(config, BatchConfig)
     load_dotenv()
+    salt = os.environ.get("SOCIETYSIM_SEED_SALT") or None
     reg = load_registry(registry)
     reg.apply_env()
     try:
@@ -336,7 +338,7 @@ def batch(
         for name, spec in specs.items():
             if prior_seat_cost(spec) == 0:
                 _echo(f"warning: {name} is unpriced; the budget guard can't see its cost")
-        rows = plan(cfg, specs)
+        rows = plan(cfg, specs, salt=salt)
         for row in rows:
             seats = " ".join(f"{seat}={model}/{role}" for seat, model, role in row["seats"])
             _echo(f"{row['game_id']} seed={row['seed']} ${row['est_usd']:.4f} {seats}")
@@ -377,6 +379,7 @@ def batch(
                 cfg,
                 specs,
                 client,
+                salt=salt,
                 provider_concurrency={p: c.concurrency for p, c in reg.providers.items()},
                 neon_connect=_neon_connect(neon),
                 on_progress=lambda e: _echo(_progress_line(e)),

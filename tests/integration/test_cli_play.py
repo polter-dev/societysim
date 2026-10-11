@@ -17,6 +17,12 @@ CONFIG = Path(__file__).resolve().parents[2] / "configs/selfplay_smoke.yaml"
 RUNNER = CliRunner()
 
 
+@pytest.fixture(autouse=True)
+def _fixed_play_randomness(monkeypatch):
+    monkeypatch.setattr("societysim.cli.secrets.token_hex", lambda n: "deadbeefdeadbeef")
+    monkeypatch.setattr("societysim.cli.secrets.randbelow", lambda n: 17)
+
+
 def events(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines()]
 
@@ -33,31 +39,64 @@ def test_scripted_play_is_reproducible_and_writes_metadata(tmp_path, monkeypatch
     args = ["play", "--config", str(CONFIG)]
     first = RUNNER.invoke(app, args)
     assert first.exit_code == 0, first.output
-    log = tmp_path / "runs/selfplay_smoke/selfplay_smoke-s0.jsonl"
+    log = tmp_path / "runs/selfplay_smoke/selfplay_smoke-deadbeefdeadbeef.jsonl"
     meta = log.with_suffix(".run_meta.json")
     assert log.is_file()
     assert meta.is_file()
-    assert str(Path("runs/selfplay_smoke/selfplay_smoke-s0.jsonl")) in first.output
+    assert str(Path("runs/selfplay_smoke/selfplay_smoke-deadbeefdeadbeef.jsonl")) in first.output
     assert "winner:" in first.output
     first_bytes = log.read_bytes()
     assert first_bytes
-    assert json.loads(meta.read_text())["game_id"] == "selfplay_smoke-s0"
+    assert json.loads(meta.read_text())["game_id"] == "selfplay_smoke-deadbeefdeadbeef"
     assert json.loads(meta.read_text())["agents"] == "scripted"
+    assert json.loads(meta.read_text())["seed"] == 17
 
     second = RUNNER.invoke(app, args)
     assert second.exit_code == 0, second.output
     assert log.read_bytes() == first_bytes
 
 
-def test_seed_override_changes_game_id(tmp_path, monkeypatch):
+def test_seed_override_changes_deal_but_not_id_shape(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = RUNNER.invoke(
         app, ["play", "--config", str(CONFIG), "--seed", "19", "--batch-id", "trial"]
     )
     assert result.exit_code == 0, result.output
-    log = tmp_path / "runs/trial/trial-s19.jsonl"
+    log = tmp_path / "runs/trial/trial-deadbeefdeadbeef.jsonl"
     assert log.is_file()
     assert events(log)[0]["meta"]["seed"] == 19
+    assert json.loads(log.with_suffix(".run_meta.json").read_text())["seed"] == 19
+
+
+def test_play_without_seed_draws_a_new_seed_for_each_game(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    seeds = iter([101, 202])
+    ids = iter(["1111111111111111", "2222222222222222"])
+    monkeypatch.setattr("societysim.cli.secrets.randbelow", lambda n: next(seeds))
+    monkeypatch.setattr("societysim.cli.secrets.token_hex", lambda n: next(ids))
+    for suffix, seed in [("1111111111111111", 101), ("2222222222222222", 202)]:
+        result = RUNNER.invoke(app, ["play", "--config", str(CONFIG)])
+        assert result.exit_code == 0, result.output
+        log = tmp_path / f"runs/selfplay_smoke/selfplay_smoke-{suffix}.jsonl"
+        assert log.is_file()
+        assert events(log)[0]["meta"]["seed"] == seed
+        assert json.loads(log.with_suffix(".run_meta.json").read_text())["seed"] == seed
+        assert f"selfplay_smoke-{suffix}" in result.output
+        assert f"-s{seed}" not in result.output
+
+
+def test_explicit_seed_repeats_game_events_with_new_id(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    ids = iter(["1111111111111111", "2222222222222222"])
+    monkeypatch.setattr("societysim.cli.secrets.token_hex", lambda n: next(ids))
+    logs = []
+    for suffix in ("1111111111111111", "2222222222222222"):
+        result = RUNNER.invoke(app, ["play", "--config", str(CONFIG), "--seed", "19"])
+        assert result.exit_code == 0, result.output
+        logs.append((tmp_path / f"runs/selfplay_smoke/selfplay_smoke-{suffix}.jsonl").read_text())
+    assert logs[0].replace("selfplay_smoke-1111111111111111", "GAME_ID") == logs[1].replace(
+        "selfplay_smoke-2222222222222222", "GAME_ID"
+    )
 
 
 def test_missing_config_exits_one(tmp_path, monkeypatch):
@@ -94,7 +133,7 @@ def test_llm_mode_uses_client_and_completes_offline(tmp_path, monkeypatch):
     monkeypatch.setattr(client_module, "LiteLLMClient", fake_client)
     result = RUNNER.invoke(app, ["play", "--config", str(CONFIG), "--agents", "llm"])
     assert result.exit_code == 0, result.output
-    log = tmp_path / "runs/selfplay_smoke/selfplay_smoke-s0.jsonl"
+    log = tmp_path / "runs/selfplay_smoke/selfplay_smoke-deadbeefdeadbeef.jsonl"
     assert log.is_file()
     assert clients and clients[0].calls
     assert events(log)[-1]["type"] == EventType.GAME_END
@@ -145,7 +184,7 @@ def test_human_seat_plays_against_llms_and_is_logged_as_human(tmp_path, monkeypa
     assert result.exit_code == 0, result.output
     assert "You are playing Werewolf" in result.output
     assert clients[0].calls  # the AI seats still go through the model client
-    log = tmp_path / "runs/h/h-s0.jsonl"
+    log = tmp_path / "runs/h/h-deadbeefdeadbeef.jsonl"
     evs = events(log)
     seats = evs[0]["meta"]["seats"]
     assert seats["p3"]["model"] == "human"
@@ -172,7 +211,7 @@ def test_human_seat_works_in_a_ten_player_game(tmp_path, monkeypatch):
     args = ["play", "--config", str(config), "--human-seat", "p9", "--batch-id", "h"]
     result = RUNNER.invoke(app, args)
     assert result.exit_code == 0, result.output
-    evs = events(tmp_path / "runs/h/h-s0.jsonl")
+    evs = events(tmp_path / "runs/h/h-deadbeefdeadbeef.jsonl")
     seats = evs[0]["meta"]["seats"]
     assert list(seats) == [f"p{i}" for i in range(10)]
     assert seats["p9"]["model"] == "human"
@@ -205,7 +244,7 @@ def test_real_hf_selfplay(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = RUNNER.invoke(app, ["play", "--config", str(CONFIG), "--agents", "llm"])
     assert result.exit_code == 0, result.output
-    log = tmp_path / "runs/selfplay_smoke/selfplay_smoke-s0.jsonl"
+    log = tmp_path / "runs/selfplay_smoke/selfplay_smoke-deadbeefdeadbeef.jsonl"
     game_events = events(log)
     assert game_events[-1]["meta"]["winner"] in {"wolves", "villagers", "draw"}
     types = {event["type"] for event in game_events}

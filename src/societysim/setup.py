@@ -6,6 +6,7 @@ schema/game_setup.schema.json (generated from GameSetup) plus models_catalog.jso
 """
 
 import random
+import secrets
 from functools import cache
 from pathlib import Path
 from typing import Literal, Self
@@ -81,11 +82,13 @@ class GameSetup(_Strict):
         "shuffle first shuffles the pool with the seed.",
     )
     human_seat: SeatId | None = Field(None, description="The seat a person plays, or null.")
-    seed: int = 0
+    seed: int = Field(default_factory=lambda: secrets.randbelow(2**31))
 
     @classmethod
-    def basic(cls, human: bool = False, *, seed: int = 0) -> Self:
+    def basic(cls, human: bool = False, *, seed: int | None = None) -> Self:
         """The default game: 10 seats, 2 wolves, seer and doctor; the human (if any) at p0."""
+        if seed is None:
+            seed = secrets.randbelow(2**31)
         return cls(human_seat="p0" if human else None, seed=seed)
 
     @model_validator(mode="after")

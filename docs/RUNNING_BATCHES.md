@@ -33,6 +33,10 @@ Set `budget_usd` near the dry-run total. The cap is a hard stop, and the guard r
 
 ## 3. Run it
 
+### Private batch seed salt
+
+`SOCIETYSIM_SEED_SALT` is off by default. Set it to a random value, for example one made with `secrets.token_hex(16)`, before starting a batch. Set the same value again for every run and dry run of that batch. A different or missing salt stops a resumed run. The deal in a salted batch cannot be rebuilt from the committed config alone. The salt is not written to the batch output.
+
 ```bash
 uv run societysim batch --config configs/selfplay_baseline_10p.yaml --agents llm   # paid
 ```

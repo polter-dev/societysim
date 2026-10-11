@@ -157,6 +157,21 @@ async def test_resume_skips_finished_games(tmp_path):
     assert res["spent_usd"] > 0  # includes the skipped games' recorded cost
 
 
+async def test_salted_batch_resume_requires_same_salt_and_keeps_it_private(tmp_path):
+    secret = "a-private-test-salt"
+    batch_cfg = cfg(n_games=1, mode="selfplay", models=["a"])
+    await run_batch(batch_cfg, SPECS, None, runs_dir=tmp_path, salt=secret)
+    meta = (tmp_path / "t/run_meta.json").read_text()
+    assert secret not in meta
+    assert secret not in "".join(p.read_text() for p in (tmp_path / "t").iterdir() if p.is_file())
+    again = await run_batch(batch_cfg, SPECS, None, runs_dir=tmp_path, salt=secret)
+    assert len(again["skipped"]) == 1
+    for changed in (None, "", "different-salt"):
+        with pytest.raises(BatchMismatch) as exc:
+            await run_batch(batch_cfg, SPECS, None, runs_dir=tmp_path, salt=changed)
+        assert secret not in str(exc.value)
+
+
 async def test_resume_with_nothing_left_makes_no_calls(tmp_path):
     await run_batch(cfg(), SPECS, PricedFake(), runs_dir=tmp_path)
     client = PricedFake()
@@ -483,6 +498,28 @@ def test_cli_batch_dry_run_prints_plan_and_writes_nothing(tmp_path, monkeypatch)
     assert lines[0].startswith("cli-g0000 seed=") and "p0=gemma4-26b/" in lines[0]
     assert "wolf" in result.output and "3 games, estimated $" in lines[-1]
     assert not (tmp_path / "runs").exists()
+
+
+def test_cli_batch_reads_private_salt_for_dry_run_and_resume(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("societysim.cli.load_dotenv", lambda: None)
+    path = write_config(tmp_path, n_games=1)
+    args = ["batch", "--config", str(path), "--registry", str(REGISTRY)]
+    secret = "private-cli-test-salt"
+    monkeypatch.setenv("SOCIETYSIM_SEED_SALT", secret)
+    private_plan = RUNNER.invoke(app, [*args, "--dry-run"])
+    assert private_plan.exit_code == 0, private_plan.output
+    assert secret not in private_plan.output
+    assert RUNNER.invoke(app, args).exit_code == 0
+    assert secret not in (tmp_path / "runs/cli/run_meta.json").read_text()
+    assert RUNNER.invoke(app, args).exit_code == 0
+    monkeypatch.delenv("SOCIETYSIM_SEED_SALT")
+    public_plan = RUNNER.invoke(app, [*args, "--dry-run"])
+    assert public_plan.exit_code == 0
+    assert public_plan.output != private_plan.output
+    missing = RUNNER.invoke(app, args)
+    assert missing.exit_code == 1
+    assert secret not in missing.output
 
 
 def test_cli_batch_llm_after_scripted_exits_one(tmp_path, monkeypatch):

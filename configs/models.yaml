@@ -5,6 +5,9 @@
 #   hosted_vllm/ models served from the HF router (HOSTED_VLLM_API_BASE below) count against the
 #   huggingface limit, because both routes hit router.huggingface.co (client.limit_key). The
 #   hosted_vllm entry below only applies to a hosted_vllm model on some other endpoint.
+#   A model with its own api_base (the AMD servers) gets its own limit per endpoint, keyed
+#   `<provider>@<host[:port]>`, so slow self-hosted turns never hold OpenAI's slots, rpm or
+#   timeout (#423). It uses the default (8 in flight, 300 rpm, 120 s) unless listed here.
 # models: one ModelSpec each (see societysim.config.ModelSpec).
 #   avatar_presentation: feminine | masculine | neutral, how viewer/public/avatars/<name>.webp
 #   reads. It picks the seat's name pool so names match the portraits (#400). Default neutral.

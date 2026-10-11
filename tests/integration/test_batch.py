@@ -730,6 +730,29 @@ async def test_down_after_exactly_n_failures(tmp_path):
         await metered.complete(SPECS["a"], [], VoteResponse)
 
 
+async def test_metered_caps_key_self_hosted_models_by_endpoint():
+    """#423: a slow self-hosted openai/ model must not hold the OpenAI cap."""
+    from societysim.agents.schemas import VoteResponse
+    from societysim.batch.runner import MeteredClient
+
+    amd = ModelSpec(name="amd", litellm_model="openai/x", api_base="http://127.0.0.1:8000/v1")
+    started, release = asyncio.Event(), asyncio.Event()
+
+    class Inner(FakeClient):
+        async def complete(self, model, messages, response_model):
+            if model.name == "amd":
+                started.set()
+                await release.wait()
+            return CompletionResult(parsed=None, raw="", error="x", usage=Usage(model=model.name))
+
+    metered = MeteredClient(Inner(players=PLAYERS), {"openai": 1})
+    slow = asyncio.create_task(metered.complete(amd, [], VoteResponse))
+    await started.wait()
+    await asyncio.wait_for(metered.complete(SPECS["a"], [], VoteResponse), 1)
+    release.set()
+    await slow
+
+
 def test_cli_batch_provider_down_says_which_and_how_to_resume(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOSTED_VLLM_API_KEY", "test-key")

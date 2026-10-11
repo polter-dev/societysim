@@ -114,6 +114,36 @@ def test_jev_labels_and_agreement(tmp_path):
     assert json.loads((tmp_path / "agreement.json").read_text()) == table
 
 
+def _false_reports(labels):
+    return {k for k in _keys(labels) if k[0] == "false_report" and k[3] == "jev"}
+
+
+def test_jev_relayed_seer_report_is_not_a_false_report():
+    events = _events()
+    jev = {e.seq: JevVerdict() for e in events if e.type is EventType.STATEMENT}
+    # Gia (p6, a villager) says "Ava checked Cleo and found a wolf": Jev flags a Seer report,
+    # but Gia doesn't claim the Seer role.
+    jev[73].seer_report = JevReport(target="p2", result="wolf")
+    assert _false_reports(label_game(events, jev)) == set()
+
+
+def test_jev_fake_seer_report_is_a_false_report():
+    events = _events()
+    jev = {e.seq: JevVerdict() for e in events if e.type is EventType.STATEMENT}
+    # Finn (p5, a wolf): "I'm the Seer. I checked Ava and she is a wolf."
+    jev[17].claim_role = "seer"
+    jev[17].seer_report = JevReport(target="p0", result="wolf")
+    assert _false_reports(label_game(events, jev)) == {("false_report", "p5", 17, "jev")}
+
+
+def test_jev_real_seer_report_is_checked_without_a_claim():
+    events = _events()
+    jev = {e.seq: JevVerdict() for e in events if e.type is EventType.STATEMENT}
+    # Ava (p0) really is the Seer; she checked Cleo (p2) as wolf, so "not_wolf" is a lie.
+    jev[27].seer_report = JevReport(target="p2", result="not_wolf")
+    assert _false_reports(label_game(events, jev)) == {("false_report", "p0", 27, "jev")}
+
+
 @pytest.fixture
 def no_key(monkeypatch):
     monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)

@@ -112,7 +112,9 @@ def _jev_tags(game: _Game, jev: Jev) -> list[_Tag]:
         tags += [_Tag(EventType.ACCUSATION, target=t, **base) for t in v.accuse]
         if v.claim_role:
             tags.append(_Tag(EventType.ROLE_CLAIM, role=v.claim_role, **base))
-        if v.seer_report:
+        # Jev's seer_report also fires when the speaker relays someone else's check ("Gia cleared
+        # Cleo"). Only a speaker who claims the Seer role, or really is the Seer, is reporting.
+        if v.seer_report and (v.claim_role == Role.SEER or game.roles[s.actor] is Role.SEER):
             r = v.seer_report
             tags.append(_Tag(EventType.SEER_CLAIM, target=r.target, result=r.result, **base))
     return tags

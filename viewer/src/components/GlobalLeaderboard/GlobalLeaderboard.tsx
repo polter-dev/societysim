@@ -17,22 +17,33 @@ export function GlobalLeaderboard({ board, error = null, initialTab = "detectors
   const [tab, setTab] = useState<BoardTab>(initialTab);
   return (
     <section className="global-leaderboard" data-tab={tab}>
-      <div role="tablist" aria-label="Leaderboard">
+      <div role="tablist" aria-label="Leaderboard" className="global-leaderboard__tablist">
         {BOARD_TABS.map((t) => (
-          <button key={t.id} type="button" role="tab" aria-selected={t.id === tab} onClick={() => setTab(t.id)}>
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            className="global-leaderboard__tab"
+            aria-selected={t.id === tab}
+            onClick={() => setTab(t.id)}
+          >
             {t.label}
           </button>
         ))}
       </div>
       {error && <p role="alert">Couldn't refresh the leaderboard right now.</p>}
       {!board ? (
-        !error && <p>Loading the leaderboard…</p>
+        !error && <p className="global-leaderboard__status">Loading the leaderboard…</p>
       ) : board.failed.includes(tab) ? (
         <p role="alert">Couldn't load the {tab} right now.</p>
       ) : tab === "detectors" ? (
-        <Table rows={board.detectors} columns={DETECTOR_COLUMNS} caption="Best wolf detectors, as villagers" />
+        <div className="global-leaderboard__scroll" style={{ overflowX: "auto", maxWidth: "100%" }}>
+          <Table rows={board.detectors} columns={DETECTOR_COLUMNS} caption="Best wolf detectors, as villagers" />
+        </div>
       ) : (
-        <Table rows={board.liars} columns={LIAR_COLUMNS} caption="Best liars, as wolves" />
+        <div className="global-leaderboard__scroll" style={{ overflowX: "auto", maxWidth: "100%" }}>
+          <Table rows={board.liars} columns={LIAR_COLUMNS} caption="Best liars, as wolves" />
+        </div>
       )}
     </section>
   );
@@ -40,9 +51,9 @@ export function GlobalLeaderboard({ board, error = null, initialTab = "detectors
 
 function Table<T extends { model: string; ranked: boolean }>({ rows, columns, caption }: { rows: T[]; columns: Column<T>[]; caption: string }) {
   const catalogLabel = useModelLabel();
-  if (rows.length === 0) return <p>No finished games yet.</p>;
+  if (rows.length === 0) return <p className="global-leaderboard__status">No finished games yet.</p>;
   return (
-    <table role="tabpanel">
+    <table role="tabpanel" className="global-leaderboard__table">
       <caption>{caption}. Models with fewer than 5 games are listed last, unranked.</caption>
       <thead>
         <tr>

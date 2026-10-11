@@ -4,6 +4,7 @@ import { GlobalLeaderboard } from "../components/GlobalLeaderboard/GlobalLeaderb
 import { useGlobalBoard } from "../data/globalBoard";
 import { modelName } from "../data/modelNames";
 import { fetchJson } from "../data/staticSource";
+import "./Leaderboard.css";
 
 /** leaderboard.json from `societysim report` (shape documented in analysis/report.py). */
 export interface Rating {
@@ -66,55 +67,57 @@ export function LeaderboardTable({
   const metric = (r: BoardRow) => (byOpenSkill ? r.openskill?.ordinal : r.win_rate) ?? -Infinity;
   const rows = [...board.models].sort((a, b) => metric(b) - metric(a));
   return (
-    <>
-      <p>
+    <div className="leaderboard-container">
+      <p className="leaderboard-summary-text">
         {board.games} games.{" "}
         {byOpenSkill
           ? "Ranked by OpenSkill ordinal (mu minus three sigma). Win rates carry a Wilson 95% interval; small batches are noisy."
           : "Ranked by win rate over all finished games; small samples are noisy."}
         {side && ` Wolf-side advantage: mu ${num(side.mu)} (0 means the sides are even).`}
       </p>
-      <div className="leaderboard-scroll" style={{ overflowX: "auto", maxWidth: "100%" }}>
-      <table>
-        <caption>Leaderboard</caption>
-        <thead>
-          <tr>
-            <th scope="col">Rank</th>
-            <th scope="col">Model</th>
-            <th scope="col">Games</th>
-            <th scope="col">Seats</th>
-            <th scope="col">Win rate (95% CI)</th>
-            <th scope="col">Wolf win</th>
-            <th scope="col">Village win</th>
-            <th scope="col">OpenSkill</th>
-            <th scope="col">OpenSkill as wolf</th>
-            <th scope="col">OpenSkill as village</th>
-            <th scope="col">Detection AUC</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={r.model}>
-              <td>{i + 1}</td>
-              <th scope="row" title={catalogLabel(r.model)}><ModelAvatar model={r.model} label={label(r.model)} size={28} /> {profileHref ? <a href={profileHref(r.model)}>{label(r.model)}</a> : label(r.model)}</th>
-              <td>{r.games ?? "n/a"}</td>
-              <td>{r.seats ?? "n/a"}</td>
-              <td>
-                {pct(r.win_rate)}
-                {r.win_ci && ` (${pct(r.win_ci[0])} to ${pct(r.win_ci[1])})`}
-              </td>
-              <td>{pct(r.wolf_win_rate)}</td>
-              <td>{pct(r.village_win_rate)}</td>
-              <td>{num(r.openskill?.ordinal)}</td>
-              <td>{num(bySide.wolf?.[r.model]?.ordinal)}</td>
-              <td>{num(bySide.village?.[r.model]?.ordinal)}</td>
-              <td>{num(r.detection_auc)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="leaderboard-table-card">
+        <div className="leaderboard-scroll" style={{ overflowX: "auto", maxWidth: "100%" }}>
+          <table className="leaderboard-table">
+            <caption>Leaderboard</caption>
+            <thead>
+              <tr>
+                <th scope="col">Rank</th>
+                <th scope="col">Model</th>
+                <th scope="col">Games</th>
+                <th scope="col">Seats</th>
+                <th scope="col">Win rate (95% CI)</th>
+                <th scope="col">Wolf win</th>
+                <th scope="col">Village win</th>
+                <th scope="col">OpenSkill</th>
+                <th scope="col">OpenSkill as wolf</th>
+                <th scope="col">OpenSkill as village</th>
+                <th scope="col">Detection AUC</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.model}>
+                  <td className="leaderboard-rank" data-rank={i + 1}>{i + 1}</td>
+                  <th scope="row" title={catalogLabel(r.model)}><ModelAvatar model={r.model} label={label(r.model)} size={28} /> {profileHref ? <a href={profileHref(r.model)}>{label(r.model)}</a> : label(r.model)}</th>
+                  <td>{r.games ?? "n/a"}</td>
+                  <td>{r.seats ?? "n/a"}</td>
+                  <td>
+                    {pct(r.win_rate)}
+                    {r.win_ci && ` (${pct(r.win_ci[0])} to ${pct(r.win_ci[1])})`}
+                  </td>
+                  <td>{pct(r.wolf_win_rate)}</td>
+                  <td>{pct(r.village_win_rate)}</td>
+                  <td>{num(r.openskill?.ordinal)}</td>
+                  <td>{num(bySide.wolf?.[r.model]?.ordinal)}</td>
+                  <td>{num(bySide.village?.[r.model]?.ordinal)}</td>
+                  <td>{num(r.detection_auc)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </>
+    </div>
   );
 }
 

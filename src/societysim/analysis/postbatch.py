@@ -13,12 +13,71 @@ Jev cache (no calls).
 
 import argparse
 import json
+import os
 import subprocess
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 CLI = [sys.executable, "-m", "societysim.cli"]
 WARN_STATUSES = ("failed", "budget_stopped", "stopped_invalid", "interrupted")
+# Only for a run_meta.json with no pid (older runners): updated_at older than this means gone.
+STALE_AFTER = timedelta(minutes=5)
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid == os.getpid():
+        return True
+    if sys.platform == "win32":  # os.kill(pid, 0) would send Ctrl-C there
+        import ctypes
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.OpenProcess.restype = ctypes.c_void_p
+        k32.CloseHandle.argtypes = [ctypes.c_void_p]
+        k32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        handle = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.get_last_error() == 5  # access denied: it exists
+        try:
+            code = ctypes.c_ulong()
+            return bool(k32.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == 259
+        finally:
+            k32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def runner_gone(meta: Any, now: datetime | None = None) -> str | None:
+    """For a run_meta.json that says 'running': why no runner is behind it, else None.
+
+    With a pid (the runner records its own) the pid decides: dead means gone, alive means
+    running, however old updated_at is. Without one, updated_at older than STALE_AFTER means
+    gone. A file with neither field (older runs) is taken at its word.
+    """
+    if not isinstance(meta, dict) or meta.get("status") != "running":
+        return None
+    pid = meta.get("pid")
+    try:
+        updated = datetime.fromisoformat(meta["updated_at"])
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=UTC)
+    except (KeyError, TypeError, ValueError):
+        updated = None
+    if isinstance(pid, int) and not isinstance(pid, bool):
+        # updated_at only moves when a model call returns (a scripted batch never rewrites it
+        # until it ends, one slow call can take minutes), so a recorded pid is the only proof.
+        if _pid_alive(pid):
+            return None
+    elif updated is None or (now or datetime.now(UTC)) - updated <= STALE_AFTER:
+        return None
+    last = updated.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S UTC") if updated else "unknown"
+    return f"last update {last}; the runner is not alive"
 
 
 def run_step(name: str, cmd: list[str]) -> None:
@@ -114,8 +173,12 @@ def main(argv: list[str] | None = None) -> None:
     meta_path = batch / "run_meta.json"
     if not meta_path.is_file():
         sys.exit(f"postbatch: {meta_path} not found")
-    status = _read(meta_path).get("status")
+    meta = _read(meta_path)
+    status = meta.get("status")
     print(f"batch status: {status}")
+    if gone := runner_gone(meta):
+        print(f"{gone}; treating the batch as interrupted")
+        status = "interrupted"
     if status == "running" and not a.force:
         sys.exit("postbatch: batch is still running; wait for it or pass --force")
     if status in WARN_STATUSES:

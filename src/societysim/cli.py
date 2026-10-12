@@ -4,6 +4,7 @@ import asyncio
 import os
 import re
 import secrets
+import signal
 import sys
 from enum import StrEnum
 from pathlib import Path
@@ -320,7 +321,7 @@ def batch(
 ) -> None:
     """Play a batch of games in parallel into runs/<batch_id>/. Re-run to resume.
 
-    Stops starting games when the budget would be exceeded; Ctrl-C stops cleanly.
+    Stops starting games when the budget would be exceeded; Ctrl-C, SIGTERM and SIGHUP stop cleanly.
     """
     from societysim.batch.runner import BatchMismatch, plan, run_batch
     from societysim.config import BatchConfig, load_yaml
@@ -401,9 +402,24 @@ def batch(
 
         client = LiteLLMClient(limits=reg.limits())
 
-    try:
-        result = asyncio.run(
-            run_batch(
+    caught: list[int] = []  # SIGTERM / SIGHUP received
+
+    async def guarded() -> dict:
+        """run_batch, with SIGTERM and SIGHUP cancelling it the way Ctrl-C does, so the batch is
+        saved as 'interrupted' instead of keeping 'running' for a dead process."""
+        task = asyncio.current_task()
+        loop = asyncio.get_running_loop()
+
+        def on_signal(signum: int, _frame: object) -> None:
+            caught.append(signum)
+            loop.call_soon_threadsafe(task.cancel)
+
+        old = {}
+        for name in ("SIGTERM", "SIGHUP"):  # SIGHUP does not exist on Windows
+            if (sig := getattr(signal, name, None)) is not None:
+                old[sig] = signal.signal(sig, on_signal)
+        try:
+            return await run_batch(
                 cfg,
                 specs,
                 client,
@@ -412,10 +428,20 @@ def batch(
                 neon_connect=_neon_connect(neon),
                 on_progress=lambda e: _echo(_progress_line(e)),
             )
-        )
+        finally:
+            for sig, handler in old.items():
+                signal.signal(sig, handler)
+
+    try:
+        result = asyncio.run(guarded())
     except KeyboardInterrupt:
         _echo(f"interrupted; re-run to resume: runs/{cfg.batch_id}")
         raise typer.Exit(130) from None
+    except asyncio.CancelledError:
+        if not caught:
+            raise
+        _echo(f"interrupted by signal {caught[0]}; re-run to resume: runs/{cfg.batch_id}")
+        raise typer.Exit(128 + caught[0]) from None
     except BatchMismatch as exc:
         _echo(str(exc))
         raise typer.Exit(1) from None

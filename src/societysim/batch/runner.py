@@ -440,6 +440,7 @@ async def run_batch(
             "agents": agents,
             "started_at": started,
             "updated_at": datetime.now(UTC).isoformat(),
+            "pid": os.getpid(),  # publish and postbatch tell a dead runner from a live one
             "spent_usd": round(spent(), 6),
             "budget_usd": cfg.budget_usd,
             "finished": finished,

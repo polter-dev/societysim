@@ -6,6 +6,7 @@ replayed from scratch (the JSONL sink overwrites).
 """
 
 import asyncio
+import errno
 import hashlib
 import json
 import logging
@@ -233,6 +234,26 @@ def _tag_agents(path: Path, agents: str) -> None:
     _replace(tmp, path)
 
 
+# Errors that mean the disk, not the game: out of space or quota, file too big, read-only mount.
+DISK_ERRNOS = {
+    getattr(errno, n) for n in ("ENOSPC", "EDQUOT", "EFBIG", "EROFS") if hasattr(errno, n)
+}
+
+
+def _write_problem(out: Path, exc: OSError | None = None) -> str:
+    """Why runs/<batch_id> cannot be written, as errno text. The JSONL sink only counts a failed
+    write, so without an errno from `exc`, try a small write and report what it says."""
+    if exc is not None and exc.errno:
+        return os.strerror(exc.errno)
+    probe = out / ".write_probe"
+    try:
+        probe.write_bytes(b"x" * 4096)
+        probe.unlink()
+    except OSError as e:
+        return e.strerror or str(e)
+    return "game log not written (disk full, quota or read-only?)"
+
+
 class BatchMismatch(Exception):
     """runs/<batch_id> holds games from a different batch config; the message is safe to print."""
 
@@ -313,7 +334,10 @@ async def run_batch(
     the batch ends "stopped_invalid" and "invalid_stop" names the model. A game that
     raises is recorded under "failed" and the batch ends "failed". A model that fails
     PROVIDER_DOWN_AFTER calls in a row with no tokens raises ProviderDown in its game; no new
-    game starts after that, and the message is kept under "provider_down". On cancellation the
+    game starts after that, and the message is kept under "provider_down". A game that ends
+    without a finished log (disk full, quota, read-only), or a ledger save that fails with such
+    an error, also stops new games; the errno text is kept under "disk_error" and the batch ends
+    "failed". On cancellation the
     running games are cancelled, run_meta.json gets status "interrupted" and CancelledError is
     re-raised; re-running resumes. Resuming into a batch_id made from a different config
     raises BatchMismatch. With neon_connect, every game also streams to Neon (NeonSink) while
@@ -402,6 +426,7 @@ async def run_batch(
         g: n for g, n in (old.get("write_errors") or {}).items() if g in skipped
     }
     down: list[str] = []  # ProviderDown messages; any one stops new games
+    disk: list[str] = []  # at most one errno text: logs cannot be written; stops new games
     started_ids: list[str] = []
     in_flight = 0
     sem = asyncio.Semaphore(cfg.max_concurrency)  # global cap on games in flight
@@ -424,14 +449,23 @@ async def run_batch(
     def spent() -> float:
         return prior_spend + (metered.spent if metered else 0.0)
 
+    def note_disk(exc: OSError | None = None) -> None:
+        if not disk:
+            disk.append(_write_problem(out, exc))
+            log.error("batch %s: cannot write to %s: %s; no new games", cfg.batch_id, out, disk[0])
+
     def save_quietly() -> None:
         """Mid-game ledger write: a stuck run_meta.json must not kill the game being played."""
         try:
             save("running")
-        except OSError:
+        except OSError as exc:
+            if exc.errno in DISK_ERRNOS:
+                note_disk(exc)
             log.warning("batch %s: run_meta.json not written; the next save retries", cfg.batch_id)
 
-    def save(status: Status) -> dict[str, Any]:
+    def save(status: Status, final: bool = False) -> dict[str, Any]:
+        """Write run_meta.json. The last save of a batch with a full disk logs its failure and
+        still returns the summary, so the caller can print it instead of a traceback."""
         s = {
             "batch_id": cfg.batch_id,
             "status": status,
@@ -447,14 +481,22 @@ async def run_batch(
             "failed": failed,
             "write_errors": write_errors,
             "provider_down": down,
+            "disk_error": disk[0] if disk else None,
             "invalid_output": {m: {"invalid": b, "calls": c} for m, (b, c) in invalid.items()},
             "invalid_stop": invalid_stop[0] if invalid_stop else None,
             "not_started": [a.game_id for a in todo if a.game_id not in started_ids],
             "config": cfg.model_dump(mode="json"),
         }
         tmp = meta_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(s, indent=2), encoding="utf-8")
-        _replace(tmp, meta_path)  # a hard kill leaves the old file, never half of one
+        try:
+            tmp.write_text(json.dumps(s, indent=2), encoding="utf-8")
+            _replace(tmp, meta_path)  # a hard kill leaves the old file, never half of one
+        except OSError as exc:
+            if not (final and (disk or exc.errno in DISK_ERRNOS)):
+                raise
+            note_disk(exc)
+            log.error("batch %s: final run_meta.json not written: %s", cfg.batch_id, exc)
+            s["status"], s["disk_error"] = "failed", disk[0]
         return s
 
     if client:
@@ -475,7 +517,7 @@ async def run_batch(
         return sum(seat_cost[m] if m in seat_cost else prior_seat_cost(specs[m]) for m in a.models)
 
     def verdict(a: Assignment) -> Literal["go", "wait", "stop"]:
-        if down or invalid_stop or spent() >= cfg.budget_usd:
+        if down or disk or invalid_stop or spent() >= cfg.budget_usd:
             return "stop"
         if metered is None:
             return "go"  # scripted games are free
@@ -502,7 +544,8 @@ async def run_batch(
                 a.game_config(cfg.game), make_agent, sinks, a.game_id, colors, presentations
             )
             if game_costs(out / f"{a.game_id}.jsonl") is None:
-                raise OSError("log not written")  # the game ran but left no finished JSONL
+                note_disk()  # the game ran but left no finished JSONL: stop starting games
+                raise OSError("log not written")
             outcome = {"event": "finished", "winner": getattr(game.winner, "value", game.winner)}
             try:
                 _tag_agents(out / f"{a.game_id}.run_meta.json", agents)
@@ -520,6 +563,8 @@ async def run_batch(
             outcome = {"event": "failed", "reason": failed[a.game_id]}
             if isinstance(exc, ProviderDown) and str(exc) not in down:
                 down.append(str(exc))
+            if isinstance(exc, OSError) and exc.errno in DISK_ERRNOS:
+                note_disk(exc)
             # asyncio.gather does not cancel the siblings of a call that raised; they inherit
             # this task's context, so find them by game id.
             me = asyncio.current_task()
@@ -575,11 +620,19 @@ async def run_batch(
                     "stopped",
                     reason="provider_down"
                     if down
+                    else "disk_error"
+                    if disk
                     else "invalid_output"
                     if invalid_stop
                     else "budget",
                     running=in_flight,
-                    detail=down[0] if down else invalid_stop[0] if invalid_stop else "",
+                    detail=down[0]
+                    if down
+                    else disk[0]
+                    if disk
+                    else invalid_stop[0]
+                    if invalid_stop
+                    else "",
                 )
                 break
             in_flight += 1
@@ -596,10 +649,10 @@ async def run_batch(
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        save("interrupted")
+        save("interrupted", final=True)
         raise
-    if failed:
-        return save("failed")
+    if failed or disk:
+        return save("failed", final=True)
     if invalid_stop and len(started_ids) < len(todo):
-        return save("stopped_invalid")
-    return save("budget_stopped" if budget_hit else "completed")
+        return save("stopped_invalid", final=True)
+    return save("budget_stopped" if budget_hit else "completed", final=True)

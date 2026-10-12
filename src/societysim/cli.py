@@ -289,9 +289,11 @@ def _hm(seconds: float, *, eta: bool = False) -> str:
 def _progress_line(e: dict) -> str:
     money = f"spent ${e['spent']:.2f} of ${e['budget']:.2f}"
     if e["event"] == "stopped":
-        why = {"provider_down": "provider down", "invalid_output": "invalid output"}.get(
-            e["reason"], "budget"
-        )
+        why = {
+            "provider_down": "provider down",
+            "invalid_output": "invalid output",
+            "disk_error": "cannot write logs",
+        }.get(e["reason"], "budget")
         return f"{why}: no new games ({money}); waiting for {e['running']} running"
     if e["event"] == "failed":
         end = f"failed: {str(e['reason'])[:80]}"
@@ -431,6 +433,17 @@ def batch(
             f"write errors: {sum(lost.values())} events missing from {len(lost)} game logs "
             f"({', '.join(lost)}); see run_meta.json"
         )
+    if result.get("disk_error"):
+        _echo(
+            f"could not write to {Path('runs') / cfg.batch_id}: {result['disk_error']}; "
+            "free space and re-run to resume"
+        )
+        _echo(
+            f"spent ${result['spent_usd']:.4f} of ${cfg.budget_usd:.2f} (the ledger in "
+            "run_meta.json may miss spend still in flight)"
+        )
+        if not result["failed"]:
+            raise typer.Exit(1)
     if result["failed"]:
         _echo(f"failed games: {', '.join(result['failed'])}")
         for msg in result["provider_down"]:

@@ -89,6 +89,7 @@ def test_report_on_empty_batch_dir_exits_1(tmp_path):
 
 
 FIXTURE = Path(__file__).parents[2] / "fixtures" / "sample_game.jsonl"
+REGISTRY = Path(__file__).parents[2] / "configs" / "models.yaml"
 
 
 def _fake_jev_cache(batch: Path, skip_every: int = 0) -> int:
@@ -267,3 +268,26 @@ def test_report_bad_labels_file_keeps_its_own_error(tmp_path):
     result = CliRunner().invoke(app, ["report", str(tmp_path)])
     assert result.exit_code == 1
     assert "no finished games" not in result.output
+
+
+@pytest.mark.parametrize(
+    "args",
+    [["play", "--config"], ["batch", "--dry-run", "--registry", str(REGISTRY), "--config"]],
+    ids=["play", "batch"],
+)
+@pytest.mark.parametrize(
+    "text, hint",
+    [("a: [1,\n", ""), ("just a string\n", "valid dictionary"), ("models: 5\n", "models")],
+    ids=["broken_yaml", "not_a_mapping", "wrong_shape"],
+)
+def test_bad_config_is_a_one_line_error_not_a_traceback(tmp_path, monkeypatch, args, text, hint):
+    monkeypatch.chdir(tmp_path)
+    path = tmp_path / "bad.yaml"
+    path.write_text(text)
+    result = CliRunner().invoke(app, [*args, str(path)])
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)  # a raised error would be the exception
+    assert result.output.startswith(f"invalid config {path}: ")
+    assert hint in result.output
+    assert "Traceback" not in result.output
+    assert not any(tmp_path.rglob("*.jsonl"))

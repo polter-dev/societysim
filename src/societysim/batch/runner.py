@@ -2,7 +2,7 @@
 
 Layout: runs/<batch_id>/<game_id>.jsonl per game plus runs/<batch_id>/run_meta.json for the
 batch. A game counts as finished when its JSONL ends with a game_end event; anything else is
-replayed from scratch (the JSONL sink overwrites).
+replayed from scratch (the JSONL sink overwrites, and its old labels file is deleted first).
 """
 
 import asyncio
@@ -494,6 +494,11 @@ async def run_batch(
         t0 = _now()
         outcome: dict[str, Any] = {}
         jsonl = JsonlSink(cfg.batch_id, runs_dir)
+        try:
+            # Labels made from an earlier partial log describe events the replay will not repeat.
+            (out / f"{a.game_id}.labels.jsonl").unlink(missing_ok=True)
+        except OSError:
+            log.warning("game %s: could not delete its stale labels file", a.game_id)
         try:
             sinks: list[Any] = [jsonl]
             if neon_connect:

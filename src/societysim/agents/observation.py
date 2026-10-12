@@ -3,7 +3,8 @@
 `observe(state, events, seat)` renders what one living player knows, as one string that
 `prompts.phase_prompt` inserts verbatim: the current phase, role-private knowledge, the dead
 with their revealed roles, the players to score in `suspicion` with their count, a
-deterministic summary of earlier days and today's full history.
+deterministic summary of earlier days and today's full history. Over `MAX_CHARS`, `_fit` keeps a
+short summary of every earlier day and trims today's oldest lines before it drops a day (#573).
 
 Two guards keep private information out:
 - every event passes through `visible()` before anything reads it;
@@ -77,7 +78,11 @@ def observe(state: GameState, events: Sequence[Event], seat: str) -> str:
         *_dead(seen, name),
         _to_score(state, seat, name),
     ]
-    days = [_summary(d, [e for e in seen if e.day == d], name, cap) for d in range(1, state.day)]
+    by_day = [[e for e in seen if e.day == d] for d in range(1, state.day)]
+    days = [
+        (_summary(d, evs, name, cap), _summary(d, evs, name, cap, quotes=False))
+        for d, evs in enumerate(by_day, 1)
+    ]
     today = [line for e in seen if e.day == state.day for line in _line(e, name, cap)]
     return _fit("\n".join(head), days, today)
 
@@ -217,8 +222,11 @@ def _quote(text: str | None, cap: int, words: int | None = None) -> str:
     return f'"{text}{"..." if cut else ""}"'
 
 
-def _summary(day: int, evs: list[Event], name: Name, cap: int) -> str:
-    """Deterministic summary of one earlier day (night, discussion and vote)."""
+def _summary(day: int, evs: list[Event], name: Name, cap: int, quotes: bool = True) -> str:
+    """Deterministic summary of one earlier day (night, discussion and vote).
+
+    `quotes=False` gives the short form: no "last said" quotes, so players with no tags drop out.
+    """
     lines = [f"Day {day} summary:"]
     lines += [f"- {_death(e, name)}" for e in evs if e.type is EventType.DEATH_REVEAL]
     lines += [
@@ -238,9 +246,11 @@ def _summary(day: int, evs: list[Event], name: Name, cap: int) -> str:
         elif e.type in (EventType.ROLE_CLAIM, EventType.SEER_CLAIM) and e.actor:
             said.setdefault(e.actor, []).append(_claim(e, name, "ed"))
     for actor in sorted(said):
-        quote = _quote(last.get(actor), cap, LAST_WORDS)
-        parts = [*dict.fromkeys(said[actor]), f"last said: {quote}"]  # dedupe, keep order
-        lines.append(f"- {name(actor)}: " + "; ".join(parts))
+        parts = [*dict.fromkeys(said[actor])]  # dedupe, keep order
+        if quotes:
+            parts.append(f"last said: {_quote(last.get(actor), cap, LAST_WORDS)}")
+        if parts:
+            lines.append(f"- {name(actor)}: " + "; ".join(parts))
 
     votes = [f"{name(e.actor)} -> {_vote(e, name)}" for e in evs if e.type is EventType.VOTE]
     if votes:
@@ -253,20 +263,23 @@ def _summary(day: int, evs: list[Event], name: Name, cap: int) -> str:
     return "\n".join(lines)
 
 
-def _fit(head: str, days: list[str], today: list[str]) -> str:
-    """Join the sections; over budget, drop the oldest days first, then the oldest of today."""
-    cut = False
-    while True:
-        parts = [head, *([OMITTED] if cut else []), *days]
-        if today:
-            parts.append("Today so far:\n" + "\n".join(today))
+def _fit(head: str, days: list[tuple[str, str]], today: list[str]) -> str:
+    """Join the sections, cutting history only when over budget (#573).
+
+    `days` holds each earlier day as (full, short). Cuts in order until the text fits: shorten
+    days to the short form, oldest first; drop today's oldest lines down to the latest one; drop
+    the oldest short days; finally hard-cut the text.
+    """
+    full = [f for f, _ in days]
+    short = [s for _, s in days]
+    tries = [([*short[:i], *full[i:]], today) for i in range(len(days) + 1)]
+    tries += [(short, today[i:]) for i in range(1, len(today))]
+    tries += [(short[i:], today[-1:]) for i in range(1, len(days) + 1)]
+    for n, (kept, lines) in enumerate(tries):
+        parts = [head, *([OMITTED] if n else []), *kept]
+        if lines:
+            parts.append("Today so far:\n" + "\n".join(lines))
         text = "\n\n".join(parts)
         if len(text) <= MAX_CHARS:
             return text
-        if days:
-            days = days[1:]
-        elif len(today) > 1:
-            today = today[1:]
-        else:
-            return text[:MAX_CHARS]
-        cut = True
+    return text[:MAX_CHARS]

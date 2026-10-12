@@ -249,23 +249,74 @@ def test_lookalike_quotes_become_apostrophes():
     assert after[-1] == f"{actor}: \"'x' 'y' 'z' 'w' 'v' 'u'\""
 
 
-def test_budget_drops_oldest_history_first():
+def _long_days(last_day: int, rounds: int):
+    """The vote2 game run on to `last_day`: `rounds` long statements per seat each extra day."""
     state, events = GAME.checkpoints["vote2"]
     state = copy.deepcopy(state)
-    state.day = 6
+    state.day = last_day
     events = list(events)
     word = "verbose" * 2
-    for day in range(3, 7):
-        for i in range(20):
+    for day in range(3, last_day + 1):
+        for i in range(rounds):
             for seat in sorted(state.alive):
                 text = f"D{day}-{i}-{seat} " + " ".join([word] * 79)
                 events.append(_long_statement(state, len(events), day, seat, text))
+    return state, events
+
+
+def test_budget_keeps_every_day_and_trims_today_first():
+    state, events = _long_days(6, 20)
     text = observe(state, events, CAST["seer"])
     assert len(text) <= MAX_CHARS
     assert OMITTED in text
     assert text.startswith("Now: ") and "Your Seer checks: night 1:" in text
-    assert "Day 1 summary:" not in text
+    for day in range(1, 6):
+        assert f"Day {day} summary:" in text  # every earlier day survives, in short form
+    assert f"- {name(CAST['v_day1'])} was voted out (villager)." in text
+    assert "last said:" not in text
+    assert f"D6-0-{min(state.alive)}" not in text  # today's oldest lines go first
     assert f"D6-19-{max(state.alive)}" in text  # the latest statement survives
+
+
+def test_budget_shortens_oldest_days_before_touching_today(monkeypatch):
+    state, events = _long_days(5, 1)
+    assert OMITTED not in observe(state, events, CAST["seer"])
+    monkeypatch.setattr("societysim.agents.observation.MAX_CHARS", 11_500)
+    text = observe(state, events, CAST["seer"])
+    assert len(text) <= 11_500 and OMITTED in text
+    day1 = text.split("Day 1 summary:\n")[1].split("\n\n")[0]
+    day2 = text.split("Day 2 summary:\n")[1].split("\n\n")[0]
+    assert "last said:" not in day1 and "last said:" in day2  # oldest day shortened first
+    assert f"- {name(CAST['wolf2'])}: claimed to be seer;" in day1  # tags stay
+    assert f"D5-0-{min(state.alive)}" in text  # today is whole
+
+
+def test_budget_drops_oldest_short_days_last(monkeypatch):
+    state, events = _long_days(4, 1)
+    monkeypatch.setattr("societysim.agents.observation.MAX_CHARS", 1800)
+    text = observe(state, events, CAST["seer"])
+    assert len(text) <= 1800 and OMITTED in text
+    assert "Day 1 summary:" not in text and "Day 3 summary:" in text
+    assert f"D4-0-{max(state.alive)}" in text  # only the latest line of today is left
+
+
+def test_long_ten_player_day2_keeps_the_day1_summary():
+    """A day-2 vote prompt the size of real 10-player ones (#573): 8 alive, 80-word statements."""
+    game = GAMES10[True]
+    state, events = game.checkpoints["vote2"]
+    events = list(events)
+    speech = " ".join(["suspicious", "because", "Finn", "voted", "late", "yesterday"] * 10)[:380]
+    for rnd in (3, 4):
+        for seat in sorted(state.alive):
+            events.append(_long_statement(state, len(events), 2, seat, f"R{rnd}-{seat} {speech}"))
+    text = observe(state, events, game.cast["villager"])
+    assert len(text) <= MAX_CHARS and OMITTED in text  # it was over budget
+    day1 = text.split("Day 1 summary:\n")[1].split("\n\n")[0]
+    assert "\n- Votes: " in day1
+    v_day1 = f"{game.final.names[game.cast['v_day1']]} ({game.cast['v_day1']})"
+    assert f"- {v_day1} was voted out (villager)." in day1
+    assert "Today so far:\n[Night 2]" in text  # and all of today is still there
+    assert f"R4-{max(state.alive)}" in text
 
 
 def test_typical_game_fits_without_cuts():

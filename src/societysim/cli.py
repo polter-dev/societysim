@@ -322,7 +322,7 @@ def batch(
 
     Stops starting games when the budget would be exceeded; Ctrl-C stops cleanly.
     """
-    from societysim.batch.runner import BatchMismatch, plan, run_batch
+    from societysim.batch.runner import BatchLocked, BatchMismatch, plan, run_batch
     from societysim.config import BatchConfig, load_yaml
     from societysim.models.registry import load_registry
 
@@ -416,7 +416,7 @@ def batch(
     except KeyboardInterrupt:
         _echo(f"interrupted; re-run to resume: runs/{cfg.batch_id}")
         raise typer.Exit(130) from None
-    except BatchMismatch as exc:
+    except (BatchMismatch, BatchLocked) as exc:
         _echo(str(exc))
         raise typer.Exit(1) from None
     _echo(Path("runs") / cfg.batch_id)

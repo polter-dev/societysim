@@ -11,9 +11,11 @@ import json
 import logging
 import os
 import re
+import sys
 import time
 from collections import Counter, defaultdict
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import UTC, datetime
 from pathlib import Path
@@ -277,7 +279,97 @@ def _read_meta(path: Path) -> dict[str, Any]:
     return meta
 
 
+class BatchLocked(Exception):
+    """Another process is running this batch; the message is safe to print."""
+
+
+LOCK_NAME = "run_meta.json.lock"
+_LOCK_AT = 1 << 20  # Windows cannot read a locked byte range, so the pid text stays below it
+
+
+def _try_lock(f: Any) -> None:
+    """Take a non-blocking exclusive OS lock on f; raise OSError if someone else holds it."""
+    if sys.platform == "win32":
+        import msvcrt
+
+        f.seek(_LOCK_AT)  # locking beyond the end of the file is allowed
+        msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def _unlock(f: Any) -> None:
+    """Release the lock now. flock goes with the close, but Windows may keep a byte-range lock
+    until the handle is reclaimed, so unlock it explicitly."""
+    if sys.platform == "win32":
+        import msvcrt
+
+        try:
+            f.seek(_LOCK_AT)
+            msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+        except OSError:  # not locked (never was); closing the file is all that is left
+            pass
+
+
+@contextmanager
+def _batch_lock(out: Path) -> Iterator[None]:
+    """Hold runs/<batch_id>/run_meta.json.lock for the run; BatchLocked if another run has it.
+
+    An OS lock, not just a file: it goes when the holder dies (SIGKILL, power loss), so a
+    leftover lock file never blocks a resume. The file holds the holder's pid for the message.
+    """
+    f = os.fdopen(os.open(out / LOCK_NAME, os.O_RDWR | os.O_CREAT), "r+b", buffering=0)
+    try:
+        _try_lock(f)
+    except OSError:
+        f.seek(0)
+        pid = f.read(32).decode(errors="replace").strip() or "unknown"
+        f.close()
+        raise BatchLocked(f"batch is already running, pid {pid}: {out}") from None
+    try:
+        f.seek(0)
+        f.truncate()
+        f.write(str(os.getpid()).encode())
+        yield
+    finally:
+        _unlock(f)
+        f.close()
+
+
 async def run_batch(
+    cfg: BatchConfig,
+    specs: Mapping[str, ModelSpec],
+    client: ModelClient | None,
+    *,
+    salt: str | None = None,
+    provider_concurrency: Mapping[str, int] | None = None,
+    runs_dir: str | Path = "runs",
+    neon_connect: Connect | None = None,
+    on_progress: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    """Play every unfinished game of the batch (see _run_batch) under a per-batch lock.
+
+    A second run on the same runs/<batch_id> raises BatchLocked before it touches any file
+    but the lock file; a lock left by a dead process does not block.
+    """
+    out = Path(runs_dir) / cfg.batch_id
+    out.mkdir(parents=True, exist_ok=True)
+    with _batch_lock(out):
+        return await _run_batch(
+            cfg,
+            specs,
+            client,
+            salt=salt,
+            provider_concurrency=provider_concurrency,
+            runs_dir=runs_dir,
+            neon_connect=neon_connect,
+            on_progress=on_progress,
+        )
+
+
+async def _run_batch(
     cfg: BatchConfig,
     specs: Mapping[str, ModelSpec],
     client: ModelClient | None,

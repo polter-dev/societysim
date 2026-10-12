@@ -1,6 +1,9 @@
 import json
+import os
 import shutil
 import subprocess
+import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -65,6 +68,48 @@ def test_running_refuses_unless_force(tmp_path, calls, monkeypatch):
     assert calls == []
     postbatch.main([str(batch), "--force"])
     assert _steps(calls)[0] == "label"
+
+
+def _dead_pid() -> int:
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()
+    return p.pid
+
+
+def _running(monkeypatch, batch: Path, **kw) -> None:
+    meta = {"status": "running", "updated_at": datetime.now(UTC).isoformat()} | kw
+    (batch / "run_meta.json").write_text(json.dumps(meta))
+    monkeypatch.setattr(
+        postbatch,
+        "_read",
+        lambda p: [] if p.name == "highlights.json" else json.loads(p.read_text()),
+    )
+
+
+def test_running_with_dead_pid_is_treated_as_interrupted(tmp_path, calls, monkeypatch, capsys):
+    batch = _batch(tmp_path, "running")
+    _running(monkeypatch, batch, pid=_dead_pid())
+    postbatch.main([str(batch)])  # no --force needed
+    out = capsys.readouterr().out
+    assert "the runner is not alive; treating the batch as interrupted" in out
+    assert "warning: batch status is interrupted" in out
+    assert _steps(calls)[0] == "label"
+
+
+def test_running_with_stale_heartbeat_is_treated_as_interrupted(tmp_path, calls, monkeypatch):
+    batch = _batch(tmp_path, "running")
+    old = (datetime.now(UTC) - timedelta(minutes=30)).isoformat()
+    _running(monkeypatch, batch, updated_at=old)
+    postbatch.main([str(batch)])
+    assert _steps(calls)[0] == "label"
+
+
+def test_running_with_live_pid_and_fresh_heartbeat_still_refuses(tmp_path, calls, monkeypatch):
+    batch = _batch(tmp_path, "running")
+    _running(monkeypatch, batch, pid=os.getpid())
+    with pytest.raises(SystemExit, match="still running"):
+        postbatch.main([str(batch)])
+    assert calls == []
 
 
 def test_stopped_invalid_warns_and_still_runs_the_steps(tmp_path, calls, monkeypatch, capsys):

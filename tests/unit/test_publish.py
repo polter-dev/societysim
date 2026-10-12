@@ -1,4 +1,8 @@
 import json
+import os
+import subprocess
+import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pyarrow.parquet as pq
@@ -310,3 +314,34 @@ def test_dataset_card_says_ten_seats(tmp_path):
     publish.publish_batch(batch(tmp_path), "org/ds", "tok", api_factory=FakeHub)
     card = FakeHub.repo["README.md"].decode()
     assert "`p0`...`p9`" in card and "p8`" not in card
+
+
+def _dead_pid() -> int:
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()
+    return p.pid
+
+
+def _running_meta(b, **kw):
+    meta = {"status": "running", "updated_at": datetime.now(UTC).isoformat()} | kw
+    (b / "run_meta.json").write_text(json.dumps(meta), encoding="utf-8")
+
+
+def test_running_batch_with_dead_runner_publishes_as_interrupted(tmp_path, capsys):
+    b = batch(tmp_path)
+    _running_meta(b, pid=_dead_pid())
+    n = publish.publish_batch(b, "org/ds", "tok", api_factory=FakeHub)  # no force needed
+    assert n["games"] == 1
+    out = capsys.readouterr().out
+    assert "the runner is not alive, publishing finished games only" in out and "last update" in out
+    # a live runner (this process, fresh heartbeat) is still refused
+    _running_meta(b, pid=os.getpid())
+    with pytest.raises(ValueError, match="still running"):
+        publish.publish_batch(b, "org/ds", "tok", api_factory=FakeHub)
+
+
+def test_running_batch_with_stale_heartbeat_publishes_as_interrupted(tmp_path):
+    b = batch(tmp_path)
+    old = (datetime.now(UTC) - timedelta(minutes=30)).isoformat()
+    _running_meta(b, updated_at=old)  # no pid (older runner): the heartbeat decides
+    assert publish.publish_batch(b, "org/ds", "tok", api_factory=FakeHub)["games"] == 1

@@ -23,6 +23,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from societysim.analysis.labeler import read_log
+from societysim.analysis.postbatch import runner_gone
 from societysim.logging.events import EventType, Label
 from societysim.logging.textio import read_text_lenient
 
@@ -157,11 +158,18 @@ classifier) or `engine` (game facts alone).
 
 
 def _is_running(batch_dir: Path) -> bool:
+    """True if run_meta.json says 'running' and a runner may still be behind it. A dead pid or
+    a stale updated_at counts as interrupted: the batch is published as it stands."""
     try:
         meta = json.loads(read_text_lenient(batch_dir / "run_meta.json"))
     except (OSError, ValueError):
         return False
-    return isinstance(meta, dict) and meta.get("status") == "running"
+    if not isinstance(meta, dict) or meta.get("status") != "running":
+        return False
+    if gone := runner_gone(meta):
+        print(f"{batch_dir.name}: {gone}, publishing finished games only")
+        return False
+    return True
 
 
 def build_staging(batch_dir: Path, out: Path, existing: dict | None = None) -> dict[str, int]:

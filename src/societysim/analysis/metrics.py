@@ -39,7 +39,7 @@ from pathlib import Path
 from openskill.models import PlackettLuce
 
 from societysim.analysis.jev import cache_dir_for, cached_verdict
-from societysim.analysis.labeler import _SAYS_VILLAGER, read_log
+from societysim.analysis.labeler import _SAYS_VILLAGER, _scripted, read_log
 from societysim.logging.events import Event, EventType, Label, LabelType
 from societysim.logging.textio import read_text_lenient
 from societysim.models.client import is_provider_failure
@@ -140,11 +140,16 @@ def jev_read_seqs(events: list[Event], cache_dir: Path) -> frozenset[int]:
 
 
 def load_finished(batch_dir: Path) -> tuple[list[tuple[Path, GameData]], int]:
-    """Finished games in a batch dir, plus how many unfinished logs (no game_end) were skipped."""
+    """Finished games in a batch dir, plus how many unfinished logs (no game_end) were skipped.
+    Games tagged `agents: scripted` are left out too: their moves are RandomAgent's, but the log
+    carries real model names (#695). Older logs with no tag still load."""
     logs = sorted(p for p in batch_dir.glob("*.jsonl") if not p.name.endswith(".labels.jsonl"))
     games, skipped = [], 0
     for p in logs:
         if not p.stat().st_size:
+            continue
+        if _scripted(p):
+            print(f"warning: {p.name} is a scripted game, skipped")
             continue
         g = load_game(p)
         if not any(e.type is EventType.GAME_END for e in g.events):

@@ -267,3 +267,24 @@ def test_report_bad_labels_file_keeps_its_own_error(tmp_path):
     result = CliRunner().invoke(app, ["report", str(tmp_path)])
     assert result.exit_code == 1
     assert "no finished games" not in result.output
+
+
+def test_report_with_only_scripted_games_says_so(tmp_path):
+    for name in ("g1", "g2"):
+        shutil.copy(FIXTURE, tmp_path / f"{name}.jsonl")
+        (tmp_path / f"{name}.run_meta.json").write_text('{"agents": "scripted"}')
+    result = CliRunner().invoke(app, ["report", str(tmp_path)])
+    assert result.exit_code == 1
+    assert f"no finished LLM games in {tmp_path} (2 scripted skipped)" in result.output
+    assert "unfinished" not in result.output
+    assert not (tmp_path / "report").exists()
+
+
+def test_report_with_scripted_and_unfinished_games_counts_both(tmp_path):
+    shutil.copy(FIXTURE, tmp_path / "s.jsonl")
+    (tmp_path / "s.run_meta.json").write_text('{"agents": "scripted"}')
+    lines = [ln for ln in FIXTURE.read_text().splitlines() if '"game_end"' not in ln]
+    (tmp_path / "u.jsonl").write_text("\n".join(lines) + "\n")
+    result = CliRunner().invoke(app, ["report", str(tmp_path)])
+    assert result.exit_code == 1
+    assert "(1 unfinished, 1 scripted skipped)" in result.output

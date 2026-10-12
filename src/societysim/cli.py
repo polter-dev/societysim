@@ -811,13 +811,21 @@ def report(
         if not str(e).startswith("no game logs"):
             _echo(str(e))
             raise typer.Exit(1) from e
-        # No finished games: every non-empty log is unfinished.
-        n = sum(
-            1
+        # No finished LLM games: every non-empty log is scripted or unfinished.
+        from societysim.analysis.labeler import _scripted
+
+        logs = [
+            p
             for p in batch.glob("*.jsonl")
             if not p.name.endswith(".labels.jsonl") and p.stat().st_size
-        )
-        _echo(f"no finished games in {batch} ({n} unfinished skipped)" if n else str(e))
+        ]
+        n_scripted = sum(_scripted(p) for p in logs)
+        n = len(logs) - n_scripted
+        if n_scripted:
+            parts = ([f"{n} unfinished"] if n else []) + [f"{n_scripted} scripted"]
+            _echo(f"no finished LLM games in {batch} ({', '.join(parts)} skipped)")
+        else:
+            _echo(f"no finished games in {batch} ({n} unfinished skipped)" if n else str(e))
         raise typer.Exit(1) from e
     _echo(f"wrote {out}")
 

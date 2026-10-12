@@ -22,6 +22,7 @@ from societysim.analysis.metrics import (
     lie_success,
     lies_left_out,
     load_batch,
+    load_finished,
     load_game,
     openskill_ratings,
     role_skill,
@@ -481,6 +482,24 @@ def test_load_batch_skips_unfinished_games(tmp_path, capsys):
     games = load_batch(tmp_path)
     assert [g.game_id for g in games] == ["fixture-0001"]
     assert "cut.jsonl has no game_end, skipped" in capsys.readouterr().out
+
+
+def test_load_batch_skips_scripted_games_but_loads_untagged_and_llm(tmp_path, capsys):
+    text = FIXTURE.read_text()
+    for name, tag in [("a_scripted", "scripted"), ("b_llm", "llm"), ("c_untagged", None)]:
+        (tmp_path / f"{name}.jsonl").write_text(text)
+        if tag:
+            (tmp_path / f"{name}.run_meta.json").write_text(f'{{"agents": "{tag}"}}')
+    games, skipped = load_finished(tmp_path)
+    assert [p.stem for p, _ in games] == ["b_llm", "c_untagged"]
+    assert skipped == 0
+    assert "a_scripted.jsonl is a scripted game, skipped" in capsys.readouterr().out
+
+
+def test_batch_of_only_scripted_games_loads_nothing(tmp_path):
+    (tmp_path / "g.jsonl").write_text(FIXTURE.read_text())
+    (tmp_path / "g.run_meta.json").write_text('{"agents": "scripted"}')
+    assert load_finished(tmp_path) == ([], 0)
 
 
 def _renumbered(game: GameData) -> GameData:

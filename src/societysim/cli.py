@@ -124,6 +124,27 @@ def catalog(
     _echo(f"wrote {path} ({len(cat.models)} models, {n_off} unavailable)")
 
 
+def _load_config(path: Path, model):
+    """`load_yaml(path, model)`, or `invalid config <path>: <first errors>` and exit 1."""
+    import yaml
+    from pydantic import ValidationError
+
+    from societysim.config import load_yaml
+    from societysim.setup import setup_errors
+
+    try:
+        return load_yaml(path, model)
+    except yaml.YAMLError as exc:
+        reason = " ".join(str(exc).split())
+    except ValidationError as exc:
+        errors = setup_errors(exc)
+        reason = "; ".join(errors[:3]) + (f" (+{len(errors) - 3} more)" if len(errors) > 3 else "")
+    except UnicodeDecodeError as exc:
+        reason = f"not UTF-8 text ({exc.reason})"
+    _echo(f"invalid config {path}: {reason}")
+    raise typer.Exit(1)
+
+
 def _load_setup(path: Path | None, human_seat: str | None, seed: int | None):
     """GameSetup from --preset basic (path None) or a --setup file, with CLI overrides."""
     import yaml
@@ -177,7 +198,7 @@ def play(
     from societysim.agents import human
     from societysim.agents.llm_agent import llm_agents
     from societysim.agents.scripted import RandomAgent
-    from societysim.config import GameConfig, load_yaml
+    from societysim.config import GameConfig
     from societysim.logging.sinks.jsonl import JsonlSink
     from societysim.logging.sinks.neon import NeonSink
     from societysim.models.registry import load_registry
@@ -194,7 +215,7 @@ def play(
         _echo(f"config file not found: {config}")
         raise typer.Exit(1)
     else:
-        cfg, stem = load_yaml(config, GameConfig), config.stem
+        cfg, stem = _load_config(config, GameConfig), config.stem
         if seed is not None:
             cfg = cfg.model_copy(update={"seed": seed})
         elif "seed" not in cfg.model_fields_set:
@@ -323,14 +344,14 @@ def batch(
     Stops starting games when the budget would be exceeded; Ctrl-C stops cleanly.
     """
     from societysim.batch.runner import BatchMismatch, plan, run_batch
-    from societysim.config import BatchConfig, load_yaml
+    from societysim.config import BatchConfig
     from societysim.models.registry import load_registry
 
     for path in (config, registry):
         if not path.is_file():
             _echo(f"config file not found: {path}")
             raise typer.Exit(1)
-    cfg = load_yaml(config, BatchConfig)
+    cfg = _load_config(config, BatchConfig)
     load_dotenv()
     salt = os.environ.get("SOCIETYSIM_SEED_SALT") or None
     reg = load_registry(registry)

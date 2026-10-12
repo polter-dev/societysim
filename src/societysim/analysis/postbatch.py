@@ -22,8 +22,7 @@ from typing import Any
 
 CLI = [sys.executable, "-m", "societysim.cli"]
 WARN_STATUSES = ("failed", "budget_stopped", "stopped_invalid", "interrupted")
-# run_batch rewrites run_meta.json (updated_at) after every model call; silence this long means
-# the runner is gone even if its pid is taken by another process now.
+# Only for a run_meta.json with no pid (older runners): updated_at older than this means gone.
 STALE_AFTER = timedelta(minutes=5)
 
 
@@ -33,10 +32,13 @@ def _pid_alive(pid: int) -> bool:
     if sys.platform == "win32":  # os.kill(pid, 0) would send Ctrl-C there
         import ctypes
 
-        k32 = ctypes.windll.kernel32
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.OpenProcess.restype = ctypes.c_void_p
+        k32.CloseHandle.argtypes = [ctypes.c_void_p]
+        k32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
         handle = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
         if not handle:
-            return k32.GetLastError() == 5  # access denied: it exists
+            return ctypes.get_last_error() == 5  # access denied: it exists
         try:
             code = ctypes.c_ulong()
             return bool(k32.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == 259
@@ -54,8 +56,9 @@ def _pid_alive(pid: int) -> bool:
 def runner_gone(meta: Any, now: datetime | None = None) -> str | None:
     """For a run_meta.json that says 'running': why no runner is behind it, else None.
 
-    Dead pid (the runner records its own), or updated_at older than STALE_AFTER. A file with
-    neither field (older runs) is taken at its word.
+    With a pid (the runner records its own) the pid decides: dead means gone, alive means
+    running, however old updated_at is. Without one, updated_at older than STALE_AFTER means
+    gone. A file with neither field (older runs) is taken at its word.
     """
     if not isinstance(meta, dict) or meta.get("status") != "running":
         return None
@@ -66,9 +69,12 @@ def runner_gone(meta: Any, now: datetime | None = None) -> str | None:
             updated = updated.replace(tzinfo=UTC)
     except (KeyError, TypeError, ValueError):
         updated = None
-    dead = isinstance(pid, int) and not isinstance(pid, bool) and not _pid_alive(pid)
-    silent = updated is not None and (now or datetime.now(UTC)) - updated > STALE_AFTER
-    if not (dead or silent):
+    if isinstance(pid, int) and not isinstance(pid, bool):
+        # updated_at only moves when a model call returns (a scripted batch never rewrites it
+        # until it ends, one slow call can take minutes), so a recorded pid is the only proof.
+        if _pid_alive(pid):
+            return None
+    elif updated is None or (now or datetime.now(UTC)) - updated <= STALE_AFTER:
         return None
     last = updated.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S UTC") if updated else "unknown"
     return f"last update {last}; the runner is not alive"

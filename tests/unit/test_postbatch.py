@@ -104,6 +104,15 @@ def test_running_with_stale_heartbeat_is_treated_as_interrupted(tmp_path, calls,
     assert _steps(calls)[0] == "label"
 
 
+def test_running_with_live_pid_and_old_heartbeat_still_refuses(tmp_path, calls, monkeypatch):
+    batch = _batch(tmp_path, "running")
+    old = (datetime.now(UTC) - timedelta(minutes=10)).isoformat()
+    _running(monkeypatch, batch, pid=os.getpid(), updated_at=old)
+    with pytest.raises(SystemExit, match="still running"):
+        postbatch.main([str(batch)])
+    assert calls == []
+
+
 def test_running_with_live_pid_and_fresh_heartbeat_still_refuses(tmp_path, calls, monkeypatch):
     batch = _batch(tmp_path, "running")
     _running(monkeypatch, batch, pid=os.getpid())

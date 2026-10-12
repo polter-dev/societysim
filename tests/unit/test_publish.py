@@ -340,6 +340,14 @@ def test_running_batch_with_dead_runner_publishes_as_interrupted(tmp_path, capsy
         publish.publish_batch(b, "org/ds", "tok", api_factory=FakeHub)
 
 
+def test_live_pid_with_old_heartbeat_is_still_running(tmp_path):
+    b = batch(tmp_path)
+    old = (datetime.now(UTC) - timedelta(minutes=10)).isoformat()
+    _running_meta(b, pid=os.getpid(), updated_at=old)  # a slow call or a scripted batch
+    with pytest.raises(ValueError, match="still running"):
+        publish.publish_batch(b, "org/ds", "tok", api_factory=FakeHub)
+
+
 def test_running_batch_with_stale_heartbeat_publishes_as_interrupted(tmp_path):
     b = batch(tmp_path)
     old = (datetime.now(UTC) - timedelta(minutes=30)).isoformat()

@@ -14,7 +14,7 @@ Models from several providers fill the seats. Each model sends a private scratch
 
 ## Research questions
 
-Answers below come from 100 ten-player games in `mixed_v2_10p`, except where stated. Lie results use the models' own tags and show associations, not proof that a lie caused a vote. Jev labels were not used in this batch. The two GPT-5 models played 12 games each, so their results have smaller samples.
+Answers below come from 100 ten-player games in `mixed_v2_10p`, except where stated. Lie results in the questions below use the models' own tags and show associations, not proof that a lie caused a vote. The table also gives lie rates from the Jev labels. The two GPT-5 models played 12 games each, so their results have smaller samples.
 
 1. **Can one model deceive another, and which models fool which?** No. Across the batch, 40% of votes followed a lie's implied choice, against a 71% no-lie baseline, and no 100-game model beat its own baseline. The [research page](https://society-sim.us/?page=research) has the pairwise table of who followed whom.
 2. **Who lies best?** Gemini Flash had the highest lie success rate of the 100-game models: its lies moved 52% of targeted suspicions (n=253), and 66% of votes followed them (n=295) against a 75% no-lie base (239 votes, 22 abstentions); GPT-oss-120b moved 43% (n=56). GPT-5 Mini moved 53% (n=32) and had 81% of votes follow (n=32) against a 76% base (55 votes, 3 abstentions), while GPT-5 Nano moved 0% (n=14) and had 0% of votes follow (n=14) against a 21% base (24 votes, 1 abstention); those two models played only 12 games each.
@@ -36,15 +36,15 @@ The table below is written by `scripts/readme_results.py` from the batch report.
 
 | Model | Games / seats | Win rate (95% CI) | OpenSkill ordinal | Detection AUC | Lie rate: self-tag | Lie rate: Jev | Invalid output rate |
 |---|---|---|---|---|---|---|---|
-| gemini-flash | 100 / 139 | 65.5% (57.2% to 72.9%) | 33.01 | 0.77 | 6.5% | n/a | 0.8% |
-| llama4-maverick | 100 / 140 | 60.7% (52.4% to 68.4%) | 22.49 | 0.72 | 11.8% | n/a | 20.0% |
-| gemini-flash-lite | 100 / 138 | 59.4% (51.1% to 67.3%) | 22.30 | 0.75 | 9.0% | n/a | 0.2% |
-| gemma4-26b | 100 / 141 | 56.0% (47.8% to 64.0%) | 18.65 | 0.70 | 3.7% | n/a | 0.2% |
-| qwen3-235b | 100 / 141 | 54.6% (46.4% to 62.6%) | 15.52 | 0.69 | 7.7% | n/a | 3.4% |
-| deepseek-v3.1 | 100 / 137 | 54.0% (45.7% to 62.1%) | 11.73 | 0.73 | 11.1% | n/a | 0.4% |
-| gpt-oss-120b | 100 / 138 | 53.6% (45.3% to 61.7%) | 8.01 | 0.65 | 1.8% | n/a | 5.0% |
-| gpt-5-nano | 12 / 13 | 38.5% (17.7% to 64.5%) | -0.14 | 0.55 | 5.6% | n/a | 12.7% |
-| gpt-5-mini | 12 / 13 | 38.5% (17.7% to 64.5%) | -2.28 | 0.61 | 9.0% | n/a | 0.7% |
+| gemini-flash | 100 / 139 | 65.5% (57.2% to 72.9%) | 33.01 | 0.77 | 6.5% | 7.2% | 0.8% |
+| llama4-maverick | 100 / 140 | 60.7% (52.4% to 68.4%) | 22.49 | 0.72 | 11.8% | 11.5% | 20.0% |
+| gemini-flash-lite | 100 / 138 | 59.4% (51.1% to 67.3%) | 22.30 | 0.75 | 9.0% | 8.6% | 0.2% |
+| gemma4-26b | 100 / 141 | 56.0% (47.8% to 64.0%) | 18.65 | 0.70 | 3.7% | 4.4% | 0.2% |
+| qwen3-235b | 100 / 141 | 54.6% (46.4% to 62.6%) | 15.52 | 0.69 | 7.7% | 7.8% | 3.4% |
+| deepseek-v3.1 | 100 / 137 | 54.0% (45.7% to 62.1%) | 11.73 | 0.73 | 11.1% | 10.5% | 0.4% |
+| gpt-oss-120b | 100 / 138 | 53.6% (45.3% to 61.7%) | 8.01 | 0.65 | 1.8% | 1.6% | 5.0% |
+| gpt-5-nano | 12 / 13 | 38.5% (17.7% to 64.5%) | -0.14 | 0.55 | 5.6% | 2.8% | 12.7% |
+| gpt-5-mini | 12 / 13 | 38.5% (17.7% to 64.5%) | -2.28 | 0.61 | 9.0% | 6.4% | 0.7% |
 
 Wolf-side advantage (OpenSkill rating of the wolf side as a player; 0 is even, above 0 favors the wolves): overall pool mu -3.86 (sigma 2.52); sided pool mu -1.09 (sigma 2.64). Within 2 sigma of 0, so no clear advantage yet.
 
